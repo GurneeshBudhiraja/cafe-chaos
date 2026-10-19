@@ -25,7 +25,7 @@ import { launchBrowser, openApp, screenPointOf } from './lib/app-driver.mjs';
 
 const SIZE = { width: 960, height: 540 };
 const OUT_DIR = 'artifacts';
-const PEN_SPEED = 0.16; // page widths per second at playback (~5.8 cm/s)
+const PEN_SPEED = 0.22; // page widths per second at playback (~8 cm/s, brisk)
 const STEP = 0.004; // page units between pointer samples
 mkdirSync(OUT_DIR, { recursive: true });
 
@@ -99,7 +99,11 @@ await page.evaluate(() => {
         return [((v.x + 1) / 2) * innerWidth, ((1 - v.y) / 2) * innerHeight];
       });
     },
-    /** Replay one stroke as pointer events (same path as a mouse drag). */
+    /**
+     * Replay one stroke as pointer events (same path as a mouse drag).
+     * Time-based: each frame sends every point that is due, so the pen keeps
+     * its intended speed even when frames render slowly.
+     */
     async playStroke(pixels, msPerPoint) {
       const fire = (type, [x, y], buttons) =>
         canvas.dispatchEvent(new PointerEvent(type, {
@@ -107,12 +111,19 @@ await page.evaluate(() => {
           pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, buttons,
         }));
       fire('pointermove', pixels[0], 0);
-      await sleep(msPerPoint * 3);
+      await sleep(60);
       fire('pointerdown', pixels[0], 1);
-      for (const p of pixels.slice(1)) {
-        fire('pointermove', p, 1);
-        await sleep(msPerPoint);
-      }
+      const t0 = performance.now();
+      let sent = 1;
+      await new Promise((resolve) => {
+        const frame = (now) => {
+          const due = Math.min(pixels.length, 1 + Math.floor((now - t0) / msPerPoint));
+          for (; sent < due; sent++) fire('pointermove', pixels[sent], 1);
+          if (sent < pixels.length) requestAnimationFrame(frame);
+          else resolve();
+        };
+        requestAnimationFrame(frame);
+      });
       fire('pointerup', pixels[pixels.length - 1], 0);
     },
     /** Camera pose that looks straight at the tablet from `distance` m. */
@@ -163,7 +174,7 @@ async function writeLine(text, options, endPause = 350) {
   const line = layoutLine(text, options);
   for (const stroke of line.strokes) {
     await writeStroke(stroke);
-    await pause(60 + rand() * 120); // pen lift between strokes
+    await pause(40 + rand() * 90); // pen lift between strokes
   }
   await pause(endPause);
   return line;
