@@ -106,11 +106,21 @@ try {
   await clickUntil(page, 'note-new-button', () => window.__metaNotes.session.summaries.length === 2);
   await waitForSaved(page);
   const twoNotes = (await activeNoteSnapshot(page)).notes;
-  await clickObject(page, 'note-delete-button');
-  await clickObject(page, 'delete-cancel-button');
+  // UIKit's isVisible signal shows whether the confirmation row is displayed.
+  const confirmShown = () =>
+    window.__metaNotes.world.scene.getObjectByName('delete-confirm').isVisible.peek() === true;
+  const confirmHidden = () =>
+    window.__metaNotes.world.scene.getObjectByName('delete-confirm').isVisible.peek() === false;
+  await clickUntil(page, 'note-delete-button', confirmShown);
+  await clickUntil(page, 'delete-cancel-button', confirmHidden);
   const afterCancel = (await activeNoteSnapshot(page)).notes;
-  await clickObject(page, 'note-delete-button');
-  await clickUntil(page, 'delete-confirm-button', () => window.__metaNotes.session.summaries.length === 1);
+  await clickUntil(page, 'note-delete-button', confirmShown);
+  // Done when one note is left and the remaining note is open again (the
+  // session briefly has no active note while it loads the next one).
+  await clickUntil(page, 'delete-confirm-button', () => {
+    const { session } = window.__metaNotes;
+    return session.summaries.length === 1 && session.active !== null;
+  });
   const afterDelete = await activeNoteSnapshot(page);
   checks.check(
     'delete asks first and removes only the confirmed note',
