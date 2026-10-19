@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview",
-    "smoke:camera": "node scripts/smoke-camera.mjs"
+    "smoke:camera": "node scripts/smoke-camera.mjs",
+    "smoke:notes": "node scripts/smoke-notes.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

@@ -18,6 +18,11 @@ const publicAssetUrl = (filePath: string): string =>
 export default defineAssets({
   tablet: tabletPrototype,
   'tablet-handle': tabletHandlePrototype,
+  'notes-panel': {
+    url: publicAssetUrl('ui/notes-panel.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Notes Panel',
+  },
   'tools-panel': {
     url: publicAssetUrl('ui/tools-panel.uikitml'),
     type: AssetType.UIKitML,

@@ -37,5 +37,33 @@ separately and remain open.
 | Camera trial produces a still | Pass (desktop) | `npm run smoke:camera` captures 1920x1080 from Chromium's fake camera |
 | Optional feature checks with fallbacks | Pass | Panel reports camera, hands, surfaces, anchors; app works when absent |
 
-Still open for this phase: Quest outward-camera access, pen-tip proximity
-feedback (planned with pen tools), and real hand-tracking quality.
+### Phase 1, day 2 (roadmap: 18 October)
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Note list, create, open | Pass | Notes panel lists notes (5 per page), opens on select, highlights the active note |
+| Rename and typed text | Pass | Title and text fields save through autosave |
+| Strokes saved locally | Pass | IndexedDB; status shows Saving, Saved, or Save failed |
+| Note with text and strokes survives 5 reloads | Pass | `npm run smoke:notes`: 5/5, tablet re-renders every stroke |
+| Simulated save failure keeps the note | Pass | Error shown, stroke kept on screen, saved after "Try saving again" |
+| Delete needs confirmation | Pass | Cancel keeps the note; confirm deletes only that note |
+
+### Open items
+
+- Headset: Quest outward-camera access, hand-tracking quality, system keyboard
+  focus on the UIKit text fields, readability, and frame rate.
+- XR panel clicks with simulated hands were not checked separately (the same
+  IWSDK pointer path was checked with the mouse and with hand rays on the tablet).
+- Pen-tip proximity feedback and stroke smoothing arrive with pen tools (19 October).
+- Browser storage is not a backup; export and restore arrive on 23 October.
+
+### Run the checks
+
+```sh
+cd app
+npm install
+npm run dev            # in one terminal
+npm run typecheck && npm run build
+npm run smoke:notes    # notes, reloads, save failure, delete
+npm run smoke:camera   # camera capture with a fake camera
+```

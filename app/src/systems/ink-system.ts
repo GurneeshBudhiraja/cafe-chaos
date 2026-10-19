@@ -11,6 +11,9 @@
  * - While a tablet handle is grabbed (tablet moving), no ink is created.
  * - A large jump between samples splits the stroke instead of drawing a long
  *   accidental line (tracking loss and recovery).
+ *
+ * The system renders the active page of the NoteSession and hands finished
+ * strokes to it; it never writes note data itself.
  */
 
 import {
@@ -25,6 +28,8 @@ import {
 import { classifySample, isOnPage } from '../ink/stroke-sampling.js';
 import { StrokeMesh, type SurfaceSize } from '../ink/stroke-mesh.js';
 import { createStroke, type Page, type Stroke } from '../notes/note-model.js';
+import { getNoteSession } from '../notes/note-services.js';
+import type { InkDocument } from '../notes/note-session.js';
 import { TabletHandle, WritingSurface } from '../note-components.js';
 import { devLog } from '../util/dev-log.js';
 import {
@@ -56,15 +61,13 @@ const SURFACE_SIZE: SurfaceSize = {
   heightM: SURFACE_HEIGHT_M,
 };
 
-/** Called when a stroke is finished; the editing layer stores it. */
-export type StrokeCommitHandler = (stroke: Stroke) => void;
-
 /** Per-tablet runtime state. */
 interface TabletInk {
   entity: Entity;
   surface: Mesh;
   inkLayer: Group;
-  page: Page;
+  /** The page currently rendered, or null while no note is open. */
+  page: Page | null;
   meshes: Map<string, StrokeMesh>;
   active: { pointerId: number; mesh: StrokeMesh } | null;
   detach: () => void;
@@ -76,15 +79,20 @@ export class InkSystem extends createSystem({
 }) {
   private readonly tablets = new Map<Entity, TabletInk>();
   private readonly localPoint = new Vector3();
-  /** Hook for the editing layer; replaced when notes are wired in. */
-  onStrokeCommitted: StrokeCommitHandler | null = null;
+  private document!: InkDocument;
 
   init(): void {
+    this.document = getNoteSession(this.world);
+
     // 'qualify' only reports entities that match later, so attach the tablets
     // that already exist (the level loads before app systems register).
     for (const entity of this.queries.tablets.entities) this.attachTablet(entity);
 
     this.cleanupFuncs.push(
+      // Re-render when another note is opened (or the first one loads).
+      this.document.subscribe((change) => {
+        if (change === 'active') this.showPage(this.document.getActivePage());
+      }),
       this.queries.tablets.subscribe('qualify', (entity) =>
         this.attachTablet(entity),
       ),
@@ -101,20 +109,18 @@ export class InkSystem extends createSystem({
     );
   }
 
-  /** The page currently shown on the first tablet, if any. */
-  getPrimaryPage(): Page | null {
-    const first = this.tablets.values().next().value;
-    return first ? first.page : null;
+  /** Replace the page shown on every tablet (used when opening a note). */
+  private showPage(page: Page | null): void {
+    for (const tablet of this.tablets.values()) this.renderPage(tablet, page);
   }
 
-  /** Replace the page shown on every tablet (used when opening a note). */
-  showPage(page: Page): void {
-    for (const tablet of this.tablets.values()) {
-      this.endStroke(tablet);
-      this.clearMeshes(tablet);
-      tablet.page = page;
-      for (const stroke of page.strokes) this.addStrokeMesh(tablet, stroke);
-    }
+  private renderPage(tablet: TabletInk, page: Page | null): void {
+    // Drop (do not commit) an unfinished stroke, so it cannot land in the
+    // newly opened note. Its mesh is removed with the others below.
+    tablet.active = null;
+    this.clearMeshes(tablet);
+    tablet.page = page;
+    for (const stroke of page?.strokes ?? []) this.addStrokeMesh(tablet, stroke);
   }
 
   private attachTablet(entity: Entity): void {
@@ -135,7 +141,7 @@ export class InkSystem extends createSystem({
       entity,
       surface,
       inkLayer,
-      page: { id: 'unsaved', strokes: [] },
+      page: null,
       meshes: new Map(),
       active: null,
       detach: () => {},
@@ -163,6 +169,7 @@ export class InkSystem extends createSystem({
     };
 
     this.tablets.set(entity, tablet);
+    this.renderPage(tablet, this.document.getActivePage());
   }
 
   private detachTablet(entity: Entity): void {
@@ -175,7 +182,7 @@ export class InkSystem extends createSystem({
   }
 
   private handleDown(tablet: TabletInk, event: InkPointerEvent): void {
-    if (tablet.active) return; // One stroke at a time.
+    if (tablet.active || !tablet.page) return; // One stroke; a note is open.
     if (this.queries.movingHandles.entities.size > 0) return; // Tablet moving.
     if (event.object !== tablet.surface) return; // Bezel, not page.
     if (!this.toPageCoords(tablet, event.point)) return;
@@ -227,12 +234,12 @@ export class InkSystem extends createSystem({
     if (!active) return;
     tablet.active = null;
     const stroke = active.mesh.stroke;
-    tablet.page.strokes.push(stroke);
+    // The session appends the stroke to the active page and autosaves.
+    this.document.commitStroke(stroke);
     devLog(
       'ink',
-      `stroke committed: ${stroke.points.length / 2} points, page has ${tablet.page.strokes.length} strokes`,
+      `stroke committed: ${stroke.points.length / 2} points, page has ${tablet.page?.strokes.length ?? 0} strokes`,
     );
-    this.onStrokeCommitted?.(stroke);
   }
 
   private addStrokeMesh(tablet: TabletInk, stroke: Stroke): StrokeMesh {
