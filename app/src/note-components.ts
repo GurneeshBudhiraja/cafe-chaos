@@ -38,6 +38,24 @@ export const WritingSurface = createComponent(
 );
 
 /**
+ * Marks scenery that exists only for the flat desktop view and recordings
+ * (for example the classroom backdrop). It is hidden during immersive XR so
+ * that, in mixed reality, the user sees their real room through passthrough.
+ */
+export const DesktopBackdrop = createComponent(
+  'DesktopBackdrop',
+  {
+    hideInXR: {
+      type: Types.Boolean,
+      default: true,
+      label: 'Hide in XR',
+      help: 'Hide this entity while an immersive session is active.',
+    },
+  },
+  'Scenery shown only outside immersive XR.',
+);
+
+/**
  * Marks the grab handle that moves and tilts a tablet. The tablet follows the
  * handle only while the handle is grabbed, so writing never moves the tablet.
  */

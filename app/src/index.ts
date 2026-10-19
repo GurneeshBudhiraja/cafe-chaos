@@ -15,6 +15,7 @@ import { provideNoteSession } from './notes/note-services.js';
 import { NoteSession } from './notes/note-session.js';
 import { IndexedDbNoteStore, SimulatedFailureStore } from './notes/note-store.js';
 import { CameraCaptureSystem } from './systems/camera-capture-system.js';
+import { DesktopBackdropSystem } from './systems/desktop-backdrop-system.js';
 import { InkSystem } from './systems/ink-system.js';
 import { NotesPanelSystem } from './systems/notes-panel-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
@@ -37,7 +38,8 @@ World.create(
     .registerSystem(InkSystem)
     .registerSystem(NotesPanelSystem)
     .registerSystem(CameraCaptureSystem)
-    .registerSystem(XrStatusSystem);
+    .registerSystem(XrStatusSystem)
+    .registerSystem(DesktopBackdropSystem);
 
   session.attachLifecycle();
   void session.load();

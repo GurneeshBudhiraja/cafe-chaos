@@ -14,7 +14,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "smoke:camera": "node scripts/smoke-camera.mjs",
-    "smoke:notes": "node scripts/smoke-notes.mjs"
+    "smoke:notes": "node scripts/smoke-notes.mjs",
+    "record:demo": "node scripts/record-demo.mjs",
+    "record:writing": "node scripts/record-writing-flow.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",
@@ -24,11 +26,12 @@
     "three": "npm:super-three@0.181.0"
   },
   "devDependencies": {
-    "@iwsdk/reference": "1.0.1",
     "@iwsdk/cli": "1.0.1",
+    "@iwsdk/reference": "1.0.1",
     "@iwsdk/vite-plugin-dev": "1.0.1",
     "@meta-quest/metavr": "^1.8.1",
     "@types/three": "^0.181.0",
+    "hersheytext": "^2.0.0",
     "typescript": "^5.5.0",
     "vite": "^7.1.4"
   },

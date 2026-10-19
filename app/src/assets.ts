@@ -8,6 +8,12 @@
 
 import { AssetType, defineAssets } from '@iwsdk/core';
 import {
+  studentChairPrototype,
+  studentDeskPrototype,
+  teacherDeskPrototype,
+} from './scene-assets/classroom-furniture.scene-asset.js';
+import { classroomRoomPrototype } from './scene-assets/classroom-room.scene-asset.js';
+import {
   tabletHandlePrototype,
   tabletPrototype,
 } from './scene-assets/tablet.scene-asset.js';
@@ -17,6 +23,11 @@ const publicAssetUrl = (filePath: string): string =>
 
 export default defineAssets({
   tablet: tabletPrototype,
+  // Classroom backdrop (desktop view and recordings only; hidden in XR).
+  'classroom-room': classroomRoomPrototype,
+  'student-desk': studentDeskPrototype,
+  'student-chair': studentChairPrototype,
+  'teacher-desk': teacherDeskPrototype,
   'tablet-handle': tabletHandlePrototype,
   'notes-panel': {
     url: publicAssetUrl('ui/notes-panel.uikitml'),

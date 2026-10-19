@@ -4,6 +4,6 @@
  */
 
 import { defineComponents } from '@iwsdk/core';
-import { TabletHandle, WritingSurface } from './note-components.js';
+import { DesktopBackdrop, TabletHandle, WritingSurface } from './note-components.js';
 
-export default defineComponents([WritingSurface, TabletHandle]);
+export default defineComponents([WritingSurface, TabletHandle, DesktopBackdrop]);

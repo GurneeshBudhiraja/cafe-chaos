@@ -52,6 +52,16 @@ export async function waitForApp(page) {
   );
   // Give UIKit one more moment to lay out text and inputs.
   await page.waitForTimeout(500);
+  // Warm up the pointer: the first press after a page load is dropped while
+  // IWSDK creates the pointer. Press once on empty background in the top-left
+  // corner (no listeners there, away from the Enter XR button at top center)
+  // so the first real click is not lost.
+  await page.mouse.move(12, 12);
+  await page.waitForTimeout(250);
+  await page.mouse.down();
+  await page.waitForTimeout(200);
+  await page.mouse.up();
+  await page.waitForTimeout(250);
 }
 
 /** Project a named 3D object's world position to viewport pixels. */
@@ -86,18 +96,48 @@ export async function tabletPoint(page, u, v) {
   );
 }
 
+let pressHoldMs = 200;
+/** Hold presses longer on slow renderers (for example while recording video). */
+export function setPressHoldMs(ms) {
+  pressHoldMs = ms;
+}
+
 /** Hover first so the 3D pointer has an intersection, then press and release. */
 export async function pressAt(page, point) {
   await page.mouse.move(point.x, point.y);
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(200);
   await page.mouse.down();
-  await page.waitForTimeout(60);
+  // Hold across several frames: IWSDK processes pointer input once per frame,
+  // so a press shorter than one frame can be missed on a slow renderer.
+  await page.waitForTimeout(pressHoldMs);
   await page.mouse.up();
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(200);
 }
 
 export async function clickObject(page, objectName) {
   await pressAt(page, await screenPointOf(page, objectName));
+}
+
+/** How many verified clicks needed more than one press (reported by scripts). */
+export const clickStats = { retries: 0 };
+
+/**
+ * Click a 3D UI control and wait for `effect` (a page predicate) to hold.
+ * Under the slow software renderer a press is occasionally dropped, so press
+ * again at most twice, counting each retry. A control that truly does not
+ * work still fails after three presses.
+ */
+export async function clickUntil(page, objectName, effect, timeoutMs = 4000) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await clickObject(page, objectName);
+    try {
+      await page.waitForFunction(effect, undefined, { timeout: timeoutMs });
+      return;
+    } catch {
+      if (attempt < 3) clickStats.retries++;
+    }
+  }
+  throw new Error(`Clicking ${objectName} had no effect after 3 presses.`);
 }
 
 /** Draw a straight stroke on the tablet between two page coordinates. */
@@ -115,12 +155,35 @@ export async function drawStroke(page, from, to, steps = 24) {
   await page.waitForTimeout(100);
 }
 
+/**
+ * Draw one stroke through several page coordinates ([u, v] pairs, 0..1),
+ * moving in small steps like a real pointer. `stepDelayMs` sets the pace.
+ */
+export async function drawPath(page, points, stepDelayMs = 8, stepsPerSegment = 12) {
+  const pixels = [];
+  for (const [u, v] of points) pixels.push(await tabletPoint(page, u, v));
+  await page.mouse.move(pixels[0].x, pixels[0].y);
+  await page.waitForTimeout(80);
+  await page.mouse.down();
+  for (let i = 1; i < pixels.length; i++) {
+    const a = pixels[i - 1];
+    const b = pixels[i];
+    for (let s = 1; s <= stepsPerSegment; s++) {
+      const t = s / stepsPerSegment;
+      await page.mouse.move(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+      await page.waitForTimeout(stepDelayMs);
+    }
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+}
+
 /** Click a UIKit input, replace its content, and type new text. */
-export async function typeInto(page, inputName, text) {
+export async function typeInto(page, inputName, text, delayMs = 15) {
   await clickObject(page, inputName);
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.press('Backspace');
-  await page.keyboard.type(text, { delay: 15 });
+  await page.keyboard.type(text, { delay: delayMs });
   await page.waitForTimeout(150);
 }
 

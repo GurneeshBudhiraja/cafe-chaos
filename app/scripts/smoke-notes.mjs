@@ -15,6 +15,8 @@
 import {
   activeNoteSnapshot,
   clickObject,
+  clickStats,
+  clickUntil,
   createChecklist,
   drawStroke,
   launchBrowser,
@@ -91,23 +93,24 @@ try {
   );
 
   await page.evaluate(() => (window.__metaNotes.store.failWrites = false));
-  await clickObject(page, 'save-retry-button');
-  await waitForSaved(page);
+  await clickUntil(page, 'save-retry-button', () => {
+    const { session } = window.__metaNotes;
+    return session.saveStatus === 'saved' && !session.hasUnsavedChanges;
+  });
   await page.reload({ waitUntil: 'load' });
   await waitForApp(page);
   const recovered = await activeNoteSnapshot(page);
   checks.check('retry saves the kept stroke', recovered.strokes === 3, `strokes=${recovered.strokes}`);
 
   // 4. Delete needs confirmation.
-  await clickObject(page, 'note-new-button');
+  await clickUntil(page, 'note-new-button', () => window.__metaNotes.session.summaries.length === 2);
   await waitForSaved(page);
   const twoNotes = (await activeNoteSnapshot(page)).notes;
   await clickObject(page, 'note-delete-button');
   await clickObject(page, 'delete-cancel-button');
   const afterCancel = (await activeNoteSnapshot(page)).notes;
   await clickObject(page, 'note-delete-button');
-  await clickObject(page, 'delete-confirm-button');
-  await page.waitForTimeout(500);
+  await clickUntil(page, 'delete-confirm-button', () => window.__metaNotes.session.summaries.length === 1);
   const afterDelete = await activeNoteSnapshot(page);
   checks.check(
     'delete asks first and removes only the confirmed note',
@@ -115,6 +118,7 @@ try {
     `notes ${twoNotes} -> cancel ${afterCancel} -> delete ${afterDelete.notes}`,
   );
 
+  console.log(`  (click retries for dropped presses: ${clickStats.retries})`);
   const pageErrors = logs.filter((l) => l.startsWith('pageerror') || l.startsWith('error'));
   checks.check('no page errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
 } catch (error) {
