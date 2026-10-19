@@ -12,8 +12,8 @@
   "resources": {},
   "nodes": [
     {
-      "id": "plant-sansevieria",
-      "name": "Plant Sansevieria",
+      "id": "tablet",
+      "name": "Tablet",
       "metadata": {
         "iwsdk.validation": {
           "allowFloating": true
@@ -21,83 +21,82 @@
       },
       "content": {
         "type": "asset",
-        "asset": "plant-sansevieria"
+        "asset": "tablet"
       },
       "transform": {
-        "position": [1.2, 0.2, -1.8],
-        "scale": 2
+        "position": [0, 0.95, -0.42],
+        "rotationDeg": [-35, 0, 0]
+      },
+      "components": {
+        "RayInteractable": {},
+        "WritingSurface": {
+          "inkColor": "#1f2937",
+          "inkWidth": 0.006
+        }
+      }
+    },
+    {
+      "id": "tablet-handle",
+      "name": "Tablet Handle",
+      "metadata": {
+        "iwsdk.validation": {
+          "allowFloating": true
+        }
+      },
+      "content": {
+        "type": "asset",
+        "asset": "tablet-handle"
+      },
+      "transform": {
+        "position": [0, 0.8, -0.315],
+        "rotationDeg": [-35, 0, 0]
       },
       "components": {
         "RayInteractable": {},
         "DistanceGrabbable": {
-          "movementMode": "MoveFromTarget"
-        }
-      }
-    },
-    {
-      "id": "robot",
-      "name": "Robot",
-      "metadata": {
-        "iwsdk.validation": {
-          "allowFloating": true
-        }
-      },
-      "content": {
-        "type": "asset",
-        "asset": "robot"
-      },
-      "transform": {
-        "position": [-1.2, 0.4, -1.8]
-      },
-      "components": {
-        "AudioSource": {
-          "src": "./audio/chime.mp3",
-          "maxInstances": 3,
-          "playbackMode": "fade-restart"
+          "movementMode": "MoveFromTarget",
+          "translate": true,
+          "rotate": true,
+          "scale": false
         },
-        "RayInteractable": {},
-        "Robot": {}
+        "OneHandGrabbable": {},
+        "TabletHandle": {
+          "tabletNodeId": "tablet"
+        }
       }
     },
     {
-      "id": "welcome-panel",
-      "name": "Welcome Panel",
+      "id": "tools-panel",
+      "name": "Tools Panel",
       "content": {
         "type": "asset",
-        "asset": "welcome-panel"
+        "asset": "tools-panel"
       },
       "transform": {
-        "position": [0, 1.6, -2],
-        "scale": 0.4
+        "position": [0.42, 1.12, -0.55],
+        "scale": 0.105
+      },
+      "constraints": {
+        "lookAt": {
+          "mode": "yaw-v1",
+          "target": [0, 1.2, 0]
+        }
       },
       "components": {
-        "RayInteractable": {},
-        "ScreenSpace": {
-          "top": "20px",
-          "left": "20px",
-          "width": "25vw",
-          "height": "40%"
-        }
+        "RayInteractable": {}
       }
-    },
-    {
-      "id": "webxr-banner",
-      "name": "WebXR Banner",
-      "metadata": {
-        "iwsdk.validation": {
-          "allowFloating": true
-        }
-      },
-      "content": {
-        "type": "asset",
-        "asset": "webxr-banner"
-      },
-      "transform": {
-        "position": [0, 1, 1.8],
-        "rotationDeg": [0, 180, 0],
-        "scale": [1, -1, 1]
-      },
-      "components": {}
     }
-  ]
+  ],
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [0, 1.32, 0.42],
+        "target": [0.1, 1.0, -0.45],
+        "fov": 60
+      }
+    ]
+  }
 }

@@ -12,7 +12,8 @@
     "reference:warmup": "iwsdk reference warmup",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "smoke:camera": "node scripts/smoke-camera.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

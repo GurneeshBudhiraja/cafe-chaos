@@ -27,11 +27,8 @@
       "near": 0.001,
       "far": 200,
       "camera": {
-        "position": [
-          0,
-          1,
-          0.5
-        ]
+        "position": [0, 1.32, 0.42],
+        "lookAt": [0.1, 1.0, -0.45]
       }
     },
     "features": {
@@ -42,7 +39,8 @@
       "environmentRaycast": true,
       "spatialUI": {
         "kit": "horizon"
-      }
+      },
+      "camera": true
     }
   },
   "dev": {

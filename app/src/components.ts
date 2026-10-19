@@ -1,11 +1,9 @@
 /**
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * Component manifest shared by the app runtime and the scene editor.
+ * Every app component that scenes may author must be listed here.
  */
 
 import { defineComponents } from '@iwsdk/core';
-import { Robot } from './robot-component.js';
+import { TabletHandle, WritingSurface } from './note-components.js';
 
-export default defineComponents([Robot]);
+export default defineComponents([WritingSurface, TabletHandle]);
