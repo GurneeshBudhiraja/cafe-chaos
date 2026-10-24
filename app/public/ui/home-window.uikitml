@@ -10,6 +10,30 @@
   expand toggle, the clock and a small New note button: a pill.
 -->
 <style>
+  @font-face {
+    font-family: bricolage;
+    src: url(../fonts/bricolage-label.ttf);
+    font-weight: 600;
+  }
+
+  @font-face {
+    font-family: bricolage;
+    src: url(../fonts/bricolage-title.ttf);
+    font-weight: 700;
+  }
+
+  @font-face {
+    font-family: bricolage;
+    src: url(../fonts/bricolage-hero.ttf);
+    font-weight: 800;
+  }
+
+  @font-face {
+    font-family: fraunces;
+    src: url(../fonts/fraunces-body.ttf);
+    font-weight: 400;
+  }
+
   .window {
     flex-direction: column;
     padding-top: 10px;
@@ -53,12 +77,14 @@
   }
 
   .clock-time {
+    font-family: bricolage;
     font-size: 40px;
-    font-weight: 700;
+    font-weight: 800;
     color: #15181d;
   }
 
   .clock-date {
+    font-family: fraunces;
     font-size: 14px;
     font-weight: 500;
     color: #3e4552;
@@ -101,6 +127,7 @@
   }
 
   .label {
+    font-family: bricolage;
     font-size: 15px;
     font-weight: 700;
     color: #3e4552;
@@ -137,12 +164,14 @@
   }
 
   .card-title {
+    font-family: bricolage;
     font-size: 15px;
     font-weight: 700;
     color: #15181d;
   }
 
   .card-meta {
+    font-family: fraunces;
     font-size: 12px;
     color: #3e4552;
   }
