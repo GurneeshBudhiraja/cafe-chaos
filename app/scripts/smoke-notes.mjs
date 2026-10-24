@@ -147,6 +147,14 @@ try {
   }, undefined, { timeout: 5000 }).then((h) => h.jsonValue(), () => 0);
   checks.check('recent notes strip scrolls', scrollX > 0, `scrollX=${scrollX}`);
 
+  // The left chevron pages back to the start of the strip.
+  await clickUntil(page, 'recent-prev', () => {
+    let node = window.__metaNotes.world.scene.getObjectByName('recent-card-0').parent;
+    while (node && !node.scrollPosition) node = node.parent;
+    return node?.scrollPosition.peek()[0] === 0;
+  });
+  checks.check('chevron pages the strip back', true);
+
   console.log(`  (click retries for dropped presses: ${clickStats.retries})`);
   const pageErrors = logs.filter((l) => l.startsWith('pageerror') || l.startsWith('error'));
   checks.check('no page errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));

@@ -1,10 +1,14 @@
 <!--
-  Home window: the app's main window (replaces the old notes panel).
-  Layout, outside in: a white border ring (.window) around a glass content
-  area (.inner). Top row: compact toggle (left), clock (centre), settings
-  (right). Middle: scrollable recent-note cards, four visible at a time.
-  Bottom centre: New note. Element ids are addressed from
-  src/systems/home-window-system.ts; keep them stable.
+  Home window: the app's main window, a clear glass panel.
+  Top row: compact toggle (left), clock with save status (centre), settings
+  (right). Middle: recent-note cards, four visible, with chevrons to page
+  through more (a ray or hand drag also scrolls the strip). Bottom centre:
+  New note. Element ids are addressed from src/systems/home-window-system.ts;
+  keep them stable.
+
+  Glass in the headset: passthrough cannot be blurred, so the glass is a
+  blue tint, a bright rim and lighter cards. The tint also keeps the lime
+  text readable over bright rooms.
 
   Compact mode hides everything except the top row, which then shows the
   expand toggle, the clock and a small New note button: a pill.
@@ -36,26 +40,16 @@
 
   .window {
     flex-direction: column;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    padding-left: 10px;
-    padding-right: 10px;
-    border-radius: 40px;
-    background-color: rgba(255, 255, 255, 0.96);
-  }
-
-  .inner {
-    flex-direction: column;
     align-items: stretch;
-    gap: 14px;
-    padding-top: 16px;
-    padding-bottom: 18px;
-    padding-left: 18px;
-    padding-right: 18px;
-    border-radius: 30px;
-    background-color: rgba(236, 240, 246, 0.78);
-    border-width: 1.5px;
-    border-color: rgba(255, 255, 255, 0.95);
+    gap: 18px;
+    padding-top: 22px;
+    padding-bottom: 26px;
+    padding-left: 26px;
+    padding-right: 26px;
+    border-radius: 40px;
+    background-color: rgba(52, 112, 190, 0.46);
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0.6);
   }
 
   .top-row {
@@ -65,29 +59,28 @@
     gap: 16px;
   }
 
+  .icon-button {
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 22px;
+    color: #d4f86b;
+    cursor: pointer;
+  }
+
   .clock {
     flex-direction: column;
     align-items: center;
+    gap: 2px;
     padding-top: 6px;
-    padding-bottom: 8px;
-    padding-left: 22px;
-    padding-right: 22px;
-    border-radius: 20px;
-    background-color: rgba(255, 255, 255, 0.6);
   }
 
   .clock-time {
     font-family: bricolage;
-    font-size: 40px;
+    font-size: 48px;
     font-weight: 800;
-    color: #15181d;
-  }
-
-  .clock-date {
-    font-family: fraunces;
-    font-size: 14px;
-    font-weight: 500;
-    color: #3e4552;
+    color: #d4f86b;
   }
 
   .status-row {
@@ -98,143 +91,203 @@
   }
 
   .status {
+    font-family: fraunces;
     font-size: 13px;
+    color: rgba(226, 250, 168, 0.8);
+  }
+
+  .pill {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.12);
+    border-width: 1.5px;
+    border-color: rgba(212, 248, 107, 0.7);
+    color: #d4f86b;
+    cursor: pointer;
+  }
+
+  .pill-label {
+    font-family: bricolage;
     font-weight: 700;
-    color: #3e4552;
+    color: #d4f86b;
   }
 
   .sheet {
     flex-direction: column;
-    padding-top: 12px;
-    padding-bottom: 12px;
-    padding-left: 16px;
-    padding-right: 16px;
-    border-radius: 18px;
-    background-color: rgba(255, 255, 255, 0.7);
+    padding-top: 14px;
+    padding-bottom: 14px;
+    padding-left: 18px;
+    padding-right: 18px;
+    border-radius: 22px;
+    background-color: rgba(255, 255, 255, 0.12);
+    border-width: 1.5px;
+    border-color: rgba(255, 255, 255, 0.45);
   }
 
   .sheet-text {
+    font-family: fraunces;
     font-size: 15px;
-    color: #15181d;
+    color: #e6fbb4;
   }
 
-  .section-head {
+  .recent-row {
     flex-direction: row;
-    justify-content: space-between;
     align-items: center;
-    padding-left: 6px;
-    padding-right: 6px;
+    gap: 6px;
   }
 
-  .label {
-    font-family: bricolage;
-    font-size: 15px;
-    font-weight: 700;
-    color: #3e4552;
+  .chevron {
+    width: 30px;
+    height: 60px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 15px;
+    color: #d4f86b;
+    cursor: pointer;
   }
 
   .strip {
     flex-direction: row;
-    gap: 12px;
-    width: 532px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    padding-left: 10px;
-    padding-right: 10px;
-    border-radius: 22px;
-    background-color: rgba(255, 255, 255, 0.45);
+    gap: 14px;
+    width: 534px;
+    padding-top: 4px;
+    padding-bottom: 4px;
     overflow: scroll;
+    scrollbar-width: 0px;
+    scrollbar-color: rgba(0, 0, 0, 0);
   }
 
   .card {
     flex-direction: column;
-    justify-content: space-between;
     flex-shrink: 0;
-    width: 118px;
-    height: 96px;
-    padding-top: 12px;
-    padding-bottom: 10px;
-    padding-left: 12px;
+    gap: 6px;
+    width: 123px;
+    height: 128px;
+    padding-top: 16px;
+    padding-bottom: 14px;
+    padding-left: 14px;
     padding-right: 12px;
-    border-radius: 16px;
-    background-color: rgba(255, 255, 255, 0.85);
-    border-width: 1px;
-    border-color: rgba(21, 24, 29, 0.08);
+    border-radius: 22px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-width: 1.5px;
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #d4f86b;
     cursor: pointer;
+  }
+
+  .card-icon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 4px;
   }
 
   .card-title {
     font-family: bricolage;
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 700;
-    color: #15181d;
+    color: #d4f86b;
   }
 
   .card-meta {
     font-family: fraunces;
-    font-size: 12px;
-    color: #3e4552;
+    font-size: 13px;
+    line-height: 1.3;
+    color: #e2faa8;
   }
 
   .bottom-row {
     flex-direction: row;
     justify-content: center;
+    padding-top: 4px;
   }
 </style>
 <div id="home-root" class="window">
-  <div id="home-inner" class="inner">
-    <div class="top-row">
-      <Button id="compact-toggle" variant="secondary">
-        <ButtonIcon><Minimize2></Minimize2></ButtonIcon>
-      </Button>
-      <Button id="expand-toggle" variant="secondary" style="display: none">
-        <ButtonIcon><Maximize2></Maximize2></ButtonIcon>
-      </Button>
-      <div class="clock">
-        <div id="clock-time" class="clock-time">--:--</div>
-        <div id="clock-date" class="clock-date">Today</div>
-      </div>
-      <Button id="settings-button" variant="secondary">
-        <ButtonIcon><Settings></Settings></ButtonIcon>
-      </Button>
-      <Button id="compact-new-button" style="display: none">
-        <ButtonIcon><Plus></Plus></ButtonIcon>
-      </Button>
+  <div class="top-row">
+    <div id="compact-toggle" class="icon-button">
+      <Minimize2 width="26" height="26"></Minimize2>
     </div>
-
-    <div id="status-row" class="status-row">
-      <div id="save-status" class="status">Loading</div>
-      <Button id="save-retry-button" size="sm" style="display: none">
-        <ButtonLabel>Try saving again</ButtonLabel>
-      </Button>
+    <div id="expand-toggle" class="icon-button" style="display: none">
+      <Maximize2 width="26" height="26"></Maximize2>
     </div>
-
-    <div id="settings-sheet" class="sheet" style="display: none">
-      <div class="sheet-text">Settings are coming soon: theme, handedness and pen defaults.</div>
-    </div>
-
-    <div id="recent-section" style="flex-direction: column; gap: 8px">
-      <div class="section-head">
-        <div class="label">Recent notes</div>
-        <div id="recent-count" class="card-meta">0 notes</div>
-      </div>
-      <div id="recent-strip" class="strip">
-        <div id="recent-card-0" class="card"><div id="recent-title-0" class="card-title">Note</div><div id="recent-meta-0" class="card-meta">now</div></div>
-        <div id="recent-card-1" class="card"><div id="recent-title-1" class="card-title">Note</div><div id="recent-meta-1" class="card-meta">now</div></div>
-        <div id="recent-card-2" class="card"><div id="recent-title-2" class="card-title">Note</div><div id="recent-meta-2" class="card-meta">now</div></div>
-        <div id="recent-card-3" class="card"><div id="recent-title-3" class="card-title">Note</div><div id="recent-meta-3" class="card-meta">now</div></div>
-        <div id="recent-card-4" class="card"><div id="recent-title-4" class="card-title">Note</div><div id="recent-meta-4" class="card-meta">now</div></div>
-        <div id="recent-card-5" class="card"><div id="recent-title-5" class="card-title">Note</div><div id="recent-meta-5" class="card-meta">now</div></div>
-        <div id="recent-card-6" class="card"><div id="recent-title-6" class="card-title">Note</div><div id="recent-meta-6" class="card-meta">now</div></div>
-        <div id="recent-card-7" class="card"><div id="recent-title-7" class="card-title">Note</div><div id="recent-meta-7" class="card-meta">now</div></div>
+    <div class="clock">
+      <div id="clock-time" class="clock-time">--:--</div>
+      <div id="status-row" class="status-row">
+        <div id="save-status" class="status">Loading</div>
+        <div id="save-retry-button" class="pill" style="display: none; padding-top: 6px; padding-bottom: 6px; padding-left: 14px; padding-right: 14px">
+          <div class="pill-label" style="font-size: 13px">Try saving again</div>
+        </div>
       </div>
     </div>
+    <div id="settings-button" class="icon-button">
+      <Settings width="28" height="28"></Settings>
+    </div>
+    <div id="compact-new-button" class="icon-button pill" style="display: none">
+      <Plus width="24" height="24"></Plus>
+    </div>
+  </div>
 
-    <div id="bottom-row" class="bottom-row">
-      <Button id="note-new-button">
-        <ButtonIcon><Plus></Plus></ButtonIcon>
-        <ButtonLabel>New note</ButtonLabel>
-      </Button>
+  <div id="settings-sheet" class="sheet" style="display: none">
+    <div class="sheet-text">Settings are coming soon: theme, handedness and pen defaults.</div>
+  </div>
+
+  <div id="recent-section" class="recent-row">
+    <div id="recent-prev" class="chevron">
+      <ChevronLeft width="24" height="24"></ChevronLeft>
+    </div>
+    <div id="recent-strip" class="strip">
+      <div id="recent-card-0" class="card">
+        <FileText id="recent-icon-0-0" class="card-icon"></FileText><MapPin id="recent-icon-0-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-0-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-0-3" class="card-icon" style="display: none"></Star>
+        <div id="recent-title-0" class="card-title">Note</div>
+        <div id="recent-meta-0" class="card-meta">Edited now</div>
+      </div>
+      <div id="recent-card-1" class="card">
+        <FileText id="recent-icon-1-0" class="card-icon"></FileText><MapPin id="recent-icon-1-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-1-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-1-3" class="card-icon" style="display: none"></Star>
+        <div id="recent-title-1" class="card-title">Note</div>
+        <div id="recent-meta-1" class="card-meta">Edited now</div>
+      </div>
+      <div id="recent-card-2" class="card">
+        <FileText id="recent-icon-2-0" class="card-icon"></FileText><MapPin id="recent-icon-2-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-2-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-2-3" class="card-icon" style="display: none"></Star>
+        <div id="recent-title-2" class="card-title">Note</div>
+        <div id="recent-meta-2" class="card-meta">Edited now</div>
+      </div>
+      <div id="recent-card-3" class="card">
+        <FileText id="recent-icon-3-0" class="card-icon"></FileText><MapPin id="recent-icon-3-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-3-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-3-3" class="card-icon" style="display: none"></Star>
+        <div id="recent-title-3" class="card-title">Note</div>
+        <div id="recent-meta-3" class="card-meta">Edited now</div>
+      </div>
+      <div id="recent-card-4" class="card">
+        <FileText id="recent-icon-4-0" class="card-icon"></FileText><MapPin id="recent-icon-4-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-4-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-4-3" class="card-icon" style="display: none"></Star>
+        <div id="recent-title-4" class="card-title">Note</div>
+        <div id="recent-meta-4" class="card-meta">Edited now</div>
+      </div>
+      <div id="recent-card-5" class="card">
+        <FileText id="recent-icon-5-0" class="card-icon"></FileText><MapPin id="recent-icon-5-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-5-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-5-3" class="card-icon" style="display: none"></Star>
+        <div id="recent-title-5" class="card-title">Note</div>
+        <div id="recent-meta-5" class="card-meta">Edited now</div>
+      </div>
+      <div id="recent-card-6" class="card">
+        <FileText id="recent-icon-6-0" class="card-icon"></FileText><MapPin id="recent-icon-6-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-6-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-6-3" class="card-icon" style="display: none"></Star>
+        <div id="recent-title-6" class="card-title">Note</div>
+        <div id="recent-meta-6" class="card-meta">Edited now</div>
+      </div>
+      <div id="recent-card-7" class="card">
+        <FileText id="recent-icon-7-0" class="card-icon"></FileText><MapPin id="recent-icon-7-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-7-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-7-3" class="card-icon" style="display: none"></Star>
+        <div id="recent-title-7" class="card-title">Note</div>
+        <div id="recent-meta-7" class="card-meta">Edited now</div>
+      </div>
+    </div>
+    <div id="recent-next" class="chevron">
+      <ChevronRight width="24" height="24"></ChevronRight>
+    </div>
+  </div>
+
+  <div id="bottom-row" class="bottom-row">
+    <div id="note-new-button" class="pill" style="width: 230px; height: 46px">
+      <Plus width="22" height="22"></Plus>
+      <div class="pill-label" style="font-size: 19px">new note</div>
     </div>
   </div>
 </div>
