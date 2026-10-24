@@ -1,0 +1,122 @@
+<!--
+  Tools panel: XR entry, the camera capture trial, and device feature status.
+  Element ids below are addressed from src/systems/*.ts; keep them stable.
+  Panel, Button, ButtonIcon, ButtonLabel and Divider come from the Horizon kit;
+  the icons are bundled Lucide components.
+-->
+<style>
+  .panel-root {
+    flex-direction: column;
+    width: 344px;
+    padding-bottom: 16px;
+  }
+
+  .section {
+    flex-direction: column;
+    padding-top: 12px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .heading {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #272727;
+  }
+
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #272727;
+    margin-bottom: 6px;
+  }
+
+  .body-text {
+    font-size: 13px;
+    line-height: 1.3;
+    color: #3a3a3a;
+  }
+
+  .button-row {
+    flex-direction: row;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .preview {
+    width: 304px;
+    height: 171px;
+    margin-top: 10px;
+    border-radius: 8px;
+    background-color: #e8e6e1;
+  }
+
+  .feature-row {
+    width: 304px;
+    flex-direction: row;
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+</style>
+<Panel class="panel-root">
+  <div class="section">
+    <div class="heading">Meta Notes</div>
+    <div class="button-row">
+      <Button id="xr-enter-button">
+        <ButtonIcon><RectangleGoggles></RectangleGoggles></ButtonIcon>
+        <ButtonLabel>Enter XR</ButtonLabel>
+      </Button>
+      <Button id="xr-exit-button" style="display: none">
+        <ButtonIcon><LogIn></LogIn></ButtonIcon>
+        <ButtonLabel>Exit to browser</ButtonLabel>
+      </Button>
+    </div>
+  </div>
+
+  <div class="section">
+    <Divider></Divider>
+    <div class="section-title" style="margin-top: 10px">Camera capture</div>
+    <div id="camera-status" class="body-text">
+      Camera is off. Start it to take a still image.
+    </div>
+    <div class="button-row">
+      <Button id="camera-start-button">
+        <ButtonIcon><Camera></Camera></ButtonIcon>
+        <ButtonLabel>Start camera</ButtonLabel>
+      </Button>
+      <Button id="camera-capture-button" style="display: none">
+        <ButtonIcon><Aperture></Aperture></ButtonIcon>
+        <ButtonLabel>Capture</ButtonLabel>
+      </Button>
+      <Button id="camera-stop-button" style="display: none">
+        <ButtonIcon><X></X></ButtonIcon>
+        <ButtonLabel>Stop</ButtonLabel>
+      </Button>
+    </div>
+    <!-- src starts as a 16x9 neutral placeholder; the camera system swaps in
+         the live video texture and then the captured still. -->
+    <img id="camera-preview" class="preview" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAIAAAC0SDtlAAAAFElEQVR42mN48ewhSYhhVMOg0AAA8pWCgD1bYT4AAAAASUVORK5CYII=" />
+  </div>
+
+  <div class="section">
+    <Divider></Divider>
+    <div class="section-title" style="margin-top: 10px">Device features</div>
+    <div class="feature-row">
+      <div class="body-text">Camera</div>
+      <div id="feature-camera" class="body-text">Checking</div>
+    </div>
+    <div class="feature-row">
+      <div class="body-text">Hand tracking</div>
+      <div id="feature-hands" class="body-text">Checking</div>
+    </div>
+    <div class="feature-row">
+      <div class="body-text">Surfaces</div>
+      <div id="feature-planes" class="body-text">Checking</div>
+    </div>
+    <div class="feature-row">
+      <div class="body-text">Room anchors</div>
+      <div id="feature-anchors" class="body-text">Checking</div>
+    </div>
+  </div>
+</Panel>
