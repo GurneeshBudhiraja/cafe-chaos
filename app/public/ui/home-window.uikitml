@@ -7,8 +7,8 @@
   keep them stable.
 
   Glass in the headset: passthrough cannot be blurred, so the glass is a
-  blue tint, a bright rim and lighter cards. The tint also keeps the lime
-  text readable over bright rooms.
+  blue tint, a bright rim and lighter cards. The tint is deep enough to keep
+  the lime text readable over bright rooms (checked over IWER's grey room).
 
   Compact mode hides everything except the top row, which then shows the
   expand toggle, the clock and a small New note button: a pill.
@@ -47,7 +47,7 @@
     padding-left: 26px;
     padding-right: 26px;
     border-radius: 40px;
-    background-color: rgba(52, 112, 190, 0.46);
+    background-color: rgba(30, 84, 160, 0.58);
     border-width: 2px;
     border-color: rgba(255, 255, 255, 0.6);
   }

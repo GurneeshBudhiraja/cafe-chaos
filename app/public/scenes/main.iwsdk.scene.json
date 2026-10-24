@@ -798,7 +798,7 @@
         "asset": "tools-panel"
       },
       "transform": {
-        "position": [0.42, 1.12, -0.55],
+        "position": [0.58, 1.12, -0.5],
         "scale": 0.105
       },
       "constraints": {

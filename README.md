@@ -50,19 +50,21 @@ separately and remain open.
 
 ### Home window (branch `Charan/home-window`)
 
-The old Notes panel is replaced by a home window: a white border around a
-glass content area, with compact mode (top left), a live clock (top centre),
-settings (top right, placeholder sheet), save status, a scrollable strip of
-recent notes (four visible; tap a card to open that note on the tablet) and
-New note (bottom centre). Compact mode shrinks it to a pill with the clock,
-expand and New note. New notes get a date-and-time title.
+The old Notes panel is replaced by a liquid-glass home window (blue tint,
+bright rim, lime text; Bricolage Grotesque and Fraunces): compact mode (top
+left), a live clock with the save status under it (top centre), settings
+(top right, placeholder sheet), recent-note cards (four visible; chevrons or
+a drag page through more; tap a card to open that note on the tablet) and
+New note (bottom centre). Compact mode shrinks it to a glass pill with the
+clock, expand and New note. The tools panel uses the same glass. New notes
+get a date-and-time title. Headset walkthrough: `npm run record:home`.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
 | New note adds a recent card | Pass | `npm run smoke:notes` |
 | Tapping an older card reopens that note | Pass | Strokes re-render on the tablet |
 | Compact mode collapses and expands | Pass | Recent notes hide in compact mode and return on expand |
-| Recent strip scrolls past four notes | Pass | Mouse wheel on desktop; XR rays and hands drag to scroll |
+| Recent strip scrolls past four notes | Pass | Chevrons page by four; wheel on desktop; XR rays and hands drag (IWSDK pointer workaround in `xr-scroll-fix-system.ts`) |
 
 Removed with the old panel: rename, typed text and delete. The note model and
 session still support them; they need a new home in the UI.
