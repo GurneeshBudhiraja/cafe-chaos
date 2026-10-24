@@ -56,7 +56,16 @@ left), a live clock with the save status under it (top centre), settings
 (top right, placeholder sheet), recent-note cards (four visible; chevrons or
 a drag page through more; tap a card to open that note on the tablet) and
 New note (bottom centre). Compact mode shrinks it to a glass pill with the
-clock, expand and New note. The tools panel uses the same glass. New notes
+clock, expand and New note. The glass is clear (faint white fill and a bright
+rim, no tint).
+
+Launch view: the home window is the only thing in the scene, centred at eye
+height 1.2 m ahead, with passthrough (the real room) behind it in the
+headset. The tablet, the tools panel (camera trial, device status) and the
+classroom backdrop are out of the scene for now; their code stays. Scripts
+that need them (`smoke:camera`, `record:demo`, `record:writing`,
+`record:headset`, and the writing step of `record:home`) will fail until they
+are placed again. New notes
 get a date-and-time title. Headset walkthrough: `npm run record:home`.
 
 | Check | Result | Evidence |

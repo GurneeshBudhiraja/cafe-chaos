@@ -2,11 +2,12 @@
  * Notes acceptance smoke test (roadmap checks for 18 October).
  *
  * Runs in a fresh browser profile (empty IndexedDB) against the dev server:
- *  1. Draw two strokes on the first note, wait for "Saved".
- *  2. Reload five times; the note's title and strokes must match and the
- *     tablet must render every stroke.
- *  3. Make writes fail, draw a stroke: the app must show "Save failed", keep
- *     the stroke on screen, and save it after "Try saving again".
+ *  1. Add two strokes to the first note, wait for "Saved". The tablet is out
+ *     of the launch view for now, so strokes go in through the note session
+ *     (the same command the tablet uses).
+ *  2. Reload five times; the note's title and strokes must match.
+ *  3. Make writes fail, add a stroke: the app must show "Save failed", keep
+ *     the stroke, and save it after "Try saving again".
  *  4. Home window: New note adds a recent card; tapping the older card
  *     reopens that note; compact mode hides the full window and restores it;
  *     with more notes than fit, the strip scrolls.
@@ -19,7 +20,6 @@ import {
   clickStats,
   clickUntil,
   createChecklist,
-  drawStroke,
   launchBrowser,
   openApp,
   screenPointOf,
@@ -27,6 +27,26 @@ import {
   waitForApp,
   waitForSaved,
 } from './lib/app-driver.mjs';
+
+/** Commit a 25-point straight stroke (page coordinates) to the active note. */
+function addStroke(page, from, to) {
+  return page.evaluate(
+    ([a, b]) => {
+      const points = [];
+      for (let i = 0; i <= 24; i++) {
+        points.push(a[0] + ((b[0] - a[0]) * i) / 24, a[1] + ((b[1] - a[1]) * i) / 24);
+      }
+      window.__metaNotes.session.commitStroke({
+        id: crypto.randomUUID(),
+        tool: 'pen',
+        color: '#1d4ed8',
+        width: 0.004,
+        points,
+      });
+    },
+    [from, to],
+  );
+}
 
 const RELOADS = 5;
 const browser = await launchBrowser();
@@ -39,13 +59,13 @@ try {
   const { page } = app;
   logs = app.logs;
 
-  // 1. Create content through the real UI.
-  await drawStroke(page, [0.15, 0.3], [0.8, 0.4]);
-  await drawStroke(page, [0.2, 0.7], [0.6, 0.55]);
+  // 1. Create content.
+  await addStroke(page, [0.15, 0.3], [0.8, 0.4]);
+  await addStroke(page, [0.2, 0.7], [0.6, 0.55]);
   await waitForSaved(page);
   const original = await activeNoteSnapshot(page);
   checks.check(
-    'content created through the UI',
+    'note content is created',
     original.title.length > 0 && original.strokes === 2,
     JSON.stringify(original),
   );
@@ -61,8 +81,7 @@ try {
       after.title === original.title &&
       after.text === original.text &&
       after.strokes === original.strokes &&
-      after.points === original.points &&
-      after.renderedStrokes === original.strokes;
+      after.points === original.points;
     if (same) survived++;
     else console.log(`  reload ${i} mismatch: ${JSON.stringify(after)}`);
   }
@@ -70,7 +89,7 @@ try {
 
   // 3. Simulated save failure keeps the work.
   await page.evaluate(() => (window.__metaNotes.store.failWrites = true));
-  await drawStroke(page, [0.3, 0.15], [0.7, 0.2]);
+  await addStroke(page, [0.3, 0.15], [0.7, 0.2]);
   await page.waitForFunction(() => window.__metaNotes.session.saveStatus === 'failed', undefined, {
     timeout: 10000,
   });
@@ -113,8 +132,8 @@ try {
   const reopened = await activeNoteSnapshot(page);
   checks.check(
     'new note adds a card; tapping the older card reopens it',
-    second.notes === 2 && second.id !== original.id && reopened.id === original.id && reopened.renderedStrokes === 3,
-    `notes=${second.notes}, reopened strokes=${reopened.renderedStrokes}`,
+    second.notes === 2 && second.id !== original.id && reopened.id === original.id && reopened.strokes === 3,
+    `notes=${second.notes}, reopened strokes=${reopened.strokes}`,
   );
 
   // UIKit's isVisible signal shows whether an element is displayed.

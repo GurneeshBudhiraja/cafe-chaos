@@ -136,7 +136,9 @@ function installHelpers(page) {
         await call('set_transform', { device: 'headset', position: { x: 0, y: 1.22, z: 0.1 } });
         await call('look_at', { device: 'headset', target: headTarget });
         await call('set_transform', { device: 'hand-right', position: { x: 0.16, y: 1.0, z: -0.1 } });
-        await call('look_at', { device: 'hand-right', target: toWorld(0.5, 0.5) });
+        // Aim the hand at the tablet when there is one, else where the head looks.
+        const handTarget = surface() ? toWorld(0.5, 0.5) : headTarget;
+        await call('look_at', { device: 'hand-right', target: handTarget });
         await sleep(600);
         hidePanels();
       },

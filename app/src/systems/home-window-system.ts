@@ -34,8 +34,8 @@ const CARDS_PER_PAGE = 4;
 
 const LIME = '#d4f86b';
 const LIME_HIDDEN = 'rgba(212, 248, 107, 0)';
-const CARD_COLOR = 'rgba(255, 255, 255, 0.1)';
-const CARD_BORDER = 'rgba(255, 255, 255, 0.5)';
+const CARD_COLOR = 'rgba(255, 255, 255, 0.12)';
+const CARD_BORDER = 'rgba(255, 255, 255, 0.65)';
 const CARD_ACTIVE_COLOR = 'rgba(212, 248, 107, 0.18)';
 const STATUS_COLOR = 'rgba(226, 250, 168, 0.8)';
 const STATUS_FAILED_COLOR = '#ffb4a8';
