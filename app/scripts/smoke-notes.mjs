@@ -2,26 +2,27 @@
  * Notes acceptance smoke test (roadmap checks for 18 October).
  *
  * Runs in a fresh browser profile (empty IndexedDB) against the dev server:
- *  1. Rename the first note, type text, draw two strokes, wait for "Saved".
- *  2. Reload five times; the note's title, text, and strokes must match and
- *     the tablet must render every stroke.
+ *  1. Draw two strokes on the first note, wait for "Saved".
+ *  2. Reload five times; the note's title and strokes must match and the
+ *     tablet must render every stroke.
  *  3. Make writes fail, draw a stroke: the app must show "Save failed", keep
  *     the stroke on screen, and save it after "Try saving again".
- *  4. Create a second note, cancel a delete, then confirm a delete.
+ *  4. Home window: New note adds a recent card; tapping the older card
+ *     reopens that note; compact mode hides the full window and restores it;
+ *     with more notes than fit, the strip scrolls.
  *
  * Usage: start the dev server (`npm run dev`), then `npm run smoke:notes`.
  */
 
 import {
   activeNoteSnapshot,
-  clickObject,
   clickStats,
   clickUntil,
   createChecklist,
   drawStroke,
   launchBrowser,
   openApp,
-  typeInto,
+  screenPointOf,
   VIEWPORT,
   waitForApp,
   waitForSaved,
@@ -39,15 +40,13 @@ try {
   logs = app.logs;
 
   // 1. Create content through the real UI.
-  await typeInto(page, 'note-title-input', 'Lab notes');
-  await typeInto(page, 'note-text-input', 'Check pH at 3 pm');
   await drawStroke(page, [0.15, 0.3], [0.8, 0.4]);
   await drawStroke(page, [0.2, 0.7], [0.6, 0.55]);
   await waitForSaved(page);
   const original = await activeNoteSnapshot(page);
   checks.check(
     'content created through the UI',
-    original.title === 'Lab notes' && original.text === 'Check pH at 3 pm' && original.strokes === 2,
+    original.title.length > 0 && original.strokes === 2,
     JSON.stringify(original),
   );
 
@@ -77,18 +76,21 @@ try {
   });
   const failedState = await page.evaluate(() => {
     const { session, world } = window.__metaNotes;
-    const alert = world.scene.getObjectByName('save-alert');
+    const retry = world.scene.getObjectByName('save-retry-button');
     return {
       status: session.saveStatus,
       unsaved: session.hasUnsavedChanges,
       strokes: session.active.pages[0].strokes.length,
-      alertShown: alert?.properties?.peek?.()?.display !== 'none',
+      retryShown: retry?.isVisible.peek() === true,
       error: session.lastError,
     };
   });
   checks.check(
     'save failure is reported and the stroke is kept',
-    failedState.status === 'failed' && failedState.unsaved && failedState.strokes === 3,
+    failedState.status === 'failed' &&
+      failedState.unsaved &&
+      failedState.strokes === 3 &&
+      failedState.retryShown,
     JSON.stringify(failedState),
   );
 
@@ -102,31 +104,48 @@ try {
   const recovered = await activeNoteSnapshot(page);
   checks.check('retry saves the kept stroke', recovered.strokes === 3, `strokes=${recovered.strokes}`);
 
-  // 4. Delete needs confirmation.
+  // 4. Home window: new note, recent cards, compact mode.
   await clickUntil(page, 'note-new-button', () => window.__metaNotes.session.summaries.length === 2);
   await waitForSaved(page);
-  const twoNotes = (await activeNoteSnapshot(page)).notes;
-  // UIKit's isVisible signal shows whether the confirmation row is displayed.
-  const confirmShown = () =>
-    window.__metaNotes.world.scene.getObjectByName('delete-confirm').isVisible.peek() === true;
-  const confirmHidden = () =>
-    window.__metaNotes.world.scene.getObjectByName('delete-confirm').isVisible.peek() === false;
-  await clickUntil(page, 'note-delete-button', confirmShown);
-  await clickUntil(page, 'delete-cancel-button', confirmHidden);
-  const afterCancel = (await activeNoteSnapshot(page)).notes;
-  await clickUntil(page, 'note-delete-button', confirmShown);
-  // Done when one note is left and the remaining note is open again (the
-  // session briefly has no active note while it loads the next one).
-  await clickUntil(page, 'delete-confirm-button', () => {
-    const { session } = window.__metaNotes;
-    return session.summaries.length === 1 && session.active !== null;
-  });
-  const afterDelete = await activeNoteSnapshot(page);
+  const second = await activeNoteSnapshot(page);
+  // Cards are most recent first, so the original note is now card 1.
+  await clickUntil(page, 'recent-card-1', () => window.__metaNotes.session.active?.pages[0].strokes.length === 3);
+  const reopened = await activeNoteSnapshot(page);
   checks.check(
-    'delete asks first and removes only the confirmed note',
-    twoNotes === 2 && afterCancel === 2 && afterDelete.notes === 1 && afterDelete.id === original.id,
-    `notes ${twoNotes} -> cancel ${afterCancel} -> delete ${afterDelete.notes}`,
+    'new note adds a card; tapping the older card reopens it',
+    second.notes === 2 && second.id !== original.id && reopened.id === original.id && reopened.renderedStrokes === 3,
+    `notes=${second.notes}, reopened strokes=${reopened.renderedStrokes}`,
   );
+
+  // UIKit's isVisible signal shows whether an element is displayed.
+  const recentShown = () =>
+    window.__metaNotes.world.scene.getObjectByName('recent-section').isVisible.peek() === true;
+  const recentHidden = () =>
+    window.__metaNotes.world.scene.getObjectByName('recent-section').isVisible.peek() === false;
+  await clickUntil(page, 'compact-toggle', recentHidden);
+  await clickUntil(page, 'expand-toggle', recentShown);
+  checks.check('compact mode collapses and expands the home window', true);
+
+  // With more notes than fit, the recent strip scrolls. On desktop a mouse
+  // scrolls UIKit with the wheel; XR rays and hands scroll by dragging.
+  await page.evaluate(async () => {
+    for (let i = 0; i < 4; i++) await window.__metaNotes.session.createNote(`Extra ${i + 1}`);
+  });
+  await waitForSaved(page);
+  const strip = await screenPointOf(page, 'recent-card-1');
+  await page.mouse.move(strip.x, strip.y);
+  for (let i = 0; i < 5; i++) {
+    await page.mouse.wheel(80, 0);
+    await page.waitForTimeout(150);
+  }
+  const scrollX = await page.waitForFunction(() => {
+    // The strip has no bound id, so find the scroll container above a card.
+    let node = window.__metaNotes.world.scene.getObjectByName('recent-card-0').parent;
+    while (node && !node.scrollPosition) node = node.parent;
+    const x = node?.scrollPosition.peek()[0] ?? 0;
+    return x > 0 ? x : false;
+  }, undefined, { timeout: 5000 }).then((h) => h.jsonValue(), () => 0);
+  checks.check('recent notes strip scrolls', scrollX > 0, `scrollX=${scrollX}`);
 
   console.log(`  (click retries for dropped presses: ${clickStats.retries})`);
   const pageErrors = logs.filter((l) => l.startsWith('pageerror') || l.startsWith('error'));

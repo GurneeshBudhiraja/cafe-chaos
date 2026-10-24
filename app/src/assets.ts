@@ -29,10 +29,10 @@ export default defineAssets({
   'student-chair': studentChairPrototype,
   'teacher-desk': teacherDeskPrototype,
   'tablet-handle': tabletHandlePrototype,
-  'notes-panel': {
-    url: publicAssetUrl('ui/notes-panel.uikitml'),
+  'home-window': {
+    url: publicAssetUrl('ui/home-window.uikitml'),
     type: AssetType.UIKitML,
-    name: 'Notes Panel',
+    name: 'Home Window',
   },
   'tools-panel': {
     url: publicAssetUrl('ui/tools-panel.uikitml'),

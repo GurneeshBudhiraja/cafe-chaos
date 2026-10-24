@@ -24,7 +24,6 @@ import {
   screenPointOf,
   pressAt,
   setPressHoldMs,
-  typeInto,
   waitForApp,
   waitForSaved,
 } from './lib/app-driver.mjs';
@@ -58,9 +57,9 @@ const trimSeconds = Math.max(0, (Date.now() - startedAt) / 1000 - 0.3);
 const SHOTS = {
   classroom: [[1.1, 1.75, 1.7], [0, 1.0, -1.6]],
   overview: [[0, 1.34, 0.62], [0, 1.0, -0.45]],
-  // Panel close-ups sit 0.55 m in front of each panel, along its facing
-  // direction, so the whole panel fits even when the save alert grows it.
-  notes: [[-0.1, 1.18, -0.12], [-0.44, 1.12, -0.55]],
+  // Panel close-ups sit in front of each panel, along its facing direction,
+  // so the whole panel fits even when the save status grows it.
+  notes: [[0, 1.3, -0.08], [0, 1.29, -0.72]],
   tablet: [[0, 1.2, -0.06], [0, 0.95, -0.42]],
   tools: [[0.1, 1.18, -0.12], [0.42, 1.12, -0.55]],
 };
@@ -194,10 +193,7 @@ try {
   await page.waitForTimeout(800);
 
   await shot('notes');
-  await caption('Type a title and a short note');
-  await typeInto(page, 'note-title-input', 'Lab notes', 70);
-  await typeInto(page, 'note-text-input', 'Check pH at 3 pm', 55);
-  await page.waitForTimeout(800);
+  await caption('Home window: clock, save status, recent notes and New note', 2500);
 
   await shot('tablet');
   await caption('Write on the tablet (mouse here; hand pinch in XR)');
@@ -221,7 +217,7 @@ try {
   await caption('Reload the page: the note comes back from local storage', 1200);
   await page.reload({ waitUntil: 'load' });
   await waitForApp(page);
-  await caption('After reload: title, text, and every stroke restored', 2500);
+  await caption('After reload: the note and every stroke restored', 2500);
 
   await shot('tablet', 700);
   await caption('Simulated save failure: new ink is kept on screen');
@@ -235,20 +231,18 @@ try {
   await clickUntil('save-retry-button', savedAll);
   await page.waitForTimeout(2000);
 
-  await caption('New note, then delete it: delete always asks first');
-  await page.evaluate(() => (window.__demoNotes = window.__metaNotes.session.summaries.length));
-  await clickUntil('note-new-button', () => window.__metaNotes.session.summaries.length > window.__demoNotes);
+  await caption('New note adds a card; tap the older card to reopen it');
+  await page.evaluate(() => (window.__demoNote = window.__metaNotes.session.active.id));
+  await clickUntil('note-new-button', () => window.__metaNotes.session.active.id !== window.__demoNote);
   await waitForSaved(page);
-  await typeInto(page, 'note-title-input', 'Shopping', 70);
   await page.waitForTimeout(1200);
-  await clickObject(page, 'note-delete-button');
-  await page.waitForTimeout(2000);
-  await clickObject(page, 'delete-cancel-button');
-  await caption('Keep note: nothing is deleted', 2000);
-  await clickObject(page, 'note-delete-button');
+  await clickUntil('recent-card-1', () => window.__metaNotes.session.active.id === window.__demoNote);
   await page.waitForTimeout(1500);
-  await clickUntil('delete-confirm-button', () => window.__metaNotes.session.summaries.length === 1);
-  await caption('Delete note: only the confirmed note is removed', 2500);
+  await caption('Compact mode shrinks the window to a pill');
+  await clickObject(page, 'compact-toggle');
+  await page.waitForTimeout(2000);
+  await clickObject(page, 'expand-toggle');
+  await page.waitForTimeout(1500);
 
   await shot('classroom', 1800);
   await caption('Next: pen tools. Headset checks are still pending.', 3000);

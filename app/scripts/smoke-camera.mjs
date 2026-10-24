@@ -16,6 +16,7 @@
  */
 
 import {
+  clickStats,
   createChecklist,
   launchBrowser,
   openApp,
@@ -50,13 +51,17 @@ try {
     { timeout: TIMEOUT_MS },
   ).catch(() => {});
   await page.waitForTimeout(1500);
-  await pressAt(page, await screenPointOf(page, 'camera-capture-button'));
-
-  const deadline = Date.now() + TIMEOUT_MS;
-  while (!logs.some((l) => l.includes('[MetaNotes:camera] captured'))) {
-    if (Date.now() > deadline) throw new Error('No capture log line seen.');
-    await page.waitForTimeout(250);
+  // The slow software renderer can drop a press right after the panel
+  // re-lays out, so press again (at most twice, counted) if nothing happens.
+  const capturedLog = () => logs.some((l) => l.includes('[MetaNotes:camera] captured'));
+  for (let attempt = 1; attempt <= 3 && !capturedLog(); attempt++) {
+    if (attempt > 1) clickStats.retries++;
+    await pressAt(page, await screenPointOf(page, 'camera-capture-button'));
+    const deadline = Date.now() + TIMEOUT_MS / 3;
+    while (!capturedLog() && Date.now() < deadline) await page.waitForTimeout(250);
   }
+  if (!capturedLog()) throw new Error('No capture log line seen after 3 presses.');
+  console.log(`  (click retries for dropped presses: ${clickStats.retries})`);
   await page.screenshot({ path: 'artifacts/smoke-camera.png' });
   const captured = logs.find((l) => l.includes('[MetaNotes:camera] captured'));
   checks.check('camera capture produced a still image', true, captured);

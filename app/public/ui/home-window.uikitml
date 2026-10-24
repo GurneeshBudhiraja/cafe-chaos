@@ -1,0 +1,211 @@
+<!--
+  Home window: the app's main window (replaces the old notes panel).
+  Layout, outside in: a white border ring (.window) around a glass content
+  area (.inner). Top row: compact toggle (left), clock (centre), settings
+  (right). Middle: scrollable recent-note cards, four visible at a time.
+  Bottom centre: New note. Element ids are addressed from
+  src/systems/home-window-system.ts; keep them stable.
+
+  Compact mode hides everything except the top row, which then shows the
+  expand toggle, the clock and a small New note button: a pill.
+-->
+<style>
+  .window {
+    flex-direction: column;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-radius: 40px;
+    background-color: rgba(255, 255, 255, 0.96);
+  }
+
+  .inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding-top: 16px;
+    padding-bottom: 18px;
+    padding-left: 18px;
+    padding-right: 18px;
+    border-radius: 30px;
+    background-color: rgba(236, 240, 246, 0.78);
+    border-width: 1.5px;
+    border-color: rgba(255, 255, 255, 0.95);
+  }
+
+  .top-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .clock {
+    flex-direction: column;
+    align-items: center;
+    padding-top: 6px;
+    padding-bottom: 8px;
+    padding-left: 22px;
+    padding-right: 22px;
+    border-radius: 20px;
+    background-color: rgba(255, 255, 255, 0.6);
+  }
+
+  .clock-time {
+    font-size: 40px;
+    font-weight: 700;
+    color: #15181d;
+  }
+
+  .clock-date {
+    font-size: 14px;
+    font-weight: 500;
+    color: #3e4552;
+  }
+
+  .status-row {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .status {
+    font-size: 13px;
+    font-weight: 700;
+    color: #3e4552;
+  }
+
+  .sheet {
+    flex-direction: column;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 18px;
+    background-color: rgba(255, 255, 255, 0.7);
+  }
+
+  .sheet-text {
+    font-size: 15px;
+    color: #15181d;
+  }
+
+  .section-head {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .label {
+    font-size: 15px;
+    font-weight: 700;
+    color: #3e4552;
+  }
+
+  .strip {
+    flex-direction: row;
+    gap: 12px;
+    width: 532px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-radius: 22px;
+    background-color: rgba(255, 255, 255, 0.45);
+    overflow: scroll;
+  }
+
+  .card {
+    flex-direction: column;
+    justify-content: space-between;
+    flex-shrink: 0;
+    width: 118px;
+    height: 96px;
+    padding-top: 12px;
+    padding-bottom: 10px;
+    padding-left: 12px;
+    padding-right: 12px;
+    border-radius: 16px;
+    background-color: rgba(255, 255, 255, 0.85);
+    border-width: 1px;
+    border-color: rgba(21, 24, 29, 0.08);
+    cursor: pointer;
+  }
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #15181d;
+  }
+
+  .card-meta {
+    font-size: 12px;
+    color: #3e4552;
+  }
+
+  .bottom-row {
+    flex-direction: row;
+    justify-content: center;
+  }
+</style>
+<div id="home-root" class="window">
+  <div id="home-inner" class="inner">
+    <div class="top-row">
+      <Button id="compact-toggle" variant="secondary">
+        <ButtonIcon><Minimize2></Minimize2></ButtonIcon>
+      </Button>
+      <Button id="expand-toggle" variant="secondary" style="display: none">
+        <ButtonIcon><Maximize2></Maximize2></ButtonIcon>
+      </Button>
+      <div class="clock">
+        <div id="clock-time" class="clock-time">--:--</div>
+        <div id="clock-date" class="clock-date">Today</div>
+      </div>
+      <Button id="settings-button" variant="secondary">
+        <ButtonIcon><Settings></Settings></ButtonIcon>
+      </Button>
+      <Button id="compact-new-button" style="display: none">
+        <ButtonIcon><Plus></Plus></ButtonIcon>
+      </Button>
+    </div>
+
+    <div id="status-row" class="status-row">
+      <div id="save-status" class="status">Loading</div>
+      <Button id="save-retry-button" size="sm" style="display: none">
+        <ButtonLabel>Try saving again</ButtonLabel>
+      </Button>
+    </div>
+
+    <div id="settings-sheet" class="sheet" style="display: none">
+      <div class="sheet-text">Settings are coming soon: theme, handedness and pen defaults.</div>
+    </div>
+
+    <div id="recent-section" style="flex-direction: column; gap: 8px">
+      <div class="section-head">
+        <div class="label">Recent notes</div>
+        <div id="recent-count" class="card-meta">0 notes</div>
+      </div>
+      <div id="recent-strip" class="strip">
+        <div id="recent-card-0" class="card"><div id="recent-title-0" class="card-title">Note</div><div id="recent-meta-0" class="card-meta">now</div></div>
+        <div id="recent-card-1" class="card"><div id="recent-title-1" class="card-title">Note</div><div id="recent-meta-1" class="card-meta">now</div></div>
+        <div id="recent-card-2" class="card"><div id="recent-title-2" class="card-title">Note</div><div id="recent-meta-2" class="card-meta">now</div></div>
+        <div id="recent-card-3" class="card"><div id="recent-title-3" class="card-title">Note</div><div id="recent-meta-3" class="card-meta">now</div></div>
+        <div id="recent-card-4" class="card"><div id="recent-title-4" class="card-title">Note</div><div id="recent-meta-4" class="card-meta">now</div></div>
+        <div id="recent-card-5" class="card"><div id="recent-title-5" class="card-title">Note</div><div id="recent-meta-5" class="card-meta">now</div></div>
+        <div id="recent-card-6" class="card"><div id="recent-title-6" class="card-title">Note</div><div id="recent-meta-6" class="card-meta">now</div></div>
+        <div id="recent-card-7" class="card"><div id="recent-title-7" class="card-title">Note</div><div id="recent-meta-7" class="card-meta">now</div></div>
+      </div>
+    </div>
+
+    <div id="bottom-row" class="bottom-row">
+      <Button id="note-new-button">
+        <ButtonIcon><Plus></Plus></ButtonIcon>
+        <ButtonLabel>New note</ButtonLabel>
+      </Button>
+    </div>
+  </div>
+</div>

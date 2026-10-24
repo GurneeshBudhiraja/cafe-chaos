@@ -17,7 +17,7 @@ import { IndexedDbNoteStore, SimulatedFailureStore } from './notes/note-store.js
 import { CameraCaptureSystem } from './systems/camera-capture-system.js';
 import { DesktopBackdropSystem } from './systems/desktop-backdrop-system.js';
 import { InkSystem } from './systems/ink-system.js';
-import { NotesPanelSystem } from './systems/notes-panel-system.js';
+import { HomeWindowSystem } from './systems/home-window-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
 import { XrStatusSystem } from './systems/xr-status-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
@@ -36,7 +36,7 @@ World.create(
   world
     .registerSystem(TabletHandleSystem)
     .registerSystem(InkSystem)
-    .registerSystem(NotesPanelSystem)
+    .registerSystem(HomeWindowSystem)
     .registerSystem(CameraCaptureSystem)
     .registerSystem(XrStatusSystem)
     .registerSystem(DesktopBackdropSystem);
