@@ -20,6 +20,7 @@ import { InkSystem } from './systems/ink-system.js';
 import { HomeWindowSystem } from './systems/home-window-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
 import { XrStatusSystem } from './systems/xr-status-system.js';
+import { XrScrollFixSystem } from './systems/xr-scroll-fix-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
 
 // Notes live in IndexedDB. `?simulateSaveFailure` makes every write fail, to
@@ -39,7 +40,8 @@ World.create(
     .registerSystem(HomeWindowSystem)
     .registerSystem(CameraCaptureSystem)
     .registerSystem(XrStatusSystem)
-    .registerSystem(DesktopBackdropSystem);
+    .registerSystem(DesktopBackdropSystem)
+    .registerSystem(XrScrollFixSystem);
 
   session.attachLifecycle();
   void session.load();
