@@ -3,12 +3,29 @@
   and delete with confirmation. Element ids are addressed from
   src/systems/notes-panel-system.ts; keep them stable.
   The list shows five rows at a time; the Newer/Older buttons page through it.
+
+  Headset glass: the root is a tinted, translucent surface with a bright rim
+  and a sheen line along the top edge (.glass-rim). A web app cannot blur
+  Quest passthrough, so glass here is tint + rim + sheen, not frosting.
 -->
 <style>
   .panel-root {
     flex-direction: column;
     width: 344px;
     padding-bottom: 16px;
+    border-radius: 28px;
+    background-color: rgba(244, 246, 249, 0.84);
+    border-width: 1.5px;
+    border-color: rgba(255, 255, 255, 0.95);
+  }
+
+  .glass-rim {
+    height: 2px;
+    margin-left: 28px;
+    margin-right: 28px;
+    margin-top: 1px;
+    border-radius: 1px;
+    background-color: #ffffff;
   }
 
   .section {
@@ -87,7 +104,7 @@
     padding-left: 10px;
     padding-right: 10px;
     border-radius: 8px;
-    background-color: #f1f0ec;
+    background-color: rgba(255, 255, 255, 0.55);
     cursor: pointer;
   }
 
@@ -102,7 +119,8 @@
     color: #6b6b6b;
   }
 </style>
-<Panel class="panel-root">
+<div class="panel-root">
+  <div class="glass-rim"></div>
   <div class="section">
     <div class="header">
       <div class="heading">Notes</div>
@@ -186,4 +204,4 @@
       </Button>
     </div>
   </div>
-</Panel>
+</div>

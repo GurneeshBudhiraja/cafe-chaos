@@ -16,7 +16,8 @@
     "smoke:camera": "node scripts/smoke-camera.mjs",
     "smoke:notes": "node scripts/smoke-notes.mjs",
     "record:demo": "node scripts/record-demo.mjs",
-    "record:writing": "node scripts/record-writing-flow.mjs"
+    "record:writing": "node scripts/record-writing-flow.mjs",
+    "record:headset": "node scripts/record-headset.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

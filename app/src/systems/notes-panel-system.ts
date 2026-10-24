@@ -26,8 +26,9 @@ const NOTES_PANEL_NODE = 'notes-panel';
 const ROWS_PER_PAGE = 5;
 const ROW_TITLE_MAX_CHARS = 28;
 
-const ROW_COLOR = '#f1f0ec';
-const ROW_ACTIVE_COLOR = '#dbe7fb';
+// Rows are lighter glass on the glass panel; the active note gets a blue tint.
+const ROW_COLOR = 'rgba(255, 255, 255, 0.55)';
+const ROW_ACTIVE_COLOR = 'rgba(47, 111, 235, 0.2)';
 const STATUS_COLOR = '#3a3a3a';
 const STATUS_FAILED_COLOR = '#b42318';
 

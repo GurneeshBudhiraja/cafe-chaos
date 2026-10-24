@@ -1,14 +1,31 @@
 <!--
   Tools panel: XR entry, the camera capture trial, and device feature status.
   Element ids below are addressed from src/systems/*.ts; keep them stable.
-  Panel, Button, ButtonIcon, ButtonLabel and Divider come from the Horizon kit;
+  Button, ButtonIcon, ButtonLabel and Divider come from the Horizon kit;
   the icons are bundled Lucide components.
+
+  Headset glass: the root is a tinted, translucent surface with a bright rim
+  and a sheen line along the top edge (.glass-rim). A web app cannot blur
+  Quest passthrough, so glass here is tint + rim + sheen, not frosting.
 -->
 <style>
   .panel-root {
     flex-direction: column;
     width: 344px;
     padding-bottom: 16px;
+    border-radius: 28px;
+    background-color: rgba(244, 246, 249, 0.84);
+    border-width: 1.5px;
+    border-color: rgba(255, 255, 255, 0.95);
+  }
+
+  .glass-rim {
+    height: 2px;
+    margin-left: 28px;
+    margin-right: 28px;
+    margin-top: 1px;
+    border-radius: 1px;
+    background-color: #ffffff;
   }
 
   .section {
@@ -59,7 +76,8 @@
     margin-top: 2px;
   }
 </style>
-<Panel class="panel-root">
+<div class="panel-root">
+  <div class="glass-rim"></div>
   <div class="section">
     <div class="heading">Meta Notes</div>
     <div class="button-row">
@@ -119,4 +137,4 @@
       <div id="feature-anchors" class="body-text">Checking</div>
     </div>
   </div>
-</Panel>
+</div>
