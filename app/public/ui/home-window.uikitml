@@ -2,15 +2,16 @@
   Home window: the app's first screen, laid out like a document app's home.
   Top bar: app name (left); clock, settings and compact toggle (right).
   "Start a new note": paper templates; Blank (#note-new-button) is the main
-  action and the only lime element. "Recent notes": cards with a preview of
+  action and, with compact New note, the only clay element. "Recent notes": cards with a preview of
   each note's real ink, a sort toggle, and chevrons (or a drag) for more.
   Element ids are addressed from src/systems/home-window-system.ts; keep
   them stable. Template and thumbnail images are canvas textures drawn by
   src/ui/paper-preview.ts; the src here is a transparent placeholder.
 
-  Glass: the window has no background here. HomeWindowSystem puts a frosted
-  glass slab behind #home-root (src/ui/liquid-glass.ts): light, clear, square
-  corners, no outline, with dark text on top for readability.
+  Theme (calm, studious): warm frosted glass, warm white paper, warm ink
+  text, one clay accent for the main action. The window has no background
+  here: HomeWindowSystem puts a frosted glass slab behind #home-root
+  (src/ui/liquid-glass.ts), square corners, no outline.
 
   Saving is silent; #status-row only appears when a save fails.
 
@@ -71,7 +72,7 @@
     font-size: 28px;
     font-weight: 800;
     letter-spacing: -0.14px;
-    color: #15181d;
+    color: #1f1c19;
   }
 
   .top-actions {
@@ -84,7 +85,7 @@
     font-family: bricolage-subhead;
     font-size: 19px;
     font-weight: 600;
-    color: #3e4552;
+    color: #5e574f;
     margin-right: 8px;
   }
 
@@ -94,28 +95,29 @@
     align-items: center;
     justify-content: center;
     border-radius: 24px;
-    color: #15181d;
+    color: #1f1c19;
     cursor: pointer;
   }
 
   .compact-action {
     flex-direction: row;
     align-items: center;
-    gap: 10px;
-    height: 48px;
-    padding-left: 8px;
-    padding-right: 16px;
-    border-radius: 24px;
-    color: #15181d;
+    gap: 8px;
+    height: 52px;
+    padding-left: 18px;
+    padding-right: 24px;
+    border-radius: 26px;
+    background-color: #b5553a;
+    color: #ffffff;
     cursor: pointer;
   }
 
   .compact-label {
     font-family: bricolage;
-    font-size: 20px;
+    font-size: 19px;
     font-weight: 700;
     line-height: 1.2;
-    color: #15181d;
+    color: #ffffff;
   }
 
   .plus-circle {
@@ -124,8 +126,8 @@
     border-radius: 24px;
     align-items: center;
     justify-content: center;
-    background-color: #d4f86b;
-    color: #15181d;
+    background-color: #b5553a;
+    color: #ffffff;
   }
 
   .status-row {
@@ -138,7 +140,7 @@
     font-family: bricolage;
     font-size: 14px;
     font-weight: 500;
-    color: #b42318;
+    color: #a3221a;
   }
 
   .pill {
@@ -149,10 +151,10 @@
     padding-left: 16px;
     padding-right: 16px;
     border-radius: 22px;
-    background-color: rgba(255, 255, 255, 0.6);
+    background-color: rgba(255, 253, 249, 0.75);
     border-width: 1px;
-    border-color: rgba(21, 24, 29, 0.18);
-    color: #15181d;
+    border-color: rgba(31, 28, 25, 0.18);
+    color: #1f1c19;
     cursor: pointer;
   }
 
@@ -160,7 +162,7 @@
     font-family: bricolage;
     font-size: 15px;
     font-weight: 500;
-    color: #15181d;
+    color: #1f1c19;
   }
 
   .sheet {
@@ -169,14 +171,14 @@
     padding-bottom: 14px;
     padding-left: 18px;
     padding-right: 18px;
-    background-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(255, 253, 249, 0.8);
   }
 
   .sheet-text {
     font-family: fraunces;
     font-size: 17px;
     line-height: 1.6;
-    color: #15181d;
+    color: #1f1c19;
   }
 
   .section-title {
@@ -185,7 +187,7 @@
     font-weight: 700;
     letter-spacing: 0.1px;
     line-height: 1.2;
-    color: #15181d;
+    color: #1f1c19;
   }
 
   .template-row {
@@ -205,8 +207,8 @@
 
   .paper-frame {
     border-width: 1px;
-    border-color: rgba(21, 24, 29, 0.14);
-    background-color: #ffffff;
+    border-color: rgba(31, 28, 25, 0.14);
+    background-color: #fffdf9;
   }
 
   .paper-blank {
@@ -214,9 +216,9 @@
     height: 102px;
     align-items: center;
     justify-content: center;
-    background-color: #ffffff;
+    background-color: #fffdf9;
     border-width: 1px;
-    border-color: rgba(21, 24, 29, 0.14);
+    border-color: rgba(31, 28, 25, 0.14);
   }
 
   .template-img {
@@ -226,7 +228,7 @@
 
   .divider {
     height: 1px;
-    background-color: rgba(21, 24, 29, 0.12);
+    background-color: rgba(31, 28, 25, 0.12);
   }
 
   .section-head {
@@ -247,7 +249,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 15px;
-    color: #15181d;
+    color: #1f1c19;
     cursor: pointer;
   }
 
@@ -283,20 +285,20 @@
     font-weight: 700;
     letter-spacing: 0.085px;
     line-height: 1.2;
-    color: #15181d;
+    color: #1f1c19;
   }
 
   .card-meta {
     font-family: bricolage;
     font-size: 13px;
     font-weight: 500;
-    color: #4f5865;
+    color: #5e574f;
   }
 
   .empty {
     font-family: fraunces;
     font-size: 17px;
-    color: #4f5865;
+    color: #5e574f;
   }
 </style>
 <div id="home-root" class="window">
@@ -306,8 +308,8 @@
       <Maximize2 width="24" height="24"></Maximize2>
     </div>
     <div id="compact-new-button" class="compact-action" style="display: none">
-      <div class="plus-circle" style="width: 40px; height: 40px"><Plus width="24" height="24"></Plus></div>
-      <div class="compact-label">new note</div>
+      <Plus width="22" height="22"></Plus>
+      <div class="compact-label">New note</div>
     </div>
     <div id="compact-settings-button" class="icon-button" style="display: none">
       <Settings width="24" height="24"></Settings>

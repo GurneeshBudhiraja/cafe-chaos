@@ -51,9 +51,10 @@ separately and remain open.
 ### Home window
 
 The first screen is laid out like a document app's home, on clear frosted
-glass with dark text (Bricolage Grotesque and Fraunces): a top bar (app name,
+glass in the warm "calm and studious" theme (warm ink, warm paper, one clay
+accent; Bricolage Grotesque and Fraunces): a top bar (app name,
 clock, settings, compact toggle), "Start a new note" paper templates (Blank,
-Lined, Grid, Dotted, Cornell, Checklist; Blank is the lime main action) and
+Lined, Grid, Dotted, Cornell, Checklist; Blank is the clay main action) and
 "Recent notes" cards that preview each note's real ink on its paper, with a
 Recent / A-Z sort and chevrons (or a drag) for more. Compact mode shrinks it
 to a pill with expand, New note and settings. Saving is silent; a line with a

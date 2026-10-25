@@ -136,8 +136,9 @@ const fragmentShader = /* glsl */ `
     float rimLit = 0.45 + 0.55 * clamp(dot(grad, normalize(vec2(-0.55, 0.85))) * 0.5 + 0.5, 0.0, 1.0);
     float innerGlow = exp(d / 12.0) * 0.16;
 
-    // Frosted body: milky white glass, brighter towards the top, with grain.
-    vec3 frost = mix(vec3(0.84, 0.87, 0.91), vec3(0.96, 0.97, 0.99), vUv.y);
+    // Frosted body: warm milky glass (theme Glass #F6F3EE), a little brighter
+    // towards the top, with grain.
+    vec3 frost = mix(vec3(0.93, 0.91, 0.88), vec3(0.97, 0.96, 0.94), vUv.y);
     frost += (grainNoise(floor(p)) - 0.5) * 0.04;
 
     vec2 viewOnPanel = vec2(dot(v, vTangent), dot(v, vBitangent));

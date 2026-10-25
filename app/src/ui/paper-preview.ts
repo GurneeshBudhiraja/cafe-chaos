@@ -11,12 +11,12 @@
 import { CanvasTexture, SRGBColorSpace } from '@iwsdk/core';
 import { PAGE_ASPECT, type Note, type PaperStyle } from '../notes/note-model.js';
 
-const PAPER_COLOR = '#ffffff';
-const RULE_COLOR = '#c3ccd7';
-const GRID_COLOR = '#cfd6de';
-const DOT_COLOR = '#97a2af';
-const MARGIN_COLOR = '#c9a4a4';
-const BOX_COLOR = '#8a94a1';
+const PAPER_COLOR = '#fffdf9';
+const RULE_COLOR = '#cfc5b8';
+const GRID_COLOR = '#ddd4c8';
+const DOT_COLOR = '#a89d90';
+const MARGIN_COLOR = '#c98f7a';
+const BOX_COLOR = '#9a928a';
 
 /** One preview: a canvas, its 2D context and the texture UIKit samples. */
 export class PaperPreview {

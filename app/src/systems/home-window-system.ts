@@ -41,11 +41,30 @@ const CARDS_PER_PAGE = 4;
 const TEMPLATE_PREVIEW_PX = 272;
 const THUMB_PREVIEW_PX = 376;
 
-const ICON_COLOR = '#15181d';
-const ICON_HIDDEN = 'rgba(21, 24, 29, 0)';
-const CLEAR = 'rgba(255, 255, 255, 0)';
-/** Pointer-over feedback, so a ray or hand shows what a pinch will hit. */
-const HOVER_COLOR = 'rgba(21, 24, 29, 0.08)';
+const ICON_COLOR = '#1f1c19';
+const ICON_HIDDEN = 'rgba(31, 28, 25, 0)';
+
+/**
+ * Background per state, from the theme: a target reacts when pointed at
+ * (hover) so a ray or hand shows what a pinch will hit, and darkens a
+ * little more while pinched.
+ */
+interface StateColors {
+  rest: string;
+  hover: string;
+  pressed: string;
+}
+const NEUTRAL: StateColors = {
+  rest: 'rgba(255, 253, 249, 0)',
+  hover: 'rgba(31, 28, 25, 0.08)',
+  pressed: 'rgba(31, 28, 25, 0.14)',
+};
+const SECONDARY: StateColors = {
+  rest: 'rgba(255, 253, 249, 0.75)',
+  hover: '#fffdf9',
+  pressed: '#efe9e1',
+};
+const PRIMARY: StateColors = { rest: '#b5553a', hover: '#a24a31', pressed: '#8f402a' };
 
 type SortMode = 'recent' | 'title';
 const SORT_LABELS: Record<SortMode, string> = { recent: 'Recent', title: 'A-Z' };
@@ -112,6 +131,9 @@ export class HomeWindowSystem extends createSystem({}) {
     ui.onClick('sort-button', () => this.toggleSort());
 
     const hoverable: PanelElement[] = [];
+    this.addStates(ui.element('sort-button'), SECONDARY);
+    this.addStates(ui.element('save-retry-button'), SECONDARY);
+    this.addStates(ui.element('compact-new-button'), PRIMARY);
     this.fullOnly = [
       ui.element('app-title'),
       ui.element('top-actions'),
@@ -119,17 +141,21 @@ export class HomeWindowSystem extends createSystem({}) {
       ui.element('section-divider'),
       ui.element('recent-section'),
     ];
+    const expand = ui.onClick('expand-toggle', () => this.setCompact(false));
+    // Settings from the pill opens the full window with the sheet showing.
+    const compactSettings = ui.onClick('compact-settings-button', () =>
+      this.openSettingsFromCompact(),
+    );
     this.compactOnly = [
-      ui.onClick('expand-toggle', () => this.setCompact(false)),
+      expand,
       ui.onClick('compact-new-button', () => this.newNote('blank')),
-      // Settings from the pill opens the full window with the sheet showing.
-      ui.onClick('compact-settings-button', () => this.openSettingsFromCompact()),
+      compactSettings,
     ];
     hoverable.push(
-      ...this.compactOnly,
+      expand,
+      compactSettings,
       ui.onClick('settings-button', () => this.toggleSettings()),
       ui.onClick('compact-toggle', () => this.setCompact(true)),
-      ui.element('sort-button'),
     );
 
     // Templates: Blank is the main New note action; the others draw their paper.
@@ -167,9 +193,9 @@ export class HomeWindowSystem extends createSystem({}) {
     }
     this.strip = findScrollContainer(this.cards[0]?.root);
 
-    // Hover feedback on everything a pinch can hit (Meta guidance: targets
+    // State feedback on everything a pinch can hit (Meta guidance: targets
     // must react to the pointer before they are selected).
-    for (const element of hoverable) this.addHover(element);
+    for (const element of hoverable) this.addStates(element, NEUTRAL);
 
     // The clock only needs to change when the minute does.
     const clockTimer = setInterval(() => {
@@ -275,14 +301,17 @@ export class HomeWindowSystem extends createSystem({}) {
     this.renderChevrons();
   }
 
-  private addHover(element: PanelElement): void {
-    const enter = () => element.setProperties({ backgroundColor: HOVER_COLOR });
-    const leave = () => element.setProperties({ backgroundColor: CLEAR });
-    element.addEventListener('pointerenter', enter);
-    element.addEventListener('pointerleave', leave);
+  private addStates(element: PanelElement, colors: StateColors): void {
+    const set = (backgroundColor: string) => () => element.setProperties({ backgroundColor });
+    const handlers = [
+      ['pointerenter', set(colors.hover)],
+      ['pointerleave', set(colors.rest)],
+      ['pointerdown', set(colors.pressed)],
+      ['pointerup', set(colors.hover)],
+    ] as const;
+    for (const [type, handler] of handlers) element.addEventListener(type, handler);
     this.cleanupFuncs.push(() => {
-      element.removeEventListener('pointerenter', enter);
-      element.removeEventListener('pointerleave', leave);
+      for (const [type, handler] of handlers) element.removeEventListener(type, handler);
     });
   }
 
