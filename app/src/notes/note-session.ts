@@ -82,8 +82,8 @@ export class NoteSession implements InkDocument {
 
   // --------------------------------------------------------------- commands
 
-  async createNote(): Promise<Note> {
-    const note = createNote();
+  async createNote(title?: string): Promise<Note> {
+    const note = createNote(title);
     this.active = note;
     this.markDirty(note);
     this.emit('active');

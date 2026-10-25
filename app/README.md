@@ -12,7 +12,7 @@ npm install
 npm run dev          # CLI-managed dev server + managed browser (IWER emulator)
 npm run typecheck    # always run before testing in the browser
 npm run build        # production build into dist/
-npm run smoke:notes  # notes, 5 reloads, save failure, delete (dev server running)
+npm run smoke:notes  # notes, 5 reloads, save failure, home window (dev server running)
 npm run smoke:camera # camera capture with a fake camera (dev server running)
 ```
 
@@ -45,8 +45,8 @@ src/note-components.ts         app ECS component declarations (no systems)
 src/scene-assets/              procedural 3D assets (tablet, handle)
 src/notes/                     note model, IndexedDB store, editing session (autosave)
 src/ink/                       stroke sampling rules and stroke rendering
-src/systems/                   ECS systems (ink, notes panel, tablet handle, camera, XR status)
-src/ui/                        UIKitML panel helpers
+src/systems/                   ECS systems (ink, home window, tablet handle, camera, XR status)
+src/ui/                        UIKitML panel helpers and text formatting
 src/util/                      dev-only logging and test hooks
 scripts/                       automated smoke checks (Playwright)
 ```

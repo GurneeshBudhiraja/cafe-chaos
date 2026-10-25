@@ -14,12 +14,11 @@ import projectOptions from 'virtual:iwsdk-project';
 import { provideNoteSession } from './notes/note-services.js';
 import { NoteSession } from './notes/note-session.js';
 import { IndexedDbNoteStore, SimulatedFailureStore } from './notes/note-store.js';
-import { CameraCaptureSystem } from './systems/camera-capture-system.js';
 import { DesktopBackdropSystem } from './systems/desktop-backdrop-system.js';
 import { InkSystem } from './systems/ink-system.js';
-import { NotesPanelSystem } from './systems/notes-panel-system.js';
+import { HomeWindowSystem } from './systems/home-window-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
-import { XrStatusSystem } from './systems/xr-status-system.js';
+import { XrScrollFixSystem } from './systems/xr-scroll-fix-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
 
 // Notes live in IndexedDB. `?simulateSaveFailure` makes every write fail, to
@@ -33,13 +32,15 @@ World.create(
   projectOptions,
 ).then((world) => {
   provideNoteSession(world, session);
+  // The launch view is the home window only. The tools panel (camera trial,
+  // device status) is out of the scene for now, so its systems are not
+  // registered; the tablet systems stay and idle until a tablet is placed.
   world
     .registerSystem(TabletHandleSystem)
     .registerSystem(InkSystem)
-    .registerSystem(NotesPanelSystem)
-    .registerSystem(CameraCaptureSystem)
-    .registerSystem(XrStatusSystem)
-    .registerSystem(DesktopBackdropSystem);
+    .registerSystem(HomeWindowSystem)
+    .registerSystem(DesktopBackdropSystem)
+    .registerSystem(XrScrollFixSystem);
 
   session.attachLifecycle();
   void session.load();

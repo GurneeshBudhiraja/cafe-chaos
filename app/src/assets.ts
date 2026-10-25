@@ -29,10 +29,17 @@ export default defineAssets({
   'student-chair': studentChairPrototype,
   'teacher-desk': teacherDeskPrototype,
   'tablet-handle': tabletHandlePrototype,
-  'notes-panel': {
-    url: publicAssetUrl('ui/notes-panel.uikitml'),
+  'home-window': {
+    url: publicAssetUrl('ui/home-window.uikitml'),
     type: AssetType.UIKitML,
-    name: 'Notes Panel',
+    name: 'Home Window',
+  },
+  // Lock-screen wallpaper inside the home window. Photo: Alexey
+  // Topolyanskiy on Unsplash (Unsplash License); see public/images/README.md.
+  'home-wallpaper': {
+    url: publicAssetUrl('images/wallpaper-fjord.jpg'),
+    type: AssetType.Texture,
+    name: 'Home Wallpaper',
   },
   'tools-panel': {
     url: publicAssetUrl('ui/tools-panel.uikitml'),
