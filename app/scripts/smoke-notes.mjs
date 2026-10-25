@@ -145,6 +145,22 @@ try {
   await clickUntil(page, 'expand-toggle', recentShown);
   checks.check('compact mode collapses and expands the home window', true);
 
+  // Settings in the compact pill opens the full window with the sheet shown.
+  await clickUntil(page, 'compact-toggle', recentHidden);
+  await clickUntil(page, 'compact-settings-button', () => {
+    const scene = window.__metaNotes.world.scene;
+    return (
+      scene.getObjectByName('recent-section').isVisible.peek() === true &&
+      scene.getObjectByName('settings-sheet').isVisible.peek() === true
+    );
+  });
+  await clickUntil(
+    page,
+    'settings-button',
+    () => window.__metaNotes.world.scene.getObjectByName('settings-sheet').isVisible.peek() === false,
+  );
+  checks.check('settings in the compact pill opens the full window', true);
+
   // With more notes than fit, the recent strip scrolls. On desktop a mouse
   // scrolls UIKit with the wheel; XR rays and hands scroll by dragging.
   await page.evaluate(async () => {

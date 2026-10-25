@@ -4,8 +4,8 @@
  * The window shows a live clock with the save status under it, recent notes
  * as glass cards (tap to open on the tablet; chevrons or a drag page through
  * them), a New note button, a settings sheet (placeholder for now), and a
- * compact toggle that collapses the window to a pill with the expand toggle
- * and a centred New note.
+ * compact toggle that collapses the window to a pill with the expand toggle,
+ * a centred New note and settings.
  *
  * All note changes go through NoteSession commands; this system only reads
  * session state and renders it.
@@ -103,7 +103,8 @@ export class HomeWindowSystem extends createSystem({}) {
     this.compactOnly = [
       ui.onClick('expand-toggle', () => this.setCompact(false)),
       ui.onClick('compact-new-button', newNote),
-      ui.element('compact-spacer'),
+      // Settings from the pill opens the full window with the sheet showing.
+      ui.onClick('compact-settings-button', () => this.openSettingsFromCompact()),
     ];
     ui.onClick('note-new-button', newNote);
 
@@ -219,6 +220,12 @@ export class HomeWindowSystem extends createSystem({}) {
   private setCompact(compact: boolean): void {
     this.compact = compact;
     if (compact) this.settingsOpen = false;
+    this.applyMode();
+  }
+
+  private openSettingsFromCompact(): void {
+    this.compact = false;
+    this.settingsOpen = true;
     this.applyMode();
   }
 
