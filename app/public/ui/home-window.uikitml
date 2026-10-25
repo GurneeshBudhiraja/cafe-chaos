@@ -1,6 +1,7 @@
 <!--
-  Home window: the app's main window, a clear glass panel.
-  Top row: compact toggle (left), clock with save status (centre), settings
+  Home window: the app's main window, styled like a computer lock screen:
+  a photo wallpaper inside a glass frame, the date above a large centred
+  clock, then recent notes. Top row: settings (left), compact toggle
   (right). Middle: recent-note cards, four visible, with chevrons to page
   through more (a ray or hand drag also scrolls the strip). Bottom centre:
   New note. Element ids are addressed from src/systems/home-window-system.ts;
@@ -8,8 +9,9 @@
 
   Glass: the window itself has no background here. HomeWindowSystem puts a
   shader-drawn liquid-glass slab behind #home-root (src/ui/liquid-glass.ts):
-  frosted smoke body, curved edge with view-dependent highlights, bright rim.
-  The cards stay as light glass tiles on top of it.
+  the wallpaper photo (frosted milky glass in compact mode), a curved edge
+  with view-dependent highlights and a bright rim. The cards are light
+  glass tiles on top, like lock-screen widgets.
 
   Compact mode hides everything except the top row, which then shows the
   expand toggle (left), New note (centre, icon and label, no pill) and
@@ -72,13 +74,20 @@
   .clock {
     flex-direction: column;
     align-items: center;
-    gap: 2px;
-    padding-top: 6px;
+    gap: 4px;
+    margin-top: -30px;
+    margin-bottom: 8px;
+  }
+
+  .clock-date {
+    font-family: fraunces;
+    font-size: 20px;
+    color: #e2faa8;
   }
 
   .clock-time {
     font-family: bricolage;
-    font-size: 48px;
+    font-size: 100px;
     font-weight: 800;
     color: #d4f86b;
   }
@@ -190,7 +199,7 @@
     padding-left: 14px;
     padding-right: 12px;
     border-radius: 22px;
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: rgba(255, 255, 255, 0.16);
     border-width: 1.5px;
     border-color: rgba(255, 255, 255, 0.65);
     color: #d4f86b;
@@ -225,23 +234,11 @@
 </style>
 <div id="home-root" class="window">
   <div class="top-row">
-    <div id="compact-toggle" class="icon-button">
-      <Minimize2 width="26" height="26"></Minimize2>
+    <div id="settings-button" class="icon-button">
+      <Settings width="26" height="26"></Settings>
     </div>
     <div id="expand-toggle" class="icon-button" style="display: none">
       <Maximize2 width="26" height="26"></Maximize2>
-    </div>
-    <div id="clock" class="clock">
-      <div id="clock-time" class="clock-time">--:--</div>
-      <div id="status-row" class="status-row">
-        <div id="save-status" class="status">Loading</div>
-        <div id="save-retry-button" class="pill" style="display: none; padding-top: 6px; padding-bottom: 6px; padding-left: 14px; padding-right: 14px">
-          <div class="pill-label" style="font-size: 13px">Try saving again</div>
-        </div>
-      </div>
-    </div>
-    <div id="settings-button" class="icon-button">
-      <Settings width="26" height="26"></Settings>
     </div>
     <div id="compact-new-button" class="compact-action" style="display: none">
       <Plus width="26" height="26"></Plus>
@@ -249,6 +246,20 @@
     </div>
     <div id="compact-settings-button" class="icon-button" style="display: none">
       <Settings width="26" height="26"></Settings>
+    </div>
+    <div id="compact-toggle" class="icon-button">
+      <Minimize2 width="26" height="26"></Minimize2>
+    </div>
+  </div>
+
+  <div id="clock" class="clock">
+    <div id="clock-date" class="clock-date">Today</div>
+    <div id="clock-time" class="clock-time">--:--</div>
+    <div id="status-row" class="status-row">
+      <div id="save-status" class="status">Loading</div>
+      <div id="save-retry-button" class="pill" style="display: none; padding-top: 6px; padding-bottom: 6px; padding-left: 14px; padding-right: 14px">
+        <div class="pill-label" style="font-size: 13px">Try saving again</div>
+      </div>
     </div>
   </div>
 

@@ -9,8 +9,9 @@
  *
  * What the shader draws (all lighting is view dependent, so it moves as the
  * head moves, which is what makes glass read as glass in a headset):
- * - a frosted body: milky white glass with a soft top-to-bottom light
- *   gradient and fine grain (no dark tint). Passthrough cannot be blurred by a WebXR app (the system
+ * - a body: either a photo (the lock-screen wallpaper, cover-fitted, with a
+ *   slight parallax so it reads as depth behind the glass) or milky frosted
+ *   glass with a soft light gradient and fine grain; setImageMix blends; Passthrough cannot be blurred by a WebXR app (the system
  *   composites it under the app layer), so the frost is what keeps the
  *   text readable over a busy room;
  * - a rounded bevel along the edge whose normals bend light: a sharp
@@ -28,10 +29,12 @@ import {
   DoubleSide,
   Matrix4,
   Mesh,
+  NoColorSpace,
   NormalBlending,
   PlaneGeometry,
   ShaderMaterial,
   Vector2,
+  type Texture,
 } from '@iwsdk/core';
 import type { PanelElement } from './panel-helpers.js';
 
@@ -40,6 +43,15 @@ export interface LiquidGlassOptions {
   radiusPx: number;
   /** Width of the curved edge in UIKit pixels. */
   bevelPx?: number;
+}
+
+/** Handle for a glass slab: the mesh plus controls for its photo body. */
+export interface LiquidGlass {
+  mesh: Mesh;
+  /** Use `texture` as the body photo (cover-fitted to the slab). */
+  setImage(texture: Texture): void;
+  /** 0 shows frosted glass, 1 shows the photo. */
+  setImageMix(mix: number): void;
 }
 
 const vertexShader = /* glsl */ `
@@ -65,6 +77,9 @@ const fragmentShader = /* glsl */ `
   uniform vec2 uSize;     // element size in UIKit pixels
   uniform float uRadius;  // corner radius, pixels
   uniform float uBevel;   // curved edge width, pixels
+  uniform sampler2D uImage;
+  uniform float uImageAspect; // image width / height
+  uniform float uImageMix;    // 0 frosted glass, 1 photo
 
   varying vec2 vUv;
   varying vec3 vWorldPos;
@@ -116,11 +131,26 @@ const fragmentShader = /* glsl */ `
     float innerGlow = exp(d / 12.0) * 0.16;
 
     // Frosted body: milky white glass, brighter towards the top, with grain.
-    vec3 body = mix(vec3(0.84, 0.87, 0.91), vec3(0.96, 0.97, 0.99), vUv.y);
-    body += (grainNoise(floor(p)) - 0.5) * 0.04;
+    vec3 frost = mix(vec3(0.84, 0.87, 0.91), vec3(0.96, 0.97, 0.99), vUv.y);
+    frost += (grainNoise(floor(p)) - 0.5) * 0.04;
+
+    vec2 viewOnPanel = vec2(dot(v, vTangent), dot(v, vBitangent));
+
+    // Photo body: cover-fit the image, zoom in slightly and shift it against
+    // the viewing angle so it sits a little "behind" the glass.
+    float panelAspect = uSize.x / uSize.y;
+    vec2 imageUv = vUv - 0.5;
+    if (panelAspect > uImageAspect) imageUv.y *= uImageAspect / panelAspect;
+    else imageUv.x *= panelAspect / uImageAspect;
+    imageUv = imageUv / 1.05 - viewOnPanel * 0.02 + 0.5;
+    // Dimmed, and darker towards the bottom where the cards sit (as lock
+    // screens do), so the lime text keeps its contrast over bright scenery.
+    float scrim = mix(0.5, 0.82, smoothstep(0.05, 0.75, vUv.y));
+    vec3 photo = texture2D(uImage, imageUv).rgb * scrim;
+
+    vec3 body = mix(frost, photo, uImageMix);
 
     // Sheen band that slides with the viewing angle across the panel.
-    vec2 viewOnPanel = vec2(dot(v, vTangent), dot(v, vBitangent));
     float band = dot(vUv - 0.5 + viewOnPanel * 0.7, normalize(vec2(1.0, -0.65)));
     float sheen = smoothstep(0.24, 0.0, abs(band + 0.12)) * 0.07;
 
@@ -131,7 +161,7 @@ const fragmentShader = /* glsl */ `
     color += spec * 1.2 + fill + fresnel * 0.45;
     color = mix(color, vec3(1.0), rim * rimLit * 0.9);
 
-    float alpha = 0.26 + 0.06 * vUv.y + sheen + gloss;
+    float alpha = mix(0.26 + 0.06 * vUv.y, 0.97, uImageMix) + sheen + gloss;
     alpha += spec * 0.6 + fill * 0.5 + fresnel * 0.35 + innerGlow + rim * rimLit * 0.6;
     gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0) * mask);
   }
@@ -139,14 +169,14 @@ const fragmentShader = /* glsl */ `
 
 /**
  * Put a liquid-glass slab behind `element` (a UIKit element whose own
- * background should be transparent). Returns the mesh; it is removed and
- * disposed through `cleanupFuncs`.
+ * background should be transparent). It is removed and disposed through
+ * `cleanupFuncs`.
  */
 export function attachLiquidGlass(
   element: PanelElement,
   cleanupFuncs: Array<() => void>,
   { radiusPx, bevelPx = 16 }: LiquidGlassOptions,
-): Mesh {
+): LiquidGlass {
   const material = new ShaderMaterial({
     vertexShader,
     fragmentShader,
@@ -154,6 +184,9 @@ export function attachLiquidGlass(
       uSize: { value: new Vector2(1, 1) },
       uRadius: { value: radiusPx },
       uBevel: { value: bevelPx },
+      uImage: { value: null },
+      uImageAspect: { value: 1 },
+      uImageMix: { value: 0 },
     },
     transparent: true,
     depthWrite: false,
@@ -191,5 +224,21 @@ export function attachLiquidGlass(
     mesh.geometry.dispose();
     material.dispose();
   });
-  return mesh;
+
+  return {
+    mesh,
+    setImage(texture) {
+      // The shader writes display colours directly (no colour management),
+      // so sample the photo's sRGB values as they are.
+      texture.colorSpace = NoColorSpace;
+      texture.needsUpdate = true;
+      const image = texture.image as { width?: number; height?: number } | undefined;
+      material.uniforms.uImage.value = texture;
+      material.uniforms.uImageAspect.value =
+        image?.width && image.height ? image.width / image.height : 1.6;
+    },
+    setImageMix(mix) {
+      material.uniforms.uImageMix.value = mix;
+    },
+  };
 }

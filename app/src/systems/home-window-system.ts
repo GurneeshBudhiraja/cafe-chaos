@@ -11,11 +11,11 @@
  * session state and renders it.
  */
 
-import { createSystem, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
+import { AssetManager, createSystem, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
 import { formatRelativeTime, noteTitleFor, truncate } from '../ui/format.js';
-import { attachLiquidGlass } from '../ui/liquid-glass.js';
+import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
 import {
   PanelBinding,
   setText,
@@ -26,6 +26,7 @@ import {
 const HOME_WINDOW_NODE = 'home-window';
 /** Must match .window border-radius in home-window.uikitml. */
 const WINDOW_RADIUS_PX = 40;
+const WALLPAPER_ASSET = 'home-wallpaper';
 /** Must match the number of `recent-card-N` elements in home-window.uikitml. */
 const CARD_SLOTS = 8;
 /** Icons per card (`recent-icon-N-K`); decorative until notes have types. */
@@ -37,7 +38,7 @@ const CARDS_PER_PAGE = 4;
 
 const LIME = '#d4f86b';
 const LIME_HIDDEN = 'rgba(212, 248, 107, 0)';
-const CARD_COLOR = 'rgba(255, 255, 255, 0.07)';
+const CARD_COLOR = 'rgba(255, 255, 255, 0.16)';
 const CARD_BORDER = 'rgba(255, 255, 255, 0.65)';
 const CARD_ACTIVE_COLOR = 'rgba(212, 248, 107, 0.18)';
 const STATUS_COLOR = 'rgba(226, 250, 168, 0.8)';
@@ -64,7 +65,10 @@ export class HomeWindowSystem extends createSystem({}) {
   private settingsOpen = false;
   private shownMinute = '';
 
+  private glass: LiquidGlass | null = null;
+  private wallpaperReady = false;
   private clockTime!: UIKit.Text;
+  private clockDate!: UIKit.Text;
   private strip: ScrollContainer | null = null;
   private prevChevron!: PanelElement;
   private nextChevron!: PanelElement;
@@ -85,9 +89,20 @@ export class HomeWindowSystem extends createSystem({}) {
     const ui = new PanelBinding(panel, this.cleanupFuncs);
     // The window surface is a shader-drawn glass slab (see liquid-glass.ts);
     // its radius matches .window's border-radius in home-window.uikitml.
-    attachLiquidGlass(ui.element('home-root'), this.cleanupFuncs, { radiusPx: WINDOW_RADIUS_PX });
+    this.glass = attachLiquidGlass(ui.element('home-root'), this.cleanupFuncs, {
+      radiusPx: WINDOW_RADIUS_PX,
+    });
+    // Lock-screen wallpaper; frosted glass shows until it has loaded.
+    AssetManager.loadTextureById(WALLPAPER_ASSET)
+      .then((texture) => {
+        this.glass?.setImage(texture);
+        this.wallpaperReady = true;
+        this.applyMode();
+      })
+      .catch((error) => console.warn('[HomeWindowSystem] Wallpaper failed to load.', error));
 
     this.clockTime = ui.text('clock-time');
+    this.clockDate = ui.text('clock-date');
     this.saveStatus = ui.text('save-status');
     this.settingsSheet = ui.element('settings-sheet');
     this.retryButton = ui.onClick('save-retry-button', () => void this.session.flush());
@@ -154,6 +169,10 @@ export class HomeWindowSystem extends createSystem({}) {
     if (time === this.shownMinute) return;
     this.shownMinute = time;
     setText(this.clockTime, time);
+    setText(
+      this.clockDate,
+      now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }),
+    );
   }
 
   private renderStatus(): void {
@@ -238,6 +257,8 @@ export class HomeWindowSystem extends createSystem({}) {
     for (const el of this.fullOnly) setVisible(el, !this.compact);
     for (const el of this.compactOnly) setVisible(el, this.compact);
     setVisible(this.settingsSheet, this.settingsOpen && !this.compact);
+    // The full window shows the wallpaper; the compact pill is frosted glass.
+    this.glass?.setImageMix(this.wallpaperReady && !this.compact ? 1 : 0);
   }
 }
 
