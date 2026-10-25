@@ -23,24 +23,33 @@ const STEP = 0.004; // page-width spacing of replayed pen points
 /**
  * Open the app, enter XR and install the in-page helpers (`window.__rec`).
  * Returns the page, paced helpers, and `finish(name)` to encode the video.
+ *
+ * Options: `size` (video frame), `fovDeg` (the emulated headset's vertical
+ * field of view; Quest 3 is about 96 degrees per eye), and `captions`
+ * (false leaves the frame exactly as the headset shows it). `prepare(rec)`
+ * runs after XR entry and before the video's first kept frame, to stage the
+ * scene and pose without showing it.
  */
-export async function startHeadsetRecording() {
+export async function startHeadsetRecording({ size = SIZE, fovDeg, captions = true, prepare } = {}) {
   mkdirSync(OUT_DIR, { recursive: true });
   const browser = await launchBrowser();
   const startedAt = Date.now();
   const context = await browser.newContext({
-    viewport: SIZE,
+    viewport: size,
     ignoreHTTPSErrors: true,
-    recordVideo: { dir: OUT_DIR, size: SIZE },
+    recordVideo: { dir: OUT_DIR, size },
   });
   const { page, logs } = await openApp(context);
   const video = page.video();
   await installHelpers(page);
+  if (fovDeg) await page.evaluate((f) => (window.IWER_DEVICE.fovy = (f * Math.PI) / 180), fovDeg);
+  if (!captions) await page.evaluate(() => window.__rec.hideCaptions());
   await page.evaluate(() => window.__rec.setup());
   const fps = await page.evaluate(() => window.__rec.measureFps());
   const speedUp = Math.min(4, Math.max(1, 30 / fps));
-  // Content before this moment (page load, XR entry) is trimmed off.
-  const contentBegins = Date.now();
+  // The video is sped up by `speedUp`, so slow the app's UI animation clock
+  // by the same factor: transitions and follow keep their true speed.
+  await page.evaluate((s) => window.__metaNotes.demo?.setAnimationSpeed(s), 1 / speedUp);
 
   const msPerPoint = (STEP / PEN_SPEED) * 1000 * speedUp;
   const writeStroke = (points) =>
@@ -54,6 +63,11 @@ export async function startHeadsetRecording() {
     pause: (ms) => page.waitForTimeout(ms * speedUp),
     caption: (t) => page.evaluate((x) => window.__rec.caption(x), t),
     lookAt: (target, ms) => page.evaluate(([t, d]) => window.__rec.lookAt(t, d), [target, ms * speedUp]),
+    /** Turn the head to an absolute yaw/pitch (degrees; yaw 0 faces -Z, positive turns left). */
+    turnHead: (yawDeg, pitchDeg, ms) =>
+      page.evaluate(([y, p, d]) => window.__rec.turnHead(y, p, d), [yawDeg, pitchDeg, ms * speedUp]),
+    /** Place the hand (world metres) and keep it aimed where it pointed. */
+    moveHand: (position) => page.evaluate((p) => window.__rec.moveHand(p), position),
     moveHead: (position) => page.evaluate((p) => window.__rec.moveHead(p), position),
     objectCenter: (name) => page.evaluate((n) => window.__rec.objectCenter(n), name),
     tap: (name) => page.evaluate((n) => window.__rec.tap(n), name),
@@ -84,6 +98,9 @@ export async function startHeadsetRecording() {
       return logs.filter((l) => l.startsWith('error') || l.startsWith('pageerror'));
     },
   };
+  await prepare?.(rec);
+  // Content before this moment (page load, XR entry, staging) is trimmed off.
+  const contentBegins = Date.now();
   return rec;
 }
 
@@ -121,6 +138,7 @@ function installHelpers(page) {
 
     window.__rec = {
       caption: (t) => (caption.textContent = t),
+      hideCaptions: () => (caption.style.display = 'none'),
       hidePanels,
       async measureFps() {
         const f0 = frame();
@@ -146,6 +164,33 @@ function installHelpers(page) {
       async moveHead(position) {
         await call('set_transform', { device: 'headset', position });
         await call('look_at', { device: 'headset', target: headTarget });
+      },
+      /** Turn the head smoothly to an absolute yaw/pitch (degrees) over `ms`. */
+      async turnHead(yawDeg, pitchDeg, ms) {
+        const head = world.camera.getWorldPosition(new V());
+        const dir = new V(headTarget.x, headTarget.y, headTarget.z).sub(head).normalize();
+        const fromYaw = Math.atan2(-dir.x, -dir.z);
+        const fromPitch = Math.asin(dir.y);
+        const toYaw = (yawDeg * Math.PI) / 180;
+        const toPitch = (pitchDeg * Math.PI) / 180;
+        const t0 = performance.now();
+        for (;;) {
+          const t = Math.min(1, (performance.now() - t0) / ms);
+          const e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+          const yaw = fromYaw + (toYaw - fromYaw) * e;
+          const pitch = fromPitch + (toPitch - fromPitch) * e;
+          headTarget = {
+            x: head.x - 2 * Math.sin(yaw) * Math.cos(pitch),
+            y: head.y + 2 * Math.sin(pitch),
+            z: head.z - 2 * Math.cos(yaw) * Math.cos(pitch),
+          };
+          await call('look_at', { device: 'headset', target: headTarget });
+          if (t >= 1) return;
+          await nextFrame();
+        }
+      },
+      async moveHand(position) {
+        await call('set_transform', { device: 'hand-right', position });
       },
       /** Turn the head smoothly toward a world point over `ms`. */
       async lookAt(target, ms) {

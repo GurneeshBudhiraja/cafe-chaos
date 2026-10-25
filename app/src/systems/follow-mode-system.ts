@@ -20,6 +20,7 @@ import {
   type Object3D,
 } from '@iwsdk/core';
 import { getHomeMode, type HomeModeState } from '../ui/home-mode.js';
+import { getTweens } from '../ui/tweens.js';
 
 const FOLLOWED_NODES = ['home-window', 'compact-dock'];
 /** Degrees off-centre / metres away before a pinned panel catches up. */
@@ -56,7 +57,9 @@ export class FollowModeSystem extends createSystem({}) {
         behavior: FollowBehavior.PivotY,
         maxAngle: MAX_ANGLE_DEG,
         tolerance: TOLERANCE_M,
-        speed: SPEED,
+        // Follows the UI animation clock, so recordings slowed for capture
+        // keep the true follow speed (1 in the app).
+        speed: SPEED * getTweens(this.world).timeScale,
       });
     }
   }

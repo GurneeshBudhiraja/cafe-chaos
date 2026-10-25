@@ -21,6 +21,13 @@ interface Tween {
 
 export class Tweens {
   private active: Tween[] = [];
+  /**
+   * Multiplies elapsed time: the UI animation clock (tweens, and the stick
+   * mode follow speed). 1 in the app; recordings that run slower than real
+   * time and are sped up afterwards lower it, so motion keeps its true speed
+   * in the final video.
+   */
+  timeScale = 1;
 
   /**
    * Run `update(t)` with t going 0..1 over `durationMs`, after `delayMs`.
@@ -42,8 +49,9 @@ export class Tweens {
     });
   }
 
-  step(deltaSeconds: number): void {
+  step(frameSeconds: number): void {
     if (this.active.length === 0) return;
+    const deltaSeconds = frameSeconds * this.timeScale;
     let finished = false;
     for (const tween of this.active) {
       if (tween.delay > 0) {
