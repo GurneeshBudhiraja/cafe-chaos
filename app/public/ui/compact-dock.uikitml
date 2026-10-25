@@ -3,7 +3,8 @@
   between them (passthrough shows through): Expand, Recent | New note |
   Templates, Settings. Recent and Templates open a small glass pop-up just
   above the buttons with that one row; picking an item closes it. The thin
-  bar underneath is the grab handle for moving the dock.
+  bar underneath is the grab handle for moving the dock; the pin beside it
+  turns stick mode on and off (the dock follows the head).
 
   The round buttons and the pop-up have no background here: the dock system
   puts a liquid-glass slab behind each (src/ui/liquid-glass.ts). New note is
@@ -82,6 +83,16 @@
     font-weight: 700;
     line-height: 1.2;
     color: #ffffff;
+  }
+
+  .pin-button {
+    width: 44px;
+    height: 44px;
+    border-radius: 22px;
+    align-items: center;
+    justify-content: center;
+    color: #1f1c19;
+    cursor: pointer;
   }
 
   .grab {
@@ -239,7 +250,13 @@
       <Settings width="26" height="26"></Settings>
     </div>
   </div>
-  <div id="dock-grab" class="grab">
-    <div id="dock-grab-bar" class="grab-bar"></div>
+  <div class="dock-row" style="gap: 10px">
+    <div id="dock-pin" class="pin-button">
+      <Pin width="20" height="20"></Pin>
+    </div>
+    <div id="dock-grab" class="grab">
+      <div id="dock-grab-bar" class="grab-bar"></div>
+    </div>
+    <div style="width: 44px; height: 44px"></div>
   </div>
 </div>

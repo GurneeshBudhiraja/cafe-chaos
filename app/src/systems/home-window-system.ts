@@ -11,16 +11,23 @@
  * session state and renders it.
  */
 
-import { createSystem, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
+import { createSystem, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
 import { PAPER_STYLES, type PaperStyle } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
 import type { NoteSummary } from '../notes/note-store.js';
 import { formatRelativeTime, noteTitleFor, truncate } from '../ui/format.js';
 import { getHomeMode, type HomeModeState } from '../ui/home-mode.js';
-import { attachLiquidGlass } from '../ui/liquid-glass.js';
+import { makeDraggable } from '../ui/drag.js';
+import {
+  attachGlowHalo,
+  attachLiquidGlass,
+  type GlowHalo,
+  type LiquidGlass,
+} from '../ui/liquid-glass.js';
 import {
   addStateColors,
+  addToggleStateColors,
   NEUTRAL_STATES,
   PanelBinding,
   SECONDARY_STATES,
@@ -29,6 +36,7 @@ import {
   type PanelElement,
 } from '../ui/panel-helpers.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
+import { easeInCubic, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 
 const HOME_WINDOW_NODE = 'home-window';
 /** Square corners; must match .window border-radius in home-window.uikitml. */
@@ -41,6 +49,11 @@ const CARD_TITLE_MAX_CHARS = 18;
 /** One chevron press scrolls by one card plus the gap (UIKit units). */
 const CARD_STEP = 206;
 const CARDS_PER_PAGE = 4;
+/** Transition timings (ms): hide, then show after the dock has faded. */
+const HIDE_MS = 220;
+const SHOW_MS = 320;
+const SHOW_DELAY_MS = 120;
+const GLOW_MS = 1200;
 /** Canvas widths for previews (about 2x their size on the window). */
 const TEMPLATE_PREVIEW_PX = 272;
 const THUMB_PREVIEW_PX = 376;
@@ -69,7 +82,15 @@ export class HomeWindowSystem extends createSystem({}) {
   private session!: NoteSession;
   private cards: NoteCard[] = [];
   private homeMode!: HomeModeState;
+  private tweens!: Tweens;
+  private panel!: Object3D;
+  private baseScale = 1;
   private root!: PanelElement;
+  private grab!: PanelElement;
+  private glass!: LiquidGlass;
+  private halo!: GlowHalo;
+  /** Whether the window is (or is becoming) visible. */
+  private shown = true;
   private settingsOpen = false;
   private sort: SortMode = 'recent';
   private shownMinute = '';
@@ -93,13 +114,27 @@ export class HomeWindowSystem extends createSystem({}) {
     }
     const ui = new PanelBinding(panel, this.cleanupFuncs);
     this.homeMode = getHomeMode(this.world);
+    this.tweens = getTweens(this.world);
+    this.panel = panel;
+    this.baseScale = panel.scale.x;
     this.root = ui.element('home-root');
-    // The window surface is a shader-drawn frosted glass slab.
-    attachLiquidGlass(this.root, this.cleanupFuncs, {
+    this.grab = ui.element('window-grab');
+    // The window surface is a shader-drawn frosted glass slab, with a soft
+    // glow halo behind it that lights up as the window appears.
+    this.halo = attachGlowHalo(this.root, this.cleanupFuncs, { marginPx: 70, host: panel });
+    this.glass = attachLiquidGlass(this.root, this.cleanupFuncs, {
       radiusPx: WINDOW_RADIUS_PX,
       edgeHighlights: false,
       frostAlpha: WINDOW_FROST_ALPHA,
+      host: panel,
     });
+    makeDraggable(this.grab, ui.element('window-grab-bar'), panel, this.world, this.cleanupFuncs, {
+      onStart: () => this.homeMode.setDragging(true),
+      onEnd: () => this.homeMode.setDragging(false),
+    });
+    const pin = ui.onClick('window-pin', () => this.homeMode.setPinned(!this.homeMode.pinned));
+    const paintPin = addToggleStateColors(pin, () => this.homeMode.pinned, this.cleanupFuncs);
+    this.cleanupFuncs.push(this.homeMode.subscribePlacement(paintPin));
 
     this.clockTime = ui.text('clock-time');
     this.saveStatus = ui.text('save-status');
@@ -263,8 +298,67 @@ export class HomeWindowSystem extends createSystem({}) {
   }
 
   private applyMode(): void {
-    setVisible(this.root, this.homeMode.mode === 'full');
     setVisible(this.settingsSheet, this.settingsOpen);
+    const full = this.homeMode.mode === 'full';
+    if (full === this.shown) return;
+    this.shown = full;
+    if (full) this.showWindow();
+    else this.hideWindow();
+  }
+
+  // ----------------------------------------------------------- transitions
+
+  /** Fade out and shrink a little, then hide (the dock fades in after). */
+  private hideWindow(): void {
+    this.tweens.play(
+      HIDE_MS,
+      (t) => {
+        const e = easeInCubic(t);
+        this.setFade(1 - e, 1 - 0.06 * e);
+      },
+      {
+        key: 'home-window',
+        done: () => {
+          setVisible(this.root, false);
+          setVisible(this.grab, false);
+          this.setFade(1, 1);
+        },
+      },
+    );
+  }
+
+  /**
+   * Fade in while growing back to full size, with a warm glow behind the
+   * window that blooms and fades: "this is it".
+   */
+  private showWindow(): void {
+    setVisible(this.root, true);
+    setVisible(this.grab, true);
+    this.setFade(0, 0.96);
+    this.tweens.play(
+      SHOW_MS,
+      (t) => {
+        const e = easeOutCubic(t);
+        this.setFade(e, 0.96 + 0.04 * e);
+      },
+      { delayMs: SHOW_DELAY_MS, key: 'home-window' },
+    );
+    this.tweens.play(
+      GLOW_MS,
+      (t) => {
+        const strength = t < 0.25 ? easeOutCubic(t / 0.25) : 1 - easeInCubic((t - 0.25) / 0.75);
+        this.halo.setStrength(strength);
+      },
+      { delayMs: SHOW_DELAY_MS, key: 'home-window-glow' },
+    );
+  }
+
+  private setFade(opacity: number, scale: number): void {
+    const fade = { opacity } as Record<string, unknown>;
+    this.root.setProperties(fade);
+    this.grab.setProperties(fade);
+    this.glass.setOpacity(opacity);
+    this.panel.scale.setScalar(this.baseScale * scale);
   }
 }
 

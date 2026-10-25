@@ -16,9 +16,11 @@ import { NoteSession } from './notes/note-session.js';
 import { IndexedDbNoteStore, SimulatedFailureStore } from './notes/note-store.js';
 import { CompactDockSystem } from './systems/compact-dock-system.js';
 import { DesktopBackdropSystem } from './systems/desktop-backdrop-system.js';
+import { FollowModeSystem } from './systems/follow-mode-system.js';
 import { InkSystem } from './systems/ink-system.js';
 import { HomeWindowSystem } from './systems/home-window-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
+import { TweenSystem } from './systems/tween-system.js';
 import { XrScrollFixSystem } from './systems/xr-scroll-fix-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
 
@@ -41,6 +43,9 @@ World.create(
     .registerSystem(InkSystem)
     .registerSystem(HomeWindowSystem)
     .registerSystem(CompactDockSystem)
+    // After both panels, so followers re-anchor once they have placed themselves.
+    .registerSystem(FollowModeSystem)
+    .registerSystem(TweenSystem)
     .registerSystem(DesktopBackdropSystem)
     .registerSystem(XrScrollFixSystem);
 

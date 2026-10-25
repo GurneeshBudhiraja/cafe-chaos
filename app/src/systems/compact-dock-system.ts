@@ -5,21 +5,25 @@
  * but passthrough. Recent and Templates open a small pop-up just above the
  * row; picking an item closes it and the dock stays minimised. A grab bar
  * under the row moves the dock (pinch and drag); on release it turns to face
- * the viewer. Expanding opens the full window where the dock is.
+ * the viewer, and the pin beside it turns stick mode on and off. Expanding
+ * opens the full window where the dock is. The dock fades in with a small
+ * pop and a shine across its glass, so the eye finds it.
  *
  * Mode changes go through the shared HomeModeState; note changes go through
  * NoteSession commands.
  */
 
-import { createSystem, Quaternion, Vector3, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
+import { createSystem, Vector3, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
 import { PAPER_STYLES, type PaperStyle } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
 import { noteTitleFor, truncate } from '../ui/format.js';
 import { getHomeMode, type HomeModeState } from '../ui/home-mode.js';
-import { attachLiquidGlass } from '../ui/liquid-glass.js';
+import { makeDraggable } from '../ui/drag.js';
+import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
 import {
   addStateColors,
+  addToggleStateColors,
   NEUTRAL_STATES,
   PanelBinding,
   PRIMARY_STATES,
@@ -28,6 +32,7 @@ import {
   type PanelElement,
 } from '../ui/panel-helpers.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
+import { easeInCubic, easeOutBack, easeOutCubic, getTweens, pulse, type Tweens } from '../ui/tweens.js';
 
 const DOCK_NODE = 'compact-dock';
 const WINDOW_NODE = 'home-window';
@@ -43,6 +48,11 @@ const GLASS_FROST_ALPHA = 0.84;
  * (metres): a little higher and further away. Matches the scene defaults.
  */
 const WINDOW_OFFSET = new Vector3(0, 0.25, -0.2);
+/** Transition timings (ms): the dock appears after the window has faded. */
+const HIDE_MS = 180;
+const SHOW_MS = 360;
+const SHOW_DELAY_MS = 160;
+const SHINE_MS = 900;
 
 type Popover = 'recent' | 'templates' | null;
 
@@ -53,17 +63,15 @@ interface RecentCard {
   noteId: string | null;
 }
 
-/** The parts of a pmndrs pointer event the drag uses. */
-interface DragEvent {
-  point: Vector3;
-  pointerId?: number;
-  object?: { setPointerCapture?(id: number): void };
-}
-
 export class CompactDockSystem extends createSystem({}) {
   private session!: NoteSession;
   private homeMode!: HomeModeState;
+  private tweens!: Tweens;
   private dock!: Object3D;
+  private baseScale = 1;
+  private glassSlabs: LiquidGlass[] = [];
+  /** Whether the dock is (or is becoming) visible. */
+  private shown = false;
   private window: Object3D | null = null;
   private root!: PanelElement;
   private popover: Popover = null;
@@ -72,13 +80,7 @@ export class CompactDockSystem extends createSystem({}) {
   private popoverRecent!: PanelElement;
   private popoverTemplates!: PanelElement;
   private recentCards: RecentCard[] = [];
-
-  // Drag state, allocated once.
-  private dragging = false;
-  private readonly dragStartPoint = new Vector3();
-  private readonly dragStartPosition = new Vector3();
   private readonly scratch = new Vector3();
-  private readonly viewer = new Vector3();
 
   init(): void {
     this.session = getNoteSession(this.world);
@@ -88,7 +90,9 @@ export class CompactDockSystem extends createSystem({}) {
       console.warn('[CompactDockSystem] Compact dock missing from the scene.');
       return;
     }
+    this.tweens = getTweens(this.world);
     this.dock = panel;
+    this.baseScale = panel.scale.x;
     this.window = this.world.getSceneObject(WINDOW_NODE) ?? null;
     const ui = new PanelBinding(panel, this.cleanupFuncs);
     this.root = ui.element('dock-root');
@@ -96,13 +100,16 @@ export class CompactDockSystem extends createSystem({}) {
     this.root.setProperties({ anchorY: 'bottom' } as Record<string, unknown>);
 
     // Each round button and the pop-up get their own glass, with edge light.
-    const glass = (el: PanelElement, radiusPx: number) =>
-      attachLiquidGlass(el, this.cleanupFuncs, {
+    const glass = (el: PanelElement, radiusPx: number) => {
+      const slab = attachLiquidGlass(el, this.cleanupFuncs, {
         radiusPx,
         bevelPx: 10,
         frostAlpha: GLASS_FROST_ALPHA,
         host: panel,
       });
+      this.glassSlabs.push(slab);
+      return slab;
+    };
 
     const round = [
       ui.onClick('dock-expand', () => this.expand()),
@@ -151,13 +158,21 @@ export class CompactDockSystem extends createSystem({}) {
       this.cleanupFuncs.push(() => preview.dispose());
     }
 
-    this.setupDrag(ui.element('dock-grab'), ui.element('dock-grab-bar'));
+    makeDraggable(ui.element('dock-grab'), ui.element('dock-grab-bar'), panel, this.world, this.cleanupFuncs, {
+      onStart: () => this.homeMode.setDragging(true),
+      onEnd: () => this.homeMode.setDragging(false),
+    });
+    const pin = ui.onClick('dock-pin', () => this.homeMode.setPinned(!this.homeMode.pinned));
+    glass(pin, 22);
+    const paintPin = addToggleStateColors(pin, () => this.homeMode.pinned, this.cleanupFuncs);
+    this.cleanupFuncs.push(this.homeMode.subscribePlacement(paintPin));
 
     this.cleanupFuncs.push(
       this.session.subscribe(() => this.renderRecent()),
       this.homeMode.subscribe(({ mode }) => this.applyMode(mode)),
     );
     this.renderRecent();
+    setVisible(this.root, false);
     this.applyMode(this.homeMode.mode);
   }
 
@@ -186,14 +201,63 @@ export class CompactDockSystem extends createSystem({}) {
 
   private applyMode(mode: 'full' | 'compact'): void {
     const compact = mode === 'compact';
+    if (compact === this.shown) return;
+    this.shown = compact;
     if (compact) {
       this.placeRelativeToWindow();
+      this.showDock();
     } else {
       this.placeWindowAtDock();
       this.popover = null;
+      this.renderPopover();
+      this.hideDock();
     }
-    setVisible(this.root, compact);
+  }
+
+  // ----------------------------------------------------------- transitions
+
+  /** Fade in with a small pop past full size, then a shine on the glass. */
+  private showDock(): void {
+    this.popover = null;
     this.renderPopover();
+    setVisible(this.root, true);
+    this.setFade(0, 0.85);
+    this.tweens.play(
+      SHOW_MS,
+      (t) => this.setFade(easeOutCubic(t), 0.85 + 0.15 * easeOutBack(t)),
+      { delayMs: SHOW_DELAY_MS, key: 'compact-dock' },
+    );
+    this.tweens.play(
+      SHINE_MS,
+      (t) => {
+        const glow = pulse(t) * 0.9;
+        for (const slab of this.glassSlabs) slab.setGlow(glow);
+      },
+      { delayMs: SHOW_DELAY_MS + SHOW_MS * 0.5, key: 'compact-dock-shine' },
+    );
+  }
+
+  private hideDock(): void {
+    this.tweens.play(
+      HIDE_MS,
+      (t) => {
+        const e = easeInCubic(t);
+        this.setFade(1 - e, 1 - 0.08 * e);
+      },
+      {
+        key: 'compact-dock',
+        done: () => {
+          setVisible(this.root, false);
+          this.setFade(1, 1);
+        },
+      },
+    );
+  }
+
+  private setFade(opacity: number, scale: number): void {
+    this.root.setProperties({ opacity } as Record<string, unknown>);
+    for (const slab of this.glassSlabs) slab.setOpacity(opacity);
+    this.dock.scale.setScalar(this.baseScale * scale);
   }
 
   private renderPopover(): void {
@@ -232,54 +296,4 @@ export class CompactDockSystem extends createSystem({}) {
     this.scratch.copy(WINDOW_OFFSET).applyQuaternion(this.dock.quaternion);
     this.window.position.copy(this.dock.position).add(this.scratch);
   }
-
-  // ------------------------------------------------------------------ drag
-
-  /**
-   * Pinch the grab bar and move the ray (or mouse) to drag the dock. Pointer
-   * capture keeps the drag going when the ray leaves the bar; the point
-   * moves at the grab distance, so the dock follows the hand.
-   */
-  private setupDrag(grab: PanelElement, bar: PanelElement): void {
-    const down = (raw: unknown) => {
-      const event = raw as DragEvent;
-      if (!event.point) return;
-      this.dragging = true;
-      this.dragStartPoint.copy(event.point);
-      this.dragStartPosition.copy(this.dock.position);
-      if (event.pointerId != null) event.object?.setPointerCapture?.(event.pointerId);
-      bar.setProperties({ backgroundColor: '#ffffff' });
-    };
-    const move = (raw: unknown) => {
-      const event = raw as DragEvent;
-      if (!this.dragging || !event.point) return;
-      this.scratch.copy(event.point).sub(this.dragStartPoint);
-      this.dock.position.copy(this.dragStartPosition).add(this.scratch);
-    };
-    const up = () => {
-      if (!this.dragging) return;
-      this.dragging = false;
-      bar.setProperties({ backgroundColor: 'rgba(255, 253, 249, 0.92)' });
-      this.faceViewer();
-    };
-    grab.addEventListener('pointerdown', down);
-    grab.addEventListener('pointermove', move);
-    grab.addEventListener('pointerup', up);
-    addStateColors(grab, NEUTRAL_STATES, this.cleanupFuncs);
-    this.cleanupFuncs.push(() => {
-      grab.removeEventListener('pointerdown', down);
-      grab.removeEventListener('pointermove', move);
-      grab.removeEventListener('pointerup', up);
-    });
-  }
-
-  /** Turn the dock about its vertical axis to face the viewer's head. */
-  private faceViewer(): void {
-    this.world.camera.getWorldPosition(this.viewer);
-    const yaw = Math.atan2(this.viewer.x - this.dock.position.x, this.viewer.z - this.dock.position.z);
-    this.dock.quaternion.copy(FACING.setFromAxisAngle(UP, yaw));
-  }
 }
-
-const UP = new Vector3(0, 1, 0);
-const FACING = new Quaternion();

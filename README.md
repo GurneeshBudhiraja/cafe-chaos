@@ -61,7 +61,12 @@ window for the compact dock: five floating glass buttons with only
 passthrough between them (Expand, Recent | New note | Templates, Settings).
 Recent and Templates open a small pop-up above the buttons; a grab bar
 underneath moves the dock, which turns to face you on release, and Expand
-opens the window where the dock is. Saving is silent; a line with a
+opens the window where the dock is. The window has its own grab bar too.
+Minimising fades the window out and the dock fades in with a small pop and
+a shine; expanding fades the window in with a warm glow behind it. The pin
+(window top bar, and beside the dock's grab bar) is stick mode: while on,
+the window and dock follow your head (IWSDK Follower, thresholded and
+smooth); while off, they stay where you put them. Saving is silent; a line with a
 retry button appears only when a save fails. Headset walkthrough:
 `npm run record:home`.
 

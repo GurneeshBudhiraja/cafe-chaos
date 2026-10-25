@@ -193,6 +193,30 @@ try {
   await clickUntil(page, 'settings-button', () => !window.__shown('settings-sheet'));
   checks.check('settings on the dock opens the full window', true);
 
+  // The window's own grab bar moves it, and the pin toggles stick mode.
+  const winX = () => page.evaluate(() => window.__metaNotes.world.getSceneObject('home-window').position.x);
+  const winBefore = await winX();
+  const bar = await screenPointOf(page, 'window-grab');
+  await page.mouse.move(bar.x, bar.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) {
+    await page.mouse.move(bar.x - i * 10, bar.y);
+    await page.waitForTimeout(40);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  const winAfter = await winX();
+  await page.evaluate(() => {
+    const win = window.__metaNotes.world.getSceneObject('home-window');
+    win.position.set(0, 1.5, -1.2);
+    win.quaternion.identity();
+  });
+  checks.check('dragging the window bar moves the window', winBefore - winAfter > 0.05, `x ${winBefore.toFixed(3)} -> ${winAfter.toFixed(3)}`);
+  await page.evaluate(() => (window.__homeMode = window.__metaNotes.world.globals['metaNotes.homeMode']));
+  await clickUntil(page, 'window-pin', () => window.__homeMode.pinned === true);
+  await clickUntil(page, 'window-pin', () => window.__homeMode.pinned === false);
+  checks.check('the pin turns stick mode on and off', true);
+
   // A paper template creates a note with that paper.
   await clickUntil(page, 'template-grid', () => window.__metaNotes.session.active?.paper === 'grid');
   checks.check('a paper template creates a note with that paper', true);

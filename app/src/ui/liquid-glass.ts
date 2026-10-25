@@ -64,6 +64,17 @@ export interface LiquidGlass {
   setImage(texture: Texture): void;
   /** 0 shows frosted glass, 1 shows the photo. */
   setImageMix(mix: number): void;
+  /** Fade the whole slab, 0..1 (for show and hide transitions). */
+  setOpacity(opacity: number): void;
+  /** Extra brightness on the body and rim, 0..1 (an attention "shine"). */
+  setGlow(glow: number): void;
+}
+
+/** Handle for a soft glow halo behind an element. */
+export interface GlowHalo {
+  mesh: Mesh;
+  /** 0 hides the halo; 1 is full glow. */
+  setStrength(strength: number): void;
 }
 
 const vertexShader = /* glsl */ `
@@ -94,6 +105,8 @@ const fragmentShader = /* glsl */ `
   uniform float uImageMix;    // 0 frosted glass, 1 photo
   uniform float uEdge;        // 1 draws edge highlights, 0 a clean edge
   uniform float uFrostAlpha;  // opacity of the frosted body
+  uniform float uOpacity;     // whole-slab fade
+  uniform float uGlow;        // attention shine
 
   varying vec2 vUv;
   varying vec3 vWorldPos;
@@ -180,12 +193,65 @@ const fragmentShader = /* glsl */ `
     vec3 color = body + sheen + innerGlow + gloss;
     color += spec * 1.2 + fill + fresnel * 0.45;
     color = mix(color, vec3(1.0), rim * rimLit * 0.9);
+    // Shine: brighten the body and light the rim all round.
+    float rimGlow = 1.0 - smoothstep(0.0, uBevel, -d);
+    color = mix(color, vec3(1.0), uGlow * (0.18 + 0.6 * rimGlow));
 
     float alpha = mix(uFrostAlpha + 0.06 * vUv.y, 0.97, uImageMix) + sheen + gloss;
     alpha += spec * 0.6 + fill * 0.5 + fresnel * 0.35 + innerGlow + rim * rimLit * 0.6;
-    gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0) * mask);
+    alpha += uGlow * (0.12 + 0.5 * rimGlow);
+    gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0) * mask * uOpacity);
   }
 `;
+
+const haloFragmentShader = /* glsl */ `
+  uniform vec2 uSize;      // the element's size in UIKit pixels
+  uniform float uMargin;   // how far the glow reaches past the edge, pixels
+  uniform float uStrength;
+  varying vec2 vUv;
+
+  void main() {
+    vec2 outer = uSize + 2.0 * uMargin;
+    vec2 p = (vUv - 0.5) * outer;
+    vec2 q = abs(p) - uSize * 0.5;
+    float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0); // > 0 outside
+    float glow = exp(-max(d, 0.0) / (uMargin * 0.38));
+    float edgeFade = 1.0 - smoothstep(uMargin * 0.7, uMargin, d);
+    gl_FragColor = vec4(1.0, 0.95, 0.88, uStrength * 0.55 * glow * edgeFade);
+  }
+`;
+
+type ElementMatrices = {
+  globalPanelMatrix?: { peek(): Matrix4 | undefined };
+  size: { subscribe(fn: (value: [number, number] | undefined) => void): () => void };
+  isVisible?: { subscribe(fn: (value: boolean) => void): () => void };
+};
+
+/**
+ * Keep `mesh` on `element` right before each render (three.js computes the
+ * model-view matrix after onBeforeRender, so this frame uses it). UIKit keeps
+ * a nested element's placement in `globalPanelMatrix`, relative to the panel
+ * document and already scaled to the element's size; only a root element
+ * also has an up-to-date matrixWorld. `extra` is applied in element space.
+ */
+function followElement(
+  mesh: Mesh,
+  element: PanelElement,
+  host: Object3D,
+  extra: () => Matrix4,
+): void {
+  const panelMatrix = (element as unknown as ElementMatrices).globalPanelMatrix;
+  mesh.matrixAutoUpdate = false;
+  mesh.matrixWorldAutoUpdate = false;
+  mesh.frustumCulled = false;
+  mesh.onBeforeRender = () => {
+    const local = panelMatrix?.peek();
+    if (local) mesh.matrixWorld.multiplyMatrices(host.matrixWorld, local);
+    else mesh.matrixWorld.copy(element.matrixWorld);
+    mesh.matrixWorld.multiply(extra());
+  };
+  host.add(mesh);
+}
 
 /**
  * Put a liquid-glass slab behind `element` (a UIKit element whose own
@@ -209,6 +275,8 @@ export function attachLiquidGlass(
       uImageMix: { value: 0 },
       uEdge: { value: edgeHighlights ? 1 : 0 },
       uFrostAlpha: { value: frostAlpha },
+      uOpacity: { value: 1 },
+      uGlow: { value: 0 },
     },
     transparent: true,
     depthWrite: false,
@@ -218,27 +286,11 @@ export function attachLiquidGlass(
   const mesh = new Mesh(new PlaneGeometry(1, 1), material);
   mesh.name = 'LiquidGlass';
   mesh.renderOrder = -1; // drawn before the element's own content
-  // Follow the element right before rendering (three.js computes the
-  // model-view matrix after onBeforeRender, so this frame uses it). UIKit
-  // keeps a nested element's placement in `globalPanelMatrix`, relative to
-  // the panel document, already scaled to the element's size; only a root
-  // element also has an up-to-date matrixWorld. Push it a little behind.
-  const behind = new Matrix4().makeTranslation(0, 0, -0.01);
-  const panelMatrix = (element as unknown as {
-    globalPanelMatrix?: { peek(): Matrix4 | undefined };
-  }).globalPanelMatrix;
-  mesh.matrixAutoUpdate = false;
-  mesh.matrixWorldAutoUpdate = false;
-  mesh.frustumCulled = false;
   const host = hostOption ?? element.parent;
   if (!host) throw new Error('attachLiquidGlass: element is not in the scene yet.');
-  mesh.onBeforeRender = () => {
-    const local = panelMatrix?.peek();
-    if (local) mesh.matrixWorld.multiplyMatrices(host.matrixWorld, local);
-    else mesh.matrixWorld.copy(element.matrixWorld);
-    mesh.matrixWorld.multiply(behind);
-  };
-  host.add(mesh);
+  // A little behind the element's own content.
+  const behind = new Matrix4().makeTranslation(0, 0, -0.01);
+  followElement(mesh, element, host, () => behind);
 
   // Keep the shader's pixel size in step with the layout (compact mode).
   const size = (element as unknown as {
@@ -275,6 +327,64 @@ export function attachLiquidGlass(
     },
     setImageMix(mix) {
       material.uniforms.uImageMix.value = mix;
+    },
+    setOpacity(opacity) {
+      material.uniforms.uOpacity.value = opacity;
+    },
+    setGlow(glow) {
+      material.uniforms.uGlow.value = glow;
+    },
+  };
+}
+
+/**
+ * Put a soft, warm glow halo behind `element` that reaches `marginPx` past
+ * its edges. Starts hidden (strength 0); used to draw the eye to a window as
+ * it appears. Removed and disposed through `cleanupFuncs`.
+ */
+export function attachGlowHalo(
+  element: PanelElement,
+  cleanupFuncs: Array<() => void>,
+  { marginPx = 60, host: hostOption }: { marginPx?: number; host?: Object3D } = {},
+): GlowHalo {
+  const material = new ShaderMaterial({
+    vertexShader,
+    fragmentShader: haloFragmentShader,
+    uniforms: {
+      uSize: { value: new Vector2(1, 1) },
+      uMargin: { value: marginPx },
+      uStrength: { value: 0 },
+    },
+    transparent: true,
+    depthWrite: false,
+    blending: NormalBlending,
+  });
+  const mesh = new Mesh(new PlaneGeometry(1, 1), material);
+  mesh.name = 'GlowHalo';
+  mesh.renderOrder = -2; // behind the glass slab
+  mesh.visible = false;
+  const host = hostOption ?? element.parent;
+  if (!host) throw new Error('attachGlowHalo: element is not in the scene yet.');
+  // Grow the unit plane past the element by the margin, slightly behind it.
+  const extra = new Matrix4();
+  const size = material.uniforms.uSize.value as Vector2;
+  followElement(mesh, element, host, () =>
+    extra.makeScale(1 + (2 * marginPx) / size.x, 1 + (2 * marginPx) / size.y, 1).setPosition(0, 0, -0.02),
+  );
+  const unsubscribe = (element as unknown as ElementMatrices).size.subscribe((value) => {
+    if (value) size.set(value[0], value[1]);
+  });
+  cleanupFuncs.push(() => {
+    unsubscribe();
+    host.remove(mesh);
+    mesh.geometry.dispose();
+    material.dispose();
+  });
+  return {
+    mesh,
+    setStrength(strength) {
+      material.uniforms.uStrength.value = strength;
+      mesh.visible = strength > 0.001;
     },
   };
 }

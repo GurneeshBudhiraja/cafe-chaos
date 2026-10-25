@@ -98,3 +98,45 @@ export function addStateColors(
     for (const [type, handler] of handlers) element.removeEventListener(type, handler);
   });
 }
+
+/** A toggle that is on (the pin while stick mode is on): ink fill. */
+const SELECTED_STATES: StateColors = {
+  rest: '#1f1c19',
+  hover: '#38332e',
+  pressed: '#4a443d',
+};
+const ICON_ON = '#ffffff';
+const ICON_OFF = '#1f1c19';
+
+/**
+ * State colours for an on/off icon button: neutral glass when off, a filled
+ * ink circle with a white icon when on. Returns `refresh`, to call after
+ * the on state changes.
+ */
+export function addToggleStateColors(
+  element: PanelElement,
+  isOn: () => boolean,
+  cleanupFuncs: Array<() => void>,
+): () => void {
+  let state: keyof StateColors = 'rest';
+  const paint = () => {
+    const colors = isOn() ? SELECTED_STATES : NEUTRAL_STATES;
+    element.setProperties({ backgroundColor: colors[state], color: isOn() ? ICON_ON : ICON_OFF });
+  };
+  const to = (next: keyof StateColors) => () => {
+    state = next;
+    paint();
+  };
+  const handlers = [
+    ['pointerenter', to('hover')],
+    ['pointerleave', to('rest')],
+    ['pointerdown', to('pressed')],
+    ['pointerup', to('hover')],
+  ] as const;
+  for (const [type, handler] of handlers) element.addEventListener(type, handler);
+  cleanupFuncs.push(() => {
+    for (const [type, handler] of handlers) element.removeEventListener(type, handler);
+  });
+  paint();
+  return paint;
+}
