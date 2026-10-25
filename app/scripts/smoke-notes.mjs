@@ -161,6 +161,10 @@ try {
   );
   checks.check('settings in the compact pill opens the full window', true);
 
+  // A paper template creates a note with that paper.
+  await clickUntil(page, 'template-grid', () => window.__metaNotes.session.active?.paper === 'grid');
+  checks.check('a paper template creates a note with that paper', true);
+
   // With more notes than fit, the recent strip scrolls. On desktop a mouse
   // scrolls UIKit with the wheel; XR rays and hands scroll by dragging.
   await page.evaluate(async () => {

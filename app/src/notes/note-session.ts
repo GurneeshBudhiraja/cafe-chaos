@@ -18,6 +18,7 @@ import {
   createNote,
   type Note,
   type Page,
+  type PaperStyle,
   type Stroke,
 } from './note-model.js';
 import type { NoteStore, NoteSummary } from './note-store.js';
@@ -82,8 +83,8 @@ export class NoteSession implements InkDocument {
 
   // --------------------------------------------------------------- commands
 
-  async createNote(title?: string): Promise<Note> {
-    const note = createNote(title);
+  async createNote(title?: string, paper?: PaperStyle): Promise<Note> {
+    const note = createNote(title, Date.now(), paper);
     this.active = note;
     this.markDirty(note);
     this.emit('active');
@@ -115,6 +116,21 @@ export class NoteSession implements InkDocument {
     }
     this.active = note;
     this.emit('active');
+  }
+
+  /**
+   * Read a note without opening it (for previews): the open or unsaved copy
+   * when there is one, else the stored note. Null if it cannot be read.
+   */
+  async getNote(id: string): Promise<Note | null> {
+    if (this.active?.id === id) return this.active;
+    const unsaved = this.dirty.get(id)?.note;
+    if (unsaved) return unsaved;
+    try {
+      return await this.store.get(id);
+    } catch {
+      return null;
+    }
   }
 
   renameActive(title: string): void {

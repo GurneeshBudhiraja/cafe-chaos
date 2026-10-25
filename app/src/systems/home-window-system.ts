@@ -1,53 +1,63 @@
 /**
  * HomeWindowSystem: connects the home window (UIKitML) to the NoteSession.
  *
- * The window shows a live clock with the save status under it, recent notes
- * as glass cards (tap to open on the tablet; chevrons or a drag page through
- * them), a New note button, a settings sheet (placeholder for now), and a
- * compact toggle that collapses the window to a pill with the expand toggle,
- * a centred New note and settings.
+ * The first screen, laid out like a document app's home: a top bar (app
+ * name, clock, settings, compact toggle), "Start a new note" paper templates
+ * and "Recent notes" cards that preview each note's real ink, with a sort
+ * toggle and chevrons (or a drag) for more. Compact mode collapses the
+ * window to a pill with expand, New note and settings.
  *
  * All note changes go through NoteSession commands; this system only reads
  * session state and renders it.
  */
 
-import { AssetManager, createSystem, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
+import { createSystem, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
+import { PAPER_STYLES, type PaperStyle } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
+import type { NoteSummary } from '../notes/note-store.js';
 import { formatRelativeTime, noteTitleFor, truncate } from '../ui/format.js';
-import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
+import { attachLiquidGlass } from '../ui/liquid-glass.js';
 import {
   PanelBinding,
   setText,
   setVisible,
   type PanelElement,
 } from '../ui/panel-helpers.js';
+import { PaperPreview } from '../ui/paper-preview.js';
 
 const HOME_WINDOW_NODE = 'home-window';
 /** Square corners; must match .window border-radius in home-window.uikitml. */
 const WINDOW_RADIUS_PX = 0;
-const WALLPAPER_ASSET = 'home-wallpaper';
+/** Frosted, mostly opaque glass so dark text reads over any room. */
+const WINDOW_FROST_ALPHA = 0.84;
 /** Must match the number of `recent-card-N` elements in home-window.uikitml. */
 const CARD_SLOTS = 8;
-const CARD_TITLE_MAX_CHARS = 14;
+const CARD_TITLE_MAX_CHARS = 18;
 /** One chevron press scrolls by one card plus the gap (UIKit units). */
-const CARD_STEP = 137;
+const CARD_STEP = 206;
 const CARDS_PER_PAGE = 4;
+/** Canvas widths for previews (about 2x their size on the window). */
+const TEMPLATE_PREVIEW_PX = 272;
+const THUMB_PREVIEW_PX = 376;
 
-const ICON_COLOR = '#ffffff';
-const ICON_HIDDEN = 'rgba(255, 255, 255, 0)';
-const CARD_COLOR = 'rgba(255, 255, 255, 0.16)';
-const PILL_COLOR = 'rgba(255, 255, 255, 0.12)';
+const ICON_COLOR = '#15181d';
+const ICON_HIDDEN = 'rgba(21, 24, 29, 0)';
+const CLEAR = 'rgba(255, 255, 255, 0)';
 /** Pointer-over feedback, so a ray or hand shows what a pinch will hit. */
-const CARD_HOVER_COLOR = 'rgba(255, 255, 255, 0.3)';
-const BUTTON_HOVER_COLOR = 'rgba(255, 255, 255, 0.22)';
-const BUTTON_COLOR = 'rgba(255, 255, 255, 0)';
+const HOVER_COLOR = 'rgba(21, 24, 29, 0.08)';
+
+type SortMode = 'recent' | 'title';
+const SORT_LABELS: Record<SortMode, string> = { recent: 'Recent', title: 'A-Z' };
 
 interface NoteCard {
   root: PanelElement;
   title: UIKit.Text;
   meta: UIKit.Text;
+  preview: PaperPreview;
   noteId: string | null;
+  /** id + updatedAt of the ink last drawn, to skip needless redraws. */
+  drawnKey: string;
 }
 
 /** The scrollable strip; UIKit exposes its scroll offset as a signal. */
@@ -61,17 +71,16 @@ export class HomeWindowSystem extends createSystem({}) {
   private cards: NoteCard[] = [];
   private compact = false;
   private settingsOpen = false;
+  private sort: SortMode = 'recent';
   private shownMinute = '';
 
-  private glass: LiquidGlass | null = null;
-  private wallpaperReady = false;
   private clockTime!: UIKit.Text;
-  private clockDate!: UIKit.Text;
   private strip: ScrollContainer | null = null;
   private prevChevron!: PanelElement;
   private nextChevron!: PanelElement;
+  private sortLabel!: UIKit.Text;
+  private emptyState!: PanelElement;
   private saveStatus!: UIKit.Text;
-  private retryButton!: PanelElement;
   private statusRow!: PanelElement;
   private settingsSheet!: PanelElement;
   /** Shown only in full mode / only in compact mode. */
@@ -86,75 +95,81 @@ export class HomeWindowSystem extends createSystem({}) {
       return;
     }
     const ui = new PanelBinding(panel, this.cleanupFuncs);
-    // The window surface is a shader-drawn glass slab (see liquid-glass.ts);
-    // its radius matches .window's border-radius in home-window.uikitml.
-    this.glass = attachLiquidGlass(ui.element('home-root'), this.cleanupFuncs, {
+    // The window surface is a shader-drawn frosted glass slab.
+    attachLiquidGlass(ui.element('home-root'), this.cleanupFuncs, {
       radiusPx: WINDOW_RADIUS_PX,
-      edgeHighlights: false, // no outline around the window
+      edgeHighlights: false,
+      frostAlpha: WINDOW_FROST_ALPHA,
     });
-    // Lock-screen wallpaper; frosted glass shows until it has loaded.
-    AssetManager.loadTextureById(WALLPAPER_ASSET)
-      .then((texture) => {
-        this.glass?.setImage(texture);
-        this.wallpaperReady = true;
-        this.applyMode();
-      })
-      .catch((error) => console.warn('[HomeWindowSystem] Wallpaper failed to load.', error));
 
     this.clockTime = ui.text('clock-time');
-    this.clockDate = ui.text('clock-date');
     this.saveStatus = ui.text('save-status');
     this.statusRow = ui.element('status-row');
     this.settingsSheet = ui.element('settings-sheet');
-    this.retryButton = ui.onClick('save-retry-button', () => void this.session.flush());
+    this.sortLabel = ui.text('sort-label');
+    this.emptyState = ui.element('recent-empty');
+    ui.onClick('save-retry-button', () => void this.session.flush());
+    ui.onClick('sort-button', () => this.toggleSort());
 
-    const newNote = () => void this.session.createNote(noteTitleFor());
+    const hoverable: PanelElement[] = [];
     this.fullOnly = [
-      ui.onClick('compact-toggle', () => this.setCompact(true)),
-      ui.onClick('settings-button', () => this.toggleSettings()),
-      ui.element('clock'),
+      ui.element('app-title'),
+      ui.element('top-actions'),
+      ui.element('templates-section'),
+      ui.element('section-divider'),
       ui.element('recent-section'),
-      ui.element('bottom-row'),
     ];
     this.compactOnly = [
       ui.onClick('expand-toggle', () => this.setCompact(false)),
-      ui.onClick('compact-new-button', newNote),
+      ui.onClick('compact-new-button', () => this.newNote('blank')),
       // Settings from the pill opens the full window with the sheet showing.
       ui.onClick('compact-settings-button', () => this.openSettingsFromCompact()),
     ];
-    ui.onClick('note-new-button', newNote);
+    hoverable.push(
+      ...this.compactOnly,
+      ui.onClick('settings-button', () => this.toggleSettings()),
+      ui.onClick('compact-toggle', () => this.setCompact(true)),
+      ui.element('sort-button'),
+    );
+
+    // Templates: Blank is the main New note action; the others draw their paper.
+    hoverable.push(ui.onClick('note-new-button', () => this.newNote('blank')));
+    for (const paper of PAPER_STYLES) {
+      if (paper === 'blank') continue;
+      const preview = new PaperPreview(TEMPLATE_PREVIEW_PX);
+      preview.draw(paper);
+      ui.element(`template-img-${paper}`).setProperties({ src: preview.texture });
+      hoverable.push(ui.onClick(`template-${paper}`, () => this.newNote(paper)));
+      this.cleanupFuncs.push(() => preview.dispose());
+    }
 
     this.prevChevron = ui.onClick('recent-prev', () => this.page(-1));
     this.nextChevron = ui.onClick('recent-next', () => this.page(1));
+    hoverable.push(this.prevChevron, this.nextChevron);
 
     for (let i = 0; i < CARD_SLOTS; i++) {
+      const preview = new PaperPreview(THUMB_PREVIEW_PX);
+      preview.draw('blank');
+      ui.element(`recent-thumb-${i}`).setProperties({ src: preview.texture });
       const card: NoteCard = {
         root: ui.onClick(`recent-card-${i}`, () => {
           if (card.noteId) void this.session.openNote(card.noteId);
         }),
         title: ui.text(`recent-title-${i}`),
         meta: ui.text(`recent-meta-${i}`),
+        preview,
         noteId: null,
+        drawnKey: '',
       };
       this.cards.push(card);
+      hoverable.push(card.root);
+      this.cleanupFuncs.push(() => preview.dispose());
     }
     this.strip = findScrollContainer(this.cards[0]?.root);
 
     // Hover feedback on everything a pinch can hit (Meta guidance: targets
     // must react to the pointer before they are selected).
-    for (const card of this.cards) this.addHover(card.root, CARD_COLOR, CARD_HOVER_COLOR);
-    for (const id of [
-      'settings-button',
-      'compact-toggle',
-      'expand-toggle',
-      'compact-new-button',
-      'compact-settings-button',
-      'recent-prev',
-      'recent-next',
-    ]) {
-      this.addHover(ui.element(id), BUTTON_COLOR, BUTTON_HOVER_COLOR);
-    }
-    this.addHover(ui.element('note-new-button'), PILL_COLOR, BUTTON_HOVER_COLOR);
+    for (const element of hoverable) this.addHover(element);
 
     // The clock only needs to change when the minute does.
     const clockTimer = setInterval(() => {
@@ -177,18 +192,26 @@ export class HomeWindowSystem extends createSystem({}) {
     this.applyMode();
   }
 
+  // -------------------------------------------------------------- commands
+
+  private newNote(paper: PaperStyle): void {
+    void this.session.createNote(noteTitleFor(), paper);
+  }
+
+  private toggleSort(): void {
+    this.sort = this.sort === 'recent' ? 'title' : 'recent';
+    setText(this.sortLabel, SORT_LABELS[this.sort]);
+    if (this.strip) this.strip.scrollPosition.value = [0, 0];
+    this.renderCards();
+  }
+
   // ------------------------------------------------------------- rendering
 
   private renderClock(): void {
-    const now = new Date();
-    const time = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    const time = new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
     if (time === this.shownMinute) return;
     this.shownMinute = time;
     setText(this.clockTime, time);
-    setText(
-      this.clockDate,
-      now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }),
-    );
   }
 
   /** Saving is silent; only a failed save shows a line, with a retry. */
@@ -196,12 +219,12 @@ export class HomeWindowSystem extends createSystem({}) {
     const failed = this.session.saveStatus === 'failed';
     setText(this.saveStatus, failed ? "Couldn't save. Your changes are kept." : '');
     setVisible(this.statusRow, failed);
-    setVisible(this.retryButton, failed);
   }
 
-  /** Most recent notes first; unused slots are hidden. The strip scrolls. */
+  /** Cards in the chosen order; unused slots are hidden. The strip scrolls. */
   private renderCards(): void {
-    const summaries = this.session.summaries;
+    const summaries = this.sortedSummaries();
+    setVisible(this.emptyState, summaries.length === 0);
     this.cards.forEach((card, i) => {
       const summary = summaries[i];
       card.noteId = summary?.id ?? null;
@@ -209,8 +232,28 @@ export class HomeWindowSystem extends createSystem({}) {
       if (!summary) return;
       setText(card.title, truncate(summary.title || 'Untitled note', CARD_TITLE_MAX_CHARS));
       setText(card.meta, `Edited ${formatRelativeTime(summary.updatedAt)}`);
+      void this.drawThumbnail(card, summary);
     });
     this.renderChevrons();
+  }
+
+  private sortedSummaries(): NoteSummary[] {
+    const summaries = this.session.summaries;
+    if (this.sort === 'recent') return summaries;
+    return [...summaries].sort((a, b) =>
+      (a.title || 'Untitled note').localeCompare(b.title || 'Untitled note'),
+    );
+  }
+
+  /** Draw the note's paper and ink into the card, only when it changed. */
+  private async drawThumbnail(card: NoteCard, summary: NoteSummary): Promise<void> {
+    const key = `${summary.id}:${summary.updatedAt}`;
+    if (card.drawnKey === key) return;
+    card.drawnKey = key;
+    const note = await this.session.getNote(summary.id);
+    // The slot may show another note by the time the read finishes.
+    if (card.drawnKey !== key) return;
+    card.preview.draw(note?.paper ?? 'blank', note ?? undefined);
   }
 
   /** Chevrons show only when there is more to see in that direction. */
@@ -232,9 +275,9 @@ export class HomeWindowSystem extends createSystem({}) {
     this.renderChevrons();
   }
 
-  private addHover(element: PanelElement, color: string, hoverColor: string): void {
-    const enter = () => element.setProperties({ backgroundColor: hoverColor });
-    const leave = () => element.setProperties({ backgroundColor: color });
+  private addHover(element: PanelElement): void {
+    const enter = () => element.setProperties({ backgroundColor: HOVER_COLOR });
+    const leave = () => element.setProperties({ backgroundColor: CLEAR });
     element.addEventListener('pointerenter', enter);
     element.addEventListener('pointerleave', leave);
     this.cleanupFuncs.push(() => {
@@ -266,9 +309,6 @@ export class HomeWindowSystem extends createSystem({}) {
     for (const el of this.fullOnly) setVisible(el, !this.compact);
     for (const el of this.compactOnly) setVisible(el, this.compact);
     setVisible(this.settingsSheet, this.settingsOpen && !this.compact);
-    // The wallpaper shows in both modes (frosted glass until it loads), so
-    // the white text and icons always sit on the dimmed photo.
-    this.glass?.setImageMix(this.wallpaperReady ? 1 : 0);
   }
 }
 

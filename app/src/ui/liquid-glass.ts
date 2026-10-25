@@ -45,6 +45,8 @@ export interface LiquidGlassOptions {
   bevelPx?: number;
   /** Draw the bevel highlights, rim, inner glow and top gloss (default on). */
   edgeHighlights?: boolean;
+  /** Opacity of the frosted body (0.26 default: see-through glass). */
+  frostAlpha?: number;
 }
 
 /** Handle for a glass slab: the mesh plus controls for its photo body. */
@@ -83,6 +85,7 @@ const fragmentShader = /* glsl */ `
   uniform float uImageAspect; // image width / height
   uniform float uImageMix;    // 0 frosted glass, 1 photo
   uniform float uEdge;        // 1 draws edge highlights, 0 a clean edge
+  uniform float uFrostAlpha;  // opacity of the frosted body
 
   varying vec2 vUv;
   varying vec3 vWorldPos;
@@ -169,7 +172,7 @@ const fragmentShader = /* glsl */ `
     color += spec * 1.2 + fill + fresnel * 0.45;
     color = mix(color, vec3(1.0), rim * rimLit * 0.9);
 
-    float alpha = mix(0.26 + 0.06 * vUv.y, 0.97, uImageMix) + sheen + gloss;
+    float alpha = mix(uFrostAlpha + 0.06 * vUv.y, 0.97, uImageMix) + sheen + gloss;
     alpha += spec * 0.6 + fill * 0.5 + fresnel * 0.35 + innerGlow + rim * rimLit * 0.6;
     gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0) * mask);
   }
@@ -183,7 +186,7 @@ const fragmentShader = /* glsl */ `
 export function attachLiquidGlass(
   element: PanelElement,
   cleanupFuncs: Array<() => void>,
-  { radiusPx, bevelPx = 16, edgeHighlights = true }: LiquidGlassOptions,
+  { radiusPx, bevelPx = 16, edgeHighlights = true, frostAlpha = 0.26 }: LiquidGlassOptions,
 ): LiquidGlass {
   const material = new ShaderMaterial({
     vertexShader,
@@ -196,6 +199,7 @@ export function attachLiquidGlass(
       uImageAspect: { value: 1 },
       uImageMix: { value: 0 },
       uEdge: { value: edgeHighlights ? 1 : 0 },
+      uFrostAlpha: { value: frostAlpha },
     },
     transparent: true,
     depthWrite: false,

@@ -34,13 +34,6 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'Home Window',
   },
-  // Lock-screen wallpaper inside the home window. Photo: Alexey
-  // Topolyanskiy on Unsplash (Unsplash License); see public/images/README.md.
-  'home-wallpaper': {
-    url: publicAssetUrl('images/wallpaper-fjord.jpg'),
-    type: AssetType.Texture,
-    name: 'Home Wallpaper',
-  },
   'tools-panel': {
     url: publicAssetUrl('ui/tools-panel.uikitml'),
     type: AssetType.UIKitML,

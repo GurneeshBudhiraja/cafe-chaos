@@ -19,6 +19,17 @@ export const PAGE_ASPECT = 4 / 3;
 
 export type ToolKind = 'pen';
 
+/** The page background a note was created with (a template). */
+export type PaperStyle = 'blank' | 'lined' | 'grid' | 'dotted' | 'cornell' | 'checklist';
+export const PAPER_STYLES: readonly PaperStyle[] = [
+  'blank',
+  'lined',
+  'grid',
+  'dotted',
+  'cornell',
+  'checklist',
+];
+
 export interface Stroke {
   id: string;
   tool: ToolKind;
@@ -41,6 +52,8 @@ export interface Note {
   title: string;
   /** Typed text content. Rich typing arrives with keyboard mode. */
   text: string;
+  /** Page background. Optional in storage: older notes read as 'blank'. */
+  paper: PaperStyle;
   /** Epoch milliseconds. */
   createdAt: number;
   updatedAt: number;
@@ -56,12 +69,17 @@ export function createPage(): Page {
   return { id: createId(), strokes: [] };
 }
 
-export function createNote(title = 'Untitled note', now = Date.now()): Note {
+export function createNote(
+  title = 'Untitled note',
+  now = Date.now(),
+  paper: PaperStyle = 'blank',
+): Note {
   return {
     schemaVersion: NOTE_SCHEMA_VERSION,
     id: createId(),
     title,
     text: '',
+    paper,
     createdAt: now,
     updatedAt: now,
     pages: [createPage()],
@@ -100,6 +118,7 @@ export function parseNote(value: unknown): Note | null {
     id: raw.id,
     title: typeof raw.title === 'string' ? raw.title : 'Untitled note',
     text: typeof raw.text === 'string' ? raw.text : '',
+    paper: PAPER_STYLES.includes(raw.paper as PaperStyle) ? (raw.paper as PaperStyle) : 'blank',
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : Date.now(),
     pages,
