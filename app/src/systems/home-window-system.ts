@@ -24,13 +24,11 @@ import {
 } from '../ui/panel-helpers.js';
 
 const HOME_WINDOW_NODE = 'home-window';
-/** Must match .window border-radius in home-window.uikitml. */
-const WINDOW_RADIUS_PX = 40;
+/** Square corners; must match .window border-radius in home-window.uikitml. */
+const WINDOW_RADIUS_PX = 0;
 const WALLPAPER_ASSET = 'home-wallpaper';
 /** Must match the number of `recent-card-N` elements in home-window.uikitml. */
 const CARD_SLOTS = 8;
-/** Icons per card (`recent-icon-N-K`); decorative until notes have types. */
-const CARD_ICONS = 4;
 const CARD_TITLE_MAX_CHARS = 14;
 /** One chevron press scrolls by one card plus the gap (UIKit units). */
 const CARD_STEP = 137;
@@ -39,14 +37,14 @@ const CARDS_PER_PAGE = 4;
 const LIME = '#d4f86b';
 const LIME_HIDDEN = 'rgba(212, 248, 107, 0)';
 const CARD_COLOR = 'rgba(255, 255, 255, 0.16)';
-const CARD_BORDER = 'rgba(255, 255, 255, 0.65)';
-const CARD_ACTIVE_COLOR = 'rgba(212, 248, 107, 0.18)';
-const STATUS_COLOR = 'rgba(226, 250, 168, 0.8)';
-const STATUS_FAILED_COLOR = '#ffb4a8';
+const PILL_COLOR = 'rgba(255, 255, 255, 0.12)';
+/** Pointer-over feedback, so a ray or hand shows what a pinch will hit. */
+const CARD_HOVER_COLOR = 'rgba(255, 255, 255, 0.3)';
+const BUTTON_HOVER_COLOR = 'rgba(255, 255, 255, 0.22)';
+const BUTTON_COLOR = 'rgba(255, 255, 255, 0)';
 
 interface NoteCard {
   root: PanelElement;
-  icons: PanelElement[];
   title: UIKit.Text;
   meta: UIKit.Text;
   noteId: string | null;
@@ -74,6 +72,7 @@ export class HomeWindowSystem extends createSystem({}) {
   private nextChevron!: PanelElement;
   private saveStatus!: UIKit.Text;
   private retryButton!: PanelElement;
+  private statusRow!: PanelElement;
   private settingsSheet!: PanelElement;
   /** Shown only in full mode / only in compact mode. */
   private fullOnly: PanelElement[] = [];
@@ -91,6 +90,7 @@ export class HomeWindowSystem extends createSystem({}) {
     // its radius matches .window's border-radius in home-window.uikitml.
     this.glass = attachLiquidGlass(ui.element('home-root'), this.cleanupFuncs, {
       radiusPx: WINDOW_RADIUS_PX,
+      edgeHighlights: false, // no outline around the window
     });
     // Lock-screen wallpaper; frosted glass shows until it has loaded.
     AssetManager.loadTextureById(WALLPAPER_ASSET)
@@ -104,6 +104,7 @@ export class HomeWindowSystem extends createSystem({}) {
     this.clockTime = ui.text('clock-time');
     this.clockDate = ui.text('clock-date');
     this.saveStatus = ui.text('save-status');
+    this.statusRow = ui.element('status-row');
     this.settingsSheet = ui.element('settings-sheet');
     this.retryButton = ui.onClick('save-retry-button', () => void this.session.flush());
 
@@ -131,7 +132,6 @@ export class HomeWindowSystem extends createSystem({}) {
         root: ui.onClick(`recent-card-${i}`, () => {
           if (card.noteId) void this.session.openNote(card.noteId);
         }),
-        icons: Array.from({ length: CARD_ICONS }, (_, k) => ui.element(`recent-icon-${i}-${k}`)),
         title: ui.text(`recent-title-${i}`),
         meta: ui.text(`recent-meta-${i}`),
         noteId: null,
@@ -139,6 +139,22 @@ export class HomeWindowSystem extends createSystem({}) {
       this.cards.push(card);
     }
     this.strip = findScrollContainer(this.cards[0]?.root);
+
+    // Hover feedback on everything a pinch can hit (Meta guidance: targets
+    // must react to the pointer before they are selected).
+    for (const card of this.cards) this.addHover(card.root, CARD_COLOR, CARD_HOVER_COLOR);
+    for (const id of [
+      'settings-button',
+      'compact-toggle',
+      'expand-toggle',
+      'compact-new-button',
+      'compact-settings-button',
+      'recent-prev',
+      'recent-next',
+    ]) {
+      this.addHover(ui.element(id), BUTTON_COLOR, BUTTON_HOVER_COLOR);
+    }
+    this.addHover(ui.element('note-new-button'), PILL_COLOR, BUTTON_HOVER_COLOR);
 
     // The clock only needs to change when the minute does.
     const clockTimer = setInterval(() => {
@@ -175,27 +191,17 @@ export class HomeWindowSystem extends createSystem({}) {
     );
   }
 
+  /** Saving is silent; only a failed save shows a line, with a retry. */
   private renderStatus(): void {
-    const { saveStatus, loaded } = this.session;
-    const failed = saveStatus === 'failed';
-    const label = !loaded
-      ? 'Loading'
-      : saveStatus === 'saving'
-        ? 'Saving...'
-        : failed
-          ? 'Save failed. Your changes are kept.'
-          : saveStatus === 'saved'
-            ? 'Saved'
-            : '';
-    setText(this.saveStatus, label);
-    this.saveStatus.setProperties({ color: failed ? STATUS_FAILED_COLOR : STATUS_COLOR });
+    const failed = this.session.saveStatus === 'failed';
+    setText(this.saveStatus, failed ? "Couldn't save. Your changes are kept." : '');
+    setVisible(this.statusRow, failed);
     setVisible(this.retryButton, failed);
   }
 
   /** Most recent notes first; unused slots are hidden. The strip scrolls. */
   private renderCards(): void {
     const summaries = this.session.summaries;
-    const activeId = this.session.active?.id;
     this.cards.forEach((card, i) => {
       const summary = summaries[i];
       card.noteId = summary?.id ?? null;
@@ -203,14 +209,6 @@ export class HomeWindowSystem extends createSystem({}) {
       if (!summary) return;
       setText(card.title, truncate(summary.title || 'Untitled note', CARD_TITLE_MAX_CHARS));
       setText(card.meta, `Edited ${formatRelativeTime(summary.updatedAt)}`);
-      const active = summary.id === activeId;
-      card.root.setProperties({
-        backgroundColor: active ? CARD_ACTIVE_COLOR : CARD_COLOR,
-        borderColor: active ? LIME : CARD_BORDER,
-      });
-      // A stable icon per note, so it does not change as the order changes.
-      const icon = iconIndexFor(summary.id);
-      card.icons.forEach((el, k) => setVisible(el, k === icon));
     });
     this.renderChevrons();
   }
@@ -232,6 +230,17 @@ export class HomeWindowSystem extends createSystem({}) {
     const next = Math.min(max, Math.max(0, x + direction * CARD_STEP * CARDS_PER_PAGE));
     this.strip.scrollPosition.value = [next, y];
     this.renderChevrons();
+  }
+
+  private addHover(element: PanelElement, color: string, hoverColor: string): void {
+    const enter = () => element.setProperties({ backgroundColor: hoverColor });
+    const leave = () => element.setProperties({ backgroundColor: color });
+    element.addEventListener('pointerenter', enter);
+    element.addEventListener('pointerleave', leave);
+    this.cleanupFuncs.push(() => {
+      element.removeEventListener('pointerenter', enter);
+      element.removeEventListener('pointerleave', leave);
+    });
   }
 
   // ----------------------------------------------------------------- modes
@@ -260,13 +269,6 @@ export class HomeWindowSystem extends createSystem({}) {
     // The full window shows the wallpaper; the compact pill is frosted glass.
     this.glass?.setImageMix(this.wallpaperReady && !this.compact ? 1 : 0);
   }
-}
-
-/** Pick one of the card icons from the note id (stable across reorders). */
-function iconIndexFor(id: string): number {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
-  return Math.abs(hash) % CARD_ICONS;
 }
 
 /** The nearest ancestor UIKit marks as scrollable (the recent strip). */

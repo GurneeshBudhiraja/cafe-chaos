@@ -43,6 +43,8 @@ export interface LiquidGlassOptions {
   radiusPx: number;
   /** Width of the curved edge in UIKit pixels. */
   bevelPx?: number;
+  /** Draw the bevel highlights, rim, inner glow and top gloss (default on). */
+  edgeHighlights?: boolean;
 }
 
 /** Handle for a glass slab: the mesh plus controls for its photo body. */
@@ -80,6 +82,7 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D uImage;
   uniform float uImageAspect; // image width / height
   uniform float uImageMix;    // 0 frosted glass, 1 photo
+  uniform float uEdge;        // 1 draws edge highlights, 0 a clean edge
 
   varying vec2 vUv;
   varying vec3 vWorldPos;
@@ -145,7 +148,7 @@ const fragmentShader = /* glsl */ `
     imageUv = imageUv / 1.05 - viewOnPanel * 0.02 + 0.5;
     // Dimmed, and darker towards the bottom where the cards sit (as lock
     // screens do), so the lime text keeps its contrast over bright scenery.
-    float scrim = mix(0.5, 0.82, smoothstep(0.05, 0.75, vUv.y));
+    float scrim = mix(0.4, 0.84, smoothstep(0.1, 0.8, vUv.y));
     vec3 photo = texture2D(uImage, imageUv).rgb * scrim;
 
     vec3 body = mix(frost, photo, uImageMix);
@@ -155,7 +158,12 @@ const fragmentShader = /* glsl */ `
     float sheen = smoothstep(0.24, 0.0, abs(band + 0.12)) * 0.07;
 
     // Gloss: light caught just inside the top edge, fading downwards.
-    float gloss = smoothstep(uBevel * 3.0, 0.0, halfSize.y - p.y) * 0.07;
+    float gloss = smoothstep(uBevel * 3.0, 0.0, halfSize.y - p.y) * 0.07 * uEdge;
+    spec *= uEdge;
+    fill *= uEdge;
+    fresnel *= uEdge;
+    rim *= uEdge;
+    innerGlow *= uEdge;
 
     vec3 color = body + sheen + innerGlow + gloss;
     color += spec * 1.2 + fill + fresnel * 0.45;
@@ -175,7 +183,7 @@ const fragmentShader = /* glsl */ `
 export function attachLiquidGlass(
   element: PanelElement,
   cleanupFuncs: Array<() => void>,
-  { radiusPx, bevelPx = 16 }: LiquidGlassOptions,
+  { radiusPx, bevelPx = 16, edgeHighlights = true }: LiquidGlassOptions,
 ): LiquidGlass {
   const material = new ShaderMaterial({
     vertexShader,
@@ -187,6 +195,7 @@ export function attachLiquidGlass(
       uImage: { value: null },
       uImageAspect: { value: 1 },
       uImageMix: { value: 0 },
+      uEdge: { value: edgeHighlights ? 1 : 0 },
     },
     transparent: true,
     depthWrite: false,

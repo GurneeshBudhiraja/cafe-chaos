@@ -8,10 +8,13 @@
   keep them stable.
 
   Glass: the window itself has no background here. HomeWindowSystem puts a
-  shader-drawn liquid-glass slab behind #home-root (src/ui/liquid-glass.ts):
-  the wallpaper photo (frosted milky glass in compact mode), a curved edge
-  with view-dependent highlights and a bright rim. The cards are light
-  glass tiles on top, like lock-screen widgets.
+  shader-drawn slab behind #home-root (src/ui/liquid-glass.ts): the
+  wallpaper photo with square corners and no outline (frosted glass in
+  compact mode). The cards are light glass tiles on top, like lock-screen
+  widgets, and brighten under the pointer.
+
+  Saving is silent, like most notes apps: the status line under the clock
+  only appears when a save fails, with a retry button.
 
   Compact mode hides everything except the top row, which then shows the
   expand toggle (left), New note (centre, icon and label, no pill) and
@@ -51,7 +54,7 @@
     padding-bottom: 26px;
     padding-left: 26px;
     padding-right: 26px;
-    border-radius: 40px;
+    border-radius: 0px;
   }
 
   .top-row {
@@ -255,7 +258,7 @@
   <div id="clock" class="clock">
     <div id="clock-date" class="clock-date">Today</div>
     <div id="clock-time" class="clock-time">--:--</div>
-    <div id="status-row" class="status-row">
+    <div id="status-row" class="status-row" style="display: none">
       <div id="save-status" class="status">Loading</div>
       <div id="save-retry-button" class="pill" style="display: none; padding-top: 6px; padding-bottom: 6px; padding-left: 14px; padding-right: 14px">
         <div class="pill-label" style="font-size: 13px">Try saving again</div>
@@ -273,42 +276,42 @@
     </div>
     <div id="recent-strip" class="strip">
       <div id="recent-card-0" class="card">
-        <FileText id="recent-icon-0-0" class="card-icon"></FileText><MapPin id="recent-icon-0-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-0-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-0-3" class="card-icon" style="display: none"></Star>
+        <FileText class="card-icon"></FileText>
         <div id="recent-title-0" class="card-title">Note</div>
         <div id="recent-meta-0" class="card-meta">Edited now</div>
       </div>
       <div id="recent-card-1" class="card">
-        <FileText id="recent-icon-1-0" class="card-icon"></FileText><MapPin id="recent-icon-1-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-1-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-1-3" class="card-icon" style="display: none"></Star>
+        <FileText class="card-icon"></FileText>
         <div id="recent-title-1" class="card-title">Note</div>
         <div id="recent-meta-1" class="card-meta">Edited now</div>
       </div>
       <div id="recent-card-2" class="card">
-        <FileText id="recent-icon-2-0" class="card-icon"></FileText><MapPin id="recent-icon-2-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-2-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-2-3" class="card-icon" style="display: none"></Star>
+        <FileText class="card-icon"></FileText>
         <div id="recent-title-2" class="card-title">Note</div>
         <div id="recent-meta-2" class="card-meta">Edited now</div>
       </div>
       <div id="recent-card-3" class="card">
-        <FileText id="recent-icon-3-0" class="card-icon"></FileText><MapPin id="recent-icon-3-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-3-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-3-3" class="card-icon" style="display: none"></Star>
+        <FileText class="card-icon"></FileText>
         <div id="recent-title-3" class="card-title">Note</div>
         <div id="recent-meta-3" class="card-meta">Edited now</div>
       </div>
       <div id="recent-card-4" class="card">
-        <FileText id="recent-icon-4-0" class="card-icon"></FileText><MapPin id="recent-icon-4-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-4-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-4-3" class="card-icon" style="display: none"></Star>
+        <FileText class="card-icon"></FileText>
         <div id="recent-title-4" class="card-title">Note</div>
         <div id="recent-meta-4" class="card-meta">Edited now</div>
       </div>
       <div id="recent-card-5" class="card">
-        <FileText id="recent-icon-5-0" class="card-icon"></FileText><MapPin id="recent-icon-5-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-5-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-5-3" class="card-icon" style="display: none"></Star>
+        <FileText class="card-icon"></FileText>
         <div id="recent-title-5" class="card-title">Note</div>
         <div id="recent-meta-5" class="card-meta">Edited now</div>
       </div>
       <div id="recent-card-6" class="card">
-        <FileText id="recent-icon-6-0" class="card-icon"></FileText><MapPin id="recent-icon-6-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-6-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-6-3" class="card-icon" style="display: none"></Star>
+        <FileText class="card-icon"></FileText>
         <div id="recent-title-6" class="card-title">Note</div>
         <div id="recent-meta-6" class="card-meta">Edited now</div>
       </div>
       <div id="recent-card-7" class="card">
-        <FileText id="recent-icon-7-0" class="card-icon"></FileText><MapPin id="recent-icon-7-1" class="card-icon" style="display: none"></MapPin><SquareCheck id="recent-icon-7-2" class="card-icon" style="display: none"></SquareCheck><Star id="recent-icon-7-3" class="card-icon" style="display: none"></Star>
+        <FileText class="card-icon"></FileText>
         <div id="recent-title-7" class="card-title">Note</div>
         <div id="recent-meta-7" class="card-meta">Edited now</div>
       </div>
