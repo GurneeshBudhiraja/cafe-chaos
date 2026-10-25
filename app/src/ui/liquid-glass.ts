@@ -9,8 +9,8 @@
  *
  * What the shader draws (all lighting is view dependent, so it moves as the
  * head moves, which is what makes glass read as glass in a headset):
- * - a frosted body: neutral smoke with a soft top-to-bottom light gradient
- *   and fine grain. Passthrough cannot be blurred by a WebXR app (the system
+ * - a frosted body: milky white glass with a soft top-to-bottom light
+ *   gradient and fine grain (no dark tint). Passthrough cannot be blurred by a WebXR app (the system
  *   composites it under the app layer), so the frost is what keeps the
  *   text readable over a busy room;
  * - a rounded bevel along the edge whose normals bend light: a sharp
@@ -115,9 +115,9 @@ const fragmentShader = /* glsl */ `
     float rimLit = 0.45 + 0.55 * clamp(dot(grad, normalize(vec2(-0.55, 0.85))) * 0.5 + 0.5, 0.0, 1.0);
     float innerGlow = exp(d / 12.0) * 0.16;
 
-    // Frosted body: neutral smoke, lighter towards the top, with grain.
-    vec3 body = mix(vec3(0.07, 0.08, 0.10), vec3(0.17, 0.19, 0.22), vUv.y);
-    body += (grainNoise(floor(p)) - 0.5) * 0.03;
+    // Frosted body: milky white glass, brighter towards the top, with grain.
+    vec3 body = mix(vec3(0.84, 0.87, 0.91), vec3(0.96, 0.97, 0.99), vUv.y);
+    body += (grainNoise(floor(p)) - 0.5) * 0.04;
 
     // Sheen band that slides with the viewing angle across the panel.
     vec2 viewOnPanel = vec2(dot(v, vTangent), dot(v, vBitangent));
@@ -131,7 +131,7 @@ const fragmentShader = /* glsl */ `
     color += spec * 1.2 + fill + fresnel * 0.45;
     color = mix(color, vec3(1.0), rim * rimLit * 0.9);
 
-    float alpha = 0.5 + 0.08 * vUv.y + sheen + gloss;
+    float alpha = 0.26 + 0.06 * vUv.y + sheen + gloss;
     alpha += spec * 0.6 + fill * 0.5 + fresnel * 0.35 + innerGlow + rim * rimLit * 0.6;
     gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0) * mask);
   }

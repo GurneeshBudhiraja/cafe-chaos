@@ -12,7 +12,8 @@
   The cards stay as light glass tiles on top of it.
 
   Compact mode hides everything except the top row, which then shows the
-  expand toggle, the clock and a small New note button: a pill.
+  expand toggle (left) and a centred New note button: a pill. A spacer the
+  size of the toggle on the right keeps New note centred.
 -->
 <style>
   @font-face {
@@ -210,7 +211,7 @@
     <div id="expand-toggle" class="icon-button" style="display: none">
       <Maximize2 width="26" height="26"></Maximize2>
     </div>
-    <div class="clock">
+    <div id="clock" class="clock">
       <div id="clock-time" class="clock-time">--:--</div>
       <div id="status-row" class="status-row">
         <div id="save-status" class="status">Loading</div>
@@ -222,9 +223,11 @@
     <div id="settings-button" class="icon-button">
       <Settings width="28" height="28"></Settings>
     </div>
-    <div id="compact-new-button" class="icon-button pill" style="display: none">
-      <Plus width="24" height="24"></Plus>
+    <div id="compact-new-button" class="pill" style="display: none; width: 230px; height: 46px">
+      <Plus width="22" height="22"></Plus>
+      <div class="pill-label" style="font-size: 19px">new note</div>
     </div>
+    <div id="compact-spacer" style="display: none; width: 44px; height: 44px"></div>
   </div>
 
   <div id="settings-sheet" class="sheet" style="display: none">
