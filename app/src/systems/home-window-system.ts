@@ -15,6 +15,7 @@ import { createSystem, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
 import { formatRelativeTime, noteTitleFor, truncate } from '../ui/format.js';
+import { attachLiquidGlass } from '../ui/liquid-glass.js';
 import {
   PanelBinding,
   setText,
@@ -23,6 +24,8 @@ import {
 } from '../ui/panel-helpers.js';
 
 const HOME_WINDOW_NODE = 'home-window';
+/** Must match .window border-radius in home-window.uikitml. */
+const WINDOW_RADIUS_PX = 40;
 /** Must match the number of `recent-card-N` elements in home-window.uikitml. */
 const CARD_SLOTS = 8;
 /** Icons per card (`recent-icon-N-K`); decorative until notes have types. */
@@ -80,6 +83,9 @@ export class HomeWindowSystem extends createSystem({}) {
       return;
     }
     const ui = new PanelBinding(panel, this.cleanupFuncs);
+    // The window surface is a shader-drawn glass slab (see liquid-glass.ts);
+    // its radius matches .window's border-radius in home-window.uikitml.
+    attachLiquidGlass(ui.element('home-root'), this.cleanupFuncs, { radiusPx: WINDOW_RADIUS_PX });
 
     this.clockTime = ui.text('clock-time');
     this.saveStatus = ui.text('save-status');

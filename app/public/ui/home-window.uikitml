@@ -6,10 +6,10 @@
   New note. Element ids are addressed from src/systems/home-window-system.ts;
   keep them stable.
 
-  Clear glass: a light neutral smoke fill (no colour tint) and a bright rim.
-  The smoke keeps the lime text readable over bright rooms. Passthrough (and
-  the WebGL canvas) cannot blur what is behind the panel, so the glass
-  effect comes from the rim and the lighter cards.
+  Glass: the window itself has no background here. HomeWindowSystem puts a
+  shader-drawn liquid-glass slab behind #home-root (src/ui/liquid-glass.ts):
+  frosted smoke body, curved edge with view-dependent highlights, bright rim.
+  The cards stay as light glass tiles on top of it.
 
   Compact mode hides everything except the top row, which then shows the
   expand toggle, the clock and a small New note button: a pill.
@@ -48,9 +48,6 @@
     padding-left: 26px;
     padding-right: 26px;
     border-radius: 40px;
-    background-color: rgba(16, 20, 26, 0.36);
-    border-width: 2px;
-    border-color: rgba(255, 255, 255, 0.75);
   }
 
   .top-row {
