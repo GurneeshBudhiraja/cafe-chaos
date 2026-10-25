@@ -29,6 +29,7 @@ import {
   DoubleSide,
   Matrix4,
   Mesh,
+  type Object3D,
   NoColorSpace,
   NormalBlending,
   PlaneGeometry,
@@ -47,6 +48,13 @@ export interface LiquidGlassOptions {
   edgeHighlights?: boolean;
   /** Opacity of the frosted body (0.26 default: see-through glass). */
   frostAlpha?: number;
+  /**
+   * The panel document (the UIKitML scene object) the element belongs to.
+   * Defaults to the element's parent, which is the document for a root
+   * element; nested elements sit in UIKit containers that only accept UIKit
+   * children, so pass the panel for those.
+   */
+  host?: Object3D;
 }
 
 /** Handle for a glass slab: the mesh plus controls for its photo body. */
@@ -187,7 +195,7 @@ const fragmentShader = /* glsl */ `
 export function attachLiquidGlass(
   element: PanelElement,
   cleanupFuncs: Array<() => void>,
-  { radiusPx, bevelPx = 16, edgeHighlights = true, frostAlpha = 0.26 }: LiquidGlassOptions,
+  { radiusPx, bevelPx = 16, edgeHighlights = true, frostAlpha = 0.26, host: hostOption }: LiquidGlassOptions,
 ): LiquidGlass {
   const material = new ShaderMaterial({
     vertexShader,
@@ -210,18 +218,26 @@ export function attachLiquidGlass(
   const mesh = new Mesh(new PlaneGeometry(1, 1), material);
   mesh.name = 'LiquidGlass';
   mesh.renderOrder = -1; // drawn before the element's own content
-  // Follow the element: copy its world matrix (plus a small push behind it)
-  // right before rendering. three.js computes the model-view matrix after
-  // onBeforeRender, so this frame already uses the copied matrix.
+  // Follow the element right before rendering (three.js computes the
+  // model-view matrix after onBeforeRender, so this frame uses it). UIKit
+  // keeps a nested element's placement in `globalPanelMatrix`, relative to
+  // the panel document, already scaled to the element's size; only a root
+  // element also has an up-to-date matrixWorld. Push it a little behind.
   const behind = new Matrix4().makeTranslation(0, 0, -0.01);
+  const panelMatrix = (element as unknown as {
+    globalPanelMatrix?: { peek(): Matrix4 | undefined };
+  }).globalPanelMatrix;
   mesh.matrixAutoUpdate = false;
   mesh.matrixWorldAutoUpdate = false;
   mesh.frustumCulled = false;
-  mesh.onBeforeRender = () => {
-    mesh.matrixWorld.multiplyMatrices(element.matrixWorld, behind);
-  };
-  const host = element.parent;
+  const host = hostOption ?? element.parent;
   if (!host) throw new Error('attachLiquidGlass: element is not in the scene yet.');
+  mesh.onBeforeRender = () => {
+    const local = panelMatrix?.peek();
+    if (local) mesh.matrixWorld.multiplyMatrices(host.matrixWorld, local);
+    else mesh.matrixWorld.copy(element.matrixWorld);
+    mesh.matrixWorld.multiply(behind);
+  };
   host.add(mesh);
 
   // Keep the shader's pixel size in step with the layout (compact mode).
@@ -231,9 +247,15 @@ export function attachLiquidGlass(
   const unsubscribe = size.subscribe((value) => {
     if (value) material.uniforms.uSize.value.set(value[0], value[1]);
   });
+  // Hide the slab whenever its element is hidden (display: none).
+  const visible = (element as unknown as {
+    isVisible?: { subscribe(fn: (value: boolean) => void): () => void };
+  }).isVisible;
+  const unsubscribeVisible = visible?.subscribe((value) => (mesh.visible = value));
 
   cleanupFuncs.push(() => {
     unsubscribe();
+    unsubscribeVisible?.();
     host.remove(mesh);
     mesh.geometry.dispose();
     material.dispose();

@@ -15,8 +15,8 @@
 
   Saving is silent; #status-row only appears when a save fails.
 
-  Compact mode hides everything except the top row, which then shows the
-  expand toggle, New note and settings: a pill.
+  The compact toggle hides this window and shows the compact dock
+  (public/ui/compact-dock.uikitml) in its place.
 -->
 <style>
   @font-face {
@@ -99,26 +99,7 @@
     cursor: pointer;
   }
 
-  .compact-action {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    height: 52px;
-    padding-left: 18px;
-    padding-right: 24px;
-    border-radius: 26px;
-    background-color: #b5553a;
-    color: #ffffff;
-    cursor: pointer;
-  }
 
-  .compact-label {
-    font-family: bricolage;
-    font-size: 19px;
-    font-weight: 700;
-    line-height: 1.2;
-    color: #ffffff;
-  }
 
   .plus-circle {
     width: 48px;
@@ -304,16 +285,6 @@
 <div id="home-root" class="window">
   <div class="top-row">
     <div id="app-title" class="app-title">Meta Notes</div>
-    <div id="expand-toggle" class="icon-button" style="display: none">
-      <Maximize2 width="24" height="24"></Maximize2>
-    </div>
-    <div id="compact-new-button" class="compact-action" style="display: none">
-      <Plus width="22" height="22"></Plus>
-      <div class="compact-label">New note</div>
-    </div>
-    <div id="compact-settings-button" class="icon-button" style="display: none">
-      <Settings width="24" height="24"></Settings>
-    </div>
     <div id="top-actions" class="top-actions">
       <div id="clock-time" class="clock">--:--</div>
       <div id="settings-button" class="icon-button">

@@ -56,8 +56,12 @@ accent; Bricolage Grotesque and Fraunces): a top bar (app name,
 clock, settings, compact toggle), "Start a new note" paper templates (Blank,
 Lined, Grid, Dotted, Cornell, Checklist; Blank is the clay main action) and
 "Recent notes" cards that preview each note's real ink on its paper, with a
-Recent / A-Z sort and chevrons (or a drag) for more. Compact mode shrinks it
-to a pill with expand, New note and settings. Saving is silent; a line with a
+Recent / A-Z sort and chevrons (or a drag) for more. Minimise swaps the
+window for the compact dock: five floating glass buttons with only
+passthrough between them (Expand, Recent | New note | Templates, Settings).
+Recent and Templates open a small pop-up above the buttons; a grab bar
+underneath moves the dock, which turns to face you on release, and Expand
+opens the window where the dock is. Saving is silent; a line with a
 retry button appears only when a save fails. Headset walkthrough:
 `npm run record:home`.
 

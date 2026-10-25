@@ -9,7 +9,8 @@
  *  3. Make writes fail, add a stroke: the app must show "Save failed", keep
  *     the stroke, and save it after "Try saving again".
  *  4. Home window: New note adds a recent card; tapping the older card
- *     reopens that note; compact mode hides the full window and restores it;
+ *     reopens that note; minimising shows the floating dock, whose pop-ups
+ *     open notes and templates and whose grab bar moves it;
  *     with more notes than fit, the strip scrolls.
  *
  * Usage: start the dev server (`npm run dev`), then `npm run smoke:notes`.
@@ -137,29 +138,60 @@ try {
   );
 
   // UIKit's isVisible signal shows whether an element is displayed.
-  const recentShown = () =>
-    window.__metaNotes.world.scene.getObjectByName('recent-section').isVisible.peek() === true;
-  const recentHidden = () =>
-    window.__metaNotes.world.scene.getObjectByName('recent-section').isVisible.peek() === false;
-  await clickUntil(page, 'compact-toggle', recentHidden);
-  await clickUntil(page, 'expand-toggle', recentShown);
-  checks.check('compact mode collapses and expands the home window', true);
-
-  // Settings in the compact pill opens the full window with the sheet shown.
-  await clickUntil(page, 'compact-toggle', recentHidden);
-  await clickUntil(page, 'compact-settings-button', () => {
-    const scene = window.__metaNotes.world.scene;
-    return (
-      scene.getObjectByName('recent-section').isVisible.peek() === true &&
-      scene.getObjectByName('settings-sheet').isVisible.peek() === true
-    );
+  // Predicates run inside the page, so the helper is installed there.
+  await page.evaluate(() => {
+    window.__shown = (name) =>
+      window.__metaNotes.world.scene.getObjectByName(name)?.isVisible.peek() === true;
   });
+  const windowShown = () => window.__shown('home-root');
+  const dockShown = () => window.__shown('dock-root') && !window.__shown('home-root');
+  await clickUntil(page, 'compact-toggle', dockShown);
+  await clickUntil(page, 'dock-expand', windowShown);
+  checks.check('minimise shows the floating dock; expand restores the window', true);
+
+  // Dock pop-ups: Recent opens a note, Templates creates one; both close.
+  await clickUntil(page, 'compact-toggle', dockShown);
+  await clickUntil(page, 'dock-recent', () => window.__shown('dock-popover-recent'));
+  await page.evaluate(() => (window.__target = window.__metaNotes.session.summaries[1].id));
   await clickUntil(
     page,
-    'settings-button',
-    () => window.__metaNotes.world.scene.getObjectByName('settings-sheet').isVisible.peek() === false,
+    'dock-recent-card-1',
+    () => window.__metaNotes.session.active?.id === window.__target && !window.__shown('dock-popover'),
   );
-  checks.check('settings in the compact pill opens the full window', true);
+  await clickUntil(page, 'dock-templates', () => window.__shown('dock-popover-templates'));
+  await clickUntil(
+    page,
+    'dock-template-dotted',
+    () => window.__metaNotes.session.active?.paper === 'dotted' && !window.__shown('dock-popover'),
+  );
+  checks.check('dock pop-ups open a recent note and create from a template', true);
+
+  // The grab bar moves the dock.
+  const before = await page.evaluate(() => window.__metaNotes.world.getSceneObject('compact-dock').position.x);
+  const grab = await screenPointOf(page, 'dock-grab');
+  await page.mouse.move(grab.x, grab.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 12; i++) {
+    await page.mouse.move(grab.x + i * 12, grab.y);
+    await page.waitForTimeout(40);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(() => window.__metaNotes.world.getSceneObject('compact-dock').position.x);
+  checks.check('dragging the grab bar moves the dock', after - before > 0.05, `x ${before.toFixed(3)} -> ${after.toFixed(3)}`);
+  // Put the dock back so the window reopens in front of the test camera
+  // (expanding opens the window wherever the dock is).
+  await page.evaluate(() => {
+    const dock = window.__metaNotes.world.getSceneObject('compact-dock');
+    dock.position.set(0, 1.25, -1.0);
+    dock.quaternion.identity();
+  });
+  await page.waitForTimeout(200);
+
+  // Settings on the dock opens the full window with the sheet shown.
+  await clickUntil(page, 'dock-settings', () => window.__shown('home-root') && window.__shown('settings-sheet'));
+  await clickUntil(page, 'settings-button', () => !window.__shown('settings-sheet'));
+  checks.check('settings on the dock opens the full window', true);
 
   // A paper template creates a note with that paper.
   await clickUntil(page, 'template-grid', () => window.__metaNotes.session.active?.paper === 'grid');

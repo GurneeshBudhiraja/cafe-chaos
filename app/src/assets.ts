@@ -34,6 +34,11 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'Home Window',
   },
+  'compact-dock': {
+    url: publicAssetUrl('ui/compact-dock.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Compact Dock',
+  },
   'tools-panel': {
     url: publicAssetUrl('ui/tools-panel.uikitml'),
     type: AssetType.UIKitML,

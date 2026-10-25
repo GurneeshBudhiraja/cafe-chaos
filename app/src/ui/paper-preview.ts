@@ -66,6 +66,42 @@ export class PaperPreview {
   }
 }
 
+/**
+ * A recent-note thumbnail: a PaperPreview that redraws a note's paper and
+ * ink only when the note shown or its last edit changes.
+ */
+export class NoteThumbnail {
+  readonly preview: PaperPreview;
+  /** id + updatedAt of the ink last drawn. */
+  private drawnKey = '';
+
+  constructor(width: number) {
+    this.preview = new PaperPreview(width);
+    this.preview.draw('blank');
+  }
+
+  get texture(): CanvasTexture {
+    return this.preview.texture;
+  }
+
+  async show(
+    summary: { id: string; updatedAt: number },
+    load: (id: string) => Promise<Note | null>,
+  ): Promise<void> {
+    const key = `${summary.id}:${summary.updatedAt}`;
+    if (this.drawnKey === key) return;
+    this.drawnKey = key;
+    const note = await load(summary.id);
+    // The slot may show another note by the time the read finishes.
+    if (this.drawnKey !== key) return;
+    this.preview.draw(note?.paper ?? 'blank', note ?? undefined);
+  }
+
+  dispose(): void {
+    this.preview.dispose();
+  }
+}
+
 function drawPaper(ctx: CanvasRenderingContext2D, paper: PaperStyle, w: number, h: number): void {
   ctx.fillStyle = PAPER_COLOR;
   ctx.fillRect(0, 0, w, h);

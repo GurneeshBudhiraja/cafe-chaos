@@ -14,6 +14,7 @@ import projectOptions from 'virtual:iwsdk-project';
 import { provideNoteSession } from './notes/note-services.js';
 import { NoteSession } from './notes/note-session.js';
 import { IndexedDbNoteStore, SimulatedFailureStore } from './notes/note-store.js';
+import { CompactDockSystem } from './systems/compact-dock-system.js';
 import { DesktopBackdropSystem } from './systems/desktop-backdrop-system.js';
 import { InkSystem } from './systems/ink-system.js';
 import { HomeWindowSystem } from './systems/home-window-system.js';
@@ -39,6 +40,7 @@ World.create(
     .registerSystem(TabletHandleSystem)
     .registerSystem(InkSystem)
     .registerSystem(HomeWindowSystem)
+    .registerSystem(CompactDockSystem)
     .registerSystem(DesktopBackdropSystem)
     .registerSystem(XrScrollFixSystem);
 

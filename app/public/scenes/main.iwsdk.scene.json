@@ -44,6 +44,25 @@
       "components": {
         "RayInteractable": {}
       }
+    },
+    {
+      "id": "compact-dock",
+      "name": "Compact Dock",
+      "content": {
+        "type": "asset",
+        "asset": "compact-dock"
+      },
+      "transform": {
+        "position": [
+          0,
+          1.25,
+          -1.0
+        ],
+        "scale": 0.15
+      },
+      "components": {
+        "RayInteractable": {}
+      }
     }
   ],
   "authoring": {
