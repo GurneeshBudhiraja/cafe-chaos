@@ -34,8 +34,8 @@ const CARD_TITLE_MAX_CHARS = 14;
 const CARD_STEP = 137;
 const CARDS_PER_PAGE = 4;
 
-const LIME = '#d4f86b';
-const LIME_HIDDEN = 'rgba(212, 248, 107, 0)';
+const ICON_COLOR = '#ffffff';
+const ICON_HIDDEN = 'rgba(255, 255, 255, 0)';
 const CARD_COLOR = 'rgba(255, 255, 255, 0.16)';
 const PILL_COLOR = 'rgba(255, 255, 255, 0.12)';
 /** Pointer-over feedback, so a ray or hand shows what a pinch will hit. */
@@ -218,8 +218,8 @@ export class HomeWindowSystem extends createSystem({}) {
     const x = this.strip?.scrollPosition.peek()[0] ?? 0;
     const max = this.strip?.maxScrollPosition.peek()[0] ?? 0;
     // Hidden chevrons stay in the layout (transparent) so cards never shift.
-    this.prevChevron.setProperties({ color: x > 1 ? LIME : LIME_HIDDEN });
-    this.nextChevron.setProperties({ color: x < max - 1 ? LIME : LIME_HIDDEN });
+    this.prevChevron.setProperties({ color: x > 1 ? ICON_COLOR : ICON_HIDDEN });
+    this.nextChevron.setProperties({ color: x < max - 1 ? ICON_COLOR : ICON_HIDDEN });
   }
 
   /** Scroll the strip one page (four cards) back or forward. */
@@ -266,8 +266,9 @@ export class HomeWindowSystem extends createSystem({}) {
     for (const el of this.fullOnly) setVisible(el, !this.compact);
     for (const el of this.compactOnly) setVisible(el, this.compact);
     setVisible(this.settingsSheet, this.settingsOpen && !this.compact);
-    // The full window shows the wallpaper; the compact pill is frosted glass.
-    this.glass?.setImageMix(this.wallpaperReady && !this.compact ? 1 : 0);
+    // The wallpaper shows in both modes (frosted glass until it loads), so
+    // the white text and icons always sit on the dimmed photo.
+    this.glass?.setImageMix(this.wallpaperReady ? 1 : 0);
   }
 }
 
