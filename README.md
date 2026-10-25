@@ -60,7 +60,7 @@ clock, expand and New note. The glass is clear (faint white fill and a bright
 rim, no tint).
 
 Launch view: the home window is the only thing in the scene, centred at eye
-height 1.2 m ahead, with passthrough (the real room) behind it in the
+height 1.2 m ahead and about 2.9 m wide (roughly 70% of the headset view), with passthrough (the real room) behind it in the
 headset. The tablet, the tools panel (camera trial, device status) and the
 classroom backdrop are out of the scene for now; their code stays. Scripts
 that need them (`smoke:camera`, `record:demo`, `record:writing`,

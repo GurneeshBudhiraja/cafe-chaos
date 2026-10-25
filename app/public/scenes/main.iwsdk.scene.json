@@ -39,7 +39,7 @@
           1.5,
           -1.2
         ],
-        "scale": 0.215
+        "scale": 0.45
       },
       "components": {
         "RayInteractable": {}
@@ -55,7 +55,7 @@
         "position": [
           0,
           1.5,
-          0
+          1.25
         ],
         "target": [
           0,
