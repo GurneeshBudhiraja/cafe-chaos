@@ -2,7 +2,8 @@
  * Notes acceptance smoke test (roadmap checks for 18 October).
  *
  * Runs in a fresh browser profile (empty IndexedDB) against the dev server:
- *  0. A first launch shows the empty state; its New note starts a note.
+ *  0. A first launch shows the empty state with the paper choice open;
+ *     Blank starts a note.
  *  1. Add two strokes to the first note, wait for "Saved". The tablet is out
  *     of the launch view for now, so strokes go in through the note session
  *     (the same command the tablet uses).
@@ -74,7 +75,7 @@ try {
     firstLaunch.notes === 0 && firstLaunch.empty,
     JSON.stringify(firstLaunch),
   );
-  await clickUntil(page, 'recent-empty-new', () => window.__metaNotes.session.active !== null);
+  await clickUntil(page, 'note-new-button', () => window.__metaNotes.session.active !== null);
 
   // 1. Create content.
   await addStroke(page, [0.15, 0.3], [0.8, 0.4]);
@@ -141,6 +142,8 @@ try {
   checks.check('retry saves the kept stroke', recovered.strokes === 3, `strokes=${recovered.strokes}`);
 
   // 4. Home window: new note, recent cards, compact mode.
+  // With notes, the paper choice opens from New note.
+  await clickUntil(page, 'new-note-button', () => window.__metaNotes.world.scene.getObjectByName('templates-section')?.isVisible.peek() === true);
   await clickUntil(page, 'note-new-button', () => window.__metaNotes.session.summaries.length === 2);
   await waitForSaved(page);
   const second = await activeNoteSnapshot(page);
@@ -238,6 +241,7 @@ try {
   checks.check('the pin turns stick mode on and off', true);
 
   // A paper template creates a note with that paper.
+  await clickUntil(page, 'new-note-button', () => window.__shown('templates-section'));
   await clickUntil(page, 'template-grid', () => window.__metaNotes.session.active?.paper === 'grid');
   checks.check('a paper template creates a note with that paper', true);
 

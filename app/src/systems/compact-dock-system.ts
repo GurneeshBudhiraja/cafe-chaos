@@ -32,6 +32,7 @@ import {
   type PanelElement,
 } from '../ui/panel-helpers.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
+import { addPressMotion } from '../ui/press-motion.js';
 import { getToasts, SETTINGS_TOAST, type ToastService } from '../ui/toasts.js';
 import { easeInCubic, easeOutBack, easeOutCubic, getTweens, pulse, type Tweens } from '../ui/tweens.js';
 
@@ -42,8 +43,10 @@ const RECENT_SLOTS = 4;
 const TITLE_MAX_CHARS = 12;
 const PREVIEW_PX = 224;
 /** Half the round buttons' size: their corner radius in UIKit pixels. */
-const BUTTON_RADIUS_PX = 32;
-const GLASS_FROST_ALPHA = 0.84;
+const BUTTON_RADIUS_PX = 28;
+const GLASS_FROST_ALPHA = 0.8;
+/** Must match .popover border-radius in compact-dock.uikitml. */
+const POPOVER_RADIUS_PX = 28;
 /**
  * Where the full window sits relative to the dock, in the dock's own frame
  * (metres): a little higher and further away. Matches the scene defaults.
@@ -123,12 +126,14 @@ export class CompactDockSystem extends createSystem({}) {
     for (const el of round) {
       glass(el, BUTTON_RADIUS_PX);
       addStateColors(el, NEUTRAL_STATES, this.cleanupFuncs);
+      addPressMotion(el, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
     }
     const newNote = ui.onClick('dock-new', () => this.newNote('blank'));
     addStateColors(newNote, PRIMARY_STATES, this.cleanupFuncs);
+    addPressMotion(newNote, this.tweens, this.cleanupFuncs);
 
     this.popoverPanel = ui.element('dock-popover');
-    glass(this.popoverPanel, 0);
+    glass(this.popoverPanel, POPOVER_RADIUS_PX);
     this.popoverTitle = ui.text('dock-popover-title');
     this.popoverRecent = ui.element('dock-popover-recent');
     this.popoverTemplates = ui.element('dock-popover-templates');
@@ -147,6 +152,7 @@ export class CompactDockSystem extends createSystem({}) {
         noteId: null,
       };
       addStateColors(card.root, NEUTRAL_STATES, this.cleanupFuncs);
+      addPressMotion(card.root, this.tweens, this.cleanupFuncs);
       this.recentCards.push(card);
       this.cleanupFuncs.push(() => thumbnail.dispose());
     }
@@ -154,6 +160,7 @@ export class CompactDockSystem extends createSystem({}) {
     for (const paper of PAPER_STYLES) {
       const card = ui.onClick(`dock-template-${paper}`, () => this.newNote(paper));
       addStateColors(card, NEUTRAL_STATES, this.cleanupFuncs);
+      addPressMotion(card, this.tweens, this.cleanupFuncs);
       if (paper === 'blank') continue;
       const preview = new PaperPreview(PREVIEW_PX);
       preview.draw(paper);
@@ -166,7 +173,7 @@ export class CompactDockSystem extends createSystem({}) {
       onEnd: () => this.homeMode.setDragging(false),
     });
     const pin = ui.onClick('dock-pin', () => this.homeMode.setPinned(!this.homeMode.pinned));
-    glass(pin, 22);
+    glass(pin, 20);
     const paintPin = addToggleStateColors(pin, () => this.homeMode.pinned, this.cleanupFuncs);
     this.cleanupFuncs.push(this.homeMode.subscribePlacement(paintPin));
 

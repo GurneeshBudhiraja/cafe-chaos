@@ -36,7 +36,7 @@
       "transform": {
         "position": [
           0,
-          1.5,
+          1.42,
           -1.2
         ],
         "scale": 0.314
@@ -58,7 +58,7 @@
           1.25,
           -1.0
         ],
-        "scale": 0.15
+        "scale": 0.314
       },
       "components": {
         "RayInteractable": {}

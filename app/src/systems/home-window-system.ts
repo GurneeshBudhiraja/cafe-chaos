@@ -60,6 +60,12 @@ const HIDE_MS = 220;
 const SHOW_MS = 320;
 const SHOW_DELAY_MS = 120;
 const GLOW_MS = 1200;
+const PICKER_MS = 240;
+/**
+ * Starting tilt toward the viewer (radians): about what faces a standing
+ * viewer's eyes from the window's default place, a little below eye level.
+ */
+const WINDOW_TILT_RAD = (6 * Math.PI) / 180;
 /** Canvas widths for previews (about 2x their size on the window). */
 const TEMPLATE_PREVIEW_PX = 272;
 const THUMB_PREVIEW_PX = 376;
@@ -112,8 +118,12 @@ export class HomeWindowSystem extends createSystem({}) {
   private nextChevron!: PanelElement;
   private sortLabel!: UIKit.Text;
   private emptyState!: PanelElement;
-  private stripElement!: PanelElement;
-  private recentActions!: PanelElement;
+  private recentSection!: PanelElement;
+  private picker!: PanelElement;
+  private pickerTitle!: PanelElement;
+  private newNoteButton!: PanelElement;
+  /** The paper choice, opened from New note (always open with no notes). */
+  private pickerOpen = false;
 
   init(): void {
     this.session = getNoteSession(this.world);
@@ -128,6 +138,9 @@ export class HomeWindowSystem extends createSystem({}) {
     this.tweens = getTweens(this.world);
     this.panel = panel;
     this.baseScale = panel.scale.x;
+    // Sit a little below eye level, tipped back to face the eyes: the
+    // comfortable place to look (drag.ts keeps this when it is moved).
+    panel.rotation.x = -WINDOW_TILT_RAD;
     this.root = ui.element('home-root');
     this.grab = ui.element('window-grab');
     // The window surface is a shader-drawn frosted glass slab, with a soft
@@ -155,14 +168,17 @@ export class HomeWindowSystem extends createSystem({}) {
     this.clockTime = ui.text('clock-time');
     this.sortLabel = ui.text('sort-label');
     this.emptyState = ui.element('recent-empty');
-    this.stripElement = ui.element('recent-strip');
-    this.recentActions = ui.element('recent-actions');
+    this.recentSection = ui.element('recent-section');
+    this.picker = ui.element('templates-section');
+    this.pickerTitle = ui.element('picker-title');
 
-    // Light-filled buttons (sort, prev/next, the empty state's New note).
+    // New note, the one clay button, opens the paper choice.
+    this.newNoteButton = ui.onClick('new-note-button', () => this.setPickerOpen(!this.pickerOpen));
+    addStateColors(this.newNoteButton, PRIMARY_STATES, this.cleanupFuncs);
+    addPressMotion(this.newNoteButton, this.tweens, this.cleanupFuncs);
+
+    // Light-filled buttons (sort, prev/next).
     const filled: PanelElement[] = [ui.onClick('sort-button', () => this.toggleSort())];
-    const emptyNew = ui.onClick('recent-empty-new', () => this.newNote('blank'));
-    addStateColors(emptyNew, PRIMARY_STATES, this.cleanupFuncs);
-    addPressMotion(emptyNew, this.tweens, this.cleanupFuncs);
 
     // Clear buttons and cards: light comes up under them when pointed at.
     const hoverable: PanelElement[] = [];
@@ -239,6 +255,7 @@ export class HomeWindowSystem extends createSystem({}) {
 
   private newNote(paper: PaperStyle): void {
     void this.session.createNote(noteTitleFor(), paper);
+    this.setPickerOpen(false);
     this.toasts.show({
       kind: 'done',
       title: paper === 'blank' ? 'New blank page' : `New ${paper} page`,
@@ -255,6 +272,18 @@ export class HomeWindowSystem extends createSystem({}) {
       title: `Opened \u201c${truncate(title, 24)}\u201d`,
       body: 'Writing on notes is coming soon.',
     });
+  }
+
+  /** Show or hide the paper choice, fading it in when it opens. */
+  private setPickerOpen(open: boolean): void {
+    this.pickerOpen = open;
+    this.renderPicker();
+    if (!open) return;
+    this.tweens.play(
+      PICKER_MS,
+      (t) => this.picker.setProperties({ opacity: easeOutCubic(t) } as Record<string, unknown>),
+      { key: 'home-picker' },
+    );
   }
 
   private toggleSort(): void {
@@ -306,8 +335,9 @@ export class HomeWindowSystem extends createSystem({}) {
     const summaries = this.sortedSummaries();
     const empty = summaries.length === 0;
     setVisible(this.emptyState, empty);
-    setVisible(this.stripElement, !empty);
-    setVisible(this.recentActions, !empty);
+    setVisible(this.recentSection, !empty);
+    setVisible(this.newNoteButton, !empty);
+    this.renderPicker();
     this.cards.forEach((card, i) => {
       const summary = summaries[i];
       card.noteId = summary?.id ?? null;
@@ -326,6 +356,13 @@ export class HomeWindowSystem extends createSystem({}) {
     return [...summaries].sort((a, b) =>
       (a.title || 'Untitled note').localeCompare(b.title || 'Untitled note'),
     );
+  }
+
+  /** The paper choice shows when asked for, and always while there are no notes. */
+  private renderPicker(): void {
+    const empty = this.session.summaries.length === 0;
+    setVisible(this.picker, this.pickerOpen || empty);
+    setVisible(this.pickerTitle, !empty);
   }
 
   /** Prev/next dim when there is nothing more in their direction. */
@@ -354,7 +391,11 @@ export class HomeWindowSystem extends createSystem({}) {
     if (full === this.shown) return;
     this.shown = full;
     if (full) this.showWindow();
-    else this.hideWindow();
+    else {
+      this.pickerOpen = false;
+      this.renderPicker();
+      this.hideWindow();
+    }
   }
 
   // ----------------------------------------------------------- transitions

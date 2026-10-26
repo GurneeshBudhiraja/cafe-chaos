@@ -4,10 +4,10 @@
  * Pinch (or press) the grab element and move the ray: pointer capture keeps
  * the drag going after the ray leaves the bar, and the event point moves at
  * the grab distance, so the panel follows the hand. On release the panel
- * turns about its vertical axis to face the viewer.
+ * turns to face the viewer, tipped back when it sits below eye level.
  */
 
-import { Quaternion, Vector3, type Object3D, type World } from '@iwsdk/core';
+import { Euler, Vector3, type Object3D, type World } from '@iwsdk/core';
 import { addStateColors, NEUTRAL_STATES, type PanelElement } from './panel-helpers.js';
 import { THEME } from './theme.js';
 
@@ -20,7 +20,6 @@ interface DragPointerEvent {
 
 const BAR_REST = THEME.grabBar;
 const BAR_ACTIVE = THEME.grabBarActive;
-const UP = new Vector3(0, 1, 0);
 
 export interface DragHooks {
   onStart?(): void;
@@ -75,11 +74,18 @@ export function makeDraggable(
 }
 
 const viewer = new Vector3();
-const facing = new Quaternion();
+const facing = new Euler(0, 0, 0, 'YXZ');
 
-/** Turn `target` about its vertical axis to face the viewer's head. */
+/**
+ * Turn `target` to face the viewer's head: about its vertical axis, and
+ * tipped back when it sits below eye level so it faces the eyes (a panel
+ * held low reads best tilted up toward you).
+ */
 export function faceViewer(target: Object3D, world: World): void {
   world.camera.getWorldPosition(viewer);
-  const yaw = Math.atan2(viewer.x - target.position.x, viewer.z - target.position.z);
-  target.quaternion.copy(facing.setFromAxisAngle(UP, yaw));
+  const dx = viewer.x - target.position.x;
+  const dz = viewer.z - target.position.z;
+  const pitch = Math.atan2(viewer.y - target.position.y, Math.hypot(dx, dz));
+  facing.set(-Math.max(0, pitch), Math.atan2(dx, dz), 0);
+  target.quaternion.setFromEuler(facing);
 }

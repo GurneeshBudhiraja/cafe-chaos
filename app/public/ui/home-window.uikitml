@@ -1,16 +1,17 @@
 <!--
   Home window: the app's first screen.
 
-  Layout, top to bottom:
+  Layout, top to bottom (one thing at a time: Recent is the hero, the
+  paper choice only appears when asked for):
   - Header: a greeting in the display serif with the date and time under it
-    (left), and one glass capsule of controls (right): pin (stick mode),
-    settings, minimise.
-  - "Start something new": paper templates. Blank (#note-new-button) is the
-    main action and carries the one clay accent.
+    (left); New note, the one clay button, and a glass capsule of controls
+    (right): pin (stick mode), settings, minimise.
+  - "Choose a paper" (#templates-section, hidden until New note is tapped):
+    Blank (#note-new-button) and the paper templates.
   - "Recent": cards that preview each note's real ink, with the sort pill
-    and round prev/next buttons in the section header. With no notes yet,
-    #recent-empty replaces the strip with a short invitation and a New note
-    button.
+    and round prev/next buttons in the section header.
+  - First launch (no notes): #recent-empty, a short invitation, takes the
+    place of Recent and the paper choice stays open under it.
 
   Theme: dark warm smoked glass with warm-white text (src/ui/theme.ts has
   the same colours for code). Paper stays warm white.
@@ -124,6 +125,25 @@
     height: 5px;
     border-radius: 3px;
     background-color: #b3aba1;
+  }
+
+  .header-actions {
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .picker {
+    flex-direction: column;
+    gap: 16px;
+    padding-top: 20px;
+    padding-bottom: 18px;
+    padding-left: 20px;
+    padding-right: 20px;
+    margin-left: -20px;
+    margin-right: -20px;
+    border-radius: 30px;
+    background-color: rgba(255, 250, 242, 0.06);
   }
 
   .controls {
@@ -307,18 +327,15 @@
   .empty {
     flex-direction: row;
     align-items: center;
-    gap: 28px;
-    height: 196px;
-    padding-left: 36px;
-    padding-right: 36px;
-    border-radius: 28px;
-    background-color: rgba(255, 250, 242, 0.06);
+    gap: 24px;
+    padding-top: 6px;
+    padding-bottom: 6px;
   }
 
   .empty-art {
-    width: 112px;
-    height: 112px;
-    border-radius: 56px;
+    width: 88px;
+    height: 88px;
+    border-radius: 44px;
     align-items: center;
     justify-content: center;
     background-color: rgba(212, 112, 79, 0.18);
@@ -376,6 +393,11 @@
         <div id="clock-time" class="subline">--</div>
       </div>
     </div>
+    <div class="header-actions">
+    <div id="new-note-button" class="primary">
+      <Plus width="22" height="22"></Plus>
+      <div class="primary-label">New note</div>
+    </div>
     <div class="controls">
       <div id="window-pin" class="icon-button">
         <Pin width="22" height="22"></Pin>
@@ -387,10 +409,19 @@
         <Minimize2 width="22" height="22"></Minimize2>
       </div>
     </div>
+    </div>
   </div>
 
-  <div id="templates-section" class="section">
-    <div class="section-title">Start something new</div>
+  <div id="recent-empty" class="empty" style="display: none">
+    <div class="empty-art"><NotebookPen width="40" height="40"></NotebookPen></div>
+    <div class="empty-text">
+      <div class="empty-title">Your notes will live here</div>
+      <div class="empty-body">Pick a paper to start your first note.</div>
+    </div>
+  </div>
+
+  <div id="templates-section" class="picker" style="display: none">
+    <div id="picker-title" class="section-title">Choose a paper</div>
     <div class="template-row">
       <div id="note-new-button" class="template">
         <div class="paper-blank">
@@ -435,17 +466,6 @@
         <div id="recent-next" class="round">
           <ChevronRight width="22" height="22"></ChevronRight>
         </div>
-      </div>
-    </div>
-    <div id="recent-empty" class="empty" style="display: none">
-      <div class="empty-art"><NotebookPen width="48" height="48"></NotebookPen></div>
-      <div class="empty-text">
-        <div class="empty-title">Your notes will live here</div>
-        <div class="empty-body">Pick a paper above, or start with a blank page.</div>
-      </div>
-      <div id="recent-empty-new" class="primary">
-        <Plus width="22" height="22"></Plus>
-        <div class="primary-label">New note</div>
       </div>
     </div>
     <div id="recent-strip" class="strip">
