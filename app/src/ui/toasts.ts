@@ -79,7 +79,8 @@ export function newNoteToast(paper: string): Toast {
 export function openedNoteToast(title: string): Toast {
   return {
     kind: 'info',
-    title: `Opened \u201c${title}\u201d`,
+    // Plain text only: the UI font has no curly quotes (they render as boxes).
+    title: `Opened ${title}`,
     body: 'Writing on notes is coming soon.',
   };
 }

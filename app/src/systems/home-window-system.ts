@@ -1,6 +1,10 @@
 /**
  * HomeWindowSystem: connects the home window (UIKitML) to the NoteSession.
  *
+ * Parked: the app now opens on the dock (CompactDockSystem) and nothing
+ * opens this window yet; it stays wired up for a future "all notes" view.
+ * It still raises the save-failure toast, which matters in every mode.
+ *
  * The first screen: a greeting with the date and time, a capsule of
  * controls (pin, settings, minimise), paper templates to start a note, and
  * "Recent" cards that preview each note's real ink, with a sort pill and
@@ -310,6 +314,12 @@ export class HomeWindowSystem extends createSystem({}) {
     this.renderClock();
     this.renderSaveState();
     this.renderCards();
+    // The app opens on the dock: start hidden, with no fade-out at launch.
+    if (this.homeMode.mode !== 'full') {
+      this.shown = false;
+      setVisible(this.root, false);
+      setVisible(this.grab, false);
+    }
     this.applyMode();
   }
 

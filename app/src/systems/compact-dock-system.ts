@@ -1,13 +1,16 @@
 /**
- * CompactDockSystem: the minimised home, a row of floating glass buttons.
+ * CompactDockSystem: the home, a row of floating glass buttons. It is the
+ * only screen at launch (no big window in front of you: see home-mode.ts).
  *
- * Expand, Recent | New note | Templates, Settings, with nothing between them
- * but passthrough. Recent and Templates open a small pop-up just above the
- * row; picking an item closes it and the dock stays minimised. A grab bar
- * under the row moves the dock (pinch and drag); on release it turns to face
- * the viewer, and the pin beside it turns stick mode on and off. Expanding
- * opens the full window where the dock is. The dock fades in with a small
- * pop and a shine across its glass, so the eye finds it.
+ * Recent | New note | Templates, Settings, with nothing between them but
+ * passthrough. Recent and Templates open a small pop-up just above the
+ * row; Recent scrolls sideways through up to eight notes. Picking an item
+ * closes it. A grab bar under the row moves the dock (pinch and drag); on
+ * release it turns to face the viewer, and the pin beside it turns stick
+ * mode on and off. The dock fades in with a small pop and a shine across
+ * its glass, so the eye finds it. On a first launch a one-line hint above
+ * the buttons points at New note, which pulses gently, until the first
+ * note exists.
  *
  * Mode changes go through the shared HomeModeState; note changes go through
  * NoteSession commands.
@@ -39,7 +42,12 @@ import { easeInCubic, easeOutBack, easeOutCubic, getTweens, pulse, type Tweens }
 const DOCK_NODE = 'compact-dock';
 const WINDOW_NODE = 'home-window';
 /** Must match the number of `dock-recent-card-N` elements. */
-const RECENT_SLOTS = 4;
+const RECENT_SLOTS = 8;
+/** The first-launch hint's capsule radius (UIKit pixels); matches .hint. */
+const HINT_RADIUS_PX = 22;
+/** New note's first-launch pulse: two gentle beats after the dock appears. */
+const PULSE_MS = 1400;
+const PULSE_DELAY_MS = 900;
 const TITLE_MAX_CHARS = 12;
 const PREVIEW_PX = 224;
 /** Half the round buttons' size: their corner radius in UIKit pixels. */
@@ -88,6 +96,8 @@ export class CompactDockSystem extends createSystem({}) {
   private popoverRecent!: PanelElement;
   private popoverTemplates!: PanelElement;
   private recentEmpty!: PanelElement;
+  private hint!: PanelElement;
+  private newNoteButton!: PanelElement;
   private recentCards: RecentCard[] = [];
   private readonly scratch = new Vector3();
 
@@ -122,7 +132,6 @@ export class CompactDockSystem extends createSystem({}) {
     };
 
     const round = [
-      ui.onClick('dock-expand', () => this.expand()),
       ui.onClick('dock-recent', () => this.togglePopover('recent')),
       ui.onClick('dock-templates', () => this.togglePopover('templates')),
       ui.onClick('dock-settings', () => {
@@ -137,6 +146,7 @@ export class CompactDockSystem extends createSystem({}) {
       addPressMotion(el, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
     }
     const newNote = ui.onClick('dock-new', () => this.newNote('blank'));
+    this.newNoteButton = newNote;
     addStateColors(newNote, PRIMARY_STATES, this.cleanupFuncs);
     addPressMotion(newNote, this.tweens, this.cleanupFuncs);
 
@@ -146,6 +156,8 @@ export class CompactDockSystem extends createSystem({}) {
     this.popoverRecent = ui.element('dock-popover-recent');
     this.popoverTemplates = ui.element('dock-popover-templates');
     this.recentEmpty = ui.element('dock-recent-empty');
+    this.hint = ui.element('dock-hint');
+    glass(this.hint, HINT_RADIUS_PX);
 
     for (let i = 0; i < RECENT_SLOTS; i++) {
       const thumbnail = new NoteThumbnail(PREVIEW_PX);
@@ -209,13 +221,29 @@ export class CompactDockSystem extends createSystem({}) {
     this.closePopover();
   }
 
-  private expand(): void {
-    this.homeMode.set('full');
-  }
-
   private togglePopover(which: Exclude<Popover, null>): void {
     this.popover = this.popover === which ? null : which;
+    // A pop-up opens where toasts show: one thing at a time.
+    if (this.popover) this.toasts.dismiss();
     this.renderPopover();
+  }
+
+  /** First launch: the hint shows (unless a pop-up is open) until a note exists. */
+  private renderHint(): void {
+    setVisible(this.hint, this.session.summaries.length === 0 && this.popover === null);
+  }
+
+  /** Two gentle beats of New note, so a first-time eye lands on it. */
+  private pulseNewNote(): void {
+    this.tweens.play(
+      PULSE_MS,
+      (t) => {
+        const beat = Math.sin(Math.PI * ((t * 2) % 1)) * 0.07;
+        const scale = 1 + beat;
+        this.newNoteButton.setProperties({ transformScaleX: scale, transformScaleY: scale } as Record<string, unknown>);
+      },
+      { delayMs: PULSE_DELAY_MS, key: 'dock-new-pulse' },
+    );
   }
 
   private closePopover(): void {
@@ -248,6 +276,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.renderPopover();
     setVisible(this.root, true);
     this.setFade(0, 0.85);
+    if (this.session.summaries.length === 0) this.pulseNewNote();
     this.tweens.play(
       SHOW_MS,
       (t) => this.setFade(easeOutCubic(t), 0.85 + 0.15 * easeOutBack(t)),
@@ -294,11 +323,13 @@ export class CompactDockSystem extends createSystem({}) {
     setVisible(this.popoverRecent, this.popover === 'recent');
     setVisible(this.popoverTemplates, this.popover === 'templates');
     setText(this.popoverTitle, this.popover === 'templates' ? 'Start a new note' : 'Recent notes');
+    this.renderHint();
   }
 
   private renderRecent(): void {
     const summaries = this.session.summaries;
     setVisible(this.recentEmpty, summaries.length === 0);
+    this.renderHint();
     this.recentCards.forEach((card, i) => {
       const summary = summaries[i];
       card.noteId = summary?.id ?? null;

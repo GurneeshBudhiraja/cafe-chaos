@@ -1,15 +1,19 @@
 <!--
-  Compact dock: the minimised home. Five floating glass buttons with nothing
-  between them (passthrough shows through): Expand, Recent | New note |
-  Templates, Settings. Recent and Templates open a small glass pop-up just
-  above the buttons with that one row; picking an item closes it. The thin
-  bar underneath is the grab handle for moving the dock; the pin beside it
-  turns stick mode on and off (the dock follows the head).
+  The dock: Meta Notes' home, and the only screen at launch. Four floating
+  glass buttons with nothing between them but passthrough: Recent | New
+  note | Templates, Settings. Recent and Templates open a small glass pop-up
+  just above the buttons (Recent scrolls sideways through up to eight
+  notes); picking an item closes it. The thin bar underneath is the grab
+  handle for moving the dock; the pin beside it turns stick mode on and off
+  (the dock follows the head).
 
-  The round buttons and the pop-up have no background here: the dock system
-  puts a liquid-glass slab behind each (src/ui/liquid-glass.ts). New note is
-  the theme's primary action, clay with white ink. Element ids are addressed
-  from src/systems/compact-dock-system.ts; keep them stable.
+  First launch (no notes): #dock-hint, one short line above the buttons,
+  points at New note; it goes once the first note exists.
+
+  The round buttons, the pop-up and the hint have no background here: the
+  dock system puts a liquid-glass slab behind each (src/ui/liquid-glass.ts).
+  New note is the theme's primary action, clay with white ink. Element ids
+  are addressed from src/systems/compact-dock-system.ts; keep them stable.
 -->
 <style>
   @font-face {
@@ -121,6 +125,30 @@
     padding-bottom: 4px;
   }
 
+  .pop-strip {
+    flex-direction: row;
+    gap: 8px;
+    width: 440px;
+    overflow: scroll;
+    scrollbar-width: 0px;
+    scrollbar-color: rgba(0, 0, 0, 0);
+  }
+
+  .hint {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    padding-left: 20px;
+    padding-right: 20px;
+    border-radius: 22px;
+  }
+
+  .hint-text {
+    font-family: ui;
+    font-size: 16px;
+    font-weight: 500;
+    color: #f7f2ea;
+  }
+
   .pop-row {
     flex-direction: row;
     gap: 8px;
@@ -128,6 +156,7 @@
 
   .pop-card {
     flex-direction: column;
+    flex-shrink: 0;
     gap: 8px;
     width: 104px;
     padding-top: 4px;
@@ -179,7 +208,7 @@
   <div id="dock-popover" class="popover" style="display: none">
     <div id="dock-popover-title" class="popover-title">Recent notes</div>
     <div id="dock-recent-empty" class="pop-empty" style="display: none">No notes yet. Tap New note to start one.</div>
-    <div id="dock-popover-recent" class="pop-row">
+    <div id="dock-popover-recent" class="pop-strip">
         <div id="dock-recent-card-0" class="pop-card">
           <div class="paper-frame"><img id="dock-recent-thumb-0" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
           <div id="dock-recent-title-0" class="pop-title">Note</div>
@@ -195,6 +224,22 @@
         <div id="dock-recent-card-3" class="pop-card">
           <div class="paper-frame"><img id="dock-recent-thumb-3" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
           <div id="dock-recent-title-3" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-4" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-4" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-4" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-5" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-5" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-5" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-6" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-6" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-6" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-7" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-7" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-7" class="pop-title">Note</div>
         </div>
     </div>
     <div id="dock-popover-templates" class="pop-row" style="display: none">
@@ -224,10 +269,10 @@
         </div>
     </div>
   </div>
+  <div id="dock-hint" class="hint" style="display: none">
+    <div class="hint-text">Pinch New note to start your first page</div>
+  </div>
   <div class="dock-row">
-    <div id="dock-expand" class="dock-button">
-      <Maximize2 width="22" height="22"></Maximize2>
-    </div>
     <div id="dock-recent" class="dock-button">
       <History width="22" height="22"></History>
     </div>

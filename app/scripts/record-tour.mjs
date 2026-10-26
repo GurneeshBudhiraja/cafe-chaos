@@ -4,13 +4,11 @@
  * at their true speed (see lib/headset-recorder.mjs). A 360-degree outdoor
  * photo stands in for passthrough, since IWER only emulates indoor rooms.
  *
- * Flow: look at the window and point at a few notes (they lift toward
- * you), sort and page Recent, open the paper sheet from New note and start
- * a dotted page (a toast confirms it), open a note and settings (toasts:
- * not built yet), drag the window by its grab bar, look around and come
- * back, pin it and turn (it follows), unpin, minimise to the dock (fade and
- * shine), open the Recent and Templates pop-ups and start a grid page,
- * drag the dock, look around, then expand (the window returns with a glow).
+ * Flow (a returning user; the first launch is in the smoke test): the dock
+ * appears with its shine; open Recent, point along the notes and open one
+ * (a toast: writing is next); open Templates and start a grid page (a
+ * toast confirms it); settings answers with a toast; drag the dock by its
+ * grab bar, look around and come back; pin it and turn (it follows), unpin.
  *
  * Usage: start the dev server (`npm run dev`), then
  *   npm run record:tour -- <equirectangular.jpg> [panorama yaw degrees]
@@ -84,105 +82,69 @@ const lookAtPanel = async (node, ms, dy = 0) => {
 const rest = () => rec.moveHand({ x: 0.2, y: 1.2, z: -0.22 }).then(() =>
   page.evaluate(() => window.IWER_DEVICE.remote.dispatch('look_at', { device: 'hand-right', target: { x: 0.75, y: 0.7, z: -0.9 } })));
 
-await lookAtPanel('home-window', 300);
+// --- The home is the dock: four glass buttons and nothing else.
+await lookAtPanel('compact-dock', 300, 0.1);
 await rest();
-await pause(1800);
+await pause(2000);
 
-// --- Recent: point at notes (they lift), sort, page.
-for (const card of ['recent-card-0', 'recent-card-1', 'recent-card-2']) {
+// --- Recent: point along the notes, open one (a toast: writing is next).
+await rec.tap('dock-recent');
+await rest();
+await pause(1200);
+for (const card of ['dock-recent-card-0', 'dock-recent-card-1', 'dock-recent-card-2']) {
   await rec.point(card);
-  await pause(700);
+  await pause(600);
 }
-await rec.tap('sort-button');
-await pause(900);
-await rec.tap('sort-button');
-await pause(700);
-await rec.tap('recent-next');
-await pause(1100);
-await rec.tap('recent-prev');
-await pause(900);
+await rec.tap('dock-recent-card-1');
+await rest();
+await pause(2400);
 
-// --- New note: the paper sheet, then a dotted page (toast).
-await rec.tap('new-note-button');
-await pause(900);
-for (const paper of ['template-lined', 'template-grid', 'template-dotted']) {
+// --- Templates: start a grid page (a toast confirms it).
+await rec.tap('dock-templates');
+await rest();
+await pause(1200);
+for (const paper of ['dock-template-lined', 'dock-template-grid']) {
   await rec.point(paper);
   await pause(600);
 }
 const before = await page.evaluate(() => window.__metaNotes.session.summaries.length);
-await rec.tap('template-dotted');
+await rec.tap('dock-template-grid');
 await until((n) => window.__metaNotes.session.summaries.length > n, before);
 await rest();
-await pause(2400);
+await pause(2600);
 
-// --- Not built yet: opening a note and settings answer with toasts.
-await rec.tap('recent-card-2');
-await rest();
-await pause(2400);
-await rec.tap('settings-button');
+// --- Settings is not built yet: a toast says so.
+await rec.tap('dock-settings');
 await rest();
 await pause(2800);
 
-// --- Move the window by its grab bar (the eyes follow it), look around, come back.
-const bar = await rec.objectCenter('window-grab-bar');
-await rec.rayDrag(bar, { x: bar.x + 0.32, y: bar.y + 0.04, z: bar.z + 0.08 }, 1800);
+// --- Move the dock (the eyes follow it), look around, come back to it.
+const dockBar = await rec.objectCenter('dock-grab-bar');
+await rec.rayDrag(dockBar, { x: dockBar.x + 0.3, y: dockBar.y + 0.04, z: dockBar.z + 0.05 }, 1800);
 await pause(600);
-let yaw = await lookAtPanel('home-window', 1000);
+let yaw = await lookAtPanel('compact-dock', 1000, 0.1);
 await pause(900);
-await turnHead(yaw + 75, 4, 2400);
+await turnHead(yaw + 75, 4, 2600);
 await pause(1200);
 await turnHead(yaw - 65, 8, 3400);
-await pause(1200);
-yaw = await lookAtPanel('home-window', 2200);
+await pause(1000);
+yaw = await lookAtPanel('compact-dock', 2200, 0.1);
 await pause(1000);
 
-// --- Stick mode: pin, turn away (the window follows), turn back, unpin.
-await rec.tap('window-pin');
+// --- Stick mode: pin, turn away (the dock follows), turn back, unpin.
+await rec.tap('dock-pin');
+await rest();
 await pause(900);
 await turnHead(yaw - 60, 0, 2800);
 await pause(2800);
 await turnHead(yaw + 20, -2, 2800);
 await pause(2800);
-yaw = await lookAtPanel('home-window', 800);
-await rec.tap('window-pin');
-await pause(900);
-
-// --- Minimise: the window fades out, the dock fades in with a shine.
-await rec.tap('compact-toggle');
-await until(() => window.__metaNotes.world.scene.getObjectByName('dock-new')?.isVisible.peek() === true);
-await lookAtPanel('compact-dock', 900, 0.08);
-await pause(1800);
-
-await rec.tap('dock-recent');
-await pause(1800);
-await rec.tap('dock-templates');
-await pause(1400);
-await rec.point('dock-template-grid');
-await pause(600);
-await rec.tap('dock-template-grid');
+await lookAtPanel('compact-dock', 800, 0.1);
+await rec.tap('dock-pin');
 await rest();
-await pause(2600);
+await pause(1800);
 
-// --- Move the dock (the eyes follow it), look around, come back to it.
-const dockBar = await rec.objectCenter('dock-grab-bar');
-await rec.rayDrag(dockBar, { x: dockBar.x - 0.3, y: dockBar.y + 0.05, z: dockBar.z + 0.05 }, 1800);
-await pause(600);
-yaw = await lookAtPanel('compact-dock', 1000, 0.08);
-await pause(900);
-await turnHead(yaw - 80, 6, 2600);
-await pause(1200);
-await turnHead(yaw + 60, 2, 3400);
-await pause(1000);
-await lookAtPanel('compact-dock', 2200, 0.08);
-await pause(1000);
-
-// --- Expand: the window returns where the dock was, with a glow.
-await rec.tap('dock-expand');
-await until(() => window.__metaNotes.world.scene.getObjectByName('home-root')?.isVisible.peek() === true);
-await lookAtPanel('home-window', 900);
-await pause(2800);
-
-const expanded = await visible('home-root');
+const docked = await visible('dock-root');
 const errors = await rec.finish('tour');
-console.log(`${fps.toFixed(1)} fps; speed-up x${speedUp.toFixed(2)}; expanded ${expanded}; errors ${errors.length}`);
+console.log(`${fps.toFixed(1)} fps; speed-up x${speedUp.toFixed(2)}; dock shown ${docked}; errors ${errors.length}`);
 if (errors.length) console.log(errors.slice(0, 5).join('\n'));

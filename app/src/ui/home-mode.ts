@@ -14,7 +14,12 @@ export type HomeMode = 'full' | 'compact';
 export const WINDOW_GLASS_NAME = 'home-window-glass';
 
 export class HomeModeState {
-  private current: HomeMode = 'full';
+  /**
+   * The dock is the home: the app opens on it, with no big window in front
+   * of you (minimal for glasses and Quest alike). The full window is parked
+   * for a future "all notes" view; nothing switches to it yet.
+   */
+  private current: HomeMode = 'compact';
   private pinnedValue = false;
   private draggingValue = false;
   private readonly listeners = new Set<(mode: HomeMode) => void>();
