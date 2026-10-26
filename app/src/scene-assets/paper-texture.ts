@@ -15,7 +15,8 @@ const SIZE = 256;
 /** Warm white paper (#f4eee4). */
 const BASE: [number, number, number] = [244, 238, 228];
 
-export function createPaperGrainTexture(seed = 7): DataTexture {
+/** `repeat`: how many times the grain tiles across the surface it maps. */
+export function createPaperGrainTexture(seed = 7, repeat = 3): DataTexture {
   const random = makeRandom(seed);
   const data = new Uint8Array(SIZE * SIZE * 4);
   // Fine grain.
@@ -46,7 +47,7 @@ export function createPaperGrainTexture(seed = 7): DataTexture {
   texture.wrapS = RepeatWrapping;
   texture.wrapT = RepeatWrapping;
   // Tile it a few times across the page so the grain is paper-fine.
-  texture.repeat.set(3, 3);
+  texture.repeat.set(repeat, repeat);
   texture.needsUpdate = true;
   return texture;
 }

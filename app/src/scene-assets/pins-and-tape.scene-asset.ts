@@ -1,8 +1,8 @@
 /**
  * Ways to hold a note up: a push pin and a strip of washi tape.
  *
- * Push pin: a clay head (flanged base, waisted grip, rounded cap, the shape
- * your fingers know) on a brushed metal needle. Contract: metres; the
+ * Push pin: a glossy clay head (wide flat flange, tapered grip, small
+ * domed cap: the classic shape your fingers know) on a brushed metal needle. Contract: metres; the
  * needle points -Z into the surface, the contact plane is z = 0 (the
  * flange's underside), origin on the axis there. Parts: Head, Needle.
  *
@@ -22,21 +22,36 @@ import {
   ShapeGeometry,
   Vector2,
 } from '@iwsdk/core';
-import { clayMaterial, metalMaterial } from './notes-materials.js';
+import { MeshPhysicalMaterial } from '@iwsdk/core';
+import { metalMaterial } from './notes-materials.js';
+import { normalizeUvs } from './notes-shapes.js';
+import { createPaperGrainTexture } from './paper-texture.js';
+
+/** Glossy moulded plastic in the clay accent, clear-coated like a real pin. */
+const pinHeadMaterial = new MeshPhysicalMaterial({
+  color: 0xd4704f,
+  roughness: 0.35,
+  clearcoat: 1,
+  clearcoatRoughness: 0.08,
+});
+const washiGrain = createPaperGrainTexture(23, 1);
 
 function createPushPin(): Group {
   const root = new Group();
   root.name = 'PushPin';
   // Profile [radius, height] from the contact plane up.
   const profile = [
-    [0, 0], [0.0052, 0], [0.0056, 0.0006], [0.0052, 0.0014], [0.0028, 0.0024],
-    [0.0024, 0.0050], [0.0028, 0.0068], [0.0042, 0.0080], [0.0046, 0.0094],
-    [0.0040, 0.0108], [0.0024, 0.0118], [0, 0.0121],
+    // Wide, thin flange that sits on the surface.
+    [0, 0], [0.0058, 0], [0.0061, 0.0004], [0.0059, 0.0010], [0.0034, 0.0014],
+    // Tapered grip, widening a little towards the cap.
+    [0.0027, 0.0022], [0.0029, 0.0060], [0.0034, 0.0084],
+    // Small domed cap.
+    [0.0037, 0.0092], [0.0035, 0.0102], [0.0027, 0.0110], [0.0014, 0.0115], [0, 0.0117],
   ].map(([r, y]) => new Vector2(r, y));
   const headGeometry = new LatheGeometry(profile, 40);
   headGeometry.rotateX(Math.PI / 2); // Lathe axis +Y becomes +Z.
   headGeometry.computeVertexNormals();
-  const head = new Mesh(headGeometry, clayMaterial);
+  const head = new Mesh(headGeometry, pinHeadMaterial);
   head.name = 'Head';
   root.add(head);
 
@@ -51,6 +66,7 @@ function createPushPin(): Group {
 
 const washiMaterial = new MeshStandardMaterial({
   color: 0xe7b9a3,
+  map: washiGrain,
   roughness: 0.9,
   transparent: true,
   opacity: 0.78,
@@ -82,7 +98,7 @@ function tornStrip(length: number, width: number, teeth: number): Shape {
 function createWashiTape(): Group {
   const root = new Group();
   root.name = 'WashiTape';
-  const strip = new Mesh(new ShapeGeometry(tornStrip(0.064, 0.016, 8)), washiMaterial);
+  const strip = new Mesh(normalizeUvs(new ShapeGeometry(tornStrip(0.064, 0.016, 8))), washiMaterial);
   strip.name = 'Strip';
   strip.position.z = 0.0002;
   root.add(strip);

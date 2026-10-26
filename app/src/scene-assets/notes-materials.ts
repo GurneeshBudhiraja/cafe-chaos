@@ -88,3 +88,14 @@ export const glowingClayMaterial = new MeshStandardMaterial({
   roughness: 0.4,
   metalness: 0.1,
 });
+
+/**
+ * Light satin metal for edge rims on dark objects: a thin bright outline
+ * that keeps a dark body's shape readable in a dark room and on additive
+ * glasses, like the chamfered aluminium edge of a tablet.
+ */
+export const satinLightMaterial = new MeshStandardMaterial({
+  color: 0xd6cdc1,
+  roughness: 0.32,
+  metalness: 0.65,
+});

@@ -15,7 +15,7 @@
  *
  * Contract: metres; long axis +X with the nib at +X; origin at the
  * middle of the length on the axis; the docking facet faces -Y. Named
- * parts: Barrel, Grip, Band, Cone, Nib, TailCap, DockFacet, and the anchor
+ * parts: Barrel, Grip, Band, Ferrule, Cone, Nib, TailCap, DockFacet, and the anchor
  * `NibTip` (an empty at the writing point).
  */
 
@@ -26,6 +26,7 @@ import {
   glowingClayMaterial,
   graphiteMaterial,
   lightGripMaterial,
+  satinLightMaterial,
 } from './notes-materials.js';
 
 export const STYLUS_LENGTH_M = 0.155;
@@ -58,8 +59,8 @@ function createStylus(): Group {
   root.add(part('TailCap', revolve([
     [0, 0], [0.0022, 0.0002], [0.0038, 0.0008], [0.0050, 0.0020], [0.0056, 0.0034], [R, 0.0050],
   ]), lightGripMaterial));
-  // Glossy barrel.
-  root.add(part('Barrel', revolve([[R, 0.0050], [R, 0.0880]])));
+  // Glossy barrel, tapering very slightly towards the tail like a pencil.
+  root.add(part('Barrel', revolve([[R - 0.00025, 0.0050], [R - 0.0001, 0.0450], [R, 0.0880]])));
   // Matte grip, a hair slimmer, with soft shoulders.
   root.add(part('Grip', revolve([
     [R, 0.0880], [R - 0.0002, 0.0895], [R - 0.0002, 0.1105], [R, 0.1120],
@@ -68,9 +69,13 @@ function createStylus(): Group {
   root.add(part('Band', revolve([
     [R, 0.1120], [R + 0.0002, 0.1126], [R + 0.0002, 0.1174], [R, 0.1180],
   ]), glowingClayMaterial));
+  // A fine satin-metal ring where the band meets the cone (a machined seam).
+  root.add(part('Ferrule', revolve([
+    [R, 0.1180], [R - 0.00005, 0.1184], [R - 0.00005, 0.1192], [R - 0.0001, 0.1196],
+  ]), satinLightMaterial));
   // Tapered cone to the nib.
   root.add(part('Cone', revolve([
-    [R, 0.1180], [R - 0.0004, 0.1240], [0.0042, 0.1350], [0.0028, 0.1455], [0.0018, 0.1500],
+    [R - 0.0001, 0.1196], [R - 0.0005, 0.1245], [0.0042, 0.1350], [0.0028, 0.1455], [0.0018, 0.1500],
   ])));
   // Soft rounded nib.
   root.add(part('Nib', revolve([

@@ -24,9 +24,13 @@ import {
 } from '@iwsdk/core';
 import { bevelBox } from './lib/hardsurface.js';
 import { clayMaterial } from './notes-materials.js';
+import { normalizeUvs } from './notes-shapes.js';
+import { createPaperGrainTexture } from './paper-texture.js';
 
+/** Fine paper grain, tinted by each note's colour (the grain is near white). */
+const grain = createPaperGrainTexture(11, 1);
 const paper = (color: number) =>
-  new MeshStandardMaterial({ color, roughness: 0.86, metalness: 0, side: DoubleSide });
+  new MeshStandardMaterial({ color, map: grain, roughness: 0.86, metalness: 0, side: DoubleSide });
 
 /** Muted, warm versions of the familiar colours (they sit with the clay theme). */
 export const STICKY_COLOURS = {
@@ -48,13 +52,16 @@ function createClassicSticky(): Group {
   const root = new Group();
   root.name = 'StickyClassic';
   const size = 0.076;
-  const geometry = new PlaneGeometry(size, size, 1, 16);
+  const geometry = new PlaneGeometry(size, size, 8, 16);
   const position = geometry.attributes.position;
   for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
     const y = position.getY(i);
-    // Free below the glue strip (the top fifth): lift grows towards the bottom.
+    // Free below the glue strip (the top fifth): lift grows towards the
+    // bottom, a little more at one corner, as a real note relaxes.
     const t = Math.min(1, Math.max(0, (size * 0.3 - y) / (size * 0.8)));
-    position.setZ(i, 0.0004 + 0.007 * t * t * t);
+    const corner = 1 + 0.35 * (x / size + 0.5);
+    position.setZ(i, 0.0004 + 0.006 * t * t * t * corner);
   }
   geometry.computeVertexNormals();
   const sheet = new Mesh(geometry, paper(STICKY_COLOURS.butter));
@@ -71,7 +78,7 @@ function createFormalCard(): Group {
   const width = 0.102;
   const height = 0.076;
   const thickness = 0.0007;
-  const card = new Mesh(bevelBox(width, height, thickness, 0.0002, 0.0015, 2), paper(0xf7f2ea));
+  const card = new Mesh(normalizeUvs(bevelBox(width, height, thickness, 0.0002, 0.0015, 2)), paper(0xf7f2ea));
   card.name = 'Card';
   card.position.z = thickness / 2;
   root.add(card);
@@ -114,7 +121,7 @@ function createFunSticky(name: string, colour: number): Group {
   outline.quadraticCurveTo(-h, h, -h, h - r);
   outline.lineTo(-h, -h + r);
   outline.quadraticCurveTo(-h, -h, -h + r, -h);
-  const sheet = new Mesh(new ShapeGeometry(outline, 12), paper(colour));
+  const sheet = new Mesh(normalizeUvs(new ShapeGeometry(outline, 12)), paper(colour));
   sheet.name = 'Sheet';
   sheet.position.z = 0.0004;
   root.add(sheet);
@@ -126,7 +133,7 @@ function createFunSticky(name: string, colour: number): Group {
   flapShape.lineTo(h - fold, -h + fold);
   flapShape.closePath();
   const back = new MeshStandardMaterial({ color: colour, roughness: 0.9, side: DoubleSide });
-  back.color.multiplyScalar(0.86);
+  back.color.multiplyScalar(0.78);
   const flap = new Mesh(new ShapeGeometry(flapShape), back);
   flap.name = 'DogEar';
   flap.position.z = 0.0008;

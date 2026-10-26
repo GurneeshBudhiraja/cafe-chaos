@@ -20,7 +20,14 @@ import {
 } from '@iwsdk/core';
 import { PAGE_ASPECT } from '../notes/note-model.js';
 import { bevelBox } from './lib/hardsurface.js';
-import { bodyMaterial, clayMaterial, gripMaterial, trimMaterial } from './notes-materials.js';
+import {
+  bodyMaterial,
+  glowingClayMaterial,
+  gripMaterial,
+  satinLightMaterial,
+  trimMaterial,
+} from './notes-materials.js';
+import { roundedRim } from './notes-shapes.js';
 import { createPaperGrainTexture } from './paper-texture.js';
 import { STYLUS_RADIUS_M } from './stylus.scene-asset.js';
 
@@ -79,6 +86,28 @@ function createTablet(): Group {
   back.position.z = -BODY_DEPTH_M - 0.0003;
   root.add(back);
 
+  // A light satin rim around the front edge: keeps the dark slab's outline
+  // readable in a dark room and on see-through glasses.
+  const rim = new Mesh(roundedRim(width, height, CORNER_RADIUS_M, 0.0016, 0.0032), satinLightMaterial);
+  rim.name = 'EdgeRim';
+  rim.position.z = -0.0032 + 0.0002;
+  root.add(rim);
+
+  // A thin dark lip framing the page, so it sits in the slab like a screen.
+  const lip = new Mesh(
+    roundedRim(SURFACE_WIDTH_M + 0.003, SURFACE_HEIGHT_M + 0.003, 0.0035, 0.0018, 0.0006),
+    trimMaterial,
+  );
+  lip.name = 'PageLip';
+  lip.position.z = 0.0001;
+  root.add(lip);
+
+  // A tiny softly glowing status dot on the bottom bezel: findable in the dark.
+  const dot = new Mesh(bevelBox(0.006, 0.0018, 0.0008, 0.0003, 0.0009, 3), glowingClayMaterial);
+  dot.name = 'StatusLight';
+  dot.position.set(0, -height / 2 + BEZEL_M / 2, 0.0002);
+  root.add(dot);
+
   // The page itself: a plane facing +Z with its center at the tablet origin.
   const surface = new Mesh(new PlaneGeometry(SURFACE_WIDTH_M, SURFACE_HEIGHT_M), paperMaterial);
   surface.name = WRITING_SURFACE_NAME;
@@ -89,10 +118,10 @@ function createTablet(): Group {
   const rail = new Group();
   rail.name = 'StylusRail';
   rail.position.set(0, height / 2 + RAIL_HEIGHT_M / 2 - 0.0008, -BODY_DEPTH_M / 2);
-  const railBar = new Mesh(bevelBox(RAIL_LENGTH_M, RAIL_HEIGHT_M, RAIL_DEPTH_M, 0.0008, 0.0012, 3), trimMaterial);
+  const railBar = new Mesh(bevelBox(RAIL_LENGTH_M, RAIL_HEIGHT_M, RAIL_DEPTH_M, 0.0008, 0.0012, 3), satinLightMaterial);
   railBar.name = 'RailBar';
   rail.add(railBar);
-  const mark = new Mesh(bevelBox(0.018, 0.0016, 0.0036, 0.0003, 0.0005, 2), clayMaterial);
+  const mark = new Mesh(bevelBox(0.018, 0.0016, 0.0036, 0.0003, 0.0005, 2), glowingClayMaterial);
   mark.name = 'RailMark';
   mark.position.y = RAIL_HEIGHT_M / 2 - 0.0002;
   rail.add(mark);
