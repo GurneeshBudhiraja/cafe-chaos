@@ -32,6 +32,7 @@ import {
   type PanelElement,
 } from '../ui/panel-helpers.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
+import { getToasts, SETTINGS_TOAST, type ToastService } from '../ui/toasts.js';
 import { easeInCubic, easeOutBack, easeOutCubic, getTweens, pulse, type Tweens } from '../ui/tweens.js';
 
 const DOCK_NODE = 'compact-dock';
@@ -65,6 +66,7 @@ interface RecentCard {
 
 export class CompactDockSystem extends createSystem({}) {
   private session!: NoteSession;
+  private toasts!: ToastService;
   private homeMode!: HomeModeState;
   private tweens!: Tweens;
   private dock!: Object3D;
@@ -84,6 +86,7 @@ export class CompactDockSystem extends createSystem({}) {
 
   init(): void {
     this.session = getNoteSession(this.world);
+    this.toasts = getToasts(this.world);
     this.homeMode = getHomeMode(this.world);
     const panel = this.world.getSceneObject<UIKitMLAsset>(DOCK_NODE);
     if (!panel) {
@@ -115,7 +118,7 @@ export class CompactDockSystem extends createSystem({}) {
       ui.onClick('dock-expand', () => this.expand()),
       ui.onClick('dock-recent', () => this.togglePopover('recent')),
       ui.onClick('dock-templates', () => this.togglePopover('templates')),
-      ui.onClick('dock-settings', () => this.expand(true)),
+      ui.onClick('dock-settings', () => this.toasts.show(SETTINGS_TOAST)),
     ];
     for (const el of round) {
       glass(el, BUTTON_RADIUS_PX);
@@ -169,7 +172,7 @@ export class CompactDockSystem extends createSystem({}) {
 
     this.cleanupFuncs.push(
       this.session.subscribe(() => this.renderRecent()),
-      this.homeMode.subscribe(({ mode }) => this.applyMode(mode)),
+      this.homeMode.subscribe((mode) => this.applyMode(mode)),
     );
     this.renderRecent();
     setVisible(this.root, false);
@@ -183,8 +186,8 @@ export class CompactDockSystem extends createSystem({}) {
     this.closePopover();
   }
 
-  private expand(openSettings = false): void {
-    this.homeMode.set('full', { openSettings });
+  private expand(): void {
+    this.homeMode.set('full');
   }
 
   private togglePopover(which: Exclude<Popover, null>): void {

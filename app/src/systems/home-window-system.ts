@@ -1,11 +1,14 @@
 /**
  * HomeWindowSystem: connects the home window (UIKitML) to the NoteSession.
  *
- * The first screen, laid out like a document app's home: a top bar (app
- * name, clock, settings, compact toggle), "Start a new note" paper templates
- * and "Recent notes" cards that preview each note's real ink, with a sort
- * toggle and chevrons (or a drag) for more. The compact toggle hides the
- * window and shows the compact dock (CompactDockSystem) instead.
+ * The first screen: a greeting with the date and time, a capsule of
+ * controls (pin, settings, minimise), paper templates to start a note, and
+ * "Recent" cards that preview each note's real ink, with a sort pill and
+ * round prev/next buttons (or a drag) for more. With no notes yet, an empty
+ * state invites the first one. The minimise button hides the window and
+ * shows the compact dock (CompactDockSystem) instead.
+ *
+ * Messages (coming soon, a failed save) go out as toasts (ToastSystem).
  *
  * All note changes go through NoteSession commands; this system only reads
  * session state and renders it.
@@ -17,7 +20,7 @@ import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
 import type { NoteSummary } from '../notes/note-store.js';
 import { formatRelativeTime, noteTitleFor, truncate } from '../ui/format.js';
-import { getHomeMode, type HomeModeState } from '../ui/home-mode.js';
+import { getHomeMode, type HomeModeState, WINDOW_GLASS_NAME } from '../ui/home-mode.js';
 import { makeDraggable } from '../ui/drag.js';
 import {
   attachGlowHalo,
@@ -30,24 +33,27 @@ import {
   addToggleStateColors,
   NEUTRAL_STATES,
   PanelBinding,
+  PRIMARY_STATES,
   SECONDARY_STATES,
   setText,
   setVisible,
   type PanelElement,
 } from '../ui/panel-helpers.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
+import { addPressMotion } from '../ui/press-motion.js';
+import { getToasts, SETTINGS_TOAST, type Toast, type ToastService } from '../ui/toasts.js';
 import { easeInCubic, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 
 const HOME_WINDOW_NODE = 'home-window';
-/** Square corners; must match .window border-radius in home-window.uikitml. */
-const WINDOW_RADIUS_PX = 0;
-/** Frosted, mostly opaque glass so dark text reads over any room. */
-const WINDOW_FROST_ALPHA = 0.84;
+/** Must match .window border-radius in home-window.uikitml. */
+const WINDOW_RADIUS_PX = 44;
+/** Frosted enough for dark text over any room, clear enough to feel light. */
+const WINDOW_FROST_ALPHA = 0.74;
 /** Must match the number of `recent-card-N` elements in home-window.uikitml. */
 const CARD_SLOTS = 8;
 const CARD_TITLE_MAX_CHARS = 18;
 /** One chevron press scrolls by one card plus the gap (UIKit units). */
-const CARD_STEP = 206;
+const CARD_STEP = 214;
 const CARDS_PER_PAGE = 4;
 /** Transition timings (ms): hide, then show after the dock has faded. */
 const HIDE_MS = 220;
@@ -58,11 +64,12 @@ const GLOW_MS = 1200;
 const TEMPLATE_PREVIEW_PX = 272;
 const THUMB_PREVIEW_PX = 376;
 
-const ICON_COLOR = '#1f1c19';
-const ICON_HIDDEN = 'rgba(31, 28, 25, 0)';
+/** Opacity of a prev/next button with nothing more in its direction. */
+const DISABLED_OPACITY = 0.35;
 
 type SortMode = 'recent' | 'title';
-const SORT_LABELS: Record<SortMode, string> = { recent: 'Recent', title: 'A-Z' };
+const SORT_LABELS: Record<SortMode, string> = { recent: 'Last edited', title: 'Name' };
+
 
 interface NoteCard {
   root: PanelElement;
@@ -80,6 +87,9 @@ interface ScrollContainer {
 
 export class HomeWindowSystem extends createSystem({}) {
   private session!: NoteSession;
+  private toasts!: ToastService;
+  /** The sticky save-failure toast while it is up. */
+  private failureToast: Toast | null = null;
   private cards: NoteCard[] = [];
   private homeMode!: HomeModeState;
   private tweens!: Tweens;
@@ -91,22 +101,22 @@ export class HomeWindowSystem extends createSystem({}) {
   private halo!: GlowHalo;
   /** Whether the window is (or is becoming) visible. */
   private shown = true;
-  private settingsOpen = false;
   private sort: SortMode = 'recent';
   private shownMinute = '';
 
+  private greeting!: UIKit.Text;
   private clockTime!: UIKit.Text;
   private strip: ScrollContainer | null = null;
   private prevChevron!: PanelElement;
   private nextChevron!: PanelElement;
   private sortLabel!: UIKit.Text;
   private emptyState!: PanelElement;
-  private saveStatus!: UIKit.Text;
-  private statusRow!: PanelElement;
-  private settingsSheet!: PanelElement;
+  private stripElement!: PanelElement;
+  private recentActions!: PanelElement;
 
   init(): void {
     this.session = getNoteSession(this.world);
+    this.toasts = getToasts(this.world);
     const panel = this.world.getSceneObject<UIKitMLAsset>(HOME_WINDOW_NODE);
     if (!panel) {
       console.warn('[HomeWindowSystem] Home window missing from the scene.');
@@ -127,6 +137,7 @@ export class HomeWindowSystem extends createSystem({}) {
       edgeHighlights: false,
       frostAlpha: WINDOW_FROST_ALPHA,
       host: panel,
+      name: WINDOW_GLASS_NAME,
     });
     makeDraggable(this.grab, ui.element('window-grab-bar'), panel, this.world, this.cleanupFuncs, {
       onStart: () => this.homeMode.setDragging(true),
@@ -136,22 +147,31 @@ export class HomeWindowSystem extends createSystem({}) {
     const paintPin = addToggleStateColors(pin, () => this.homeMode.pinned, this.cleanupFuncs);
     this.cleanupFuncs.push(this.homeMode.subscribePlacement(paintPin));
 
+    addPressMotion(pin, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
+
+    this.greeting = ui.text('greeting');
     this.clockTime = ui.text('clock-time');
-    this.saveStatus = ui.text('save-status');
-    this.statusRow = ui.element('status-row');
-    this.settingsSheet = ui.element('settings-sheet');
     this.sortLabel = ui.text('sort-label');
     this.emptyState = ui.element('recent-empty');
-    ui.onClick('save-retry-button', () => void this.session.flush());
-    ui.onClick('sort-button', () => this.toggleSort());
+    this.stripElement = ui.element('recent-strip');
+    this.recentActions = ui.element('recent-actions');
 
+    // Light-filled buttons (sort, prev/next, the empty state's New note).
+    const filled: PanelElement[] = [ui.onClick('sort-button', () => this.toggleSort())];
+    const emptyNew = ui.onClick('recent-empty-new', () => this.newNote('blank'));
+    addStateColors(emptyNew, PRIMARY_STATES, this.cleanupFuncs);
+    addPressMotion(emptyNew, this.tweens, this.cleanupFuncs);
+
+    // Clear buttons and cards: light comes up under them when pointed at.
     const hoverable: PanelElement[] = [];
-    addStateColors(ui.element('sort-button'), SECONDARY_STATES, this.cleanupFuncs);
-    addStateColors(ui.element('save-retry-button'), SECONDARY_STATES, this.cleanupFuncs);
-    hoverable.push(
-      ui.onClick('settings-button', () => this.toggleSettings()),
+    const iconButtons = [
+      ui.onClick('settings-button', () => this.toasts.show(SETTINGS_TOAST)),
       ui.onClick('compact-toggle', () => this.homeMode.set('compact')),
-    );
+    ];
+    hoverable.push(...iconButtons);
+    for (const button of iconButtons) {
+      addPressMotion(button, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
+    }
 
     // Templates: Blank is the main New note action; the others draw their paper.
     hoverable.push(ui.onClick('note-new-button', () => this.newNote('blank')));
@@ -166,15 +186,17 @@ export class HomeWindowSystem extends createSystem({}) {
 
     this.prevChevron = ui.onClick('recent-prev', () => this.page(-1));
     this.nextChevron = ui.onClick('recent-next', () => this.page(1));
-    hoverable.push(this.prevChevron, this.nextChevron);
+    filled.push(this.prevChevron, this.nextChevron);
+    for (const button of filled) {
+      addStateColors(button, SECONDARY_STATES, this.cleanupFuncs);
+      addPressMotion(button, this.tweens, this.cleanupFuncs, { hover: 1.06, pressed: 0.94 });
+    }
 
     for (let i = 0; i < CARD_SLOTS; i++) {
       const thumbnail = new NoteThumbnail(THUMB_PREVIEW_PX);
       ui.element(`recent-thumb-${i}`).setProperties({ src: thumbnail.texture });
       const card: NoteCard = {
-        root: ui.onClick(`recent-card-${i}`, () => {
-          if (card.noteId) void this.session.openNote(card.noteId);
-        }),
+        root: ui.onClick(`recent-card-${i}`, () => this.openCard(card)),
         title: ui.text(`recent-title-${i}`),
         meta: ui.text(`recent-meta-${i}`),
         thumbnail,
@@ -189,6 +211,7 @@ export class HomeWindowSystem extends createSystem({}) {
     // State feedback on everything a pinch can hit (Meta guidance: targets
     // must react to the pointer before they are selected).
     for (const element of hoverable) addStateColors(element, NEUTRAL_STATES, this.cleanupFuncs);
+    for (const card of this.cards) addPressMotion(card.root, this.tweens, this.cleanupFuncs);
 
     // The clock only needs to change when the minute does.
     const clockTimer = setInterval(() => {
@@ -198,22 +221,14 @@ export class HomeWindowSystem extends createSystem({}) {
     this.cleanupFuncs.push(
       () => clearInterval(clockTimer),
       this.session.subscribe(() => {
-        this.renderStatus();
+        this.renderSaveState();
         this.renderCards();
-        // A failed save must stay visible: leave compact mode to show it.
-        if (this.homeMode.mode === 'compact' && this.session.saveStatus === 'failed') {
-          this.homeMode.set('full');
-        }
       }),
-      this.homeMode.subscribe(({ mode, openSettings }) => {
-        if (mode === 'compact') this.settingsOpen = false;
-        if (openSettings) this.settingsOpen = true;
-        this.applyMode();
-      }),
+      this.homeMode.subscribe(() => this.applyMode()),
     );
 
     this.renderClock();
-    this.renderStatus();
+    this.renderSaveState();
     this.renderCards();
     this.applyMode();
   }
@@ -222,6 +237,22 @@ export class HomeWindowSystem extends createSystem({}) {
 
   private newNote(paper: PaperStyle): void {
     void this.session.createNote(noteTitleFor(), paper);
+    this.toasts.show({
+      kind: 'done',
+      title: paper === 'blank' ? 'New blank page' : `New ${paper} page`,
+      body: 'Saved to Recent.',
+    });
+  }
+
+  private openCard(card: NoteCard): void {
+    if (!card.noteId) return;
+    void this.session.openNote(card.noteId);
+    const title = this.session.summaries.find((s) => s.id === card.noteId)?.title || 'Untitled note';
+    this.toasts.show({
+      kind: 'info',
+      title: `Opened \u201c${truncate(title, 24)}\u201d`,
+      body: 'Writing on notes is coming soon.',
+    });
   }
 
   private toggleSort(): void {
@@ -233,24 +264,47 @@ export class HomeWindowSystem extends createSystem({}) {
 
   // ------------------------------------------------------------- rendering
 
+  /** Greeting by time of day, and the date and time under it. */
   private renderClock(): void {
-    const time = new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    const now = new Date();
+    const time = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
     if (time === this.shownMinute) return;
     this.shownMinute = time;
-    setText(this.clockTime, time);
+    const date = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    setText(this.clockTime, `${date} \u00b7 ${time}`);
+    const hour = now.getHours();
+    const part = hour >= 5 && hour < 12 ? 'morning' : hour >= 12 && hour < 17 ? 'afternoon' : 'evening';
+    setText(this.greeting, `Good ${part}`);
   }
 
-  /** Saving is silent; only a failed save shows a line, with a retry. */
-  private renderStatus(): void {
+  /**
+   * Saving is silent. A failed save raises a sticky toast with a retry,
+   * which gives way to a short "Saved" once a later save succeeds.
+   */
+  private renderSaveState(): void {
     const failed = this.session.saveStatus === 'failed';
-    setText(this.saveStatus, failed ? "Couldn't save. Your changes are kept." : '');
-    setVisible(this.statusRow, failed);
+    if (failed && !this.failureToast) {
+      this.failureToast = {
+        kind: 'error',
+        title: "Couldn't save your note",
+        body: 'Your changes are kept on this device.',
+        sticky: true,
+        action: { label: 'Try again', run: () => void this.session.flush() },
+      };
+      this.toasts.show(this.failureToast);
+    } else if (!failed && this.failureToast && this.session.saveStatus === 'saved') {
+      this.failureToast = null;
+      this.toasts.show({ kind: 'done', title: 'Saved' });
+    }
   }
 
   /** Cards in the chosen order; unused slots are hidden. The strip scrolls. */
   private renderCards(): void {
     const summaries = this.sortedSummaries();
-    setVisible(this.emptyState, summaries.length === 0);
+    const empty = summaries.length === 0;
+    setVisible(this.emptyState, empty);
+    setVisible(this.stripElement, !empty);
+    setVisible(this.recentActions, !empty);
     this.cards.forEach((card, i) => {
       const summary = summaries[i];
       card.noteId = summary?.id ?? null;
@@ -271,13 +325,13 @@ export class HomeWindowSystem extends createSystem({}) {
     );
   }
 
-  /** Chevrons show only when there is more to see in that direction. */
+  /** Prev/next dim when there is nothing more in their direction. */
   private renderChevrons(): void {
     const x = this.strip?.scrollPosition.peek()[0] ?? 0;
     const max = this.strip?.maxScrollPosition.peek()[0] ?? 0;
-    // Hidden chevrons stay in the layout (transparent) so cards never shift.
-    this.prevChevron.setProperties({ color: x > 1 ? ICON_COLOR : ICON_HIDDEN });
-    this.nextChevron.setProperties({ color: x < max - 1 ? ICON_COLOR : ICON_HIDDEN });
+    const dim = (on: boolean) => ({ opacity: on ? 1 : DISABLED_OPACITY }) as Record<string, unknown>;
+    this.prevChevron.setProperties(dim(x > 1));
+    this.nextChevron.setProperties(dim(x < max - 1));
   }
 
   /** Scroll the strip one page (four cards) back or forward. */
@@ -292,13 +346,7 @@ export class HomeWindowSystem extends createSystem({}) {
 
   // ----------------------------------------------------------------- modes
 
-  private toggleSettings(): void {
-    this.settingsOpen = !this.settingsOpen;
-    this.applyMode();
-  }
-
   private applyMode(): void {
-    setVisible(this.settingsSheet, this.settingsOpen);
     const full = this.homeMode.mode === 'full';
     if (full === this.shown) return;
     this.shown = full;

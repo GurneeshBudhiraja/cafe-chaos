@@ -10,32 +10,29 @@ import type { World } from '@iwsdk/core';
 
 export type HomeMode = 'full' | 'compact';
 
-export interface HomeModeChange {
-  mode: HomeMode;
-  /** Open the settings sheet when switching to the full window. */
-  openSettings: boolean;
-}
+/** Name of the home window's glass mesh; its world scale is the window's size. */
+export const WINDOW_GLASS_NAME = 'home-window-glass';
 
 export class HomeModeState {
   private current: HomeMode = 'full';
   private pinnedValue = false;
   private draggingValue = false;
-  private readonly listeners = new Set<(change: HomeModeChange) => void>();
+  private readonly listeners = new Set<(mode: HomeMode) => void>();
   private readonly placementListeners = new Set<() => void>();
 
   get mode(): HomeMode {
     return this.current;
   }
 
-  set(mode: HomeMode, { openSettings = false } = {}): void {
-    if (mode === this.current && !openSettings) return;
+  set(mode: HomeMode): void {
+    if (mode === this.current) return;
     this.current = mode;
-    for (const listener of this.listeners) listener({ mode, openSettings });
+    for (const listener of this.listeners) listener(mode);
     // After the surfaces have placed themselves, followers re-anchor.
     this.notifyPlacement();
   }
 
-  subscribe(listener: (change: HomeModeChange) => void): () => void {
+  subscribe(listener: (mode: HomeMode) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }

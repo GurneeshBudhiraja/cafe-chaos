@@ -55,6 +55,8 @@ export interface LiquidGlassOptions {
    * children, so pass the panel for those.
    */
   host?: Object3D;
+  /** Mesh name, so other systems can find this slab (default 'LiquidGlass'). */
+  name?: string;
 }
 
 /** Handle for a glass slab: the mesh plus controls for its photo body. */
@@ -261,7 +263,14 @@ function followElement(
 export function attachLiquidGlass(
   element: PanelElement,
   cleanupFuncs: Array<() => void>,
-  { radiusPx, bevelPx = 16, edgeHighlights = true, frostAlpha = 0.26, host: hostOption }: LiquidGlassOptions,
+  {
+    radiusPx,
+    bevelPx = 16,
+    edgeHighlights = true,
+    frostAlpha = 0.26,
+    host: hostOption,
+    name = 'LiquidGlass',
+  }: LiquidGlassOptions,
 ): LiquidGlass {
   const material = new ShaderMaterial({
     vertexShader,
@@ -284,7 +293,7 @@ export function attachLiquidGlass(
     side: DoubleSide,
   });
   const mesh = new Mesh(new PlaneGeometry(1, 1), material);
-  mesh.name = 'LiquidGlass';
+  mesh.name = name;
   mesh.renderOrder = -1; // drawn before the element's own content
   const host = hostOption ?? element.parent;
   if (!host) throw new Error('attachLiquidGlass: element is not in the scene yet.');

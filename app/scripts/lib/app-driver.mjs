@@ -43,7 +43,6 @@ export async function waitForApp(page) {
       const hooks = window.__metaNotes;
       return (
         hooks?.session?.loaded === true &&
-        hooks.session.active !== null &&
         hooks.world.scene.getObjectByName('note-new-button') !== undefined
       );
     },

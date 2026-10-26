@@ -64,7 +64,11 @@ export class NoteSession implements InkDocument {
 
   // ---------------------------------------------------------------- loading
 
-  /** Load the library and open the most recent note (or create the first). */
+  /**
+   * Load the library and open the most recent note. A first launch opens
+   * nothing: the home window shows its empty state until the user starts
+   * a note.
+   */
   async load(): Promise<void> {
     try {
       this.summaries = await this.store.list();
@@ -74,11 +78,7 @@ export class NoteSession implements InkDocument {
     }
     this.loaded = true;
     this.emit('library');
-    if (this.summaries.length > 0) {
-      await this.openNote(this.summaries[0].id);
-    } else {
-      await this.createNote();
-    }
+    if (this.summaries.length > 0) await this.openNote(this.summaries[0].id);
   }
 
   // --------------------------------------------------------------- commands
@@ -186,7 +186,7 @@ export class NoteSession implements InkDocument {
       this.active = null;
       const next = this.summaries[0];
       if (next) await this.openNote(next.id);
-      else await this.createNote();
+      else this.emit('active');
     }
     return true;
   }

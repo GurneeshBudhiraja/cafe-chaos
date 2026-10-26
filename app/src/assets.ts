@@ -39,6 +39,11 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'Compact Dock',
   },
+  toast: {
+    url: publicAssetUrl('ui/toast.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Toast',
+  },
   'tools-panel': {
     url: publicAssetUrl('ui/tools-panel.uikitml'),
     type: AssetType.UIKitML,

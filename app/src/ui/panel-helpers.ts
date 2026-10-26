@@ -60,17 +60,20 @@ export interface StateColors {
   pressed: string;
 }
 
-/** Icon buttons and cards on glass. */
+/**
+ * Icon buttons and cards on glass: clear at rest, and a soft light comes up
+ * under them when pointed at (like visionOS hover), rather than a grey tint.
+ */
 export const NEUTRAL_STATES: StateColors = {
   rest: 'rgba(255, 253, 249, 0)',
-  hover: 'rgba(31, 28, 25, 0.08)',
-  pressed: 'rgba(31, 28, 25, 0.14)',
+  hover: 'rgba(255, 253, 249, 0.72)',
+  pressed: 'rgba(255, 253, 249, 0.95)',
 };
 
-/** Secondary pills such as Sort. */
+/** Buttons with their own light fill (Sort, the round prev/next). */
 export const SECONDARY_STATES: StateColors = {
-  rest: 'rgba(255, 253, 249, 0.75)',
-  hover: '#fffdf9',
+  rest: 'rgba(255, 253, 249, 0.6)',
+  hover: 'rgba(255, 253, 249, 0.98)',
   pressed: '#efe9e1',
 };
 

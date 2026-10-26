@@ -2,12 +2,13 @@
  * Notes acceptance smoke test (roadmap checks for 18 October).
  *
  * Runs in a fresh browser profile (empty IndexedDB) against the dev server:
+ *  0. A first launch shows the empty state; its New note starts a note.
  *  1. Add two strokes to the first note, wait for "Saved". The tablet is out
  *     of the launch view for now, so strokes go in through the note session
  *     (the same command the tablet uses).
  *  2. Reload five times; the note's title and strokes must match.
- *  3. Make writes fail, add a stroke: the app must show "Save failed", keep
- *     the stroke, and save it after "Try saving again".
+ *  3. Make writes fail, add a stroke: the app must raise the save-failure
+ *     toast, keep the stroke, and save it after the toast's "Try again".
  *  4. Home window: New note adds a recent card; tapping the older card
  *     reopens that note; minimising shows the floating dock, whose pop-ups
  *     open notes and templates and whose grab bar moves it;
@@ -60,6 +61,21 @@ try {
   const { page } = app;
   logs = app.logs;
 
+  // 0. A first launch opens no note: the home window shows its empty state.
+  const firstLaunch = await page.evaluate(() => {
+    const { session, world } = window.__metaNotes;
+    return {
+      notes: session.summaries.length,
+      empty: world.scene.getObjectByName('recent-empty')?.isVisible.peek() === true,
+    };
+  });
+  checks.check(
+    'first launch shows the empty state',
+    firstLaunch.notes === 0 && firstLaunch.empty,
+    JSON.stringify(firstLaunch),
+  );
+  await clickUntil(page, 'recent-empty-new', () => window.__metaNotes.session.active !== null);
+
   // 1. Create content.
   await addStroke(page, [0.15, 0.3], [0.8, 0.4]);
   await addStroke(page, [0.2, 0.7], [0.6, 0.55]);
@@ -96,7 +112,7 @@ try {
   });
   const failedState = await page.evaluate(() => {
     const { session, world } = window.__metaNotes;
-    const retry = world.scene.getObjectByName('save-retry-button');
+    const retry = world.scene.getObjectByName('toast-action');
     return {
       status: session.saveStatus,
       unsaved: session.hasUnsavedChanges,
@@ -115,7 +131,7 @@ try {
   );
 
   await page.evaluate(() => (window.__metaNotes.store.failWrites = false));
-  await clickUntil(page, 'save-retry-button', () => {
+  await clickUntil(page, 'toast-action', () => {
     const { session } = window.__metaNotes;
     return session.saveStatus === 'saved' && !session.hasUnsavedChanges;
   });
@@ -188,10 +204,14 @@ try {
   });
   await page.waitForTimeout(200);
 
-  // Settings on the dock opens the full window with the sheet shown.
-  await clickUntil(page, 'dock-settings', () => window.__shown('home-root') && window.__shown('settings-sheet'));
-  await clickUntil(page, 'settings-button', () => !window.__shown('settings-sheet'));
-  checks.check('settings on the dock opens the full window', true);
+  // Settings (not built yet) answers with a toast, on the dock and the window.
+  const toastTitle = () => window.__metaNotes.world.globals['metaNotes.toasts']?.current?.title ?? '';
+  await clickUntil(page, 'dock-settings', () => window.__shown('toast-root'));
+  const dockToast = await page.evaluate(toastTitle);
+  await clickUntil(page, 'dock-expand', () => window.__shown('home-root'));
+  await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.toasts'].dismiss());
+  await clickUntil(page, 'settings-button', () => window.__shown('toast-root'));
+  checks.check('settings shows a coming-soon toast', dockToast.startsWith('Settings'), dockToast);
 
   // The window's own grab bar moves it, and the pin toggles stick mode.
   const winX = () => page.evaluate(() => window.__metaNotes.world.getSceneObject('home-window').position.x);

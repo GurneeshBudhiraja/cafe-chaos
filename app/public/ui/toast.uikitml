@@ -1,0 +1,95 @@
+<!--
+  Toast: one short app message on a glass capsule. An icon in a tinted
+  circle says what kind of message it is (info, done, error), a title and
+  an optional line of detail say what happened, and an optional pill offers
+  one action ("Try again"). ToastSystem (src/systems/toast-system.ts) fills
+  it in, puts a glass slab behind #toast-root, places it above the home
+  window or dock, and animates it in and out. Keep the ids stable.
+-->
+<style>
+  @font-face {
+    font-family: ui;
+    src: url(../fonts/bricolage-text.ttf);
+    font-weight: 400;
+  }
+
+  @font-face {
+    font-family: ui;
+    src: url(../fonts/bricolage-ui-strong.ttf);
+    font-weight: 600;
+  }
+
+  .toast {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+    padding-left: 14px;
+    padding-right: 26px;
+    border-radius: 40px;
+  }
+
+  .badge {
+    width: 52px;
+    height: 52px;
+    border-radius: 26px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(181, 85, 58, 0.14);
+    color: #b5553a;
+  }
+
+  .text {
+    flex-direction: column;
+    gap: 2px;
+    max-width: 460px;
+  }
+
+  .title {
+    font-family: ui;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f1c19;
+  }
+
+  .body {
+    font-family: ui;
+    font-size: 15px;
+    font-weight: 400;
+    color: #6b635a;
+  }
+
+  .action {
+    height: 44px;
+    margin-left: 6px;
+    padding-left: 18px;
+    padding-right: 18px;
+    border-radius: 22px;
+    align-items: center;
+    justify-content: center;
+    background-color: #1f1c19;
+    cursor: pointer;
+  }
+
+  .action-label {
+    font-family: ui;
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+  }
+</style>
+<div id="toast-root" class="toast">
+  <div id="toast-badge" class="badge">
+    <Sparkles id="toast-icon-info" width="24" height="24"></Sparkles>
+    <Check id="toast-icon-done" width="24" height="24" style="display: none"></Check>
+    <CloudOff id="toast-icon-error" width="24" height="24" style="display: none"></CloudOff>
+  </div>
+  <div class="text">
+    <div id="toast-title" class="title">Title</div>
+    <div id="toast-body" class="body">Body</div>
+  </div>
+  <div id="toast-action" class="action" style="display: none">
+    <div id="toast-action-label" class="action-label">Try again</div>
+  </div>
+</div>

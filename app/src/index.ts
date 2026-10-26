@@ -20,6 +20,7 @@ import { FollowModeSystem } from './systems/follow-mode-system.js';
 import { InkSystem } from './systems/ink-system.js';
 import { HomeWindowSystem } from './systems/home-window-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
+import { ToastSystem } from './systems/toast-system.js';
 import { TweenSystem } from './systems/tween-system.js';
 import { XrScrollFixSystem } from './systems/xr-scroll-fix-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
@@ -45,6 +46,7 @@ World.create(
     .registerSystem(CompactDockSystem)
     // After both panels, so followers re-anchor once they have placed themselves.
     .registerSystem(FollowModeSystem)
+    .registerSystem(ToastSystem)
     .registerSystem(TweenSystem)
     .registerSystem(DesktopBackdropSystem)
     .registerSystem(XrScrollFixSystem);
