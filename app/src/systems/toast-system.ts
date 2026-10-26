@@ -33,7 +33,7 @@ const RADIUS_PX = 40;
  * origin (its bottom edge), measured to clear the button row;
  * and toward the viewer.
  */
-const WINDOW_GAP_M = 0.05;
+const WINDOW_GAP_M = 0.09;
 const DOCK_LIFT_M = 0.48;
 const FORWARD_M = 0.02;
 /** Rises this far (metres) while fading in. */

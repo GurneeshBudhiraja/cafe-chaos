@@ -4,11 +4,13 @@
  * at their true speed (see lib/headset-recorder.mjs). A 360-degree outdoor
  * photo stands in for passthrough, since IWER only emulates indoor rooms.
  *
- * Flow: look at the window and tap its buttons (sort, scroll, a template,
- * settings), drag it by its grab bar, look around and come back, pin it and
- * turn (it follows), unpin, minimise to the dock (fade and shine), open the
- * Recent and Templates pop-ups, drag the dock, look around, then expand
- * (the window returns with a glow).
+ * Flow: look at the window and point at a few notes (they lift toward
+ * you), sort and page Recent, open the paper sheet from New note and start
+ * a dotted page (a toast confirms it), open a note and settings (toasts:
+ * not built yet), drag the window by its grab bar, look around and come
+ * back, pin it and turn (it follows), unpin, minimise to the dock (fade and
+ * shine), open the Recent and Templates pop-ups and start a grid page,
+ * drag the dock, look around, then expand (the window returns with a glow).
  *
  * Usage: start the dev server (`npm run dev`), then
  *   npm run record:tour -- <equirectangular.jpg> [panorama yaw degrees]
@@ -54,7 +56,7 @@ async function prepare(r) {
   // Standing eye height, the hand held low and forward like a relaxed pinch.
   await r.moveHead(HEAD);
   await r.moveHand({ x: 0.2, y: 1.2, z: -0.22 });
-  await r.turnHead(0, -2, 100);
+  await r.turnHead(0, -6, 100);
   await r.pause(600);
 }
 
@@ -79,9 +81,18 @@ const lookAtPanel = async (node, ms, dy = 0) => {
   return yawTo(at);
 };
 
+const rest = () => rec.moveHand({ x: 0.2, y: 1.2, z: -0.22 }).then(() =>
+  page.evaluate(() => window.IWER_DEVICE.remote.dispatch('look_at', { device: 'hand-right', target: { x: 0.75, y: 0.7, z: -0.9 } })));
+
+await lookAtPanel('home-window', 300);
+await rest();
 await pause(1800);
 
-// --- Expanded window: tap through its buttons.
+// --- Recent: point at notes (they lift), sort, page.
+for (const card of ['recent-card-0', 'recent-card-1', 'recent-card-2']) {
+  await rec.point(card);
+  await pause(700);
+}
 await rec.tap('sort-button');
 await pause(900);
 await rec.tap('sort-button');
@@ -90,14 +101,27 @@ await rec.tap('recent-next');
 await pause(1100);
 await rec.tap('recent-prev');
 await pause(900);
-const before = await page.evaluate(() => window.__metaNotes.session.summaries.length);
-await rec.tap('template-grid');
-await until((n) => window.__metaNotes.session.summaries.length > n, before);
-await pause(1200);
-await rec.tap('settings-button');
-await pause(1600);
-await rec.tap('settings-button');
+
+// --- New note: the paper sheet, then a dotted page (toast).
+await rec.tap('new-note-button');
 await pause(900);
+for (const paper of ['template-lined', 'template-grid', 'template-dotted']) {
+  await rec.point(paper);
+  await pause(600);
+}
+const before = await page.evaluate(() => window.__metaNotes.session.summaries.length);
+await rec.tap('template-dotted');
+await until((n) => window.__metaNotes.session.summaries.length > n, before);
+await rest();
+await pause(2400);
+
+// --- Not built yet: opening a note and settings answer with toasts.
+await rec.tap('recent-card-2');
+await rest();
+await pause(2400);
+await rec.tap('settings-button');
+await rest();
+await pause(2800);
 
 // --- Move the window by its grab bar (the eyes follow it), look around, come back.
 const bar = await rec.objectCenter('window-grab-bar');
@@ -132,9 +156,12 @@ await pause(1800);
 await rec.tap('dock-recent');
 await pause(1800);
 await rec.tap('dock-templates');
-await pause(1800);
-await rec.tap('dock-templates');
-await pause(900);
+await pause(1400);
+await rec.point('dock-template-grid');
+await pause(600);
+await rec.tap('dock-template-grid');
+await rest();
+await pause(2600);
 
 // --- Move the dock (the eyes follow it), look around, come back to it.
 const dockBar = await rec.objectCenter('dock-grab-bar');

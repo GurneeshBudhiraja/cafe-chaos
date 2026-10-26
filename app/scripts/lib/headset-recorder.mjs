@@ -71,6 +71,8 @@ export async function startHeadsetRecording({ size = SIZE, fovDeg, captions = tr
     moveHead: (position) => page.evaluate((p) => window.__rec.moveHead(p), position),
     objectCenter: (name) => page.evaluate((n) => window.__rec.objectCenter(n), name),
     tap: (name) => page.evaluate((n) => window.__rec.tap(n), name),
+    /** Aim the hand ray at a named UI element without pinching (hover). */
+    point: (name) => page.evaluate((n) => window.__rec.point(n), name),
     rayDrag: (from, to, ms) => page.evaluate(([f, t, d]) => window.__rec.rayDrag(f, t, d), [from, to, ms * speedUp]),
     writeStroke,
     /** Handwrite `text` on the tablet (see handwriting.mjs for options). */
@@ -210,6 +212,9 @@ function installHelpers(page) {
           if (t >= 1) return;
           await nextFrame();
         }
+      },
+      async point(name) {
+        await call('look_at', { device: 'hand-right', target: this.objectCenter(name) });
       },
       /** Aim the hand ray at a named UI element and pinch once (a tap). */
       async tap(name) {
