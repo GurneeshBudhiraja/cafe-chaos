@@ -75,6 +75,8 @@ export class CompactDockSystem extends createSystem({}) {
   private dock!: Object3D;
   private baseScale = 1;
   private glassSlabs: LiquidGlass[] = [];
+  /** Pop-up thumbnails and paper previews (faded with the dock). */
+  private readonly images: PanelElement[] = [];
   /** Whether the dock is (or is becoming) visible. */
   private shown = false;
   private window: Object3D | null = null;
@@ -140,7 +142,9 @@ export class CompactDockSystem extends createSystem({}) {
 
     for (let i = 0; i < RECENT_SLOTS; i++) {
       const thumbnail = new NoteThumbnail(PREVIEW_PX);
-      ui.element(`dock-recent-thumb-${i}`).setProperties({ src: thumbnail.texture });
+      const image = ui.element(`dock-recent-thumb-${i}`);
+      image.setProperties({ src: thumbnail.texture });
+      this.images.push(image);
       const card: RecentCard = {
         root: ui.onClick(`dock-recent-card-${i}`, () => {
           if (!card.noteId) return;
@@ -164,7 +168,9 @@ export class CompactDockSystem extends createSystem({}) {
       if (paper === 'blank') continue;
       const preview = new PaperPreview(PREVIEW_PX);
       preview.draw(paper);
-      ui.element(`dock-template-img-${paper}`).setProperties({ src: preview.texture });
+      const image = ui.element(`dock-template-img-${paper}`);
+      image.setProperties({ src: preview.texture });
+      this.images.push(image);
       this.cleanupFuncs.push(() => preview.dispose());
     }
 
@@ -265,7 +271,10 @@ export class CompactDockSystem extends createSystem({}) {
   }
 
   private setFade(opacity: number, scale: number): void {
-    this.root.setProperties({ opacity } as Record<string, unknown>);
+    const fade = { opacity } as Record<string, unknown>;
+    this.root.setProperties(fade);
+    // UIKit images do not inherit opacity; fade them directly.
+    for (const image of this.images) image.setProperties(fade);
     for (const slab of this.glassSlabs) slab.setOpacity(opacity);
     this.dock.scale.setScalar(this.baseScale * scale);
   }

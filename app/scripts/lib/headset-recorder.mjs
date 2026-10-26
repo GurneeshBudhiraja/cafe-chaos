@@ -154,6 +154,8 @@ function installHelpers(page) {
         await call('set_transform', { device: 'headset', position: { x: 0, y: 1.22, z: 0.1 } });
         await call('look_at', { device: 'headset', target: headTarget });
         await call('set_transform', { device: 'hand-right', position: { x: 0.16, y: 1.0, z: -0.1 } });
+        // The idle left hand rests at the user's side, out of view.
+        await call('set_transform', { device: 'hand-left', position: { x: -0.3, y: 0.75, z: 0.15 } });
         // Aim the hand at the tablet when there is one, else where the head looks.
         const handTarget = surface() ? toWorld(0.5, 0.5) : headTarget;
         await call('look_at', { device: 'hand-right', target: handTarget });

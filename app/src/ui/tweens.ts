@@ -49,6 +49,11 @@ export class Tweens {
     });
   }
 
+  /** Stop the tween with `key` where it is (its `done` does not run). */
+  cancel(key: string): void {
+    this.active = this.active.filter((tween) => tween.key !== key);
+  }
+
   step(frameSeconds: number): void {
     if (this.active.length === 0) return;
     const deltaSeconds = frameSeconds * this.timeScale;

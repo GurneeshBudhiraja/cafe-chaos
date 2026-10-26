@@ -131,7 +131,6 @@
   .paper-frame {
     border-radius: 12px;
     overflow: hidden;
-    background-color: #f4eee4;
   }
 
   .paper-blank {

@@ -60,7 +60,38 @@ const HIDE_MS = 220;
 const SHOW_MS = 320;
 const SHOW_DELAY_MS = 120;
 const GLOW_MS = 1200;
-const PICKER_MS = 240;
+const PICKER_OPEN_MS = 300;
+const PICKER_CLOSE_MS = 180;
+/** Must match .picker border-radius in home-window.uikitml. */
+const PICKER_RADIUS_PX = 30;
+/** How far the floating sheet sits in front of the window (UIKit pixels). */
+const PICKER_LIFT_PX = 14;
+/**
+ * How much Recent fades while the sheet is open. Fully: UIKit draws later
+ * sections over earlier ones whatever their depth, so anything left of
+ * Recent would show through the sheet.
+ */
+const RECENT_DIM = 1;
+/** Paper choice placement: floating under the header, or inline. */
+const PICKER_FLOATING = {
+  positionType: 'absolute',
+  // Centred in the space Recent leaves (header bottom to window bottom).
+  positionTop: 168,
+  positionLeft: 28,
+  positionRight: 28,
+  marginLeft: 0,
+  marginRight: 0,
+  transformOriginX: 'right',
+  transformOriginY: 'top',
+};
+const PICKER_INLINE = {
+  positionType: 'relative',
+  positionTop: undefined,
+  positionLeft: undefined,
+  positionRight: undefined,
+  marginLeft: -20,
+  marginRight: -20,
+};
 /**
  * Starting tilt toward the viewer (radians): about what faces a standing
  * viewer's eyes from the window's default place, a little below eye level.
@@ -124,6 +155,14 @@ export class HomeWindowSystem extends createSystem({}) {
   private newNoteButton!: PanelElement;
   /** The paper choice, opened from New note (always open with no notes). */
   private pickerOpen = false;
+  /** 0 closed .. 1 open, for the floating sheet's transition. */
+  private pickerProgress = 0;
+  /** The window's own fade (show/hide transitions). */
+  private windowOpacity = 1;
+  private readonly templateImages: PanelElement[] = [];
+  private readonly thumbImages: PanelElement[] = [];
+  private pickerGlass!: LiquidGlass;
+  private newNoteIcon!: PanelElement;
 
   init(): void {
     this.session = getNoteSession(this.world);
@@ -171,6 +210,14 @@ export class HomeWindowSystem extends createSystem({}) {
     this.recentSection = ui.element('recent-section');
     this.picker = ui.element('templates-section');
     this.pickerTitle = ui.element('picker-title');
+    this.newNoteIcon = ui.element('new-note-icon');
+    // The floating paper sheet has its own glass, in front of the window's.
+    this.pickerGlass = attachLiquidGlass(this.picker, this.cleanupFuncs, {
+      radiusPx: PICKER_RADIUS_PX,
+      bevelPx: 14,
+      frostAlpha: 0.9,
+      host: panel,
+    });
 
     // New note, the one clay button, opens the paper choice.
     this.newNoteButton = ui.onClick('new-note-button', () => this.setPickerOpen(!this.pickerOpen));
@@ -199,7 +246,9 @@ export class HomeWindowSystem extends createSystem({}) {
       if (paper === 'blank') continue;
       const preview = new PaperPreview(TEMPLATE_PREVIEW_PX);
       preview.draw(paper);
-      ui.element(`template-img-${paper}`).setProperties({ src: preview.texture });
+      const image = ui.element(`template-img-${paper}`);
+      image.setProperties({ src: preview.texture });
+      this.templateImages.push(image);
       const template = ui.onClick(`template-${paper}`, () => this.newNote(paper));
       hoverable.push(template);
       addPressMotion(template, this.tweens, this.cleanupFuncs, { liftPx: 12 });
@@ -216,7 +265,9 @@ export class HomeWindowSystem extends createSystem({}) {
 
     for (let i = 0; i < CARD_SLOTS; i++) {
       const thumbnail = new NoteThumbnail(THUMB_PREVIEW_PX);
-      ui.element(`recent-thumb-${i}`).setProperties({ src: thumbnail.texture });
+      const image = ui.element(`recent-thumb-${i}`);
+      image.setProperties({ src: thumbnail.texture });
+      this.thumbImages.push(image);
       const card: NoteCard = {
         root: ui.onClick(`recent-card-${i}`, () => this.openCard(card)),
         title: ui.text(`recent-title-${i}`),
@@ -278,16 +329,44 @@ export class HomeWindowSystem extends createSystem({}) {
     });
   }
 
-  /** Show or hide the paper choice, fading it in when it opens. */
+  /**
+   * Open or close the paper choice. With notes it floats as a glass sheet
+   * in Recent's place and grows out of the New note button, whose plus
+   * turns into a close cross, while Recent fades out: one thing in focus,
+   * and the window never changes size. With no notes it sits inline instead (see
+   * renderPicker).
+   */
   private setPickerOpen(open: boolean): void {
+    if (open === this.pickerOpen) return;
     this.pickerOpen = open;
-    this.renderPicker();
-    if (!open) return;
+    if (open) this.renderPicker();
+    const from = this.pickerProgress;
+    const to = open ? 1 : 0;
     this.tweens.play(
-      PICKER_MS,
-      (t) => this.picker.setProperties({ opacity: easeOutCubic(t) } as Record<string, unknown>),
-      { key: 'home-picker' },
+      open ? PICKER_OPEN_MS : PICKER_CLOSE_MS,
+      (t) => this.applyPickerProgress(from + (to - from) * (open ? easeOutCubic(t) : easeInCubic(t))),
+      { key: 'home-picker', done: () => !open && this.renderPicker() },
     );
+  }
+
+  /** 0 closed, 1 open: the floating sheet's fade, scale and lift. */
+  private applyPickerProgress(progress: number): void {
+    this.pickerProgress = progress;
+    const scale = 0.94 + 0.06 * progress;
+    this.picker.setProperties({
+      opacity: progress,
+      transformScaleX: scale,
+      transformScaleY: scale,
+      transformTranslateZ: PICKER_LIFT_PX * progress,
+    } as Record<string, unknown>);
+    this.pickerGlass.setOpacity(progress);
+    this.recentSection.setProperties({
+      opacity: 1 - RECENT_DIM * progress,
+      // Hidden cards must not take pinches meant for the sheet.
+      pointerEvents: progress > 0 ? 'none' : 'auto',
+    } as Record<string, unknown>);
+    this.newNoteIcon.setProperties({ transformRotateZ: 45 * progress } as Record<string, unknown>);
+    this.paintImageOpacity();
   }
 
   private toggleSort(): void {
@@ -367,13 +446,28 @@ export class HomeWindowSystem extends createSystem({}) {
     const empty = this.session.summaries.length === 0;
     setVisible(this.picker, this.pickerOpen || empty);
     setVisible(this.pickerTitle, !empty);
+    this.picker.setProperties((empty ? PICKER_INLINE : PICKER_FLOATING) as Record<string, unknown>);
+    if (empty) {
+      // Inline under the invitation: no sheet, nothing dimmed.
+      this.pickerOpen = false;
+      this.applyPickerProgress(1);
+      this.pickerGlass.setOpacity(0);
+      this.picker.setProperties({ transformTranslateZ: 0 } as Record<string, unknown>);
+      this.newNoteIcon.setProperties({ transformRotateZ: 0 } as Record<string, unknown>);
+      this.recentSection.setProperties({ opacity: 1 } as Record<string, unknown>);
+    } else if (!this.pickerOpen) {
+      this.applyPickerProgress(0);
+    }
   }
 
   /** Prev/next dim when there is nothing more in their direction. */
   private renderChevrons(): void {
     const x = this.strip?.scrollPosition.peek()[0] ?? 0;
     const max = this.strip?.maxScrollPosition.peek()[0] ?? 0;
-    const dim = (on: boolean) => ({ opacity: on ? 1 : DISABLED_OPACITY }) as Record<string, unknown>;
+    // Explicit opacity overrides the inherited one in UIKit, so include
+    // Recent's own fade (behind the paper sheet) and the window's.
+    const fade = this.windowOpacity * (1 - RECENT_DIM * this.pickerProgress);
+    const dim = (on: boolean) => ({ opacity: fade * (on ? 1 : DISABLED_OPACITY) }) as Record<string, unknown>;
     this.prevChevron.setProperties(dim(x > 1));
     this.nextChevron.setProperties(dim(x < max - 1));
   }
@@ -397,6 +491,7 @@ export class HomeWindowSystem extends createSystem({}) {
     if (full) this.showWindow();
     else {
       this.pickerOpen = false;
+      this.tweens.cancel('home-picker');
       this.renderPicker();
       this.hideWindow();
     }
@@ -450,11 +545,28 @@ export class HomeWindowSystem extends createSystem({}) {
   }
 
   private setFade(opacity: number, scale: number): void {
+    this.windowOpacity = opacity;
     const fade = { opacity } as Record<string, unknown>;
     this.root.setProperties(fade);
     this.grab.setProperties(fade);
     this.glass.setOpacity(opacity);
     this.panel.scale.setScalar(this.baseScale * scale);
+    this.paintImageOpacity();
+  }
+
+  /**
+   * UIKit images (and elements with their own opacity, the prev/next
+   * buttons) do not inherit their parents' opacity, so fades set it on them
+   * directly: the window's fade, times the paper sheet's (templates) or
+   * Recent's (thumbnails, prev/next).
+   */
+  private paintImageOpacity(): void {
+    const sheet = this.session.summaries.length === 0 ? 1 : this.pickerProgress;
+    const templates = { opacity: this.windowOpacity * sheet } as Record<string, unknown>;
+    const thumbs = { opacity: this.windowOpacity * (1 - RECENT_DIM * this.pickerProgress) } as Record<string, unknown>;
+    for (const image of this.templateImages) image.setProperties(templates);
+    for (const image of this.thumbImages) image.setProperties(thumbs);
+    if (this.prevChevron) this.renderChevrons();
   }
 }
 

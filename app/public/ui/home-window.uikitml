@@ -7,7 +7,9 @@
     (left); New note, the one clay button, and a glass capsule of controls
     (right): pin (stick mode), settings, minimise.
   - "Choose a paper" (#templates-section, hidden until New note is tapped):
-    Blank (#note-new-button) and the paper templates.
+    Blank (#note-new-button) and the paper templates. HomeWindowSystem
+    floats it as a glass sheet over Recent (absolute position, lifted
+    forward) and animates it out of the New note button.
   - "Recent": cards that preview each note's real ink, with the sort pill
     and round prev/next buttons in the section header.
   - First launch (no notes): #recent-empty, a short invitation, takes the
@@ -243,7 +245,6 @@
   .paper {
     border-radius: 14px;
     overflow: hidden;
-    background-color: #f4eee4;
   }
 
   .paper-blank {
@@ -319,7 +320,7 @@
 
   .card-meta {
     font-family: ui;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 400;
     color: #b3aba1;
   }
@@ -395,7 +396,7 @@
     </div>
     <div class="header-actions">
     <div id="new-note-button" class="primary">
-      <Plus width="22" height="22"></Plus>
+      <Plus id="new-note-icon" width="22" height="22"></Plus>
       <div class="primary-label">New note</div>
     </div>
     <div class="controls">
