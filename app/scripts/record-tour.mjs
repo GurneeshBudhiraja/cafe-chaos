@@ -7,7 +7,8 @@
  * Flow (a returning user; the first launch is in the smoke test): the dock
  * appears with its shine; open Recent, point along the notes and open one
  * (a toast: writing is next); open Templates and start a grid page (a
- * toast confirms it); settings answers with a toast; drag the dock by its
+ * toast confirms it); open Settings, switch stick mode off and on, try
+ * Connect (it answers "Coming soon" in place) and close it; drag the dock by its
  * grab bar; then look around: stick mode is on, so the dock comes along.
  *
  * Usage: start the dev server (`npm run dev`), then
@@ -118,10 +119,27 @@ await pause(2600);
 
 await lookAtPanel('compact-dock', 700, 0.1);
 
-// --- Settings is not built yet: a toast says so.
+// --- Settings: switch stick mode off and back on, try Connect (a toast:
+// coming soon), then close it.
 await rec.tap('dock-settings');
 await rest();
-await pause(2800);
+await lookAtPanel('compact-dock', 700, 0.28);
+await pause(1400);
+await rec.tap('set-stick');
+await rest();
+await pause(1400);
+await rec.tap('set-stick');
+await rest();
+await pause(1200);
+await rec.point('set-connect-microsoft');
+await pause(700);
+await rec.tap('set-connect-drive');
+await rest();
+await pause(2600);
+await rec.tap('dock-settings');
+await rest();
+await lookAtPanel('compact-dock', 700, 0.1);
+await pause(1000);
 
 // --- Move the dock by its grab bar (the eyes follow it).
 const dockBar = await rec.objectCenter('dock-grab-bar');

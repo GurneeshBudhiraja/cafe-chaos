@@ -2,16 +2,18 @@
  * ToastSystem: draws the current toast (src/ui/toasts.ts) as one slim glass
  * line at the top centre of the view, apart from the app.
  *
- * Where: about a metre out along the gaze, a little above its centre: in
- * view, but never over what you are looking at, and not at the blurry edge
- * of the lenses (a top-right corner is easy to miss in a headset). Quest's
- * own system messages appear in this region, so the eye already looks there.
- * It drifts lazily after the head, so a turn brings it along without it
- * swimming with every small movement. It slides down into place while fading
+ * Where: about a metre out, straight ahead in the direction the head faces
+ * and a little above eye level: the top centre of the view, above the dock
+ * and its pop-ups (which sit below the gaze), and not at the blurry edge of
+ * the lenses (a top-right corner is easy to miss in a headset). Quest's own
+ * system messages appear in this region, so the eye already looks there.
+ * It turns with the head but does not tilt with it, so looking down at a
+ * panel never brings a toast onto it. It drifts lazily after the head, so
+ * a turn brings it along without it swimming with every small movement. It slides down into place while fading
  * in, holds, then fades away (sticky toasts stay until dismissed).
  */
 
-import { createSystem, Quaternion, Vector3, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
+import { createSystem, Euler, Quaternion, Vector3, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
 import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
 import {
   addStateColors,
@@ -30,9 +32,9 @@ import { easeInCubic, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.
 const TOAST_NODE = 'toast';
 /** Half the line's height in UIKit pixels: its corner radius (.toast). */
 const RADIUS_PX = 24;
-/** Metres out along the gaze, and degrees above its centre. */
+/** Metres out, and degrees above eye level (the horizon, not the gaze). */
 const DISTANCE_M = 1.0;
-const ABOVE_GAZE_DEG = 20;
+const ABOVE_EYE_LEVEL_DEG = 10;
 /** Slides down this far (metres) while fading in. */
 const DROP_M = 0.03;
 /** How quickly it catches up with the head (per second, on the UI clock). */
@@ -47,7 +49,6 @@ const ICON_COLORS: Record<ToastKind, string> = {
   error: '#f0897d',
 };
 const ACTION_STATES: StateColors = { rest: THEME.ink, hover: '#ffffff', pressed: '#e9e2d8' };
-const UP = new Vector3(0, 1, 0);
 const FORWARD = new Vector3(0, 0, -1);
 
 export class ToastSystem extends createSystem({}) {
@@ -73,7 +74,9 @@ export class ToastSystem extends createSystem({}) {
   private readonly headPosition = new Vector3();
   private readonly headQuaternion = new Quaternion();
   private readonly target = new Vector3();
-  private readonly up = new Vector3();
+  private readonly euler = new Euler(0, 0, 0, 'YXZ');
+  /** The toast's orientation: the head's yaw, tipped to face the eyes. */
+  private readonly facing = new Quaternion();
 
   init(): void {
     const panel = this.world.getSceneObject<UIKitMLAsset>(TOAST_NODE);
@@ -187,23 +190,25 @@ export class ToastSystem extends createSystem({}) {
     const head = this.world.camera;
     head.getWorldPosition(this.headPosition);
     head.getWorldQuaternion(this.headQuaternion);
-    this.up.copy(UP).applyQuaternion(this.headQuaternion);
-    const rise = DISTANCE_M * Math.tan((ABOVE_GAZE_DEG * Math.PI) / 180) + this.lift * DROP_M;
+    // Yaw only: straight ahead of where the head faces, level with the eyes.
+    const yaw = this.euler.setFromQuaternion(this.headQuaternion, 'YXZ').y;
+    const pitch = (ABOVE_EYE_LEVEL_DEG * Math.PI) / 180;
+    this.facing.setFromEuler(this.euler.set(pitch, yaw, 0, 'YXZ'));
     this.target
       .copy(FORWARD)
-      .applyQuaternion(this.headQuaternion)
+      .applyQuaternion(this.facing)
       .multiplyScalar(DISTANCE_M)
-      .add(this.headPosition)
-      .addScaledVector(this.up, rise);
+      .add(this.headPosition);
+    this.target.y += this.lift * DROP_M;
     if (this.snap) {
       this.panel.position.copy(this.target);
-      this.panel.quaternion.copy(this.headQuaternion);
+      this.panel.quaternion.copy(this.facing);
       this.snap = false;
       return;
     }
     const rate = FOLLOW_RATE * getTweens(this.world).timeScale;
     const k = 1 - Math.exp(-delta * rate);
     this.panel.position.lerp(this.target, k);
-    this.panel.quaternion.slerp(this.headQuaternion, k);
+    this.panel.quaternion.slerp(this.facing, k);
   }
 }

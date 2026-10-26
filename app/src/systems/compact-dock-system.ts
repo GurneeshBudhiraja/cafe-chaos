@@ -8,7 +8,8 @@
  * closes it. A grab bar under the row moves the dock (pinch and drag); on
  * release it turns to face the viewer. Settings opens the same kind of
  * pop-up: stick mode (the dock follows the head; on by default and
- * remembered) and account connections (not built yet: a toast says so). The dock fades in with a small pop and a shine across
+ * remembered) and account connections (not built yet: Connect says so in
+ * place). The dock fades in with a small pop and a shine across
  * its glass, so the eye finds it. On a first launch a one-line hint above
  * the buttons points at New note, which pulses gently, until the first
  * note exists.
@@ -85,6 +86,12 @@ const POPOVER_TITLES: Record<Exclude<Popover, null>, string> = {
   templates: 'Start a new note',
   settings: 'Settings',
 };
+/** Connect buttons: a light fill that brightens when pointed at. */
+const CONNECT_STATES = {
+  rest: 'rgba(255, 250, 242, 0.12)',
+  hover: 'rgba(255, 250, 242, 0.22)',
+  pressed: 'rgba(255, 250, 242, 0.3)',
+};
 /** Settings rows: a faint fill at rest, brighter when pointed at. */
 const SETTINGS_ROW_STATES = {
   rest: 'rgba(255, 250, 242, 0.06)',
@@ -95,8 +102,12 @@ const SETTINGS_ROW_STATES = {
 /** Knob travel (UIKit pixels) between off and on: track 48 - padding 6 - knob 22. */
 const KNOB_TRAVEL_PX = 20;
 const SWITCH_MS = 220;
-/** Until account connections exist, Connect says so honestly. */
-const CONNECT_TOAST = { kind: 'info' as const, title: 'Connecting accounts is coming soon' };
+/**
+ * Until account connections exist, Connect answers in place: its label
+ * reads "Coming soon" for a moment (feedback where you pinched, rather
+ * than a pop-up over the panel you are looking at).
+ */
+const CONNECT_SOON_MS = 2200;
 
 interface RecentCard {
   root: PanelElement;
@@ -313,13 +324,20 @@ export class CompactDockSystem extends createSystem({}) {
     const stickRow = ui.onClick('set-stick', () => this.homeMode.setPinned(!this.homeMode.pinned));
     this.stickSwitch = ui.element('set-stick-switch');
     this.stickKnob = ui.element('set-stick-knob');
-    const rows = [
-      stickRow,
-      ui.onClick('set-connect-drive', () => this.toasts.show(CONNECT_TOAST)),
-      ui.onClick('set-connect-microsoft', () => this.toasts.show(CONNECT_TOAST)),
-    ];
-    for (const row of rows) addPressMotion(row, this.tweens, this.cleanupFuncs, { hover: 1.02, pressed: 0.98 });
+    addPressMotion(stickRow, this.tweens, this.cleanupFuncs, { hover: 1.02, pressed: 0.98 });
     addStateColors(stickRow, SETTINGS_ROW_STATES, this.cleanupFuncs);
+    for (const service of ['drive', 'microsoft']) {
+      const label = ui.text(`set-connect-${service}-label`);
+      const button = ui.onClick(`set-connect-${service}`, () => {
+        setText(label, 'Coming soon');
+        this.tweens.play(CONNECT_SOON_MS, () => {}, {
+          key: `connect-${service}`,
+          done: () => setText(label, 'Connect'),
+        });
+      });
+      addStateColors(button, CONNECT_STATES, this.cleanupFuncs);
+      addPressMotion(button, this.tweens, this.cleanupFuncs, { hover: 1.05, pressed: 0.95 });
+    }
     this.stickProgress = this.homeMode.pinned ? 1 : 0;
     this.paintStick();
     this.cleanupFuncs.push(this.homeMode.subscribePlacement(() => this.animateStick()));

@@ -227,7 +227,7 @@
 
   .set-foot {
     font-family: ui;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     color: #b3aba1;
     padding-left: 6px;
@@ -345,16 +345,16 @@
           <div class="set-sub">Back up and export your notes</div>
         </div>
         <div id="set-connect-drive" class="set-button">
-          <div class="set-button-label">Connect</div>
+          <div id="set-connect-drive-label" class="set-button-label">Connect</div>
         </div>
       </div>
       <div class="set-row">
         <div class="set-text">
-          <div class="set-title">Microsoft (Outlook, OneDrive)</div>
-          <div class="set-sub">Back up and export your notes</div>
+          <div class="set-title">Microsoft</div>
+          <div class="set-sub">Outlook and OneDrive account</div>
         </div>
         <div id="set-connect-microsoft" class="set-button">
-          <div class="set-button-label">Connect</div>
+          <div id="set-connect-microsoft-label" class="set-button-label">Connect</div>
         </div>
       </div>
       <div class="set-foot">Your notes are saved on this device.</div>
