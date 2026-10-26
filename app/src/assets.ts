@@ -13,6 +13,7 @@ import {
   teacherDeskPrototype,
 } from './scene-assets/classroom-furniture.scene-asset.js';
 import { classroomRoomPrototype } from './scene-assets/classroom-room.scene-asset.js';
+import { stylusPrototype } from './scene-assets/stylus.scene-asset.js';
 import {
   tabletHandlePrototype,
   tabletPrototype,
@@ -29,6 +30,7 @@ export default defineAssets({
   'student-chair': studentChairPrototype,
   'teacher-desk': teacherDeskPrototype,
   'tablet-handle': tabletHandlePrototype,
+  stylus: stylusPrototype,
   'home-window': {
     url: publicAssetUrl('ui/home-window.uikitml'),
     type: AssetType.UIKitML,
