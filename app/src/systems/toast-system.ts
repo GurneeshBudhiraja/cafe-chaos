@@ -18,6 +18,7 @@ import {
   type StateColors,
 } from '../ui/panel-helpers.js';
 import { addPressMotion } from '../ui/press-motion.js';
+import { THEME } from '../ui/theme.js';
 import { getToasts, type Toast, type ToastKind, type ToastService } from '../ui/toasts.js';
 import { easeInCubic, easeOutBack, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 
@@ -37,11 +38,11 @@ const HIDE_MS = 220;
 const HOLD_MS = 3200;
 
 const BADGE_COLORS: Record<ToastKind, { background: string; color: string }> = {
-  info: { background: 'rgba(181, 85, 58, 0.14)', color: '#b5553a' },
-  done: { background: 'rgba(64, 120, 84, 0.14)', color: '#3f7a54' },
-  error: { background: 'rgba(163, 34, 26, 0.12)', color: '#a3221a' },
+  info: { background: 'rgba(212, 112, 79, 0.18)', color: THEME.clay },
+  done: { background: 'rgba(124, 196, 154, 0.16)', color: '#8fd1a9' },
+  error: { background: 'rgba(240, 133, 122, 0.16)', color: '#f0897d' },
 };
-const ACTION_STATES: StateColors = { rest: '#1f1c19', hover: '#38332e', pressed: '#4a443d' };
+const ACTION_STATES: StateColors = { rest: THEME.ink, hover: '#ffffff', pressed: '#e9e2d8' };
 
 export class ToastSystem extends createSystem({}) {
   private toasts!: ToastService;
@@ -84,7 +85,7 @@ export class ToastSystem extends createSystem({}) {
     this.glass = attachLiquidGlass(this.root, this.cleanupFuncs, {
       radiusPx: RADIUS_PX,
       bevelPx: 12,
-      frostAlpha: 0.9,
+      frostAlpha: 0.86,
       host: panel,
     });
     this.badge = ui.element('toast-badge');

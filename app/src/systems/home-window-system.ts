@@ -105,6 +105,7 @@ export class HomeWindowSystem extends createSystem({}) {
   private shownMinute = '';
 
   private greeting!: UIKit.Text;
+  private clockDate!: UIKit.Text;
   private clockTime!: UIKit.Text;
   private strip: ScrollContainer | null = null;
   private prevChevron!: PanelElement;
@@ -150,6 +151,7 @@ export class HomeWindowSystem extends createSystem({}) {
     addPressMotion(pin, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
 
     this.greeting = ui.text('greeting');
+    this.clockDate = ui.text('clock-date');
     this.clockTime = ui.text('clock-time');
     this.sortLabel = ui.text('sort-label');
     this.emptyState = ui.element('recent-empty');
@@ -271,7 +273,8 @@ export class HomeWindowSystem extends createSystem({}) {
     if (time === this.shownMinute) return;
     this.shownMinute = time;
     const date = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-    setText(this.clockTime, `${date} \u00b7 ${time}`);
+    setText(this.clockDate, date);
+    setText(this.clockTime, time);
     const hour = now.getHours();
     const part = hour >= 5 && hour < 12 ? 'morning' : hour >= 12 && hour < 17 ? 'afternoon' : 'evening';
     setText(this.greeting, `Good ${part}`);

@@ -12,6 +12,9 @@
     #recent-empty replaces the strip with a short invitation and a New note
     button.
 
+  Theme: dark warm smoked glass with warm-white text (src/ui/theme.ts has
+  the same colours for code). Paper stays warm white.
+
   Design notes (see the redesign research): medium weights rather than bold
   (Meta: Light/Thin wash out, overused Strong shouts), one accent colour,
   generous spacing instead of dividers, and concentric rounded shapes (the
@@ -69,7 +72,7 @@
     width: 120px;
     height: 10px;
     border-radius: 5px;
-    background-color: rgba(255, 253, 249, 0.92);
+    background-color: rgba(255, 250, 242, 0.5);
   }
 
   .window {
@@ -100,14 +103,27 @@
     font-weight: 400;
     letter-spacing: -0.4px;
     line-height: 1.15;
-    color: #1f1c19;
+    color: #f7f2ea;
   }
 
   .subline {
     font-family: ui;
     font-size: 17px;
     font-weight: 500;
-    color: #6b635a;
+    color: #b3aba1;
+  }
+
+  .subline-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 3px;
+    background-color: #b3aba1;
   }
 
   .controls {
@@ -119,7 +135,7 @@
     padding-left: 5px;
     padding-right: 5px;
     border-radius: 30px;
-    background-color: rgba(255, 253, 249, 0.6);
+    background-color: rgba(255, 250, 242, 0.08);
   }
 
   .icon-button {
@@ -128,7 +144,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 25px;
-    color: #3a3530;
+    color: #ebe4da;
     cursor: pointer;
   }
 
@@ -148,7 +164,7 @@
     font-family: ui;
     font-size: 19px;
     font-weight: 600;
-    color: #1f1c19;
+    color: #f7f2ea;
   }
 
   .head-actions {
@@ -165,8 +181,8 @@
     padding-left: 16px;
     padding-right: 18px;
     border-radius: 22px;
-    background-color: rgba(255, 253, 249, 0.6);
-    color: #3a3530;
+    background-color: rgba(255, 250, 242, 0.08);
+    color: #ebe4da;
     cursor: pointer;
   }
 
@@ -174,7 +190,7 @@
     font-family: ui;
     font-size: 16px;
     font-weight: 500;
-    color: #3a3530;
+    color: #ebe4da;
   }
 
   .round {
@@ -183,8 +199,8 @@
     border-radius: 22px;
     align-items: center;
     justify-content: center;
-    background-color: rgba(255, 253, 249, 0.6);
-    color: #3a3530;
+    background-color: rgba(255, 250, 242, 0.08);
+    color: #ebe4da;
     cursor: pointer;
   }
 
@@ -207,7 +223,7 @@
   .paper {
     border-radius: 14px;
     overflow: hidden;
-    background-color: #fffdf9;
+    background-color: #f4eee4;
   }
 
   .paper-blank {
@@ -216,7 +232,7 @@
     border-radius: 14px;
     align-items: center;
     justify-content: center;
-    background-color: #fffdf9;
+    background-color: #f4eee4;
   }
 
   .plus-circle {
@@ -225,7 +241,7 @@
     border-radius: 22px;
     align-items: center;
     justify-content: center;
-    background-color: #b5553a;
+    background-color: #d4704f;
     color: #ffffff;
   }
 
@@ -238,7 +254,7 @@
     font-family: ui;
     font-size: 16px;
     font-weight: 500;
-    color: #3a3530;
+    color: #ebe4da;
   }
 
   .strip {
@@ -278,14 +294,14 @@
     font-family: ui;
     font-size: 17px;
     font-weight: 600;
-    color: #1f1c19;
+    color: #f7f2ea;
   }
 
   .card-meta {
     font-family: ui;
     font-size: 14px;
     font-weight: 400;
-    color: #6b635a;
+    color: #b3aba1;
   }
 
   .empty {
@@ -296,7 +312,7 @@
     padding-left: 36px;
     padding-right: 36px;
     border-radius: 28px;
-    background-color: rgba(255, 253, 249, 0.5);
+    background-color: rgba(255, 250, 242, 0.06);
   }
 
   .empty-art {
@@ -305,8 +321,8 @@
     border-radius: 56px;
     align-items: center;
     justify-content: center;
-    background-color: rgba(181, 85, 58, 0.12);
-    color: #b5553a;
+    background-color: rgba(212, 112, 79, 0.18);
+    color: #d4704f;
   }
 
   .empty-text {
@@ -319,14 +335,14 @@
     font-family: display;
     font-size: 28px;
     font-weight: 400;
-    color: #1f1c19;
+    color: #f7f2ea;
   }
 
   .empty-body {
     font-family: ui;
     font-size: 17px;
     font-weight: 400;
-    color: #6b635a;
+    color: #b3aba1;
   }
 
   .primary {
@@ -337,7 +353,7 @@
     padding-left: 20px;
     padding-right: 24px;
     border-radius: 26px;
-    background-color: #b5553a;
+    background-color: #d4704f;
     color: #ffffff;
     cursor: pointer;
   }
@@ -354,7 +370,11 @@
   <div class="header">
     <div class="greeting-block">
       <div id="greeting" class="greeting">Good evening</div>
-      <div id="clock-time" class="subline">--</div>
+      <div class="subline-row">
+        <div id="clock-date" class="subline">--</div>
+        <div class="dot"></div>
+        <div id="clock-time" class="subline">--</div>
+      </div>
     </div>
     <div class="controls">
       <div id="window-pin" class="icon-button">

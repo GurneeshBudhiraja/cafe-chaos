@@ -7,6 +7,7 @@
  */
 
 import type { UIKit, UIKitMLAsset } from '@iwsdk/core';
+import { THEME } from './theme.js';
 
 /** Any UIKit element returned by `getElementById`. */
 export type PanelElement = NonNullable<
@@ -62,26 +63,26 @@ export interface StateColors {
 
 /**
  * Icon buttons and cards on glass: clear at rest, and a soft light comes up
- * under them when pointed at (like visionOS hover), rather than a grey tint.
+ * under them when pointed at (like visionOS hover), brighter while pinched.
  */
 export const NEUTRAL_STATES: StateColors = {
-  rest: 'rgba(255, 253, 249, 0)',
-  hover: 'rgba(255, 253, 249, 0.72)',
-  pressed: 'rgba(255, 253, 249, 0.95)',
+  rest: 'rgba(255, 250, 242, 0)',
+  hover: THEME.fill,
+  pressed: THEME.fillHover,
 };
 
 /** Buttons with their own light fill (Sort, the round prev/next). */
 export const SECONDARY_STATES: StateColors = {
-  rest: 'rgba(255, 253, 249, 0.6)',
-  hover: 'rgba(255, 253, 249, 0.98)',
-  pressed: '#efe9e1',
+  rest: THEME.fill,
+  hover: THEME.fillHover,
+  pressed: THEME.fillPressed,
 };
 
 /** The primary action (clay). */
 export const PRIMARY_STATES: StateColors = {
-  rest: '#b5553a',
-  hover: '#a24a31',
-  pressed: '#8f402a',
+  rest: THEME.clay,
+  hover: THEME.clayHover,
+  pressed: THEME.clayPressed,
 };
 
 export function addStateColors(
@@ -102,18 +103,18 @@ export function addStateColors(
   });
 }
 
-/** A toggle that is on (the pin while stick mode is on): ink fill. */
+/** A toggle that is on (the pin while stick mode is on): a warm-white fill. */
 const SELECTED_STATES: StateColors = {
-  rest: '#1f1c19',
-  hover: '#38332e',
-  pressed: '#4a443d',
+  rest: THEME.ink,
+  hover: '#ffffff',
+  pressed: '#e9e2d8',
 };
-const ICON_ON = '#ffffff';
-const ICON_OFF = '#1f1c19';
+const ICON_ON = THEME.inkOnLight;
+const ICON_OFF = THEME.ink;
 
 /**
- * State colours for an on/off icon button: neutral glass when off, a filled
- * ink circle with a white icon when on. Returns `refresh`, to call after
+ * State colours for an on/off icon button: clear glass when off, a filled
+ * warm-white circle with a dark icon when on. Returns `refresh`, to call after
  * the on state changes.
  */
 export function addToggleStateColors(

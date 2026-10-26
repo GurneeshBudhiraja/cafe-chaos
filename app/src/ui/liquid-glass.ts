@@ -26,6 +26,7 @@
  */
 
 import {
+  Color,
   DoubleSide,
   Matrix4,
   Mesh,
@@ -57,6 +58,11 @@ export interface LiquidGlassOptions {
   host?: Object3D;
   /** Mesh name, so other systems can find this slab (default 'LiquidGlass'). */
   name?: string;
+  /**
+   * 'dark' (default): warm smoked glass for light text, the app theme.
+   * 'light': milky frosted glass for dark text.
+   */
+  tint?: 'dark' | 'light';
 }
 
 /** Handle for a glass slab: the mesh plus controls for its photo body. */
@@ -78,6 +84,18 @@ export interface GlowHalo {
   /** 0 hides the halo; 1 is full glow. */
   setStrength(strength: number): void;
 }
+
+/** Frosted body colours (linear RGB, bottom then top) per tint. */
+const FROST: Record<'dark' | 'light', [[number, number, number], [number, number, number]]> = {
+  dark: [
+    [0.085, 0.075, 0.068],
+    [0.15, 0.135, 0.122],
+  ],
+  light: [
+    [0.93, 0.91, 0.88],
+    [0.97, 0.96, 0.94],
+  ],
+};
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
@@ -109,6 +127,8 @@ const fragmentShader = /* glsl */ `
   uniform float uFrostAlpha;  // opacity of the frosted body
   uniform float uOpacity;     // whole-slab fade
   uniform float uGlow;        // attention shine
+  uniform vec3 uFrostLow;     // body colour at the bottom
+  uniform vec3 uFrostHigh;    // body colour at the top
 
   varying vec2 vUv;
   varying vec3 vWorldPos;
@@ -159,10 +179,10 @@ const fragmentShader = /* glsl */ `
     float rimLit = 0.45 + 0.55 * clamp(dot(grad, normalize(vec2(-0.55, 0.85))) * 0.5 + 0.5, 0.0, 1.0);
     float innerGlow = exp(d / 12.0) * 0.16;
 
-    // Frosted body: warm milky glass (theme Glass #F6F3EE), a little brighter
-    // towards the top, with grain.
-    vec3 frost = mix(vec3(0.93, 0.91, 0.88), vec3(0.97, 0.96, 0.94), vUv.y);
-    frost += (grainNoise(floor(p)) - 0.5) * 0.04;
+    // Frosted body: the tint's colour, a little lighter towards the top,
+    // with fine grain (a flat field looks like a display defect in a headset).
+    vec3 frost = mix(uFrostLow, uFrostHigh, vUv.y);
+    frost += (grainNoise(floor(p)) - 0.5) * 0.03;
 
     vec2 viewOnPanel = vec2(dot(v, vTangent), dot(v, vBitangent));
 
@@ -174,7 +194,7 @@ const fragmentShader = /* glsl */ `
     else imageUv.x *= panelAspect / uImageAspect;
     imageUv = imageUv / 1.05 - viewOnPanel * 0.02 + 0.5;
     // Dimmed, and darker towards the bottom where the cards sit (as lock
-    // screens do), so the lime text keeps its contrast over bright scenery.
+    // screens do), so text keeps its contrast over bright scenery.
     float scrim = mix(0.4, 0.84, smoothstep(0.1, 0.8, vUv.y));
     vec3 photo = texture2D(uImage, imageUv).rgb * scrim;
 
@@ -270,6 +290,7 @@ export function attachLiquidGlass(
     frostAlpha = 0.26,
     host: hostOption,
     name = 'LiquidGlass',
+    tint = 'dark',
   }: LiquidGlassOptions,
 ): LiquidGlass {
   const material = new ShaderMaterial({
@@ -286,6 +307,8 @@ export function attachLiquidGlass(
       uFrostAlpha: { value: frostAlpha },
       uOpacity: { value: 1 },
       uGlow: { value: 0 },
+      uFrostLow: { value: new Color(...FROST[tint][0]) },
+      uFrostHigh: { value: new Color(...FROST[tint][1]) },
     },
     transparent: true,
     depthWrite: false,

@@ -9,6 +9,7 @@
 
 import { Quaternion, Vector3, type Object3D, type World } from '@iwsdk/core';
 import { addStateColors, NEUTRAL_STATES, type PanelElement } from './panel-helpers.js';
+import { THEME } from './theme.js';
 
 /** The parts of a pmndrs pointer event the drag uses. */
 interface DragPointerEvent {
@@ -17,8 +18,8 @@ interface DragPointerEvent {
   object?: { setPointerCapture?(id: number): void };
 }
 
-const BAR_REST = 'rgba(255, 253, 249, 0.92)';
-const BAR_ACTIVE = '#ffffff';
+const BAR_REST = THEME.grabBar;
+const BAR_ACTIVE = THEME.grabBarActive;
 const UP = new Vector3(0, 1, 0);
 
 export interface DragHooks {

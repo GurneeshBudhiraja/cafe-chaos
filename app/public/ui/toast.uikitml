@@ -36,8 +36,8 @@
     border-radius: 26px;
     align-items: center;
     justify-content: center;
-    background-color: rgba(181, 85, 58, 0.14);
-    color: #b5553a;
+    background-color: rgba(212, 112, 79, 0.18);
+    color: #d4704f;
   }
 
   .text {
@@ -50,14 +50,14 @@
     font-family: ui;
     font-size: 18px;
     font-weight: 600;
-    color: #1f1c19;
+    color: #f7f2ea;
   }
 
   .body {
     font-family: ui;
     font-size: 15px;
     font-weight: 400;
-    color: #6b635a;
+    color: #b3aba1;
   }
 
   .action {
@@ -68,7 +68,7 @@
     border-radius: 22px;
     align-items: center;
     justify-content: center;
-    background-color: #1f1c19;
+    background-color: #f7f2ea;
     cursor: pointer;
   }
 
@@ -76,7 +76,7 @@
     font-family: ui;
     font-size: 15px;
     font-weight: 600;
-    color: #ffffff;
+    color: #1f1c19;
   }
 </style>
 <div id="toast-root" class="toast">
