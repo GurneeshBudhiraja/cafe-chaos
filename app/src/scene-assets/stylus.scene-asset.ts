@@ -8,6 +8,11 @@
  * the tablet's top rail, Apple Pencil style), a matte grip, the clay band
  * (the app's accent, where the eye lands), a tapered cone and a soft nib.
  *
+ * Light on purpose: a warm white ceramic body stays visible in a dark
+ * room's passthrough and on see-through glasses, where dark colours render
+ * as transparent. The clay band glows softly so the pen can be found in
+ * the dark, and the nib is graphite so you see where ink lands on paper.
+ *
  * Contract: metres; long axis +X with the nib at +X; origin at the
  * middle of the length on the axis; the docking facet faces -Y. Named
  * parts: Barrel, Grip, Band, Cone, Nib, TailCap, DockFacet, and the anchor
@@ -17,11 +22,10 @@
 import { BufferGeometry, Group, LatheGeometry, Mesh, Object3D, Vector2 } from '@iwsdk/core';
 import { bevelBox } from './lib/hardsurface.js';
 import {
-  bodyMaterial,
-  clayMaterial,
-  gripMaterial,
-  paperWhiteMaterial,
-  trimMaterial,
+  ceramicMaterial,
+  glowingClayMaterial,
+  graphiteMaterial,
+  lightGripMaterial,
 } from './notes-materials.js';
 
 export const STYLUS_LENGTH_M = 0.155;
@@ -39,7 +43,7 @@ function revolve(points: Array<[number, number]>): BufferGeometry {
   return geometry;
 }
 
-function part(name: string, geometry: BufferGeometry, material = bodyMaterial): Mesh {
+function part(name: string, geometry: BufferGeometry, material = ceramicMaterial): Mesh {
   const mesh = new Mesh(geometry, material);
   mesh.name = name;
   return mesh;
@@ -53,17 +57,17 @@ function createStylus(): Group {
   // Rounded tail cap, closed at the very end.
   root.add(part('TailCap', revolve([
     [0, 0], [0.0022, 0.0002], [0.0038, 0.0008], [0.0050, 0.0020], [0.0056, 0.0034], [R, 0.0050],
-  ]), trimMaterial));
+  ]), lightGripMaterial));
   // Glossy barrel.
   root.add(part('Barrel', revolve([[R, 0.0050], [R, 0.0880]])));
   // Matte grip, a hair slimmer, with soft shoulders.
   root.add(part('Grip', revolve([
     [R, 0.0880], [R - 0.0002, 0.0895], [R - 0.0002, 0.1105], [R, 0.1120],
-  ]), gripMaterial));
+  ]), lightGripMaterial));
   // Clay band, very slightly proud of the barrel.
   root.add(part('Band', revolve([
     [R, 0.1120], [R + 0.0002, 0.1126], [R + 0.0002, 0.1174], [R, 0.1180],
-  ]), clayMaterial));
+  ]), glowingClayMaterial));
   // Tapered cone to the nib.
   root.add(part('Cone', revolve([
     [R, 0.1180], [R - 0.0004, 0.1240], [0.0042, 0.1350], [0.0028, 0.1455], [0.0018, 0.1500],
@@ -71,11 +75,11 @@ function createStylus(): Group {
   // Soft rounded nib.
   root.add(part('Nib', revolve([
     [0.0018, 0.1500], [0.0016, 0.1530], [0.0011, 0.1542], [0.0005, 0.1548], [0, STYLUS_LENGTH_M],
-  ]), paperWhiteMaterial));
+  ]), graphiteMaterial));
 
   // Flat magnetic facet along the barrel's underside (-Y), slightly inset so
   // it reads as a machined flat rather than a stuck-on strip.
-  const facet = part('DockFacet', bevelBox(0.07, 0.0008, 0.0046, 0.0002), gripMaterial);
+  const facet = part('DockFacet', bevelBox(0.07, 0.0008, 0.0046, 0.0002), lightGripMaterial);
   facet.position.set(-0.018, -R + 0.0003, 0);
   root.add(facet);
 
