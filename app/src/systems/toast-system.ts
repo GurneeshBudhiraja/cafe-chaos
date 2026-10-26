@@ -19,6 +19,7 @@ import {
 } from '../ui/panel-helpers.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import { THEME } from '../ui/theme.js';
+import { playUiSound } from '../ui/ui-sounds.js';
 import { getToasts, type Toast, type ToastKind, type ToastService } from '../ui/toasts.js';
 import { easeInCubic, easeOutBack, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 
@@ -133,6 +134,7 @@ export class ToastSystem extends createSystem({}) {
     setVisible(this.action, Boolean(toast.action));
     if (toast.action) setText(this.actionLabel, toast.action.label);
     setVisible(this.root, true);
+    if (!replacing) playUiSound('toast');
 
     // Rise and fade in (a replacement only pops, it is already in place).
     const fromDrop = replacing ? 0.4 : 1;

@@ -148,7 +148,7 @@ export class HomeWindowSystem extends createSystem({}) {
     this.halo = attachGlowHalo(this.root, this.cleanupFuncs, { marginPx: 70, host: panel });
     this.glass = attachLiquidGlass(this.root, this.cleanupFuncs, {
       radiusPx: WINDOW_RADIUS_PX,
-      edgeHighlights: false,
+      bevelPx: 18,
       frostAlpha: WINDOW_FROST_ALPHA,
       host: panel,
       name: WINDOW_GLASS_NAME,
@@ -192,13 +192,17 @@ export class HomeWindowSystem extends createSystem({}) {
     }
 
     // Templates: Blank is the main New note action; the others draw their paper.
-    hoverable.push(ui.onClick('note-new-button', () => this.newNote('blank')));
+    const blank = ui.onClick('note-new-button', () => this.newNote('blank'));
+    hoverable.push(blank);
+    addPressMotion(blank, this.tweens, this.cleanupFuncs, { liftPx: 12 });
     for (const paper of PAPER_STYLES) {
       if (paper === 'blank') continue;
       const preview = new PaperPreview(TEMPLATE_PREVIEW_PX);
       preview.draw(paper);
       ui.element(`template-img-${paper}`).setProperties({ src: preview.texture });
-      hoverable.push(ui.onClick(`template-${paper}`, () => this.newNote(paper)));
+      const template = ui.onClick(`template-${paper}`, () => this.newNote(paper));
+      hoverable.push(template);
+      addPressMotion(template, this.tweens, this.cleanupFuncs, { liftPx: 12 });
       this.cleanupFuncs.push(() => preview.dispose());
     }
 
@@ -229,7 +233,7 @@ export class HomeWindowSystem extends createSystem({}) {
     // State feedback on everything a pinch can hit (Meta guidance: targets
     // must react to the pointer before they are selected).
     for (const element of hoverable) addStateColors(element, NEUTRAL_STATES, this.cleanupFuncs);
-    for (const card of this.cards) addPressMotion(card.root, this.tweens, this.cleanupFuncs);
+    for (const card of this.cards) addPressMotion(card.root, this.tweens, this.cleanupFuncs, { liftPx: 14 });
 
     // The clock only needs to change when the minute does.
     const clockTimer = setInterval(() => {

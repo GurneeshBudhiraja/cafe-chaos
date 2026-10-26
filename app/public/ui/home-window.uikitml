@@ -327,6 +327,7 @@
   .empty {
     flex-direction: row;
     align-items: center;
+    justify-content: center;
     gap: 24px;
     padding-top: 6px;
     padding-bottom: 6px;
@@ -344,7 +345,6 @@
 
   .empty-text {
     flex-direction: column;
-    flex-grow: 1;
     gap: 6px;
   }
 
