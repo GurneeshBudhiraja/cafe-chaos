@@ -3,8 +3,8 @@
   buttons with nothing between them but passthrough: Settings, Templates,
   Recent in one line, and New note, the main action, at the right end
   (where the dominant hand finds it; mirrored for left-handed use later).
-  Stick mode (the dock follows the head) is on by default; its switch moves
-  into Settings when they exist. Recent and Templates open a small glass pop-up
+  Settings opens the same kind of pop-up: preferences (stick mode, on by
+  default) and account connections (Google Drive, Microsoft). Recent and Templates open a small glass pop-up
   just above the buttons (Recent scrolls sideways through up to eight
   notes); picking an item closes it. The thin bar underneath is the grab
   handle for moving the dock.
@@ -141,6 +141,99 @@
     color: #f7f2ea;
   }
 
+  .settings {
+    flex-direction: column;
+    gap: 6px;
+    width: 460px;
+  }
+
+  .set-section {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 600;
+    color: #b3aba1;
+    padding-left: 6px;
+    padding-top: 6px;
+  }
+
+  .set-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 12px;
+    padding-right: 10px;
+    border-radius: 18px;
+    background-color: rgba(255, 250, 242, 0.06);
+    cursor: pointer;
+  }
+
+  .set-text {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .set-title {
+    font-family: ui;
+    font-size: 16px;
+    font-weight: 600;
+    color: #f7f2ea;
+  }
+
+  .set-sub {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 500;
+    color: #b3aba1;
+  }
+
+  .switch {
+    width: 48px;
+    height: 28px;
+    border-radius: 14px;
+    padding-left: 3px;
+    padding-right: 3px;
+    flex-direction: row;
+    align-items: center;
+    background-color: #d4704f;
+  }
+
+  .knob {
+    width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    background-color: #ffffff;
+  }
+
+  .set-button {
+    height: 36px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 18px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 250, 242, 0.12);
+    cursor: pointer;
+  }
+
+  .set-button-label {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 600;
+    color: #f7f2ea;
+  }
+
+  .set-foot {
+    font-family: ui;
+    font-size: 13px;
+    font-weight: 500;
+    color: #b3aba1;
+    padding-left: 6px;
+    padding-top: 4px;
+  }
+
   .pop-row {
     flex-direction: row;
     gap: 8px;
@@ -233,6 +326,38 @@
           <div class="paper-frame"><img id="dock-recent-thumb-7" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
           <div id="dock-recent-title-7" class="pop-title">Note</div>
         </div>
+    </div>
+    <div id="dock-popover-settings" class="settings" style="display: none">
+      <div class="set-section">Preferences</div>
+      <div id="set-stick" class="set-row">
+        <div class="set-text">
+          <div class="set-title">Stick mode</div>
+          <div class="set-sub">The dock follows your view</div>
+        </div>
+        <div id="set-stick-switch" class="switch">
+          <div id="set-stick-knob" class="knob"></div>
+        </div>
+      </div>
+      <div class="set-section">Connections</div>
+      <div class="set-row">
+        <div class="set-text">
+          <div class="set-title">Google Drive</div>
+          <div class="set-sub">Back up and export your notes</div>
+        </div>
+        <div id="set-connect-drive" class="set-button">
+          <div class="set-button-label">Connect</div>
+        </div>
+      </div>
+      <div class="set-row">
+        <div class="set-text">
+          <div class="set-title">Microsoft (Outlook, OneDrive)</div>
+          <div class="set-sub">Back up and export your notes</div>
+        </div>
+        <div id="set-connect-microsoft" class="set-button">
+          <div class="set-button-label">Connect</div>
+        </div>
+      </div>
+      <div class="set-foot">Your notes are saved on this device.</div>
     </div>
     <div id="dock-popover-templates" class="pop-row" style="display: none">
         <div id="dock-template-blank" class="pop-card">

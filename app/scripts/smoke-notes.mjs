@@ -12,7 +12,8 @@
  *     toast, keep the stroke, and save it after the toast's "Try again".
  *  4. The dock: New note adds a note, Recent reopens the older one,
  *     Templates creates a note with its paper, the grab bar moves the dock,
- *     settings answers with a toast, stick mode is on by default, and with
+ *     stick mode is on by default and its Settings switch is remembered,
+ *     Connect answers with a toast, and with
  *     more notes than fit the Recent pop-up scrolls.
  *
  * Usage: start the dev server (`npm run dev`), then `npm run smoke:notes`.
@@ -201,16 +202,28 @@ try {
   });
   await page.waitForTimeout(200);
 
-  // Settings (not built yet) answers with a toast.
-  const toastTitle = () => window.__metaNotes.world.globals['metaNotes.toasts']?.current?.title ?? '';
-  await clickUntil(page, 'dock-settings', () => window.__shown('toast-root'));
-  const settingsToast = await page.evaluate(toastTitle);
-  checks.check('settings shows a coming-soon toast', settingsToast.startsWith('Settings'), settingsToast);
-  await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.toasts'].dismiss());
-
   // Stick mode is on by default: the dock follows the head.
   const stick = await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.homeMode'].pinned);
   checks.check('stick mode is on by default', stick === true, `pinned=${stick}`);
+
+  // Settings: the stick mode switch turns it off and on, and is remembered;
+  // Connect (not built yet) answers with a toast.
+  await page.evaluate(() => (window.__homeMode = window.__metaNotes.world.globals['metaNotes.homeMode']));
+  await clickUntil(page, 'dock-settings', () => window.__shown('dock-popover-settings'));
+  await clickUntil(page, 'set-stick', () => window.__homeMode.pinned === false);
+  const savedOff = await page.evaluate(() => JSON.parse(localStorage.getItem('metaNotes.preferences') ?? '{}').stickMode);
+  await clickUntil(page, 'set-stick', () => window.__homeMode.pinned === true);
+  await clickUntil(page, 'set-connect-drive', () => window.__shown('toast-root'));
+  const connectToast = await page.evaluate(
+    () => window.__metaNotes.world.globals['metaNotes.toasts']?.current?.title ?? '',
+  );
+  checks.check(
+    'settings: stick mode switch is remembered; Connect answers with a toast',
+    savedOff === false && connectToast.startsWith('Connecting'),
+    `saved off=${savedOff}, toast="${connectToast}"`,
+  );
+  await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.toasts'].dismiss());
+  await clickUntil(page, 'dock-settings', () => !window.__shown('dock-popover'));
 
   // With more notes than fit, the Recent pop-up scrolls. On desktop a mouse
   // scrolls UIKit with the wheel; XR rays and hands scroll by dragging.

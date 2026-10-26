@@ -7,6 +7,7 @@
  */
 
 import type { World } from '@iwsdk/core';
+import { loadPreferences, savePreferences } from './preferences.js';
 
 export type HomeMode = 'full' | 'compact';
 
@@ -22,9 +23,9 @@ export class HomeModeState {
   private current: HomeMode = 'compact';
   /**
    * Stick mode, on by default: the small floating home comes along wherever
-   * you look. Its switch belongs in Settings (not built yet).
+   * you look. The switch is in Settings and the choice is remembered.
    */
-  private pinnedValue = true;
+  private pinnedValue = loadPreferences().stickMode;
   private draggingValue = false;
   private readonly listeners = new Set<(mode: HomeMode) => void>();
   private readonly placementListeners = new Set<() => void>();
@@ -55,6 +56,7 @@ export class HomeModeState {
   setPinned(pinned: boolean): void {
     if (pinned === this.pinnedValue) return;
     this.pinnedValue = pinned;
+    savePreferences({ ...loadPreferences(), stickMode: pinned });
     this.notifyPlacement();
   }
 

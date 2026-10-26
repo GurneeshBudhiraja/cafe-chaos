@@ -6,8 +6,9 @@
  * passthrough. Recent and Templates open a small pop-up just above the
  * row; Recent scrolls sideways through up to eight notes. Picking an item
  * closes it. A grab bar under the row moves the dock (pinch and drag); on
- * release it turns to face the viewer. Stick mode (the dock follows the
- * head) is on by default; its switch belongs in Settings. The dock fades in with a small pop and a shine across
+ * release it turns to face the viewer. Settings opens the same kind of
+ * pop-up: stick mode (the dock follows the head; on by default and
+ * remembered) and account connections (not built yet: a toast says so). The dock fades in with a small pop and a shine across
  * its glass, so the eye finds it. On a first launch a one-line hint above
  * the buttons points at New note, which pulses gently, until the first
  * note exists.
@@ -35,7 +36,8 @@ import {
 } from '../ui/panel-helpers.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
-import { getToasts, newNoteToast, openedNoteToast, SETTINGS_TOAST, type ToastService } from '../ui/toasts.js';
+import { THEME } from '../ui/theme.js';
+import { getToasts, newNoteToast, openedNoteToast, type ToastService } from '../ui/toasts.js';
 import { easeInCubic, easeOutBack, easeOutCubic, getTweens, pulse, type Tweens } from '../ui/tweens.js';
 
 const DOCK_NODE = 'compact-dock';
@@ -76,7 +78,25 @@ const SHOW_MS = 360;
 const SHOW_DELAY_MS = 160;
 const SHINE_MS = 900;
 
-type Popover = 'recent' | 'templates' | null;
+type Popover = 'recent' | 'templates' | 'settings' | null;
+
+const POPOVER_TITLES: Record<Exclude<Popover, null>, string> = {
+  recent: 'Recent notes',
+  templates: 'Start a new note',
+  settings: 'Settings',
+};
+/** Settings rows: a faint fill at rest, brighter when pointed at. */
+const SETTINGS_ROW_STATES = {
+  rest: 'rgba(255, 250, 242, 0.06)',
+  hover: 'rgba(255, 250, 242, 0.14)',
+  pressed: 'rgba(255, 250, 242, 0.2)',
+};
+
+/** Knob travel (UIKit pixels) between off and on: track 48 - padding 6 - knob 22. */
+const KNOB_TRAVEL_PX = 20;
+const SWITCH_MS = 220;
+/** Until account connections exist, Connect says so honestly. */
+const CONNECT_TOAST = { kind: 'info' as const, title: 'Connecting accounts is coming soon' };
 
 interface RecentCard {
   root: PanelElement;
@@ -105,6 +125,11 @@ export class CompactDockSystem extends createSystem({}) {
   private popoverRecent!: PanelElement;
   private popoverTemplates!: PanelElement;
   private recentEmpty!: PanelElement;
+  private popoverSettings!: PanelElement;
+  private stickSwitch!: PanelElement;
+  private stickKnob!: PanelElement;
+  /** 0 off .. 1 on, the switch's drawn position. */
+  private stickProgress = 1;
   private hint!: PanelElement;
   private newNoteButton!: PanelElement;
   private recentCards: RecentCard[] = [];
@@ -149,11 +174,7 @@ export class CompactDockSystem extends createSystem({}) {
     const round = [
       ui.onClick('dock-recent', () => this.togglePopover('recent')),
       ui.onClick('dock-templates', () => this.togglePopover('templates')),
-      ui.onClick('dock-settings', () => {
-        // The toast shows where the pop-up would be; one thing at a time.
-        this.closePopover();
-        this.toasts.show(SETTINGS_TOAST);
-      }),
+      ui.onClick('dock-settings', () => this.togglePopover('settings')),
     ];
     for (const el of round) {
       glass(el, BUTTON_RADIUS_PX);
@@ -171,6 +192,8 @@ export class CompactDockSystem extends createSystem({}) {
     this.popoverRecent = ui.element('dock-popover-recent');
     this.popoverTemplates = ui.element('dock-popover-templates');
     this.recentEmpty = ui.element('dock-recent-empty');
+    this.popoverSettings = ui.element('dock-popover-settings');
+    this.bindSettings(ui);
     this.hint = ui.element('dock-hint');
     glass(this.hint, HINT_RADIUS_PX);
 
@@ -283,6 +306,46 @@ export class CompactDockSystem extends createSystem({}) {
     this.renderPopover();
   }
 
+  // -------------------------------------------------------------- settings
+
+  /** Settings: the stick mode switch (remembered) and account connections. */
+  private bindSettings(ui: PanelBinding): void {
+    const stickRow = ui.onClick('set-stick', () => this.homeMode.setPinned(!this.homeMode.pinned));
+    this.stickSwitch = ui.element('set-stick-switch');
+    this.stickKnob = ui.element('set-stick-knob');
+    const rows = [
+      stickRow,
+      ui.onClick('set-connect-drive', () => this.toasts.show(CONNECT_TOAST)),
+      ui.onClick('set-connect-microsoft', () => this.toasts.show(CONNECT_TOAST)),
+    ];
+    for (const row of rows) addPressMotion(row, this.tweens, this.cleanupFuncs, { hover: 1.02, pressed: 0.98 });
+    addStateColors(stickRow, SETTINGS_ROW_STATES, this.cleanupFuncs);
+    this.stickProgress = this.homeMode.pinned ? 1 : 0;
+    this.paintStick();
+    this.cleanupFuncs.push(this.homeMode.subscribePlacement(() => this.animateStick()));
+  }
+
+  /** Slide the knob and change the track colour when stick mode changes. */
+  private animateStick(): void {
+    const target = this.homeMode.pinned ? 1 : 0;
+    if (target === this.stickProgress) return;
+    const from = this.stickProgress;
+    this.tweens.play(
+      SWITCH_MS,
+      (t) => {
+        this.stickProgress = from + (target - from) * easeOutCubic(t);
+        this.paintStick();
+      },
+      { key: 'dock-stick-switch' },
+    );
+  }
+
+  private paintStick(): void {
+    const p = this.stickProgress;
+    this.stickKnob.setProperties({ transformTranslateX: KNOB_TRAVEL_PX * p } as Record<string, unknown>);
+    this.stickSwitch.setProperties({ backgroundColor: p > 0.5 ? THEME.clay : 'rgba(255, 250, 242, 0.22)' });
+  }
+
   /** First launch: the hint shows (unless a pop-up is open) until a note exists. */
   private renderHint(): void {
     setVisible(this.hint, this.session.summaries.length === 0 && this.popover === null);
@@ -377,7 +440,8 @@ export class CompactDockSystem extends createSystem({}) {
     setVisible(this.popoverPanel, this.popover !== null);
     setVisible(this.popoverRecent, this.popover === 'recent');
     setVisible(this.popoverTemplates, this.popover === 'templates');
-    setText(this.popoverTitle, this.popover === 'templates' ? 'Start a new note' : 'Recent notes');
+    setVisible(this.popoverSettings, this.popover === 'settings');
+    setText(this.popoverTitle, POPOVER_TITLES[this.popover ?? 'recent']);
     this.renderHint();
   }
 
