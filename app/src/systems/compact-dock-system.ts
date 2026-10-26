@@ -33,7 +33,7 @@ import {
 } from '../ui/panel-helpers.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
-import { getToasts, SETTINGS_TOAST, type ToastService } from '../ui/toasts.js';
+import { getToasts, newNoteToast, openedNoteToast, SETTINGS_TOAST, type ToastService } from '../ui/toasts.js';
 import { easeInCubic, easeOutBack, easeOutCubic, getTweens, pulse, type Tweens } from '../ui/tweens.js';
 
 const DOCK_NODE = 'compact-dock';
@@ -49,9 +49,10 @@ const GLASS_FROST_ALPHA = 0.8;
 const POPOVER_RADIUS_PX = 28;
 /**
  * Where the full window sits relative to the dock, in the dock's own frame
- * (metres): a little higher and further away. Matches the scene defaults.
+ * (metres): a little higher and further away, so the dock appears about
+ * where the eyes were on the window (its lower middle), not below it.
  */
-const WINDOW_OFFSET = new Vector3(0, 0.25, -0.2);
+const WINDOW_OFFSET = new Vector3(0, 0.1, -0.04);
 /** Transition timings (ms): the dock appears after the window has faded. */
 const HIDE_MS = 180;
 const SHOW_MS = 360;
@@ -86,6 +87,7 @@ export class CompactDockSystem extends createSystem({}) {
   private popoverTitle!: UIKit.Text;
   private popoverRecent!: PanelElement;
   private popoverTemplates!: PanelElement;
+  private recentEmpty!: PanelElement;
   private recentCards: RecentCard[] = [];
   private readonly scratch = new Vector3();
 
@@ -123,7 +125,11 @@ export class CompactDockSystem extends createSystem({}) {
       ui.onClick('dock-expand', () => this.expand()),
       ui.onClick('dock-recent', () => this.togglePopover('recent')),
       ui.onClick('dock-templates', () => this.togglePopover('templates')),
-      ui.onClick('dock-settings', () => this.toasts.show(SETTINGS_TOAST)),
+      ui.onClick('dock-settings', () => {
+        // The toast shows where the pop-up would be; one thing at a time.
+        this.closePopover();
+        this.toasts.show(SETTINGS_TOAST);
+      }),
     ];
     for (const el of round) {
       glass(el, BUTTON_RADIUS_PX);
@@ -139,6 +145,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.popoverTitle = ui.text('dock-popover-title');
     this.popoverRecent = ui.element('dock-popover-recent');
     this.popoverTemplates = ui.element('dock-popover-templates');
+    this.recentEmpty = ui.element('dock-recent-empty');
 
     for (let i = 0; i < RECENT_SLOTS; i++) {
       const thumbnail = new NoteThumbnail(PREVIEW_PX);
@@ -149,6 +156,8 @@ export class CompactDockSystem extends createSystem({}) {
         root: ui.onClick(`dock-recent-card-${i}`, () => {
           if (!card.noteId) return;
           void this.session.openNote(card.noteId);
+          const title = this.session.summaries.find((s) => s.id === card.noteId)?.title || 'Untitled note';
+          this.toasts.show(openedNoteToast(truncate(title, 24)));
           this.closePopover();
         }),
         title: ui.text(`dock-recent-title-${i}`),
@@ -196,6 +205,7 @@ export class CompactDockSystem extends createSystem({}) {
 
   private newNote(paper: PaperStyle): void {
     void this.session.createNote(noteTitleFor(), paper);
+    this.toasts.show(newNoteToast(paper));
     this.closePopover();
   }
 
@@ -288,6 +298,7 @@ export class CompactDockSystem extends createSystem({}) {
 
   private renderRecent(): void {
     const summaries = this.session.summaries;
+    setVisible(this.recentEmpty, summaries.length === 0);
     this.recentCards.forEach((card, i) => {
       const summary = summaries[i];
       card.noteId = summary?.id ?? null;

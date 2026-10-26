@@ -28,9 +28,13 @@ const WINDOW_NODE = 'home-window';
 const DOCK_NODE = 'compact-dock';
 /** Half the capsule height in UIKit pixels: its corner radius. */
 const RADIUS_PX = 40;
-/** Metres: the gap above the window's top edge, the lift above the dock, and toward the viewer. */
+/**
+ * Metres: the gap above the window's top edge; the lift above the dock's
+ * origin (its bottom edge), measured to clear the button row;
+ * and toward the viewer.
+ */
 const WINDOW_GAP_M = 0.05;
-const DOCK_LIFT_M = 0.2;
+const DOCK_LIFT_M = 0.48;
 const FORWARD_M = 0.02;
 /** Rises this far (metres) while fading in. */
 const RISE_M = 0.025;
@@ -64,7 +68,6 @@ export class ToastSystem extends createSystem({}) {
   private action!: PanelElement;
   private actionLabel!: UIKit.Text;
   private shown: Toast | null = null;
-  private holdTimer: ReturnType<typeof setTimeout> | null = null;
   /** 0 at rest in place; 1 lowered by RISE_M (the start of the rise). */
   private drop = 0;
   private readonly anchor = new Vector3();
@@ -148,7 +151,11 @@ export class ToastSystem extends createSystem({}) {
       { key: 'toast' },
     );
     if (!toast.sticky) {
-      this.holdTimer = setTimeout(() => this.toasts.dismiss(toast), HOLD_MS + SHOW_MS);
+      // On the UI animation clock (like the fades), so it pauses and scales with them.
+      this.tweens.play(HOLD_MS + SHOW_MS, () => {}, {
+        key: 'toast-hold',
+        done: () => this.toasts.dismiss(toast),
+      });
     }
   }
 
@@ -176,8 +183,7 @@ export class ToastSystem extends createSystem({}) {
   }
 
   private clearHold(): void {
-    if (this.holdTimer) clearTimeout(this.holdTimer);
-    this.holdTimer = null;
+    this.tweens.cancel('toast-hold');
   }
 
   // ------------------------------------------------------------- placement

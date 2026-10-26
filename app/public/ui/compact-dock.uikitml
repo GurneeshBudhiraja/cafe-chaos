@@ -111,6 +111,16 @@
     padding-left: 6px;
   }
 
+  .pop-empty {
+    font-family: ui;
+    font-size: 15px;
+    font-weight: 500;
+    color: #b3aba1;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-bottom: 4px;
+  }
+
   .pop-row {
     flex-direction: row;
     gap: 8px;
@@ -168,6 +178,7 @@
 <div id="dock-root" class="dock">
   <div id="dock-popover" class="popover" style="display: none">
     <div id="dock-popover-title" class="popover-title">Recent notes</div>
+    <div id="dock-recent-empty" class="pop-empty" style="display: none">No notes yet. Tap New note to start one.</div>
     <div id="dock-popover-recent" class="pop-row">
         <div id="dock-recent-card-0" class="pop-card">
           <div class="paper-frame"><img id="dock-recent-thumb-0" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>

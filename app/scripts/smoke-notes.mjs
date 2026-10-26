@@ -202,7 +202,7 @@ try {
   // (expanding opens the window wherever the dock is).
   await page.evaluate(() => {
     const dock = window.__metaNotes.world.getSceneObject('compact-dock');
-    dock.position.set(0, 1.25, -1.0);
+    dock.position.set(0, 1.32, -1.16);
     dock.quaternion.identity();
   });
   await page.waitForTimeout(200);

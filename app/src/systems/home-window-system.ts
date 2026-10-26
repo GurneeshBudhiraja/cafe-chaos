@@ -41,7 +41,14 @@ import {
 } from '../ui/panel-helpers.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
-import { getToasts, SETTINGS_TOAST, type Toast, type ToastService } from '../ui/toasts.js';
+import {
+  getToasts,
+  newNoteToast,
+  openedNoteToast,
+  SETTINGS_TOAST,
+  type Toast,
+  type ToastService,
+} from '../ui/toasts.js';
 import { easeInCubic, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 
 const HOME_WINDOW_NODE = 'home-window';
@@ -311,22 +318,14 @@ export class HomeWindowSystem extends createSystem({}) {
   private newNote(paper: PaperStyle): void {
     void this.session.createNote(noteTitleFor(), paper);
     this.setPickerOpen(false);
-    this.toasts.show({
-      kind: 'done',
-      title: paper === 'blank' ? 'New blank page' : `New ${paper} page`,
-      body: 'Saved to Recent.',
-    });
+    this.toasts.show(newNoteToast(paper));
   }
 
   private openCard(card: NoteCard): void {
     if (!card.noteId) return;
     void this.session.openNote(card.noteId);
     const title = this.session.summaries.find((s) => s.id === card.noteId)?.title || 'Untitled note';
-    this.toasts.show({
-      kind: 'info',
-      title: `Opened \u201c${truncate(title, 24)}\u201d`,
-      body: 'Writing on notes is coming soon.',
-    });
+    this.toasts.show(openedNoteToast(truncate(title, 24)));
   }
 
   /**
