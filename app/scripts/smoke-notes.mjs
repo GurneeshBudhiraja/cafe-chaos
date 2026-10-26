@@ -200,6 +200,8 @@ try {
     const dock = window.__metaNotes.world.getSceneObject('compact-dock');
     dock.position.set(0, 1.32, -1.16);
     dock.quaternion.identity();
+    // Stick mode is on: re-anchor following to the new place.
+    window.__metaNotes.world.globals['metaNotes.homeMode'].notifyMoved();
   });
   await page.waitForTimeout(200);
 
@@ -217,7 +219,24 @@ try {
   // Connect (not built yet) answers in place; the recording shows its label.
   await clickObject(page, 'set-connect-drive');
   checks.check('settings: stick mode switch is remembered', savedOff === false, `saved off=${savedOff}`);
-  await clickUntil(page, 'dock-settings', () => !window.__shown('dock-popover'));
+  // The close button and a pinch outside the panel both close Settings
+  // (the buttons' fade itself is checked in the headset recording).
+  await clickUntil(page, 'dock-popover-close', () => !window.__shown('dock-popover'));
+  await clickUntil(page, 'dock-settings', () => window.__shown('dock-popover-settings'));
+  await page.waitForTimeout(500);
+  let closedOutside = false;
+  for (let attempt = 0; attempt < 3 && !closedOutside; attempt++) {
+    // Hover first (the pointer must be over the catcher), then pinch.
+    await page.mouse.move(60, 60);
+    await page.waitForTimeout(150);
+    await page.mouse.down();
+    await page.waitForTimeout(100);
+    await page.mouse.up();
+    closedOutside = await page
+      .waitForFunction(() => !window.__shown('dock-popover'), undefined, { timeout: 2000 })
+      .then(() => true, () => false);
+  }
+  checks.check('settings closes with its close button and a pinch outside', closedOutside, `outside=${closedOutside}`);
 
   // With more notes than fit, the Recent pop-up scrolls. On desktop a mouse
   // scrolls UIKit with the wheel; XR rays and hands scroll by dragging.

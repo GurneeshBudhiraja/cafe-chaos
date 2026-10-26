@@ -3,8 +3,11 @@
   buttons with nothing between them but passthrough: Settings, Templates,
   Recent in one line, and New note, the main action, at the right end
   (where the dominant hand finds it; mirrored for left-handed use later).
-  Settings opens the same kind of pop-up: preferences (stick mode, on by
-  default) and account connections (Google Drive, Microsoft). Recent and Templates open a small glass pop-up
+  Settings opens a panel with preferences (stick mode, on by default) and
+  account connections (Google Drive, Microsoft). While it is open the
+  buttons fade away and the panel takes their place, centred where the eye
+  already is; its close button, or a pinch anywhere outside it (an
+  invisible catcher the dock system places behind it), brings them back. Recent and Templates open a small glass pop-up
   just above the buttons (Recent scrolls sideways through up to eight
   notes); picking an item closes it. The thin bar underneath is the grab
   handle for moving the dock.
@@ -234,6 +237,24 @@
     padding-top: 4px;
   }
 
+  .pop-head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 36px;
+  }
+
+  .close-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 250, 242, 0.1);
+    color: #f7f2ea;
+    cursor: pointer;
+  }
+
   .pop-row {
     flex-direction: row;
     gap: 8px;
@@ -291,7 +312,12 @@
 </style>
 <div id="dock-root" class="dock">
   <div id="dock-popover" class="popover" style="display: none">
-    <div id="dock-popover-title" class="popover-title">Recent notes</div>
+    <div class="pop-head">
+      <div id="dock-popover-title" class="popover-title">Recent notes</div>
+      <div id="dock-popover-close" class="close-button" style="display: none">
+        <X width="18" height="18"></X>
+      </div>
+    </div>
     <div id="dock-recent-empty" class="pop-empty" style="display: none">No notes yet. Tap New note to start one.</div>
     <div id="dock-popover-recent" class="pop-strip">
         <div id="dock-recent-card-0" class="pop-card">
@@ -389,7 +415,7 @@
   <div id="dock-hint" class="hint" style="display: none">
     <div class="hint-text">Pinch New note to start your first page</div>
   </div>
-  <div class="dock-row">
+  <div id="dock-row" class="dock-row">
     <div id="dock-settings" class="dock-button">
       <Settings width="22" height="22"></Settings>
     </div>

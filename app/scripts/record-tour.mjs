@@ -8,7 +8,8 @@
  * appears with its shine; open Recent, point along the notes and open one
  * (a toast: writing is next); open Templates and start a grid page (a
  * toast confirms it); open Settings, switch stick mode off and on, try
- * Connect (it answers "Coming soon" in place) and close it; drag the dock by its
+ * Connect (it answers "Coming soon" in place) and close it with a pinch
+ * outside the panel (the buttons fade away while it is open); drag the dock by its
  * grab bar; then look around: stick mode is on, so the dock comes along.
  *
  * Usage: start the dev server (`npm run dev`), then
@@ -135,8 +136,11 @@ await rec.point('set-connect-microsoft');
 await pause(700);
 await rec.tap('set-connect-drive');
 await rest();
-await pause(2600);
-await rec.tap('dock-settings');
+await pause(2400);
+// Close it with a pinch anywhere outside the panel: the buttons come back.
+const outside = await panelAt('compact-dock', 0.25);
+outside.x += 0.9;
+await rec.rayDrag(outside, outside, 150);
 await rest();
 await lookAtPanel('compact-dock', 700, 0.1);
 await pause(1000);

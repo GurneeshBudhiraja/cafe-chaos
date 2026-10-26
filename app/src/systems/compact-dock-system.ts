@@ -6,10 +6,12 @@
  * passthrough. Recent and Templates open a small pop-up just above the
  * row; Recent scrolls sideways through up to eight notes. Picking an item
  * closes it. A grab bar under the row moves the dock (pinch and drag); on
- * release it turns to face the viewer. Settings opens the same kind of
- * pop-up: stick mode (the dock follows the head; on by default and
- * remembered) and account connections (not built yet: Connect says so in
- * place). The dock fades in with a small pop and a shine across
+ * release it turns to face the viewer. Settings opens a panel with stick
+ * mode (the dock follows the head; on by default and remembered) and
+ * account connections (not built yet: Connect says so in place). While it
+ * is open the buttons fade away and the panel takes their place, centred
+ * where the eye already is; its close button or a pinch anywhere outside it
+ * brings the buttons back. The dock fades in with a small pop and a shine across
  * its glass, so the eye finds it. On a first launch a one-line hint above
  * the buttons points at New note, which pulses gently, until the first
  * note exists.
@@ -18,7 +20,20 @@
  * NoteSession commands.
  */
 
-import { createSystem, Euler, Quaternion, Vector3, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
+import {
+  createSystem,
+  Euler,
+  Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  Quaternion,
+  RayInteractable,
+  Vector3,
+  type Entity,
+  type Object3D,
+  type UIKit,
+  type UIKitMLAsset,
+} from '@iwsdk/core';
 import { PAPER_STYLES, type PaperStyle } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
@@ -86,6 +101,22 @@ const POPOVER_TITLES: Record<Exclude<Popover, null>, string> = {
   templates: 'Start a new note',
   settings: 'Settings',
 };
+const FOCUS_IN_MS = 320;
+const FOCUS_OUT_MS = 220;
+/** Height of the button row's centre above the dock's bottom edge (UIKit pixels). */
+const ROW_CENTRE_PX = 70;
+/**
+ * The outside-pinch catcher: an invisible sheet (metres) a little behind the
+ * dock. A scene object rather than a UI element, because UIKit only
+ * hit-tests children within their parent's bounds.
+ */
+const CATCHER_SIZE_M: [number, number] = [6, 4];
+const CATCHER_BEHIND_M = 0.04;
+const CLOSE_STATES = {
+  rest: 'rgba(255, 250, 242, 0.1)',
+  hover: 'rgba(255, 250, 242, 0.22)',
+  pressed: 'rgba(255, 250, 242, 0.3)',
+};
 /** Connect buttons: a light fill that brightens when pointed at. */
 const CONNECT_STATES = {
   rest: 'rgba(255, 250, 242, 0.12)',
@@ -137,6 +168,20 @@ export class CompactDockSystem extends createSystem({}) {
   private popoverTemplates!: PanelElement;
   private recentEmpty!: PanelElement;
   private popoverSettings!: PanelElement;
+  private row!: PanelElement;
+  private grabArea!: PanelElement;
+  private closeButton!: PanelElement;
+  /** Invisible sheet behind the Settings panel: a pinch on it closes Settings. */
+  private catcher!: Mesh;
+  private catcherEntity: Entity | null = null;
+  /** Requested catcher state, applied in update (outside pointer dispatch). */
+  private catcherWanted: boolean | null = null;
+  /** Glass behind the round buttons (faded while Settings has the stage). */
+  private readonly rowSlabs: LiquidGlass[] = [];
+  /** 0: the dock as usual; 1: Settings has the stage. */
+  private focus = 0;
+  /** The dock's own fade (show/hide), which the focus fade multiplies. */
+  private dockOpacity = 1;
   private stickSwitch!: PanelElement;
   private stickKnob!: PanelElement;
   /** 0 off .. 1 on, the switch's drawn position. */
@@ -185,10 +230,10 @@ export class CompactDockSystem extends createSystem({}) {
     const round = [
       ui.onClick('dock-recent', () => this.togglePopover('recent')),
       ui.onClick('dock-templates', () => this.togglePopover('templates')),
-      ui.onClick('dock-settings', () => this.togglePopover('settings')),
+      ui.onClick('dock-settings', () => this.setSettingsOpen(true)),
     ];
     for (const el of round) {
-      glass(el, BUTTON_RADIUS_PX);
+      this.rowSlabs.push(glass(el, BUTTON_RADIUS_PX));
       addStateColors(el, NEUTRAL_STATES, this.cleanupFuncs);
       addPressMotion(el, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
     }
@@ -198,6 +243,12 @@ export class CompactDockSystem extends createSystem({}) {
     addPressMotion(newNote, this.tweens, this.cleanupFuncs);
 
     this.popoverPanel = ui.element('dock-popover');
+    this.row = ui.element('dock-row');
+    this.grabArea = ui.element('dock-grab');
+    this.closeButton = ui.onClick('dock-popover-close', () => this.setSettingsOpen(false));
+    addStateColors(this.closeButton, CLOSE_STATES, this.cleanupFuncs);
+    addPressMotion(this.closeButton, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
+    this.createDismissCatcher();
     glass(this.popoverPanel, POPOVER_RADIUS_PX);
     this.popoverTitle = ui.text('dock-popover-title');
     this.popoverRecent = ui.element('dock-popover-recent');
@@ -262,6 +313,12 @@ export class CompactDockSystem extends createSystem({}) {
   }
 
   update(): void {
+    if (this.catcherWanted !== null) {
+      this.setCatcherActive(this.catcherWanted);
+      this.catcherWanted = null;
+    }
+    // Keep the catcher behind the dock (stick mode can move it).
+    if (this.catcher?.visible) this.placeCatcher();
     // Entering XR places the home in front of the viewer once the head pose
     // has settled, and so does a headset recenter.
     const presenting = this.world.renderer.xr.isPresenting;
@@ -383,8 +440,111 @@ export class CompactDockSystem extends createSystem({}) {
   }
 
   private closePopover(): void {
+    if (this.popover === 'settings') {
+      this.setSettingsOpen(false);
+      return;
+    }
     this.popover = null;
     this.renderPopover();
+  }
+
+  /**
+   * Settings takes the stage: the buttons fade away and the panel glides
+   * down into their place, centred where the eye already is. Closing (its
+   * close button, or a pinch outside it) reverses that.
+   */
+  private setSettingsOpen(open: boolean): void {
+    if (open) {
+      this.popover = 'settings';
+      this.toasts.dismiss();
+      this.renderPopover();
+    } else if (this.popover !== 'settings') {
+      return;
+    }
+    // Applied next frame: changing interactables while a pointer event is
+    // being dispatched would break the dispatcher's listener loop.
+    this.catcherWanted = open;
+    const from = this.focus;
+    const to = open ? 1 : 0;
+    this.tweens.play(
+      open ? FOCUS_IN_MS : FOCUS_OUT_MS,
+      (t) => {
+        this.focus = from + (to - from) * (open ? easeOutCubic(t) : easeInCubic(t));
+        this.paintFocus();
+      },
+      {
+        key: 'dock-focus',
+        done: () => {
+          if (open) return;
+          this.popover = null;
+          this.renderPopover();
+          this.paintFocus();
+        },
+      },
+    );
+  }
+
+  private createDismissCatcher(): void {
+    this.catcher = new Mesh(
+      new PlaneGeometry(...CATCHER_SIZE_M),
+      new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
+    );
+    this.catcher.name = 'SettingsDismissCatcher';
+    this.catcher.visible = false;
+    // A pinch that starts and ends on the catcher closes Settings (XR hand
+    // rays deliver down and up here, but no 'click' for a plain mesh).
+    let armed = false;
+    const handlers: Array<[string, () => void]> = [
+      ['pointerdown', () => (armed = true)],
+      ['pointerleave', () => (armed = false)],
+      [
+        'pointerup',
+        () => {
+          if (armed) this.setSettingsOpen(false);
+          armed = false;
+        },
+      ],
+    ];
+    const target = this.catcher as unknown as EventTarget;
+    for (const [type, handler] of handlers) target.addEventListener(type, handler);
+    this.cleanupFuncs.push(() => {
+      for (const [type, handler] of handlers) target.removeEventListener(type, handler);
+      this.catcherEntity?.dispose();
+    });
+  }
+
+  private placeCatcher(): void {
+    this.scratch.set(0, 0, -CATCHER_BEHIND_M).applyQuaternion(this.dock.quaternion);
+    this.catcher.position.copy(this.dock.position).add(this.scratch);
+    this.catcher.quaternion.copy(this.dock.quaternion);
+  }
+
+  /** Put the catcher just behind the dock and let rays hit it, or retire it. */
+  private setCatcherActive(active: boolean): void {
+    if (active) {
+      this.placeCatcher();
+      this.catcher.visible = true;
+      this.catcherEntity ??= this.world.createTransformEntity(this.catcher);
+      if (!this.catcherEntity.hasComponent(RayInteractable)) this.catcherEntity.addComponent(RayInteractable);
+    } else if (this.catcherEntity) {
+      this.catcher.visible = false;
+      if (this.catcherEntity.hasComponent(RayInteractable)) this.catcherEntity.removeComponent(RayInteractable);
+    }
+  }
+
+  /** The buttons' fade and the panel's glide for the current focus. */
+  private paintFocus(): void {
+    const f = this.focus;
+    const buttons = this.dockOpacity * (1 - f);
+    const hidden = f > 0.01;
+    for (const el of [this.row, this.grabArea]) {
+      el.setProperties({ opacity: buttons, pointerEvents: hidden ? 'none' : 'auto' } as Record<string, unknown>);
+    }
+    for (const slab of this.rowSlabs) slab.setOpacity(buttons);
+    // Glide the panel down so its centre lands on the row's centre.
+    const height = (this.popoverPanel as unknown as { size: { peek(): [number, number] | undefined } }).size.peek()?.[1] ?? 0;
+    const glide = Math.max(0, height / 2 - ROW_CENTRE_PX) * f;
+    this.popoverPanel.setProperties({ transformTranslateY: glide } as Record<string, unknown>);
   }
 
   // ------------------------------------------------------------- rendering
@@ -446,12 +606,14 @@ export class CompactDockSystem extends createSystem({}) {
   }
 
   private setFade(opacity: number, scale: number): void {
+    this.dockOpacity = opacity;
     const fade = { opacity } as Record<string, unknown>;
     this.root.setProperties(fade);
     // UIKit images do not inherit opacity; fade them directly.
     for (const image of this.images) image.setProperties(fade);
     for (const slab of this.glassSlabs) slab.setOpacity(opacity);
     this.dock.scale.setScalar(this.baseScale * scale);
+    if (this.focus > 0) this.paintFocus();
   }
 
   private renderPopover(): void {
@@ -459,6 +621,7 @@ export class CompactDockSystem extends createSystem({}) {
     setVisible(this.popoverRecent, this.popover === 'recent');
     setVisible(this.popoverTemplates, this.popover === 'templates');
     setVisible(this.popoverSettings, this.popover === 'settings');
+    setVisible(this.closeButton, this.popover === 'settings');
     setText(this.popoverTitle, POPOVER_TITLES[this.popover ?? 'recent']);
     this.renderHint();
   }
