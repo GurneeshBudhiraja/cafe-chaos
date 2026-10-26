@@ -20,10 +20,15 @@ export class HomeModeState {
    * for a future "all notes" view; nothing switches to it yet.
    */
   private current: HomeMode = 'compact';
-  private pinnedValue = false;
+  /**
+   * Stick mode, on by default: the small floating home comes along wherever
+   * you look. Its switch belongs in Settings (not built yet).
+   */
+  private pinnedValue = true;
   private draggingValue = false;
   private readonly listeners = new Set<(mode: HomeMode) => void>();
   private readonly placementListeners = new Set<() => void>();
+  private readonly recenterListeners = new Set<() => void>();
 
   get mode(): HomeMode {
     return this.current;
@@ -71,6 +76,24 @@ export class HomeModeState {
   subscribePlacement(listener: () => void): () => void {
     this.placementListeners.add(listener);
     return () => this.placementListeners.delete(listener);
+  }
+
+  /**
+   * Ask the home to come back in front of the viewer (a headset recenter,
+   * or the first moments of a session once the head pose is known).
+   */
+  requestRecenter(): void {
+    for (const listener of this.recenterListeners) listener();
+  }
+
+  subscribeRecenter(listener: () => void): () => void {
+    this.recenterListeners.add(listener);
+    return () => this.recenterListeners.delete(listener);
+  }
+
+  /** The home was moved by code (placed or recentered): followers re-anchor. */
+  notifyMoved(): void {
+    this.notifyPlacement();
   }
 
   private notifyPlacement(): void {

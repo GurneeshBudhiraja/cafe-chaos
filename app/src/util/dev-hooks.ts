@@ -16,6 +16,7 @@ import {
 } from '@iwsdk/core';
 import type { NoteSession } from '../notes/note-session.js';
 import type { SimulatedFailureStore } from '../notes/note-store.js';
+import { getHomeMode } from '../ui/home-mode.js';
 import { getTweens } from '../ui/tweens.js';
 
 export interface DevHooks {
@@ -33,6 +34,8 @@ interface DemoHooks {
   showPanorama(url: string, yawDeg?: number): Promise<void>;
   /** Recording only: scale UI animation time (see Tweens.timeScale). */
   setAnimationSpeed(scale: number): void;
+  /** Recording only: bring the home back in front of the head (a recenter). */
+  recenterHome(): void;
 }
 
 export function installDevHooks(hooks: DevHooks): void {
@@ -52,6 +55,9 @@ export function installDevHooks(hooks: DevHooks): void {
     },
     setAnimationSpeed(scale) {
       getTweens(hooks.world).timeScale = scale;
+    },
+    recenterHome() {
+      getHomeMode(hooks.world).requestRecenter();
     },
   };
   (window as unknown as { __metaNotes: DevHooks & { demo: DemoHooks } }).__metaNotes = {

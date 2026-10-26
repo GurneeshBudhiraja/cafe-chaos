@@ -44,6 +44,8 @@ export class FollowModeSystem extends createSystem({}) {
       if (entity && object) this.targets.push({ entity, object });
     }
     this.cleanupFuncs.push(this.homeMode.subscribePlacement(() => this.apply()));
+    // Stick mode can be on from the start.
+    this.apply();
   }
 
   private apply(): void {

@@ -410,8 +410,8 @@ export class HomeWindowSystem extends createSystem({}) {
     if (failed && !this.failureToast) {
       this.failureToast = {
         kind: 'error',
-        title: "Couldn't save your note",
-        body: 'Your changes are kept on this device.',
+        title: "Couldn't save",
+        body: 'Your changes are kept',
         sticky: true,
         action: { label: 'Try again', run: () => void this.session.flush() },
       };

@@ -1,11 +1,13 @@
 <!--
-  The dock: Meta Notes' home, and the only screen at launch. Four floating
-  glass buttons with nothing between them but passthrough: Recent | New
-  note | Templates, Settings. Recent and Templates open a small glass pop-up
+  The dock: Meta Notes' home, and the only screen at launch. Floating glass
+  buttons with nothing between them but passthrough: Settings, Templates,
+  Recent in one line, and New note, the main action, at the right end
+  (where the dominant hand finds it; mirrored for left-handed use later).
+  Stick mode (the dock follows the head) is on by default; its switch moves
+  into Settings when they exist. Recent and Templates open a small glass pop-up
   just above the buttons (Recent scrolls sideways through up to eight
   notes); picking an item closes it. The thin bar underneath is the grab
-  handle for moving the dock; the pin beside it turns stick mode on and off
-  (the dock follows the head).
+  handle for moving the dock.
 
   First launch (no notes): #dock-hint, one short line above the buttons,
   points at New note; it goes once the first note exists.
@@ -69,16 +71,6 @@
     font-size: 17px;
     font-weight: 600;
     color: #ffffff;
-  }
-
-  .pin-button {
-    width: 40px;
-    height: 40px;
-    border-radius: 20px;
-    align-items: center;
-    justify-content: center;
-    color: #f7f2ea;
-    cursor: pointer;
   }
 
   .grab {
@@ -273,6 +265,12 @@
     <div class="hint-text">Pinch New note to start your first page</div>
   </div>
   <div class="dock-row">
+    <div id="dock-settings" class="dock-button">
+      <Settings width="22" height="22"></Settings>
+    </div>
+    <div id="dock-templates" class="dock-button">
+      <LayoutGrid width="22" height="22"></LayoutGrid>
+    </div>
     <div id="dock-recent" class="dock-button">
       <History width="22" height="22"></History>
     </div>
@@ -280,20 +278,8 @@
       <Plus width="20" height="20"></Plus>
       <div class="dock-new-label">New note</div>
     </div>
-    <div id="dock-templates" class="dock-button">
-      <LayoutGrid width="22" height="22"></LayoutGrid>
-    </div>
-    <div id="dock-settings" class="dock-button">
-      <Settings width="22" height="22"></Settings>
-    </div>
   </div>
-  <div class="dock-row" style="gap: 10px">
-    <div id="dock-pin" class="pin-button">
-      <Pin width="18" height="18"></Pin>
-    </div>
-    <div id="dock-grab" class="grab">
-      <div id="dock-grab-bar" class="grab-bar"></div>
-    </div>
-    <div style="width: 40px; height: 40px"></div>
+  <div id="dock-grab" class="grab">
+    <div id="dock-grab-bar" class="grab-bar"></div>
   </div>
 </div>

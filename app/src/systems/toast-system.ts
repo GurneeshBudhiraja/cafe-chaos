@@ -1,13 +1,17 @@
 /**
- * ToastSystem: draws the current toast (src/ui/toasts.ts) on a glass
- * capsule just above whichever home surface is showing: the window's top
- * edge, or above the dock. It rises into place while fading in, holds, then
- * fades away (sticky toasts stay). While shown it keeps its place relative
- * to that surface, so it travels with a dragged or pinned window.
+ * ToastSystem: draws the current toast (src/ui/toasts.ts) as one slim glass
+ * line at the top centre of the view, apart from the app.
+ *
+ * Where: about a metre out along the gaze, a little above its centre: in
+ * view, but never over what you are looking at, and not at the blurry edge
+ * of the lenses (a top-right corner is easy to miss in a headset). Quest's
+ * own system messages appear in this region, so the eye already looks there.
+ * It drifts lazily after the head, so a turn brings it along without it
+ * swimming with every small movement. It slides down into place while fading
+ * in, holds, then fades away (sticky toasts stay until dismissed).
  */
 
-import { createSystem, Vector3, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
-import { getHomeMode, type HomeModeState, WINDOW_GLASS_NAME } from '../ui/home-mode.js';
+import { createSystem, Quaternion, Vector3, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
 import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
 import {
   addStateColors,
@@ -21,44 +25,36 @@ import { addPressMotion } from '../ui/press-motion.js';
 import { THEME } from '../ui/theme.js';
 import { playUiSound } from '../ui/ui-sounds.js';
 import { getToasts, type Toast, type ToastKind, type ToastService } from '../ui/toasts.js';
-import { easeInCubic, easeOutBack, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
+import { easeInCubic, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 
 const TOAST_NODE = 'toast';
-const WINDOW_NODE = 'home-window';
-const DOCK_NODE = 'compact-dock';
-/** Half the capsule height in UIKit pixels: its corner radius. */
-const RADIUS_PX = 40;
-/**
- * Metres: the gap above the window's top edge; the lift above the dock's
- * origin (its bottom edge), measured to clear the button row;
- * and toward the viewer.
- */
-const WINDOW_GAP_M = 0.09;
-const DOCK_LIFT_M = 0.48;
-const FORWARD_M = 0.02;
-/** Rises this far (metres) while fading in. */
-const RISE_M = 0.025;
+/** Half the line's height in UIKit pixels: its corner radius (.toast). */
+const RADIUS_PX = 24;
+/** Metres out along the gaze, and degrees above its centre. */
+const DISTANCE_M = 1.0;
+const ABOVE_GAZE_DEG = 20;
+/** Slides down this far (metres) while fading in. */
+const DROP_M = 0.03;
+/** How quickly it catches up with the head (per second, on the UI clock). */
+const FOLLOW_RATE = 4;
 const SHOW_MS = 360;
 const HIDE_MS = 220;
 const HOLD_MS = 3200;
 
-const BADGE_COLORS: Record<ToastKind, { background: string; color: string }> = {
-  info: { background: 'rgba(212, 112, 79, 0.18)', color: THEME.clay },
-  done: { background: 'rgba(124, 196, 154, 0.16)', color: '#8fd1a9' },
-  error: { background: 'rgba(240, 133, 122, 0.16)', color: '#f0897d' },
+const ICON_COLORS: Record<ToastKind, string> = {
+  info: THEME.clay,
+  done: '#8fd1a9',
+  error: '#f0897d',
 };
 const ACTION_STATES: StateColors = { rest: THEME.ink, hover: '#ffffff', pressed: '#e9e2d8' };
+const UP = new Vector3(0, 1, 0);
+const FORWARD = new Vector3(0, 0, -1);
 
 export class ToastSystem extends createSystem({}) {
   private toasts!: ToastService;
-  private homeMode!: HomeModeState;
   private tweens!: Tweens;
   private panel!: Object3D;
   private baseScale = 1;
-  private windowPanel: Object3D | null = null;
-  /** The window's glass mesh (its scale is the window's size), found lazily. */
-  private windowGlass: Object3D | null = null;
-  private dockPanel: Object3D | null = null;
   private root!: PanelElement;
   private glass!: LiquidGlass;
   private icons!: Record<ToastKind, PanelElement>;
@@ -68,10 +64,16 @@ export class ToastSystem extends createSystem({}) {
   private action!: PanelElement;
   private actionLabel!: UIKit.Text;
   private shown: Toast | null = null;
-  /** 0 at rest in place; 1 lowered by RISE_M (the start of the rise). */
-  private drop = 0;
-  private readonly anchor = new Vector3();
-  private readonly offset = new Vector3();
+  /** True while visible or fading out: the toast keeps following the head. */
+  private active = false;
+  /** 1 at the start of the slide-in (raised by DROP_M), 0 in place. */
+  private lift = 0;
+  /** Snap to the head on the next placement instead of easing there. */
+  private snap = true;
+  private readonly headPosition = new Vector3();
+  private readonly headQuaternion = new Quaternion();
+  private readonly target = new Vector3();
+  private readonly up = new Vector3();
 
   init(): void {
     const panel = this.world.getSceneObject<UIKitMLAsset>(TOAST_NODE);
@@ -79,17 +81,14 @@ export class ToastSystem extends createSystem({}) {
     this.panel = panel;
     this.baseScale = panel.scale.x;
     this.toasts = getToasts(this.world);
-    this.homeMode = getHomeMode(this.world);
     this.tweens = getTweens(this.world);
-    this.windowPanel = this.world.getSceneObject(WINDOW_NODE) ?? null;
-    this.dockPanel = this.world.getSceneObject(DOCK_NODE) ?? null;
 
     const ui = new PanelBinding(panel, this.cleanupFuncs);
     this.root = ui.element('toast-root');
     this.glass = attachLiquidGlass(this.root, this.cleanupFuncs, {
       radiusPx: RADIUS_PX,
-      bevelPx: 12,
-      frostAlpha: 0.86,
+      bevelPx: 8,
+      frostAlpha: 0.88,
       host: panel,
     });
     this.badge = ui.element('toast-badge');
@@ -112,12 +111,12 @@ export class ToastSystem extends createSystem({}) {
     setVisible(this.root, false);
     this.cleanupFuncs.push(
       this.toasts.subscribe((toast) => (toast ? this.present(toast) : this.hide())),
-      () => this.clearHold(),
+      () => this.tweens.cancel('toast-hold'),
     );
   }
 
-  update(): void {
-    if (this.shown || this.drop < 1) this.place();
+  update(delta: number): void {
+    if (this.active) this.place(delta);
   }
 
   // ------------------------------------------------------------- rendering
@@ -125,33 +124,35 @@ export class ToastSystem extends createSystem({}) {
   private present(toast: Toast): void {
     const replacing = this.shown !== null;
     this.shown = toast;
-    this.clearHold();
+    this.active = true;
+    this.tweens.cancel('toast-hold');
     for (const kind of Object.keys(this.icons) as ToastKind[]) {
       setVisible(this.icons[kind], kind === toast.kind);
     }
-    const colors = BADGE_COLORS[toast.kind];
-    this.badge.setProperties({ backgroundColor: colors.background, color: colors.color });
+    this.badge.setProperties({ color: ICON_COLORS[toast.kind] });
     setText(this.title, toast.title);
     setText(this.body, toast.body ?? '');
     setVisible(this.body as unknown as PanelElement, Boolean(toast.body));
     setVisible(this.action, Boolean(toast.action));
     if (toast.action) setText(this.actionLabel, toast.action.label);
     setVisible(this.root, true);
-    if (!replacing) playUiSound('toast');
+    if (!replacing) {
+      this.snap = true;
+      playUiSound('toast');
+    }
 
-    // Rise and fade in (a replacement only pops, it is already in place).
-    const fromDrop = replacing ? 0.4 : 1;
+    // Slide down and fade in (a replacement only refreshes in place).
     this.tweens.play(
       SHOW_MS,
       (t) => {
-        this.drop = fromDrop * (1 - easeOutCubic(t));
-        const scale = 0.94 + 0.06 * easeOutBack(t);
-        this.setFade(replacing ? 1 : easeOutCubic(t), scale);
+        const e = easeOutCubic(t);
+        this.lift = replacing ? 0 : 1 - e;
+        this.setFade(replacing ? 1 : e);
       },
       { key: 'toast' },
     );
     if (!toast.sticky) {
-      // On the UI animation clock (like the fades), so it pauses and scales with them.
+      // On the UI animation clock (like the fades), so it scales with them.
       this.tweens.play(HOLD_MS + SHOW_MS, () => {}, {
         key: 'toast-hold',
         done: () => this.toasts.dismiss(toast),
@@ -160,51 +161,49 @@ export class ToastSystem extends createSystem({}) {
   }
 
   private hide(): void {
-    this.clearHold();
+    this.tweens.cancel('toast-hold');
     if (!this.shown) return;
     this.shown = null;
-    this.tweens.play(
-      HIDE_MS,
-      (t) => this.setFade(1 - easeInCubic(t), 1 - 0.04 * easeInCubic(t)),
-      {
-        key: 'toast',
-        done: () => {
-          setVisible(this.root, false);
-          this.drop = 1;
-        },
+    this.tweens.play(HIDE_MS, (t) => this.setFade(1 - easeInCubic(t)), {
+      key: 'toast',
+      done: () => {
+        setVisible(this.root, false);
+        this.active = false;
       },
-    );
+    });
   }
 
-  private setFade(opacity: number, scale: number): void {
+  private setFade(opacity: number): void {
     this.root.setProperties({ opacity } as Record<string, unknown>);
     this.glass.setOpacity(opacity);
-    this.panel.scale.setScalar(this.baseScale * scale);
-  }
-
-  private clearHold(): void {
-    this.tweens.cancel('toast-hold');
+    this.panel.scale.setScalar(this.baseScale * (0.96 + 0.04 * opacity));
   }
 
   // ------------------------------------------------------------- placement
 
-  /** Above the window's top edge, or above the dock, a little nearer. */
-  private place(): void {
-    const compact = this.homeMode.mode === 'compact';
-    const surface = compact ? this.dockPanel : this.windowPanel;
-    if (!surface) return;
-    this.panel.quaternion.copy(surface.quaternion);
-    this.anchor.copy(surface.position);
-    let up = DOCK_LIFT_M;
-    this.windowGlass ??= this.windowPanel?.getObjectByName(WINDOW_GLASS_NAME) ?? null;
-    if (!compact && this.windowGlass) {
-      // The glass plane's world scale is the window's size in metres (it
-      // only yaws, so the matrix's Y column length is its height).
-      this.windowGlass.getWorldPosition(this.anchor);
-      up = this.windowGlass.matrixWorld.elements[5] / 2 + WINDOW_GAP_M;
+  /** Ease toward the top centre of the view, facing the eyes. */
+  private place(delta: number): void {
+    // The camera is the viewer's eyes in XR and on desktop alike.
+    const head = this.world.camera;
+    head.getWorldPosition(this.headPosition);
+    head.getWorldQuaternion(this.headQuaternion);
+    this.up.copy(UP).applyQuaternion(this.headQuaternion);
+    const rise = DISTANCE_M * Math.tan((ABOVE_GAZE_DEG * Math.PI) / 180) + this.lift * DROP_M;
+    this.target
+      .copy(FORWARD)
+      .applyQuaternion(this.headQuaternion)
+      .multiplyScalar(DISTANCE_M)
+      .add(this.headPosition)
+      .addScaledVector(this.up, rise);
+    if (this.snap) {
+      this.panel.position.copy(this.target);
+      this.panel.quaternion.copy(this.headQuaternion);
+      this.snap = false;
+      return;
     }
-    up -= this.drop * RISE_M;
-    this.offset.set(0, up, FORWARD_M).applyQuaternion(surface.quaternion);
-    this.panel.position.copy(this.anchor).add(this.offset);
+    const rate = FOLLOW_RATE * getTweens(this.world).timeScale;
+    const k = 1 - Math.exp(-delta * rate);
+    this.panel.position.lerp(this.target, k);
+    this.panel.quaternion.slerp(this.headQuaternion, k);
   }
 }

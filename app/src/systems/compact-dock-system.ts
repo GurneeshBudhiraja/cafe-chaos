@@ -6,8 +6,8 @@
  * passthrough. Recent and Templates open a small pop-up just above the
  * row; Recent scrolls sideways through up to eight notes. Picking an item
  * closes it. A grab bar under the row moves the dock (pinch and drag); on
- * release it turns to face the viewer, and the pin beside it turns stick
- * mode on and off. The dock fades in with a small pop and a shine across
+ * release it turns to face the viewer. Stick mode (the dock follows the
+ * head) is on by default; its switch belongs in Settings. The dock fades in with a small pop and a shine across
  * its glass, so the eye finds it. On a first launch a one-line hint above
  * the buttons points at New note, which pulses gently, until the first
  * note exists.
@@ -16,17 +16,16 @@
  * NoteSession commands.
  */
 
-import { createSystem, Vector3, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
+import { createSystem, Euler, Quaternion, Vector3, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
 import { PAPER_STYLES, type PaperStyle } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
 import { noteTitleFor, truncate } from '../ui/format.js';
 import { getHomeMode, type HomeModeState } from '../ui/home-mode.js';
-import { makeDraggable } from '../ui/drag.js';
+import { faceViewer, makeDraggable } from '../ui/drag.js';
 import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
 import {
   addStateColors,
-  addToggleStateColors,
   NEUTRAL_STATES,
   PanelBinding,
   PRIMARY_STATES,
@@ -48,6 +47,16 @@ const HINT_RADIUS_PX = 22;
 /** New note's first-launch pulse: two gentle beats after the dock appears. */
 const PULSE_MS = 1400;
 const PULSE_DELAY_MS = 900;
+/**
+ * Launch placement: the button row about 85 cm out and 20 degrees below the
+ * gaze, in the bottom half of the view, centred. The dock's origin is its
+ * bottom edge, about 0.15 m below the row's centre (at the scene's scale).
+ */
+const HOME_DISTANCE_M = 0.85;
+const HOME_BELOW_GAZE_DEG = 20;
+const ROW_ABOVE_ORIGIN_M = 0.15;
+/** Frames to wait after XR starts (or a recenter) for a settled head pose. */
+const SETTLE_FRAMES = 12;
 const TITLE_MAX_CHARS = 12;
 const PREVIEW_PX = 224;
 /** Half the round buttons' size: their corner radius in UIKit pixels. */
@@ -100,6 +109,12 @@ export class CompactDockSystem extends createSystem({}) {
   private newNoteButton!: PanelElement;
   private recentCards: RecentCard[] = [];
   private readonly scratch = new Vector3();
+  private readonly headPosition = new Vector3();
+  private readonly headQuaternion = new Quaternion();
+  private readonly euler = new Euler(0, 0, 0, 'YXZ');
+  /** Counts down to placing the dock in front of the head (0 = idle). */
+  private placeInFrames = 0;
+  private wasPresenting = false;
 
   init(): void {
     this.session = getNoteSession(this.world);
@@ -199,18 +214,58 @@ export class CompactDockSystem extends createSystem({}) {
       onStart: () => this.homeMode.setDragging(true),
       onEnd: () => this.homeMode.setDragging(false),
     });
-    const pin = ui.onClick('dock-pin', () => this.homeMode.setPinned(!this.homeMode.pinned));
-    glass(pin, 20);
-    const paintPin = addToggleStateColors(pin, () => this.homeMode.pinned, this.cleanupFuncs);
-    this.cleanupFuncs.push(this.homeMode.subscribePlacement(paintPin));
 
     this.cleanupFuncs.push(
       this.session.subscribe(() => this.renderRecent()),
       this.homeMode.subscribe((mode) => this.applyMode(mode)),
     );
+    this.cleanupFuncs.push(this.homeMode.subscribeRecenter(() => (this.placeInFrames = SETTLE_FRAMES)));
     this.renderRecent();
     setVisible(this.root, false);
+    // Outside XR the dock appears where the scene put it; entering XR
+    // moves it in front of the viewer (update).
     this.applyMode(this.homeMode.mode);
+  }
+
+  update(): void {
+    // Entering XR places the home in front of the viewer once the head pose
+    // has settled, and so does a headset recenter.
+    const presenting = this.world.renderer.xr.isPresenting;
+    if (presenting && !this.wasPresenting) {
+      this.placeInFrames = SETTLE_FRAMES;
+      this.listenForRecenter();
+    }
+    this.wasPresenting = presenting;
+    if (this.placeInFrames > 0 && --this.placeInFrames === 0) {
+      this.placeInFrontOfHead();
+      // Appear (again) in the new place, with the fade and shine.
+      if (this.homeMode.mode === 'compact') this.showDock();
+    }
+  }
+
+  /** The system recenter (holding the Meta button) resets the reference space. */
+  private listenForRecenter(): void {
+    const space = this.world.renderer.xr.getReferenceSpace();
+    if (!space) return;
+    const onReset = () => this.homeMode.requestRecenter();
+    space.addEventListener('reset', onReset);
+    this.cleanupFuncs.push(() => space.removeEventListener('reset', onReset));
+  }
+
+  /** Bottom half of the view, centred, facing the eyes (yaw only from the head). */
+  private placeInFrontOfHead(): void {
+    const head = this.player.head;
+    head.getWorldPosition(this.headPosition);
+    head.getWorldQuaternion(this.headQuaternion);
+    const yaw = this.euler.setFromQuaternion(this.headQuaternion, 'YXZ').y;
+    const drop = HOME_DISTANCE_M * Math.tan((HOME_BELOW_GAZE_DEG * Math.PI) / 180);
+    this.dock.position.set(
+      this.headPosition.x - Math.sin(yaw) * HOME_DISTANCE_M,
+      this.headPosition.y - drop - ROW_ABOVE_ORIGIN_M,
+      this.headPosition.z - Math.cos(yaw) * HOME_DISTANCE_M,
+    );
+    faceViewer(this.dock, this.world);
+    this.homeMode.notifyMoved();
   }
 
   // -------------------------------------------------------------- commands

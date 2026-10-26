@@ -8,7 +8,7 @@
  * appears with its shine; open Recent, point along the notes and open one
  * (a toast: writing is next); open Templates and start a grid page (a
  * toast confirms it); settings answers with a toast; drag the dock by its
- * grab bar, look around and come back; pin it and turn (it follows), unpin.
+ * grab bar; then look around: stick mode is on, so the dock comes along.
  *
  * Usage: start the dev server (`npm run dev`), then
  *   npm run record:tour -- <equirectangular.jpg> [panorama yaw degrees]
@@ -54,6 +54,8 @@ async function prepare(r) {
   // Standing eye height, the hand held low and forward like a relaxed pinch.
   await r.moveHead(HEAD);
   await r.moveHand({ x: 0.2, y: 1.2, z: -0.22 });
+  // Recenter for the standing pose, so the home sits where it would at launch.
+  await r.page.evaluate(() => window.__metaNotes.demo.recenterHome());
   await r.turnHead(0, -6, 100);
   await r.pause(600);
 }
@@ -90,7 +92,8 @@ await pause(2000);
 // --- Recent: point along the notes, open one (a toast: writing is next).
 await rec.tap('dock-recent');
 await rest();
-await pause(1200);
+await lookAtPanel('compact-dock', 700, 0.2);
+await pause(800);
 for (const card of ['dock-recent-card-0', 'dock-recent-card-1', 'dock-recent-card-2']) {
   await rec.point(card);
   await pause(600);
@@ -113,36 +116,27 @@ await until((n) => window.__metaNotes.session.summaries.length > n, before);
 await rest();
 await pause(2600);
 
+await lookAtPanel('compact-dock', 700, 0.1);
+
 // --- Settings is not built yet: a toast says so.
 await rec.tap('dock-settings');
 await rest();
 await pause(2800);
 
-// --- Move the dock (the eyes follow it), look around, come back to it.
+// --- Move the dock by its grab bar (the eyes follow it).
 const dockBar = await rec.objectCenter('dock-grab-bar');
-await rec.rayDrag(dockBar, { x: dockBar.x + 0.3, y: dockBar.y + 0.04, z: dockBar.z + 0.05 }, 1800);
+await rec.rayDrag(dockBar, { x: dockBar.x + 0.25, y: dockBar.y + 0.04, z: dockBar.z + 0.04 }, 1800);
 await pause(600);
-let yaw = await lookAtPanel('compact-dock', 1000, 0.1);
-await pause(900);
-await turnHead(yaw + 75, 4, 2600);
+const yaw = await lookAtPanel('compact-dock', 1000, 0.1);
 await pause(1200);
-await turnHead(yaw - 65, 8, 3400);
-await pause(1000);
-yaw = await lookAtPanel('compact-dock', 2200, 0.1);
-await pause(1000);
 
-// --- Stick mode: pin, turn away (the dock follows), turn back, unpin.
-await rec.tap('dock-pin');
-await rest();
-await pause(900);
-await turnHead(yaw - 60, 0, 2800);
+// --- Stick mode is on: turn away and the dock comes along; turn back.
+await turnHead(yaw + 70, 4, 2800);
 await pause(2800);
-await turnHead(yaw + 20, -2, 2800);
+await turnHead(yaw - 50, 6, 3600);
 await pause(2800);
-await lookAtPanel('compact-dock', 800, 0.1);
-await rec.tap('dock-pin');
-await rest();
-await pause(1800);
+await turnHead(yaw, -10, 2400);
+await pause(2000);
 
 const docked = await visible('dock-root');
 const errors = await rec.finish('tour');

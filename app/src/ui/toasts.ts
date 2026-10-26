@@ -1,6 +1,7 @@
 /**
- * App messages as toasts: short glass notices that float just above the
- * home window (or the dock) and fade away on their own.
+ * App messages as toasts: one slim glass line at the top centre of the view,
+ * apart from the app, that fades away on its own. Keep them short: a title
+ * of a few words and, at most, a few more words of detail.
  *
  * Any system can raise one through the shared service; ToastSystem draws
  * it. One toast shows at a time, and a newer one replaces it, so messages
@@ -62,8 +63,7 @@ export function getToasts(world: World): ToastService {
 /** Placeholder for the settings buttons until settings exist. */
 export const SETTINGS_TOAST: Toast = {
   kind: 'info',
-  title: 'Settings are on the way',
-  body: 'Handedness, pen and paper preferences are coming soon.',
+  title: 'Settings are coming soon',
 };
 
 /** After a new note is started (the home window and the dock). */
@@ -71,7 +71,7 @@ export function newNoteToast(paper: string): Toast {
   return {
     kind: 'done',
     title: paper === 'blank' ? 'New blank page' : `New ${paper} page`,
-    body: 'Saved to Recent.',
+    body: 'Saved to Recent',
   };
 }
 
@@ -81,6 +81,6 @@ export function openedNoteToast(title: string): Toast {
     kind: 'info',
     // Plain text only: the UI font has no curly quotes (they render as boxes).
     title: `Opened ${title}`,
-    body: 'Writing on notes is coming soon.',
+    body: 'Writing comes next',
   };
 }
