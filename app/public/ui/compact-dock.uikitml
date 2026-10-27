@@ -567,9 +567,6 @@
           </div>
         </div>
         <div class="chip-row">
-          <div id="paper-any" class="chip">
-            <div id="paper-any-label" class="chip-label">Any paper</div>
-          </div>
           <div id="paper-blank" class="chip">
             <div id="paper-blank-label" class="chip-label">Blank</div>
           </div>

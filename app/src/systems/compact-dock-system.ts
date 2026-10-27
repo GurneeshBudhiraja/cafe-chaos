@@ -57,7 +57,6 @@ import {
   isFiltering,
   type NoteFilters,
   type NoteSort,
-  type PaperFilter,
   type WhenFilter,
 } from '../ui/note-filters.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
@@ -701,9 +700,11 @@ export class CompactDockSystem extends createSystem({}) {
   /** Show all's filters: when a note was edited, its paper, and the order. */
   private bindFilters(ui: PanelBinding): void {
     // Segments sit on their own track; paper chips stand alone, so they keep a faint fill.
+    // A paper chip is a toggle: pinching the chosen one again shows every paper.
     const option = <K extends keyof NoteFilters>(key: K, value: NoteFilters[K], id: string, restFill = CLEAR) => {
       const chip = ui.onClick(id, () => {
-        this.filters = { ...this.filters, [key]: value };
+        const clears = key === 'paper' && this.filters[key] === value;
+        this.filters = { ...this.filters, [key]: clears ? DEFAULT_FILTERS[key] : value };
         this.renderRecentSections();
       });
       addPressMotion(chip, this.tweens, this.cleanupFuncs, { hover: 1.05, pressed: 0.95 });
@@ -711,7 +712,7 @@ export class CompactDockSystem extends createSystem({}) {
     };
     for (const when of ['all', 'today', 'week', 'older'] as WhenFilter[]) option('when', when, `when-${when}`);
     for (const sort of ['recent', 'title'] as NoteSort[]) option('sort', sort, `sort-${sort}`);
-    for (const paper of ['any', ...PAPER_STYLES] as PaperFilter[]) option('paper', paper, `paper-${paper}`, CHIP_FILL);
+    for (const paper of PAPER_STYLES) option('paper', paper, `paper-${paper}`, CHIP_FILL);
   }
 
   // ------------------------------------------------------------- placement
