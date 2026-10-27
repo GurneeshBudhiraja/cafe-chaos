@@ -10,8 +10,8 @@
  * mode (the dock follows the head; on by default and remembered) and
  * account connections (not built yet: Connect says so in place). While it
  * is open the buttons fade away and the panel takes their place, centred
- * where the eye already is; its close button or a pinch anywhere outside it
- * brings the buttons back. The dock fades in with a small pop and a shine across
+ * where the eye already is; a pinch anywhere outside it brings the buttons
+ * back. The dock fades in with a small pop and a shine across
  * its glass, so the eye finds it. On a first launch a one-line hint above
  * the buttons points at New note, which pulses gently, until the first
  * note exists.
@@ -112,11 +112,6 @@ const ROW_CENTRE_PX = 70;
  */
 const CATCHER_SIZE_M: [number, number] = [6, 4];
 const CATCHER_BEHIND_M = 0.04;
-const CLOSE_STATES = {
-  rest: 'rgba(255, 250, 242, 0.1)',
-  hover: 'rgba(255, 250, 242, 0.22)',
-  pressed: 'rgba(255, 250, 242, 0.3)',
-};
 /** Connect buttons: a light fill that brightens when pointed at. */
 const CONNECT_STATES = {
   rest: 'rgba(255, 250, 242, 0.12)',
@@ -157,6 +152,13 @@ export class CompactDockSystem extends createSystem({}) {
   private glassSlabs: LiquidGlass[] = [];
   /** Pop-up thumbnails and paper previews (faded with the dock). */
   private readonly images: PanelElement[] = [];
+  /**
+   * The same images by pop-up. Each is hidden with its own pop-up section:
+   * a hidden section's images otherwise keep drawing at stale positions
+   * once the Settings panel glides (white sheets across the view).
+   */
+  private readonly recentImages: PanelElement[] = [];
+  private readonly templateImages: PanelElement[] = [];
   /** Whether the dock is (or is becoming) visible. */
   private shown = false;
   private window: Object3D | null = null;
@@ -170,7 +172,6 @@ export class CompactDockSystem extends createSystem({}) {
   private popoverSettings!: PanelElement;
   private row!: PanelElement;
   private grabArea!: PanelElement;
-  private closeButton!: PanelElement;
   /** Invisible sheet behind the Settings panel: a pinch on it closes Settings. */
   private catcher!: Mesh;
   private catcherEntity: Entity | null = null;
@@ -245,9 +246,6 @@ export class CompactDockSystem extends createSystem({}) {
     this.popoverPanel = ui.element('dock-popover');
     this.row = ui.element('dock-row');
     this.grabArea = ui.element('dock-grab');
-    this.closeButton = ui.onClick('dock-popover-close', () => this.setSettingsOpen(false));
-    addStateColors(this.closeButton, CLOSE_STATES, this.cleanupFuncs);
-    addPressMotion(this.closeButton, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
     this.createDismissCatcher();
     glass(this.popoverPanel, POPOVER_RADIUS_PX);
     this.popoverTitle = ui.text('dock-popover-title');
@@ -264,6 +262,7 @@ export class CompactDockSystem extends createSystem({}) {
       const image = ui.element(`dock-recent-thumb-${i}`);
       image.setProperties({ src: thumbnail.texture });
       this.images.push(image);
+      this.recentImages.push(image);
       const card: RecentCard = {
         root: ui.onClick(`dock-recent-card-${i}`, () => {
           if (!card.noteId) return;
@@ -292,6 +291,7 @@ export class CompactDockSystem extends createSystem({}) {
       const image = ui.element(`dock-template-img-${paper}`);
       image.setProperties({ src: preview.texture });
       this.images.push(image);
+      this.templateImages.push(image);
       this.cleanupFuncs.push(() => preview.dispose());
     }
 
@@ -450,8 +450,8 @@ export class CompactDockSystem extends createSystem({}) {
 
   /**
    * Settings takes the stage: the buttons fade away and the panel glides
-   * down into their place, centred where the eye already is. Closing (its
-   * close button, or a pinch outside it) reverses that.
+   * down into their place, centred where the eye already is. Closing (a
+   * pinch outside it) reverses that.
    */
   private setSettingsOpen(open: boolean): void {
     if (open) {
@@ -621,7 +621,8 @@ export class CompactDockSystem extends createSystem({}) {
     setVisible(this.popoverRecent, this.popover === 'recent');
     setVisible(this.popoverTemplates, this.popover === 'templates');
     setVisible(this.popoverSettings, this.popover === 'settings');
-    setVisible(this.closeButton, this.popover === 'settings');
+    for (const image of this.recentImages) setVisible(image, this.popover === 'recent');
+    for (const image of this.templateImages) setVisible(image, this.popover === 'templates');
     setText(this.popoverTitle, POPOVER_TITLES[this.popover ?? 'recent']);
     this.renderHint();
   }

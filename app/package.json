@@ -15,10 +15,7 @@
     "preview": "vite preview",
     "smoke:camera": "node scripts/smoke-camera.mjs",
     "smoke:notes": "node scripts/smoke-notes.mjs",
-    "record:demo": "node scripts/record-demo.mjs",
     "record:writing": "node scripts/record-writing-flow.mjs",
-    "record:headset": "node scripts/record-headset.mjs",
-    "record:home": "node scripts/record-home.mjs",
     "record:tour": "node scripts/record-tour.mjs"
   },
   "dependencies": {
