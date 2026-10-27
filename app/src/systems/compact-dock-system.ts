@@ -2,19 +2,23 @@
  * CompactDockSystem: the home, a row of floating glass buttons. It is the
  * only screen at launch (no big window in front of you: see home-mode.ts).
  *
- * Recent | New note | Templates, Settings, with nothing between them but
- * passthrough. Recent and Templates open a small pop-up just above the
- * row; Recent scrolls sideways through up to eight notes. Picking an item
- * closes it. A grab bar under the row moves the dock (pinch and drag); on
- * release it turns to face the viewer. Settings opens a panel with stick
- * mode (the dock follows the head; on by default and remembered) and
- * account connections (not built yet: Connect says so in place). While it
- * is open the buttons fade away and the panel takes their place, centred
- * where the eye already is; a pinch anywhere outside it brings the buttons
- * back. The dock fades in with a small pop and a shine across
- * its glass, so the eye finds it. On a first launch a one-line hint above
- * the buttons points at New note, which pulses gently, until the first
- * note exists.
+ * Settings, Templates, Recent in one line, then New note at the right end,
+ * with nothing between them but passthrough. Entering XR (or a headset
+ * recenter) places it in the bottom half of the view, centred. Recent and
+ * Templates open a small pop-up just above the row; Recent scrolls sideways
+ * through up to eight notes. Picking an item closes it. A grab bar under the
+ * row moves the dock (pinch and drag); on release it turns to face the
+ * viewer.
+ *
+ * Settings opens a panel with stick mode (the dock follows the head; on by
+ * default and remembered) and account connections (not built yet: Connect
+ * says so in place). While it is open the buttons fade away and the panel
+ * takes their place, centred where the eye already is; a pinch anywhere
+ * outside it brings the buttons back.
+ *
+ * The dock fades in with a small pop and a shine across its glass, so the
+ * eye finds it. On a first launch a one-line hint above the buttons points
+ * at New note, which pulses gently, until the first note exists.
  *
  * Mode changes go through the shared HomeModeState; note changes go through
  * NoteSession commands.
@@ -37,7 +41,7 @@ import {
 import { PAPER_STYLES, type PaperStyle } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
-import { noteTitleFor, truncate } from '../ui/format.js';
+import { truncate } from '../ui/format.js';
 import { getHomeMode, type HomeModeState } from '../ui/home-mode.js';
 import { faceViewer, makeDraggable } from '../ui/drag.js';
 import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
@@ -53,7 +57,8 @@ import {
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import { THEME } from '../ui/theme.js';
-import { getToasts, newNoteToast, openedNoteToast, type ToastService } from '../ui/toasts.js';
+import { openNoteFromHome, startNote } from '../ui/note-actions.js';
+import { getToasts, type ToastService } from '../ui/toasts.js';
 import { easeInCubic, easeOutBack, easeOutCubic, getTweens, pulse, type Tweens } from '../ui/tweens.js';
 
 const DOCK_NODE = 'compact-dock';
@@ -197,6 +202,9 @@ export class CompactDockSystem extends createSystem({}) {
   /** Counts down to placing the dock in front of the head (0 = idle). */
   private placeInFrames = 0;
   private wasPresenting = false;
+  /** The reference space whose 'reset' (a headset recenter) we listen to. */
+  private recenterSpace: XRReferenceSpace | null = null;
+  private readonly onRecenter = () => this.homeMode.requestRecenter();
 
   init(): void {
     this.session = getNoteSession(this.world);
@@ -266,9 +274,7 @@ export class CompactDockSystem extends createSystem({}) {
       const card: RecentCard = {
         root: ui.onClick(`dock-recent-card-${i}`, () => {
           if (!card.noteId) return;
-          void this.session.openNote(card.noteId);
-          const title = this.session.summaries.find((s) => s.id === card.noteId)?.title || 'Untitled note';
-          this.toasts.show(openedNoteToast(truncate(title, 24)));
+          void openNoteFromHome(this.session, this.toasts, card.noteId);
           this.closePopover();
         }),
         title: ui.text(`dock-recent-title-${i}`),
@@ -305,6 +311,7 @@ export class CompactDockSystem extends createSystem({}) {
       this.homeMode.subscribe((mode) => this.applyMode(mode)),
     );
     this.cleanupFuncs.push(this.homeMode.subscribeRecenter(() => (this.placeInFrames = SETTLE_FRAMES)));
+    this.cleanupFuncs.push(() => this.recenterSpace?.removeEventListener('reset', this.onRecenter));
     this.renderRecent();
     setVisible(this.root, false);
     // Outside XR the dock appears where the scene put it; entering XR
@@ -336,11 +343,10 @@ export class CompactDockSystem extends createSystem({}) {
 
   /** The system recenter (holding the Meta button) resets the reference space. */
   private listenForRecenter(): void {
-    const space = this.world.renderer.xr.getReferenceSpace();
-    if (!space) return;
-    const onReset = () => this.homeMode.requestRecenter();
-    space.addEventListener('reset', onReset);
-    this.cleanupFuncs.push(() => space.removeEventListener('reset', onReset));
+    // One listener at a time: drop the previous session's.
+    this.recenterSpace?.removeEventListener('reset', this.onRecenter);
+    this.recenterSpace = this.world.renderer.xr.getReferenceSpace();
+    this.recenterSpace?.addEventListener('reset', this.onRecenter);
   }
 
   /** Bottom half of the view, centred, facing the eyes (yaw only from the head). */
@@ -362,8 +368,7 @@ export class CompactDockSystem extends createSystem({}) {
   // -------------------------------------------------------------- commands
 
   private newNote(paper: PaperStyle): void {
-    void this.session.createNote(noteTitleFor(), paper);
-    this.toasts.show(newNoteToast(paper));
+    startNote(this.session, this.toasts, paper);
     this.closePopover();
   }
 
@@ -532,6 +537,14 @@ export class CompactDockSystem extends createSystem({}) {
     }
   }
 
+  /** Drop Settings' focus state at once (no transition). */
+  private resetSettingsFocus(): void {
+    this.tweens.cancel('dock-focus');
+    this.focus = 0;
+    this.catcherWanted = false;
+    this.paintFocus();
+  }
+
   /** The buttons' fade and the panel's glide for the current focus. */
   private paintFocus(): void {
     const f = this.focus;
@@ -568,6 +581,9 @@ export class CompactDockSystem extends createSystem({}) {
 
   /** Fade in with a small pop past full size, then a shine on the glass. */
   private showDock(): void {
+    // Re-showing (after a recenter or re-entering XR) starts from the plain
+    // dock: an open Settings would otherwise leave its buttons faded out.
+    this.resetSettingsFocus();
     this.popover = null;
     this.renderPopover();
     setVisible(this.root, true);

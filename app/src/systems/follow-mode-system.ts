@@ -1,11 +1,13 @@
 /**
- * FollowModeSystem: stick mode for the home window and the compact dock.
+ * FollowModeSystem: stick mode for the dock (and the parked home window).
  *
- * While pinned, both follow the viewer's head through IWSDK's Follower
+ * Stick mode is on by default and switched in Settings. While it is on, both
+ * follow the viewer's head through IWSDK's Follower
  * (thresholded and smooth, yawing only, so the panels stay upright and do
- * not swim with every small head turn). Unpinned, they stay where they were
- * placed. Each panel keeps the offset it had from the head when pinning, a
- * drag or a mode switch happened, so following never jumps it elsewhere.
+ * not swim with every small head turn). With it off, they stay where they were
+ * placed. Each panel keeps the offset it had from the head when stick mode
+ * was turned on, a drag ended or the home was placed, so following never
+ * jumps it elsewhere.
  * While the user drags, following pauses.
  */
 

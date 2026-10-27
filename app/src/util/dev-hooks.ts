@@ -12,11 +12,13 @@ import {
   SphereGeometry,
   SRGBColorSpace,
   TextureLoader,
+  Vector3,
   type World,
 } from '@iwsdk/core';
 import type { NoteSession } from '../notes/note-session.js';
 import type { SimulatedFailureStore } from '../notes/note-store.js';
 import { getHomeMode } from '../ui/home-mode.js';
+import { elementWorldPosition } from '../ui/panel-helpers.js';
 import { getTweens } from '../ui/tweens.js';
 
 export interface DevHooks {
@@ -36,6 +38,8 @@ interface DemoHooks {
   setAnimationSpeed(scale: number): void;
   /** Recording only: bring the home back in front of the head (a recenter). */
   recenterHome(): void;
+  /** Tests and recordings: world centre of a named object or UI element. */
+  objectCenter(name: string): { x: number; y: number; z: number } | null;
 }
 
 export function installDevHooks(hooks: DevHooks): void {
@@ -55,9 +59,17 @@ export function installDevHooks(hooks: DevHooks): void {
     },
     setAnimationSpeed(scale) {
       getTweens(hooks.world).timeScale = scale;
+      // Stick mode reads the clock when it (re)anchors: re-anchor now.
+      getHomeMode(hooks.world).notifyMoved();
     },
     recenterHome() {
       getHomeMode(hooks.world).requestRecenter();
+    },
+    objectCenter(name) {
+      const object = hooks.world.scene.getObjectByName(name);
+      if (!object) return null;
+      const { x, y, z } = elementWorldPosition(object, new Vector3());
+      return { x, y, z };
     },
   };
   (window as unknown as { __metaNotes: DevHooks & { demo: DemoHooks } }).__metaNotes = {

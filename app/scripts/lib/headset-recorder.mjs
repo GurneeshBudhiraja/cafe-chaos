@@ -251,18 +251,8 @@ function installHelpers(page) {
         await nextFrame();
       },
       tabletCenter: () => toWorld(0.5, 0.5),
-      objectCenter(name) {
-        const o = world.scene.getObjectByName(name);
-        // Nested UIKit elements keep their placement in globalPanelMatrix,
-        // relative to the panel document (their own matrixWorld is identity).
-        const local = o.globalPanelMatrix?.peek?.();
-        let host = o;
-        while (host && !host.getElementById) host = host.parent;
-        const w = new V();
-        if (local && host) w.applyMatrix4(local).applyMatrix4(host.matrixWorld);
-        else o.getWorldPosition(w);
-        return { x: w.x, y: w.y, z: w.z };
-      },
+      // The app's own helper knows where nested UIKit elements really are.
+      objectCenter: (name) => window.__metaNotes.demo.objectCenter(name),
       /** Write one stroke: aim the hand ray along page points, pinch held. */
       async writeStroke(points, msPerPoint) {
         await call('look_at', { device: 'hand-right', target: toWorld(...points[0]) });

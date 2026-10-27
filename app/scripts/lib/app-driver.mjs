@@ -66,18 +66,11 @@ export async function waitForApp(page) {
 /** Project a named 3D object's world position to viewport pixels. */
 export async function screenPointOf(page, objectName) {
   const point = await page.evaluate((name) => {
-    const { world } = window.__metaNotes;
-    const object = world.scene.getObjectByName(name);
-    if (!object) return null;
-    // Nested UIKit elements keep their placement in globalPanelMatrix,
-    // relative to the panel document (their own matrixWorld is identity).
-    const p = object.position.clone();
-    const local = object.globalPanelMatrix?.peek?.();
-    let host = object;
-    while (host && !host.getElementById) host = host.parent;
-    if (local && host) p.set(0, 0, 0).applyMatrix4(local).applyMatrix4(host.matrixWorld);
-    else object.getWorldPosition(p);
-    p.project(world.camera);
+    const { world, demo } = window.__metaNotes;
+    // The app's own helper knows where nested UIKit elements really are.
+    const center = demo.objectCenter(name);
+    if (!center) return null;
+    const p = world.camera.position.clone().set(center.x, center.y, center.z).project(world.camera);
     return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight };
   }, objectName);
   if (!point) throw new Error(`3D object "${objectName}" not found.`);

@@ -6,7 +6,7 @@
  * updates consistent across systems.
  */
 
-import type { UIKit, UIKitMLAsset } from '@iwsdk/core';
+import type { Matrix4, Object3D, UIKit, UIKitMLAsset, Vector3 } from '@iwsdk/core';
 import { THEME } from './theme.js';
 
 /** Any UIKit element returned by `getElementById`. */
@@ -143,4 +143,18 @@ export function addToggleStateColors(
   });
   paint();
   return paint;
+}
+
+/**
+ * World position of an element's centre (or of any Object3D). Nested UIKit
+ * elements keep their placement in `globalPanelMatrix`, relative to the
+ * panel document; their own matrixWorld is identity, so getWorldPosition
+ * alone would report the panel's origin.
+ */
+export function elementWorldPosition(object: Object3D, out: Vector3): Vector3 {
+  const local = (object as { globalPanelMatrix?: { peek(): Matrix4 | undefined } }).globalPanelMatrix?.peek();
+  let host: Object3D | null = object;
+  while (host && !('getElementById' in host)) host = host.parent;
+  if (local && host) return out.set(0, 0, 0).applyMatrix4(local).applyMatrix4(host.matrixWorld);
+  return object.getWorldPosition(out);
 }

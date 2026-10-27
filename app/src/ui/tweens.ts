@@ -17,6 +17,8 @@ interface Tween {
   done?: () => void;
   /** Tweens sharing a key replace each other (a newer fade cancels an older one). */
   key?: string;
+  /** Set when cancelled or replaced, so a step already under way skips it. */
+  cancelled?: boolean;
 }
 
 export class Tweens {
@@ -38,7 +40,7 @@ export class Tweens {
     update: (t: number) => void,
     { delayMs = 0, done, key }: { delayMs?: number; done?: () => void; key?: string } = {},
   ): void {
-    if (key) this.active = this.active.filter((tween) => tween.key !== key);
+    if (key) this.cancel(key);
     this.active.push({
       delay: delayMs / 1000,
       duration: Math.max(durationMs / 1000, 1e-3),
@@ -51,14 +53,18 @@ export class Tweens {
 
   /** Stop the tween with `key` where it is (its `done` does not run). */
   cancel(key: string): void {
-    this.active = this.active.filter((tween) => tween.key !== key);
+    for (const tween of this.active) if (tween.key === key) tween.cancelled = true;
+    this.active = this.active.filter((tween) => !tween.cancelled);
   }
 
   step(frameSeconds: number): void {
     if (this.active.length === 0) return;
     const deltaSeconds = frameSeconds * this.timeScale;
     let finished = false;
+    // Iterates the list as it was when the step began; a callback may cancel
+    // or replace a later tween, which is then flagged and skipped.
     for (const tween of this.active) {
+      if (tween.cancelled) continue;
       if (tween.delay > 0) {
         tween.delay -= deltaSeconds;
         continue;
@@ -71,7 +77,9 @@ export class Tweens {
         finished = true;
       }
     }
-    if (finished) this.active = this.active.filter((tween) => tween.elapsed < tween.duration);
+    if (finished) {
+      this.active = this.active.filter((tween) => !tween.cancelled && tween.elapsed < tween.duration);
+    }
   }
 }
 

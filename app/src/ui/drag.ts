@@ -38,11 +38,14 @@ export function makeDraggable(
   const startPosition = new Vector3();
   const delta = new Vector3();
   let dragging = false;
+  /** The pointer doing the drag; others are ignored until it ends. */
+  let dragPointerId: number | undefined;
 
   const down = (raw: unknown) => {
     const event = raw as DragPointerEvent;
-    if (!event.point) return;
+    if (!event.point || dragging) return;
     dragging = true;
+    dragPointerId = event.pointerId;
     startPoint.copy(event.point);
     startPosition.copy(target.position);
     if (event.pointerId != null) event.object?.setPointerCapture?.(event.pointerId);
@@ -51,25 +54,30 @@ export function makeDraggable(
   };
   const move = (raw: unknown) => {
     const event = raw as DragPointerEvent;
-    if (!dragging || !event.point) return;
+    if (!dragging || !event.point || event.pointerId !== dragPointerId) return;
     delta.copy(event.point).sub(startPoint);
     target.position.copy(startPosition).add(delta);
   };
-  const up = () => {
-    if (!dragging) return;
+  /** Release, or a cancelled pointer (tracking lost, input switched). */
+  const end = (raw: unknown) => {
+    const event = raw as DragPointerEvent;
+    if (!dragging || event.pointerId !== dragPointerId) return;
     dragging = false;
+    dragPointerId = undefined;
     bar.setProperties({ backgroundColor: BAR_REST });
     faceViewer(target, world);
     hooks.onEnd?.();
   };
-  grab.addEventListener('pointerdown', down);
-  grab.addEventListener('pointermove', move);
-  grab.addEventListener('pointerup', up);
+  const handlers = [
+    ['pointerdown', down],
+    ['pointermove', move],
+    ['pointerup', end],
+    ['pointercancel', end],
+  ] as const;
+  for (const [type, handler] of handlers) grab.addEventListener(type, handler);
   addStateColors(grab, NEUTRAL_STATES, cleanupFuncs);
   cleanupFuncs.push(() => {
-    grab.removeEventListener('pointerdown', down);
-    grab.removeEventListener('pointermove', move);
-    grab.removeEventListener('pointerup', up);
+    for (const [type, handler] of handlers) grab.removeEventListener(type, handler);
   });
 }
 

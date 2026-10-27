@@ -23,7 +23,7 @@ import { PAPER_STYLES, type PaperStyle } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
 import type { NoteSummary } from '../notes/note-store.js';
-import { formatRelativeTime, noteTitleFor, truncate } from '../ui/format.js';
+import { formatRelativeTime, truncate } from '../ui/format.js';
 import { getHomeMode, type HomeModeState, WINDOW_GLASS_NAME } from '../ui/home-mode.js';
 import { makeDraggable } from '../ui/drag.js';
 import {
@@ -43,12 +43,11 @@ import {
   setVisible,
   type PanelElement,
 } from '../ui/panel-helpers.js';
+import { openNoteFromHome, startNote } from '../ui/note-actions.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import {
   getToasts,
-  newNoteToast,
-  openedNoteToast,
   SETTINGS_TOAST,
   type Toast,
   type ToastService,
@@ -299,14 +298,17 @@ export class HomeWindowSystem extends createSystem({}) {
 
     // The clock only needs to change when the minute does.
     const clockTimer = setInterval(() => {
+      if (!this.shown) return; // Parked: nothing to draw.
       this.renderClock();
       this.renderChevrons();
     }, 1000);
     this.cleanupFuncs.push(
       () => clearInterval(clockTimer),
       this.session.subscribe(() => {
+        // The save-failure toast matters in every mode; the cards only
+        // while the window shows (showWindow catches up).
         this.renderSaveState();
-        this.renderCards();
+        if (this.shown) this.renderCards();
       }),
       this.homeMode.subscribe(() => this.applyMode()),
     );
@@ -326,16 +328,12 @@ export class HomeWindowSystem extends createSystem({}) {
   // -------------------------------------------------------------- commands
 
   private newNote(paper: PaperStyle): void {
-    void this.session.createNote(noteTitleFor(), paper);
+    startNote(this.session, this.toasts, paper);
     this.setPickerOpen(false);
-    this.toasts.show(newNoteToast(paper));
   }
 
   private openCard(card: NoteCard): void {
-    if (!card.noteId) return;
-    void this.session.openNote(card.noteId);
-    const title = this.session.summaries.find((s) => s.id === card.noteId)?.title || 'Untitled note';
-    this.toasts.show(openedNoteToast(truncate(title, 24)));
+    if (card.noteId) void openNoteFromHome(this.session, this.toasts, card.noteId);
   }
 
   /**
@@ -402,21 +400,23 @@ export class HomeWindowSystem extends createSystem({}) {
   }
 
   /**
-   * Saving is silent. A failed save raises a sticky toast with a retry,
-   * which gives way to a short "Saved" once a later save succeeds.
+   * Saving is silent. While saves fail, a sticky toast with a retry stays
+   * up: whenever it is not showing (a pop-up or another toast replaced it,
+   * or a retry failed again) the next save update brings it back. A later
+   * successful save gives way to a short "Saved".
    */
   private renderSaveState(): void {
     const failed = this.session.saveStatus === 'failed';
-    if (failed && !this.failureToast) {
-      this.failureToast = {
+    if (failed) {
+      this.failureToast ??= {
         kind: 'error',
         title: "Couldn't save",
         body: 'Your changes are kept',
         sticky: true,
         action: { label: 'Try again', run: () => void this.session.flush() },
       };
-      this.toasts.show(this.failureToast);
-    } else if (!failed && this.failureToast && this.session.saveStatus === 'saved') {
+      if (this.toasts.current !== this.failureToast) this.toasts.show(this.failureToast);
+    } else if (this.failureToast && this.session.saveStatus === 'saved') {
       this.failureToast = null;
       this.toasts.show({ kind: 'done', title: 'Saved' });
     }
@@ -532,6 +532,8 @@ export class HomeWindowSystem extends createSystem({}) {
    * window that blooms and fades: "this is it".
    */
   private showWindow(): void {
+    this.renderClock();
+    this.renderCards();
     setVisible(this.root, true);
     setVisible(this.grab, true);
     this.setFade(0, 0.96);
