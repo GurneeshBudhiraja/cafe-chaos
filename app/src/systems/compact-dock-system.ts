@@ -80,7 +80,7 @@ const HOME_BELOW_GAZE_DEG = 20;
 const ROW_ABOVE_ORIGIN_M = 0.15;
 /** Frames to wait after XR starts (or a recenter) for a settled head pose. */
 const SETTLE_FRAMES = 12;
-const TITLE_MAX_CHARS = 12;
+const TITLE_MAX_CHARS = 14;
 const PREVIEW_PX = 224;
 /** Half the round buttons' size: their corner radius in UIKit pixels. */
 const BUTTON_RADIUS_PX = 28;

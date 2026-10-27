@@ -7,10 +7,11 @@
   account connections (Google Drive, Microsoft). While it is open the
   buttons fade away and the panel takes their place, centred where the eye
   already is; a pinch anywhere outside it (on an invisible catcher the dock
-  system places behind it) brings them back. Recent and Templates open a small glass pop-up
-  just above the buttons (Recent scrolls sideways through up to eight
-  notes); picking an item closes it. The thin bar underneath is the grab
-  handle for moving the dock.
+  system places behind it) brings them back. Recent and Templates take the
+  stage the same way: Recent is a grid of up to eight notes (ink, title and
+  when it was edited), Templates a grid of six papers with a line on what
+  each is for; picking an item closes it. The thin bar underneath is the
+  grab handle for moving the dock.
 
   First launch (no notes): #dock-hint, one short line above the buttons,
   points at New note; it goes once the first note exists.
@@ -110,23 +111,73 @@
     padding-left: 6px;
   }
 
+  .pop-head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .pop-count {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 500;
+    color: #b3aba1;
+  }
+
   .pop-empty {
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 360px;
+    padding-top: 18px;
+    padding-bottom: 8px;
+  }
+
+  .empty-title {
+    font-family: ui;
+    font-size: 18px;
+    font-weight: 600;
+    color: #f7f2ea;
+  }
+
+  .empty-body {
     font-family: ui;
     font-size: 15px;
     font-weight: 500;
     color: #b3aba1;
-    padding-left: 6px;
-    padding-right: 6px;
-    padding-bottom: 4px;
   }
 
-  .pop-strip {
+  .empty-button {
     flex-direction: row;
+    align-items: center;
     gap: 8px;
-    width: 440px;
-    overflow: scroll;
-    scrollbar-width: 0px;
-    scrollbar-color: rgba(0, 0, 0, 0);
+    height: 44px;
+    margin-top: 10px;
+    padding-left: 18px;
+    padding-right: 20px;
+    border-radius: 22px;
+    background-color: #d4704f;
+    color: #ffffff;
+    cursor: pointer;
+  }
+
+  .empty-button-label {
+    font-family: ui;
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+  }
+
+  .grid {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .grid-row {
+    flex-direction: row;
+    gap: 10px;
   }
 
   .hint {
@@ -237,32 +288,78 @@
     padding-top: 4px;
   }
 
-  .pop-row {
-    flex-direction: row;
-    gap: 8px;
-  }
-
-  .pop-card {
+  .note-card {
     flex-direction: column;
-    flex-shrink: 0;
     gap: 8px;
-    width: 104px;
-    padding-top: 4px;
-    padding-bottom: 6px;
-    padding-left: 4px;
-    padding-right: 4px;
+    width: 124px;
+    padding-top: 6px;
+    padding-bottom: 8px;
+    padding-left: 6px;
+    padding-right: 6px;
     border-radius: 18px;
+    background-color: rgba(255, 250, 242, 0.06);
     cursor: pointer;
   }
 
-  .paper-frame {
+  .note-paper {
     border-radius: 12px;
     overflow: hidden;
   }
 
-  .paper-blank {
-    width: 96px;
-    height: 72px;
+  .note-thumb {
+    flex-shrink: 0;
+    width: 112px;
+    height: 84px;
+  }
+
+  .note-text {
+    flex-direction: column;
+    gap: 2px;
+    padding-left: 4px;
+  }
+
+  .note-title {
+    font-family: ui;
+    font-size: 15px;
+    font-weight: 600;
+    color: #f7f2ea;
+  }
+
+  .note-meta {
+    font-family: ui;
+    font-size: 13px;
+    font-weight: 500;
+    color: #b3aba1;
+  }
+
+  .tpl-card {
+    flex-direction: column;
+    gap: 8px;
+    width: 168px;
+    padding-top: 6px;
+    padding-bottom: 8px;
+    padding-left: 6px;
+    padding-right: 6px;
+    border-radius: 18px;
+    background-color: rgba(255, 250, 242, 0.06);
+    cursor: pointer;
+  }
+
+  .tpl-paper {
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .tpl-img {
+    flex-shrink: 0;
+    width: 156px;
+    height: 117px;
+  }
+
+  .tpl-blank {
+    flex-shrink: 0;
+    width: 156px;
+    height: 117px;
     border-radius: 12px;
     align-items: center;
     justify-content: center;
@@ -270,65 +367,138 @@
   }
 
   .plus-circle {
-    width: 32px;
-    height: 32px;
-    border-radius: 16px;
+    width: 40px;
+    height: 40px;
+    border-radius: 20px;
     align-items: center;
     justify-content: center;
     background-color: #d4704f;
     color: #ffffff;
   }
-
-  .pop-thumb {
-    width: 96px;
-    height: 72px;
-  }
-
-  .pop-title {
-    font-family: ui;
-    font-size: 14px;
-    font-weight: 500;
-    color: #f7f2ea;
-    padding-left: 2px;
-  }
 </style>
 <div id="dock-root" class="dock">
   <div id="dock-popover" class="popover" style="display: none">
-    <div id="dock-popover-title" class="popover-title">Recent notes</div>
-    <div id="dock-recent-empty" class="pop-empty" style="display: none">No notes yet. Tap New note to start one.</div>
-    <div id="dock-popover-recent" class="pop-strip">
-        <div id="dock-recent-card-0" class="pop-card">
-          <div class="paper-frame"><img id="dock-recent-thumb-0" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div id="dock-recent-title-0" class="pop-title">Note</div>
+    <div class="pop-head">
+      <div id="dock-popover-title" class="popover-title">Recent notes</div>
+      <div id="dock-popover-count" class="pop-count"></div>
+    </div>
+    <div id="dock-recent-empty" class="pop-empty" style="display: none">
+      <div class="empty-title">No notes yet</div>
+      <div class="empty-body">Your notes will appear here.</div>
+      <div id="dock-recent-empty-new" class="empty-button">
+        <Plus width="18" height="18"></Plus>
+        <div class="empty-button-label">Start a note</div>
+      </div>
+    </div>
+    <div id="dock-popover-recent" class="grid">
+      <div id="dock-recent-row-0" class="grid-row">
+        <div id="dock-recent-card-0" class="note-card">
+          <div class="note-paper"><img id="dock-recent-thumb-0" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div id="dock-recent-title-0" class="note-title">Note</div>
+            <div id="dock-recent-meta-0" class="note-meta">Edited now</div>
+          </div>
         </div>
-        <div id="dock-recent-card-1" class="pop-card">
-          <div class="paper-frame"><img id="dock-recent-thumb-1" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div id="dock-recent-title-1" class="pop-title">Note</div>
+        <div id="dock-recent-card-1" class="note-card">
+          <div class="note-paper"><img id="dock-recent-thumb-1" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div id="dock-recent-title-1" class="note-title">Note</div>
+            <div id="dock-recent-meta-1" class="note-meta">Edited now</div>
+          </div>
         </div>
-        <div id="dock-recent-card-2" class="pop-card">
-          <div class="paper-frame"><img id="dock-recent-thumb-2" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div id="dock-recent-title-2" class="pop-title">Note</div>
+        <div id="dock-recent-card-2" class="note-card">
+          <div class="note-paper"><img id="dock-recent-thumb-2" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div id="dock-recent-title-2" class="note-title">Note</div>
+            <div id="dock-recent-meta-2" class="note-meta">Edited now</div>
+          </div>
         </div>
-        <div id="dock-recent-card-3" class="pop-card">
-          <div class="paper-frame"><img id="dock-recent-thumb-3" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div id="dock-recent-title-3" class="pop-title">Note</div>
+        <div id="dock-recent-card-3" class="note-card">
+          <div class="note-paper"><img id="dock-recent-thumb-3" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div id="dock-recent-title-3" class="note-title">Note</div>
+            <div id="dock-recent-meta-3" class="note-meta">Edited now</div>
+          </div>
         </div>
-        <div id="dock-recent-card-4" class="pop-card">
-          <div class="paper-frame"><img id="dock-recent-thumb-4" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div id="dock-recent-title-4" class="pop-title">Note</div>
+      </div>
+      <div id="dock-recent-row-1" class="grid-row">
+        <div id="dock-recent-card-4" class="note-card">
+          <div class="note-paper"><img id="dock-recent-thumb-4" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div id="dock-recent-title-4" class="note-title">Note</div>
+            <div id="dock-recent-meta-4" class="note-meta">Edited now</div>
+          </div>
         </div>
-        <div id="dock-recent-card-5" class="pop-card">
-          <div class="paper-frame"><img id="dock-recent-thumb-5" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div id="dock-recent-title-5" class="pop-title">Note</div>
+        <div id="dock-recent-card-5" class="note-card">
+          <div class="note-paper"><img id="dock-recent-thumb-5" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div id="dock-recent-title-5" class="note-title">Note</div>
+            <div id="dock-recent-meta-5" class="note-meta">Edited now</div>
+          </div>
         </div>
-        <div id="dock-recent-card-6" class="pop-card">
-          <div class="paper-frame"><img id="dock-recent-thumb-6" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div id="dock-recent-title-6" class="pop-title">Note</div>
+        <div id="dock-recent-card-6" class="note-card">
+          <div class="note-paper"><img id="dock-recent-thumb-6" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div id="dock-recent-title-6" class="note-title">Note</div>
+            <div id="dock-recent-meta-6" class="note-meta">Edited now</div>
+          </div>
         </div>
-        <div id="dock-recent-card-7" class="pop-card">
-          <div class="paper-frame"><img id="dock-recent-thumb-7" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div id="dock-recent-title-7" class="pop-title">Note</div>
+        <div id="dock-recent-card-7" class="note-card">
+          <div class="note-paper"><img id="dock-recent-thumb-7" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div id="dock-recent-title-7" class="note-title">Note</div>
+            <div id="dock-recent-meta-7" class="note-meta">Edited now</div>
+          </div>
         </div>
+      </div>
+    </div>
+    <div id="dock-popover-templates" class="grid" style="display: none">
+      <div class="grid-row">
+        <div id="dock-template-blank" class="tpl-card">
+          <div class="tpl-blank"><div class="plus-circle"><Plus width="22" height="22"></Plus></div></div>
+          <div class="note-text">
+            <div class="note-title">Blank</div>
+            <div class="note-meta">Start fresh</div>
+          </div>
+        </div>
+        <div id="dock-template-lined" class="tpl-card">
+          <div class="tpl-paper"><img id="dock-template-img-lined" class="tpl-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div class="note-title">Lined</div>
+            <div class="note-meta">Writing</div>
+          </div>
+        </div>
+        <div id="dock-template-grid" class="tpl-card">
+          <div class="tpl-paper"><img id="dock-template-img-grid" class="tpl-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div class="note-title">Grid</div>
+            <div class="note-meta">Maths and sketches</div>
+          </div>
+        </div>
+      </div>
+      <div class="grid-row">
+        <div id="dock-template-dotted" class="tpl-card">
+          <div class="tpl-paper"><img id="dock-template-img-dotted" class="tpl-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div class="note-title">Dotted</div>
+            <div class="note-meta">Bullet journal</div>
+          </div>
+        </div>
+        <div id="dock-template-cornell" class="tpl-card">
+          <div class="tpl-paper"><img id="dock-template-img-cornell" class="tpl-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div class="note-title">Cornell</div>
+            <div class="note-meta">Study notes</div>
+          </div>
+        </div>
+        <div id="dock-template-checklist" class="tpl-card">
+          <div class="tpl-paper"><img id="dock-template-img-checklist" class="tpl-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="note-text">
+            <div class="note-title">Checklist</div>
+            <div class="note-meta">To-dos</div>
+          </div>
+        </div>
+      </div>
     </div>
     <div id="dock-popover-settings" class="settings" style="display: none">
       <div class="set-section">Preferences</div>
@@ -361,32 +531,6 @@
         </div>
       </div>
       <div class="set-foot">Your notes are saved on this device.</div>
-    </div>
-    <div id="dock-popover-templates" class="pop-row" style="display: none">
-        <div id="dock-template-blank" class="pop-card">
-          <div class="paper-blank"><div class="plus-circle"><Plus width="18" height="18"></Plus></div></div>
-          <div class="pop-title">Blank</div>
-        </div>
-        <div id="dock-template-lined" class="pop-card">
-          <div class="paper-frame"><img id="dock-template-img-lined" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="pop-title">Lined</div>
-        </div>
-        <div id="dock-template-grid" class="pop-card">
-          <div class="paper-frame"><img id="dock-template-img-grid" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="pop-title">Grid</div>
-        </div>
-        <div id="dock-template-dotted" class="pop-card">
-          <div class="paper-frame"><img id="dock-template-img-dotted" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="pop-title">Dotted</div>
-        </div>
-        <div id="dock-template-cornell" class="pop-card">
-          <div class="paper-frame"><img id="dock-template-img-cornell" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="pop-title">Cornell</div>
-        </div>
-        <div id="dock-template-checklist" class="pop-card">
-          <div class="paper-frame"><img id="dock-template-img-checklist" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="pop-title">Checklist</div>
-        </div>
     </div>
   </div>
   <div id="dock-hint" class="hint" style="display: none">
