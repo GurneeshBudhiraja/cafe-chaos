@@ -4,14 +4,12 @@
   Recent in one line, and New note, the main action, at the right end
   (where the dominant hand finds it; mirrored for left-handed use later).
   Settings opens a panel with preferences (stick mode, on by default) and
-  account connections (Google Drive, Microsoft). While it is open the
-  buttons fade away and the panel takes their place, centred where the eye
-  already is; a pinch anywhere outside it (on an invisible catcher the dock
-  system places behind it) brings them back. Recent and Templates take the
-  stage the same way: Recent is a grid of up to eight notes (ink, title and
-  when it was edited), Templates a grid of six papers with a line on what
-  each is for; picking an item closes it. The thin bar underneath is the
-  grab handle for moving the dock.
+  account connections (Google Drive, Microsoft); Recent a grid of up to
+  eight notes (ink, title and when it was edited); Templates a grid of six
+  papers with a line on what each is for. While a panel is open the
+  buttons fade away and it takes their place, centred where the eye
+  already is; its close button (or picking an item) brings them back. The
+  thin bar underneath is the grab handle for moving the dock.
 
   First launch (no notes): #dock-hint, one short line above the buttons,
   points at New note; it goes once the first note exists.
@@ -108,7 +106,6 @@
     font-size: 16px;
     font-weight: 600;
     color: #b3aba1;
-    padding-left: 6px;
   }
 
   .pop-head {
@@ -116,7 +113,23 @@
     align-items: center;
     justify-content: space-between;
     padding-left: 6px;
-    padding-right: 6px;
+  }
+
+  .pop-heading {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .close-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 250, 242, 0.1);
+    color: #f7f2ea;
+    cursor: pointer;
   }
 
   .pop-count {
@@ -358,8 +371,13 @@
 <div id="dock-root" class="dock">
   <div id="dock-popover" class="popover" style="display: none">
     <div class="pop-head">
-      <div id="dock-popover-title" class="popover-title">Recent notes</div>
-      <div id="dock-popover-count" class="pop-count">0 notes</div>
+      <div class="pop-heading">
+        <div id="dock-popover-title" class="popover-title">Recent notes</div>
+        <div id="dock-popover-count" class="pop-count">0 notes</div>
+      </div>
+      <div id="dock-popover-close" class="close-button">
+        <X width="18" height="18"></X>
+      </div>
     </div>
     <div id="dock-recent-empty" class="pop-empty" style="display: none">
       <div class="empty-title">No notes yet</div>

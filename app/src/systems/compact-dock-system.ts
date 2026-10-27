@@ -10,7 +10,7 @@
  *
  * Settings, Templates and Recent each open a panel that takes the stage:
  * the buttons fade away and the panel takes their place, centred where the
- * eye already is; a pinch anywhere outside it brings the buttons back.
+ * eye already is; its close button brings the buttons back.
  * Recent is a grid of up to eight notes (ink, title, when it was edited),
  * Templates a grid of papers; picking an item closes the panel. Settings
  * holds stick mode (the dock follows the head; on by default and
@@ -28,13 +28,8 @@
 import {
   createSystem,
   Euler,
-  Mesh,
-  MeshBasicMaterial,
-  PlaneGeometry,
   Quaternion,
-  RayInteractable,
   Vector3,
-  type Entity,
   type Object3D,
   type UIKit,
   type UIKitMLAsset,
@@ -113,13 +108,12 @@ const FOCUS_IN_MS = 320;
 const FOCUS_OUT_MS = 220;
 /** Height of the button row's centre above the dock's bottom edge (UIKit pixels). */
 const ROW_CENTRE_PX = 70;
-/**
- * The outside-pinch catcher: an invisible sheet (metres) a little behind the
- * dock. A scene object rather than a UI element, because UIKit only
- * hit-tests children within their parent's bounds.
- */
-const CATCHER_SIZE_M: [number, number] = [6, 4];
-const CATCHER_BEHIND_M = 0.04;
+/** The panels' close button: a faint fill that brightens when pointed at. */
+const CLOSE_STATES = {
+  rest: 'rgba(255, 250, 242, 0.1)',
+  hover: 'rgba(255, 250, 242, 0.22)',
+  pressed: 'rgba(255, 250, 242, 0.3)',
+};
 /** Connect buttons: a light fill that brightens when pointed at. */
 const CONNECT_STATES = {
   rest: 'rgba(255, 250, 242, 0.12)',
@@ -184,11 +178,6 @@ export class CompactDockSystem extends createSystem({}) {
   private popoverSettings!: PanelElement;
   private row!: PanelElement;
   private grabArea!: PanelElement;
-  /** Invisible sheet behind an open panel: a pinch on it closes the panel. */
-  private catcher!: Mesh;
-  private catcherEntity: Entity | null = null;
-  /** Requested catcher state, applied in update (outside pointer dispatch). */
-  private catcherWanted: boolean | null = null;
   /** Glass behind the round buttons (faded while a panel has the stage). */
   private readonly rowSlabs: LiquidGlass[] = [];
   /** 0: the dock as usual; 1: a panel has the stage. */
@@ -261,7 +250,9 @@ export class CompactDockSystem extends createSystem({}) {
     this.popoverPanel = ui.element('dock-popover');
     this.row = ui.element('dock-row');
     this.grabArea = ui.element('dock-grab');
-    this.createDismissCatcher();
+    const closeButton = ui.onClick('dock-popover-close', () => this.closePanel());
+    addStateColors(closeButton, CLOSE_STATES, this.cleanupFuncs);
+    addPressMotion(closeButton, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
     glass(this.popoverPanel, POPOVER_RADIUS_PX);
     this.popoverTitle = ui.text('dock-popover-title');
     this.popoverCount = ui.text('dock-popover-count');
@@ -330,12 +321,6 @@ export class CompactDockSystem extends createSystem({}) {
   }
 
   update(): void {
-    if (this.catcherWanted !== null) {
-      this.setCatcherActive(this.catcherWanted);
-      this.catcherWanted = null;
-    }
-    // Keep the catcher behind the dock (stick mode can move it).
-    if (this.catcher?.visible) this.placeCatcher();
     // Entering XR places the home in front of the viewer once the head pose
     // has settled, and so does a headset recenter.
     const presenting = this.world.renderer.xr.isPresenting;
@@ -461,16 +446,13 @@ export class CompactDockSystem extends createSystem({}) {
     this.animateFocus(true);
   }
 
-  /** Close the open panel (after a pick, or a pinch outside it). */
+  /** Close the open panel (its close button, or after a pick). */
   private closePanel(): void {
     if (this.popover === null) return;
     this.animateFocus(false);
   }
 
   private animateFocus(open: boolean): void {
-    // Applied next frame: changing interactables while a pointer event is
-    // being dispatched would break the dispatcher's listener loop.
-    this.catcherWanted = open;
     const from = this.focus;
     const to = open ? 1 : 0;
     this.tweens.play(
@@ -491,59 +473,10 @@ export class CompactDockSystem extends createSystem({}) {
     );
   }
 
-  private createDismissCatcher(): void {
-    this.catcher = new Mesh(
-      new PlaneGeometry(...CATCHER_SIZE_M),
-      new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
-    );
-    this.catcher.name = 'PanelDismissCatcher';
-    this.catcher.visible = false;
-    // A pinch that starts and ends on the catcher closes the panel (XR hand
-    // rays deliver down and up here, but no 'click' for a plain mesh).
-    let armed = false;
-    const handlers: Array<[string, () => void]> = [
-      ['pointerdown', () => (armed = true)],
-      ['pointerleave', () => (armed = false)],
-      [
-        'pointerup',
-        () => {
-          if (armed) this.closePanel();
-          armed = false;
-        },
-      ],
-    ];
-    const target = this.catcher as unknown as EventTarget;
-    for (const [type, handler] of handlers) target.addEventListener(type, handler);
-    this.cleanupFuncs.push(() => {
-      for (const [type, handler] of handlers) target.removeEventListener(type, handler);
-      this.catcherEntity?.dispose();
-    });
-  }
-
-  private placeCatcher(): void {
-    this.scratch.set(0, 0, -CATCHER_BEHIND_M).applyQuaternion(this.dock.quaternion);
-    this.catcher.position.copy(this.dock.position).add(this.scratch);
-    this.catcher.quaternion.copy(this.dock.quaternion);
-  }
-
-  /** Put the catcher just behind the dock and let rays hit it, or retire it. */
-  private setCatcherActive(active: boolean): void {
-    if (active) {
-      this.placeCatcher();
-      this.catcher.visible = true;
-      this.catcherEntity ??= this.world.createTransformEntity(this.catcher);
-      if (!this.catcherEntity.hasComponent(RayInteractable)) this.catcherEntity.addComponent(RayInteractable);
-    } else if (this.catcherEntity) {
-      this.catcher.visible = false;
-      if (this.catcherEntity.hasComponent(RayInteractable)) this.catcherEntity.removeComponent(RayInteractable);
-    }
-  }
-
   /** Drop the panel focus state at once (no transition). */
   private resetPanelFocus(): void {
     this.tweens.cancel('dock-focus');
     this.focus = 0;
-    this.catcherWanted = false;
     this.paintFocus();
   }
 
