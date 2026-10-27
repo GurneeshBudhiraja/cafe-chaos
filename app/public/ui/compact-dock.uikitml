@@ -5,8 +5,9 @@
   (where the dominant hand finds it; mirrored for left-handed use later).
   Settings opens a panel with preferences (stick mode, on by default) and
   account connections (Google Drive, Microsoft); Recent a grid of up to
-  eight notes (ink, title and when it was edited), with a Recents / Show all
-  toggle for a scrolling grid of every note; Templates a grid of six
+  six notes (ink, title and when it was edited), with a Recents / Show all
+  toggle for a scrolling grid of every note (filtered by when it was
+  edited and its paper, sorted by date or title); Templates a grid of six
   papers with a line on what each is for. While a panel is open the
   buttons fade away and it takes their place, centred where the eye
   already is; its close button (or picking an item) brings them back. The
@@ -159,12 +160,63 @@
   .all-scroll {
     flex-direction: column;
     gap: 14px;
-    width: 554px;
-    max-height: 314px;
+    width: 556px;
+    max-height: 386px;
     overflow: scroll;
     scrollbar-width: 4px;
     scrollbar-color: rgba(255, 250, 242, 0.35);
     scrollbar-border-radius: 2px;
+  }
+
+  .all-view {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .filters {
+    flex-direction: column;
+    gap: 10px;
+    width: 556px;
+  }
+
+  .filter-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .chip-row {
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .chip {
+    height: 30px;
+    padding-left: 12px;
+    padding-right: 12px;
+    border-radius: 15px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 250, 242, 0.08);
+    cursor: pointer;
+  }
+
+  .chip-label {
+    font-family: ui;
+    font-size: 13px;
+    font-weight: 500;
+    color: #b3aba1;
+  }
+
+  .no-match {
+    font-family: ui;
+    font-size: 15px;
+    font-weight: 400;
+    color: #b3aba1;
+    padding-top: 24px;
+    padding-bottom: 24px;
+    width: 556px;
+    text-align: center;
   }
 
   .close-button {
@@ -329,7 +381,7 @@
   .note-card {
     flex-direction: column;
     gap: 10px;
-    width: 128px;
+    width: 176px;
     padding-top: 8px;
     padding-bottom: 10px;
     padding-left: 8px;
@@ -347,8 +399,8 @@
 
   .note-thumb {
     flex-shrink: 0;
-    width: 112px;
-    height: 84px;
+    width: 160px;
+    height: 120px;
   }
 
   .note-text {
@@ -374,7 +426,7 @@
   .tpl-card {
     flex-direction: column;
     gap: 10px;
-    width: 172px;
+    width: 176px;
     padding-top: 8px;
     padding-bottom: 10px;
     padding-left: 8px;
@@ -391,14 +443,14 @@
 
   .tpl-img {
     flex-shrink: 0;
-    width: 156px;
-    height: 117px;
+    width: 160px;
+    height: 120px;
   }
 
   .tpl-blank {
     flex-shrink: 0;
-    width: 156px;
-    height: 117px;
+    width: 160px;
+    height: 120px;
     border-radius: 12px;
     align-items: center;
     justify-content: center;
@@ -463,6 +515,8 @@
             <div id="dock-recent-meta-2" class="note-meta">Edited now</div>
           </div>
         </div>
+      </div>
+      <div id="dock-recent-row-1" class="grid-row">
         <div id="dock-recent-card-3" class="note-card">
           <div class="note-paper"><img id="dock-recent-thumb-3" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
           <div class="note-text">
@@ -470,8 +524,6 @@
             <div id="dock-recent-meta-3" class="note-meta">Edited now</div>
           </div>
         </div>
-      </div>
-      <div id="dock-recent-row-1" class="grid-row">
         <div id="dock-recent-card-4" class="note-card">
           <div class="note-paper"><img id="dock-recent-thumb-4" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
           <div class="note-text">
@@ -486,23 +538,61 @@
             <div id="dock-recent-meta-5" class="note-meta">Edited now</div>
           </div>
         </div>
-        <div id="dock-recent-card-6" class="note-card">
-          <div class="note-paper"><img id="dock-recent-thumb-6" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="note-text">
-            <div id="dock-recent-title-6" class="note-title">Note</div>
-            <div id="dock-recent-meta-6" class="note-meta">Edited now</div>
+      </div>
+    </div>
+    <div id="dock-all-view" class="all-view" style="display: none">
+      <div id="all-filters" class="filters">
+        <div class="filter-row">
+          <div class="segmented">
+            <div id="when-all" class="segment">
+              <div id="when-all-label" class="segment-label">All</div>
+            </div>
+            <div id="when-today" class="segment">
+              <div id="when-today-label" class="segment-label">Today</div>
+            </div>
+            <div id="when-week" class="segment">
+              <div id="when-week-label" class="segment-label">This week</div>
+            </div>
+            <div id="when-older" class="segment">
+              <div id="when-older-label" class="segment-label">Older</div>
+            </div>
+          </div>
+          <div class="segmented">
+            <div id="sort-recent" class="segment">
+              <div id="sort-recent-label" class="segment-label">Recent</div>
+            </div>
+            <div id="sort-title" class="segment">
+              <div id="sort-title-label" class="segment-label">A-Z</div>
+            </div>
           </div>
         </div>
-        <div id="dock-recent-card-7" class="note-card">
-          <div class="note-paper"><img id="dock-recent-thumb-7" class="note-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="note-text">
-            <div id="dock-recent-title-7" class="note-title">Note</div>
-            <div id="dock-recent-meta-7" class="note-meta">Edited now</div>
+        <div class="chip-row">
+          <div id="paper-any" class="chip">
+            <div id="paper-any-label" class="chip-label">Any paper</div>
+          </div>
+          <div id="paper-blank" class="chip">
+            <div id="paper-blank-label" class="chip-label">Blank</div>
+          </div>
+          <div id="paper-lined" class="chip">
+            <div id="paper-lined-label" class="chip-label">Lined</div>
+          </div>
+          <div id="paper-grid" class="chip">
+            <div id="paper-grid-label" class="chip-label">Grid</div>
+          </div>
+          <div id="paper-dotted" class="chip">
+            <div id="paper-dotted-label" class="chip-label">Dotted</div>
+          </div>
+          <div id="paper-cornell" class="chip">
+            <div id="paper-cornell-label" class="chip-label">Cornell</div>
+          </div>
+          <div id="paper-checklist" class="chip">
+            <div id="paper-checklist-label" class="chip-label">Checklist</div>
           </div>
         </div>
       </div>
+      <div id="all-no-match" class="no-match" style="display: none">No notes match these filters.</div>
+      <div id="dock-popover-all" class="all-scroll"></div>
     </div>
-    <div id="dock-popover-all" class="all-scroll" style="display: none"></div>
     <div id="dock-popover-templates" class="grid" style="display: none">
       <div class="grid-row">
         <div id="dock-template-blank" class="tpl-card">

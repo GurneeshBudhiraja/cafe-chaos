@@ -51,6 +51,15 @@ import {
   type PanelElement,
 } from '../ui/panel-helpers.js';
 import { AllNotesGrid } from '../ui/all-notes-grid.js';
+import {
+  applyNoteFilters,
+  DEFAULT_FILTERS,
+  isFiltering,
+  type NoteFilters,
+  type NoteSort,
+  type PaperFilter,
+  type WhenFilter,
+} from '../ui/note-filters.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import { THEME } from '../ui/theme.js';
@@ -61,9 +70,9 @@ import { easeInCubic, easeOutBack, easeOutCubic, getTweens, pulse, type Tweens }
 const DOCK_NODE = 'compact-dock';
 const WINDOW_NODE = 'home-window';
 /** Must match the number of `dock-recent-card-N` elements. */
-const RECENT_SLOTS = 8;
+const RECENT_SLOTS = 6;
 /** Cards per row of the Recent grid; must match the markup. */
-const RECENT_PER_ROW = 4;
+const RECENT_PER_ROW = 3;
 /** The first-launch hint's capsule radius (UIKit pixels); matches .hint. */
 const HINT_RADIUS_PX = 22;
 /** New note's first-launch pulse: two gentle beats after the dock appears. */
@@ -79,7 +88,7 @@ const HOME_BELOW_GAZE_DEG = 20;
 const ROW_ABOVE_ORIGIN_M = 0.15;
 /** Frames to wait after XR starts (or a recenter) for a settled head pose. */
 const SETTLE_FRAMES = 12;
-const TITLE_MAX_CHARS = 14;
+const TITLE_MAX_CHARS = 18;
 const PREVIEW_PX = 224;
 /** Half the round buttons' size: their corner radius in UIKit pixels. */
 const BUTTON_RADIUS_PX = 28;
@@ -139,6 +148,9 @@ const SWITCH_MS = 220;
  * than a pop-up over the panel you are looking at).
  */
 const CONNECT_SOON_MS = 2200;
+const CLEAR = 'rgba(255, 250, 242, 0)';
+/** Must match .chip background-color in compact-dock.uikitml. */
+const CHIP_FILL = 'rgba(255, 250, 242, 0.08)';
 
 interface RecentCard {
   root: PanelElement;
@@ -176,8 +188,17 @@ export class CompactDockSystem extends createSystem({}) {
   private recentView: RecentView = 'recent';
   private recentToggle!: PanelElement;
   private readonly recentTabs = {} as Record<RecentView, { tab: PanelElement; label: UIKit.Text }>;
-  private popoverAll!: PanelElement;
+  private allView!: PanelElement;
+  private allNoMatch!: PanelElement;
   private allNotes!: AllNotesGrid;
+  private filters: NoteFilters = { ...DEFAULT_FILTERS };
+  /** Each filter option's chip, painted clay while it is chosen. */
+  private readonly filterChips: Array<{
+    chip: PanelElement;
+    label: UIKit.Text;
+    chosen: () => boolean;
+    restFill: string;
+  }> = [];
   private popoverRecent!: PanelElement;
   private popoverTemplates!: PanelElement;
   private recentEmpty!: PanelElement;
@@ -256,6 +277,12 @@ export class CompactDockSystem extends createSystem({}) {
     addPressMotion(newNote, this.tweens, this.cleanupFuncs);
 
     this.popoverPanel = ui.element('dock-popover');
+    // Re-centre an open panel when its size changes (switching Recent's views).
+    this.cleanupFuncs.push(
+      panelSize(this.popoverPanel).subscribe(() => {
+        if (this.focus > 0) this.paintFocus();
+      }),
+    );
     this.row = ui.element('dock-row');
     this.grabArea = ui.element('dock-grab');
     const closeButton = ui.onClick('dock-popover-close', () => this.closePanel());
@@ -453,6 +480,7 @@ export class CompactDockSystem extends createSystem({}) {
     // Recent opens on the latest notes, the quick glance.
     if (which === 'recent') {
       this.recentView = 'recent';
+      this.filters = { ...DEFAULT_FILTERS };
       this.renderRecent();
     }
     this.renderPopover();
@@ -503,7 +531,7 @@ export class CompactDockSystem extends createSystem({}) {
     }
     for (const slab of this.rowSlabs) slab.setOpacity(buttons);
     // Glide the panel down so its centre lands on the row's centre.
-    const height = (this.popoverPanel as unknown as { size: { peek(): [number, number] | undefined } }).size.peek()?.[1] ?? 0;
+    const height = panelSize(this.popoverPanel).peek()?.[1] ?? 0;
     const glide = Math.max(0, height / 2 - ROW_CENTRE_PX) * f;
     this.popoverPanel.setProperties({ transformTranslateY: glide } as Record<string, unknown>);
   }
@@ -622,25 +650,31 @@ export class CompactDockSystem extends createSystem({}) {
     setVisible(this.recentEmpty, total === 0);
     setVisible(this.recentToggle, open && total > 0);
     setVisible(this.popoverRecent, showLatest);
-    setVisible(this.popoverAll, showAll);
+    setVisible(this.allView, showAll);
     this.recentRows.forEach((row, r) => setVisible(row, total > r * RECENT_PER_ROW));
     this.recentCards.forEach((card, i) => setVisible(this.recentImages[i], showLatest && card.noteId !== null));
-    this.allNotes.render(summaries, showAll);
+    const matches = applyNoteFilters(summaries, this.filters);
+    this.allNotes.render(matches, showAll);
+    setVisible(this.allNoMatch, showAll && matches.length === 0);
     // Only Recent counts its items.
     setVisible(this.popoverCount, open && total > 0);
-    if (total > 0) setText(this.popoverCount, this.recentView === 'all' ? notesLabel(total) : noteCountLabel(total));
+    if (total > 0) setText(this.popoverCount, this.countLabel(total, matches.length));
     for (const view of ['recent', 'all'] as const) {
-      const selected = view === this.recentView;
-      // The selected view wears the theme's clay, like other on states.
-      this.recentTabs[view].tab.setProperties({ backgroundColor: selected ? THEME.clay : 'rgba(255, 250, 242, 0)' });
-      this.recentTabs[view].label.setProperties({ color: selected ? '#ffffff' : THEME.inkSoft });
+      paintChoice(this.recentTabs[view].tab, this.recentTabs[view].label, view === this.recentView);
     }
+    for (const { chip, label, chosen, restFill } of this.filterChips) paintChoice(chip, label, chosen(), restFill);
+  }
+
+  private countLabel(total: number, matching: number): string {
+    if (this.recentView === 'recent') return noteCountLabel(total);
+    return isFiltering(this.filters) ? `${matching} of ${total}` : notesLabel(total);
   }
 
   /** Recents / Show all: switch Recent between the latest notes and every note. */
   private bindRecentToggle(ui: PanelBinding): void {
     this.recentToggle = ui.element('recent-toggle');
-    this.popoverAll = ui.element('dock-popover-all');
+    this.allView = ui.element('dock-all-view');
+    this.allNoMatch = ui.element('all-no-match');
     for (const view of ['recent', 'all'] as const) {
       const tab = ui.onClick(`recent-tab-${view}`, () => {
         this.recentView = view;
@@ -649,7 +683,8 @@ export class CompactDockSystem extends createSystem({}) {
       addPressMotion(tab, this.tweens, this.cleanupFuncs, { hover: 1.05, pressed: 0.95 });
       this.recentTabs[view] = { tab, label: ui.text(`recent-tab-${view}-label`) };
     }
-    this.allNotes = new AllNotesGrid(this.popoverAll, {
+    this.bindFilters(ui);
+    this.allNotes = new AllNotesGrid(ui.element('dock-popover-all'), {
       perRow: RECENT_PER_ROW,
       titleMaxChars: TITLE_MAX_CHARS,
       thumbnailPx: PREVIEW_PX,
@@ -661,6 +696,22 @@ export class CompactDockSystem extends createSystem({}) {
         this.closePanel();
       },
     });
+  }
+
+  /** Show all's filters: when a note was edited, its paper, and the order. */
+  private bindFilters(ui: PanelBinding): void {
+    // Segments sit on their own track; paper chips stand alone, so they keep a faint fill.
+    const option = <K extends keyof NoteFilters>(key: K, value: NoteFilters[K], id: string, restFill = CLEAR) => {
+      const chip = ui.onClick(id, () => {
+        this.filters = { ...this.filters, [key]: value };
+        this.renderRecentSections();
+      });
+      addPressMotion(chip, this.tweens, this.cleanupFuncs, { hover: 1.05, pressed: 0.95 });
+      this.filterChips.push({ chip, label: ui.text(`${id}-label`), chosen: () => this.filters[key] === value, restFill });
+    };
+    for (const when of ['all', 'today', 'week', 'older'] as WhenFilter[]) option('when', when, `when-${when}`);
+    for (const sort of ['recent', 'title'] as NoteSort[]) option('sort', sort, `sort-${sort}`);
+    for (const paper of ['any', ...PAPER_STYLES] as PaperFilter[]) option('paper', paper, `paper-${paper}`, CHIP_FILL);
   }
 
   // ------------------------------------------------------------- placement
@@ -691,4 +742,18 @@ function noteCountLabel(total: number): string {
 /** "1 note", "12 notes". */
 function notesLabel(total: number): string {
   return total === 1 ? '1 note' : `${total} notes`;
+}
+
+/** A chosen option (a tab or filter chip) wears the theme's clay. */
+function paintChoice(chip: PanelElement, label: UIKit.Text, chosen: boolean, restFill = CLEAR): void {
+  chip.setProperties({ backgroundColor: chosen ? THEME.clay : restFill });
+  label.setProperties({ color: chosen ? '#ffffff' : THEME.inkSoft });
+}
+
+/** A UIKit element's laid-out size signal (UIKit pixels), missing from its public type. */
+function panelSize(element: PanelElement): {
+  peek(): [number, number] | undefined;
+  subscribe(listener: () => void): () => void;
+} {
+  return (element as unknown as { size: ReturnType<typeof panelSize> }).size;
 }
