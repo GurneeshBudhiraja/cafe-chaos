@@ -12,7 +12,7 @@ npm install
 npm run dev          # CLI-managed dev server + managed browser (IWER emulator)
 npm run typecheck    # always run before testing in the browser
 npm run build        # production build into dist/
-npm run smoke:notes  # notes, reloads, save failure, the dock and Settings (dev server running)
+npm run smoke:notes  # notes, reloads, save failure, the dock and its panels (dev server running)
 npm run record:tour -- <360-photo.jpg>  # headset-view video of the home into artifacts/tour.mp4
 ```
 
@@ -30,12 +30,17 @@ note write fail (for checking error handling by hand).
   entering XR places it about 85 cm out and 20 degrees below the gaze, and a
   headset recenter brings it back there. Stick mode (it follows your view) is
   on by default.
-- **Recent and Templates:** small glass pop-ups above the dock. Recent scrolls
-  through up to eight notes; Templates starts a note on a chosen paper.
-- **Settings:** while open, the dock's buttons fade away and the panel takes
-  their place; a pinch outside it closes it. It holds the stick mode switch
-  (remembered on this device) and Google Drive / Microsoft connections
-  (not built yet: Connect answers "Coming soon").
+- **Panels:** Settings, Templates and Recent each open a glass panel. While
+  one is open the dock's buttons fade away and the panel takes their place,
+  where you are already looking; its close button (or picking an item)
+  brings the buttons back.
+- **Recent:** a grid of up to eight notes, each with its ink, title and when
+  it was edited; the header counts your notes.
+- **Templates:** six papers (Blank, Lined, Grid, Dotted, Cornell, Checklist),
+  each with a line on what it is for; picking one starts a note on it.
+- **Settings:** the stick mode switch (remembered on this device) and Google
+  Drive / Microsoft connections (not built yet: Connect answers "Coming
+  soon").
 - **Toasts:** one slim line at the top centre of the view for confirmations
   and a failed save (with "Try again").
 - **First launch:** no note is created; one hint line points at New note.
@@ -103,7 +108,7 @@ scripts/                       smoke checks and headset-view recordings (Playwri
 - Objects stay findable: dark objects get a light rim and key parts a soft
   glow, because dark colours disappear in a dim room and render transparent on
   see-through (additive) glasses.
-- One thing at a time: a pop-up replaces any toast, and Settings replaces the
-  dock's buttons while it is open.
+- One thing at a time: a panel replaces any toast and, while it is open, the
+  dock's buttons.
 - Note content is stored separately from any room placement (placement comes
   later), so a missing room anchor can never remove a note.

@@ -13,8 +13,8 @@
  *  4. The dock: New note adds a note, Recent reopens the older one,
  *     Templates creates a note with its paper, the grab bar moves the dock,
  *     stick mode is on by default and its Settings switch is remembered,
- *     and with
- *     more notes than fit the Recent pop-up scrolls.
+ *     every panel closes with its close button, and with more notes than
+ *     fit the Recent grid shows the latest eight with edit times.
  *
  * Usage: start the dev server (`npm run dev`), then `npm run smoke:notes`.
  */
@@ -219,43 +219,46 @@ try {
   // Connect (not built yet) answers in place; the recording shows its label.
   await clickObject(page, 'set-connect-drive');
   checks.check('settings: stick mode switch is remembered', savedOff === false, `saved off=${savedOff}`);
-  // A pinch outside the panel closes Settings (the buttons' fade itself is
-  // checked in the headset recording).
-  await page.waitForTimeout(500);
-  let closedOutside = false;
-  for (let attempt = 0; attempt < 3 && !closedOutside; attempt++) {
-    // Hover first (the pointer must be over the catcher), then pinch.
-    await page.mouse.move(60, 60);
-    await page.waitForTimeout(150);
-    await page.mouse.down();
-    await page.waitForTimeout(100);
-    await page.mouse.up();
-    closedOutside = await page
-      .waitForFunction(() => !window.__shown('dock-popover'), undefined, { timeout: 2000 })
-      .then(() => true, () => false);
-  }
-  checks.check('settings closes with a pinch outside the panel', closedOutside, `outside=${closedOutside}`);
+  // Every panel closes with its close button, and the buttons come back
+  // (the fade itself is checked in the headset recording).
+  const closeWithButton = () =>
+    clickUntil(page, 'dock-popover-close', () => !window.__shown('dock-popover') && window.__shown('dock-row'));
+  await closeWithButton();
+  await clickUntil(page, 'dock-templates', () => window.__shown('dock-popover-templates'));
+  await closeWithButton();
+  await clickUntil(page, 'dock-recent', () => window.__shown('dock-popover-recent'));
+  await closeWithButton();
+  checks.check('every panel closes with its close button', true);
 
-  // With more notes than fit, the Recent pop-up scrolls. On desktop a mouse
-  // scrolls UIKit with the wheel; XR rays and hands scroll by dragging.
+  // With more notes than fit, the Recent grid shows the latest eight, each
+  // with when it was edited, and the header says how many there are.
   await page.evaluate(async () => {
-    for (let i = 0; i < 4; i++) await window.__metaNotes.session.createNote(`Extra ${i + 1}`);
+    for (let i = 0; i < 6; i++) await window.__metaNotes.session.createNote(`Extra ${i + 1}`);
   });
   await waitForSaved(page);
   await clickUntil(page, 'dock-recent', () => window.__shown('dock-popover-recent'));
-  const strip = await screenPointOf(page, 'dock-recent-card-1');
-  await page.mouse.move(strip.x, strip.y);
-  for (let i = 0; i < 5; i++) {
-    await page.mouse.wheel(80, 0);
-    await page.waitForTimeout(150);
-  }
-  const scrollX = await page.waitForFunction(() => {
-    let node = window.__metaNotes.world.scene.getObjectByName('dock-recent-card-0').parent;
-    while (node && !node.scrollPosition) node = node.parent;
-    const x = node?.scrollPosition.peek()[0] ?? 0;
-    return x > 0 ? x : false;
-  }, undefined, { timeout: 5000 }).then((h) => h.jsonValue(), () => 0);
-  checks.check('Recent pop-up scrolls through more notes', scrollX > 0, `scrollX=${scrollX}`);
+  const grid = await page.evaluate(() => {
+    const { session, world } = window.__metaNotes;
+    const textOf = (name) => world.scene.getObjectByName(name)?.properties?.peek?.().text ?? null;
+    const shownCards = Array.from({ length: 10 }, (_, i) => window.__shown(`dock-recent-card-${i}`)).filter(Boolean);
+    return {
+      notes: session.summaries.length,
+      cards: shownCards.length,
+      firstTitle: textOf('dock-recent-title-0'),
+      newest: session.summaries[0].title,
+      meta: textOf('dock-recent-meta-0'),
+      count: textOf('dock-popover-count'),
+    };
+  });
+  checks.check(
+    'Recent grid shows the latest eight with edit times and a count',
+    grid.notes === 9 &&
+      grid.cards === 8 &&
+      grid.firstTitle === grid.newest &&
+      /^Edited /.test(grid.meta ?? '') &&
+      grid.count === '8 of 9',
+    JSON.stringify(grid),
+  );
 
   console.log(`  (click retries for dropped presses: ${clickStats.retries})`);
   const pageErrors = logs.filter((l) => l.startsWith('pageerror') || l.startsWith('error'));

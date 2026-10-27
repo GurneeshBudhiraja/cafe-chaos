@@ -5,12 +5,13 @@
  * photo stands in for passthrough, since IWER only emulates indoor rooms.
  *
  * Flow (a returning user; the first launch is in the smoke test): the dock
- * appears with its shine; open Recent, point along the notes and open one
- * (a toast: writing is next); open Templates and start a grid page (a
- * toast confirms it); open Settings, switch stick mode off and on, try
- * Connect (it answers "Coming soon" in place) and close it with a pinch
- * outside the panel (the buttons fade away while it is open); drag the dock by its
- * grab bar; then look around: stick mode is on, so the dock comes along.
+ * appears with its shine; open Recent (its panel takes the buttons' place),
+ * point across the grid of notes and open one (a toast: writing is next);
+ * open Templates, point along the papers and start a grid page (a toast
+ * confirms it); open Settings, switch stick mode off and on, try Connect
+ * (it answers "Coming soon" in place) and close it with its close button;
+ * drag the dock by its grab bar; then look around: stick mode is on, so
+ * the dock comes along.
  *
  * Usage: start the dev server (`npm run dev`), then
  *   npm run record:tour -- <equirectangular.jpg> [panorama yaw degrees]
@@ -36,6 +37,9 @@ const notes = [
   { title: 'Physics ch. 4', paper: 'grid', strokes: lines(['F = ma', 'p = mv'], 0.0045, 21) },
   { title: 'Lab notes', paper: 'lined', strokes: lines(['Titration Thu', 'pH 7.2 at 3 pm', 'add 2 ml buffer'], 0.0032, 11) },
   { title: 'Reading list', paper: 'cornell', strokes: lines(['Dune', 'The Overstory'], 0.004, 51) },
+  { title: 'Standup', paper: 'lined', strokes: lines(['ship grid', 'record tour'], 0.0036, 61) },
+  { title: 'Sketches', paper: 'blank', strokes: lines(['tree', 'bench'], 0.005, 71) },
+  { title: 'Spanish verbs', paper: 'lined', strokes: lines(['ser, estar', 'tener'], 0.0036, 81) },
 ];
 const HEAD = { x: 0, y: 1.55, z: 0.05 };
 
@@ -76,6 +80,11 @@ const panelAt = (node, dy = 0) =>
   }, [node, dy]);
 /** The head yaw (degrees, as turnHead takes it) that faces a point. */
 const yawTo = (p) => (Math.atan2(-(p.x - HEAD.x), -(p.z - HEAD.z)) * 180) / Math.PI;
+/** Look at the open dock panel's centre, once its glide has settled. */
+const lookAtOpenPanel = async (ms) => {
+  await pause(450);
+  await rec.lookAt(await rec.objectCenter('dock-popover'), ms);
+};
 /** Turn to look straight at a panel. */
 const lookAtPanel = async (node, ms, dy = 0) => {
   const at = await panelAt(node, dy);
@@ -83,32 +92,35 @@ const lookAtPanel = async (node, ms, dy = 0) => {
   return yawTo(at);
 };
 
+// The resting hand points down, out of the way of the panels.
 const rest = () => rec.moveHand({ x: 0.2, y: 1.2, z: -0.22 }).then(() =>
-  page.evaluate(() => window.IWER_DEVICE.remote.dispatch('look_at', { device: 'hand-right', target: { x: 0.75, y: 0.7, z: -0.9 } })));
+  page.evaluate(() => window.IWER_DEVICE.remote.dispatch('look_at', { device: 'hand-right', target: { x: 0.25, y: 0, z: -0.3 } })));
 
 // --- The home is the dock: four glass buttons and nothing else.
 await lookAtPanel('compact-dock', 300, 0.1);
 await rest();
 await pause(2000);
 
-// --- Recent: point along the notes, open one (a toast: writing is next).
+// --- Recent: point across the grid, open a note (a toast: writing is next).
 await rec.tap('dock-recent');
 await rest();
-await lookAtPanel('compact-dock', 700, 0.2);
-await pause(800);
-for (const card of ['dock-recent-card-0', 'dock-recent-card-1', 'dock-recent-card-2']) {
-  await rec.point(card);
-  await pause(600);
+await lookAtOpenPanel(700);
+await pause(1000);
+for (const card of [0, 1, 2, 6, 5]) {
+  await rec.point(`dock-recent-card-${card}`);
+  await pause(550);
 }
-await rec.tap('dock-recent-card-1');
+await rec.tap('dock-recent-card-5');
 await rest();
 await pause(2400);
 
-// --- Templates: start a grid page (a toast confirms it).
+// --- Templates: point along the papers, start a grid page (a toast confirms it).
+await lookAtPanel('compact-dock', 500, 0.1);
 await rec.tap('dock-templates');
 await rest();
+await lookAtOpenPanel(700);
 await pause(1200);
-for (const paper of ['dock-template-lined', 'dock-template-grid']) {
+for (const paper of ['dock-template-blank', 'dock-template-lined', 'dock-template-cornell', 'dock-template-grid']) {
   await rec.point(paper);
   await pause(600);
 }
@@ -124,7 +136,7 @@ await lookAtPanel('compact-dock', 700, 0.1);
 // coming soon), then close it.
 await rec.tap('dock-settings');
 await rest();
-await lookAtPanel('compact-dock', 700, 0.28);
+await lookAtOpenPanel(700);
 await pause(1400);
 await rec.tap('set-stick');
 await rest();
@@ -137,10 +149,10 @@ await pause(700);
 await rec.tap('set-connect-drive');
 await rest();
 await pause(2400);
-// Close it with a pinch anywhere outside the panel: the buttons come back.
-const outside = await panelAt('compact-dock', 0.25);
-outside.x += 0.9;
-await rec.rayDrag(outside, outside, 150);
+// Close it with its close button: the buttons come back.
+await rec.point('dock-popover-close');
+await pause(500);
+await rec.tap('dock-popover-close');
 await rest();
 await lookAtPanel('compact-dock', 700, 0.1);
 await pause(1000);
