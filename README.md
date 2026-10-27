@@ -48,25 +48,27 @@ separately and remain open.
 | Simulated save failure keeps the note | Pass | Error shown, stroke kept on screen, saved after "Try saving again" |
 | Delete needs confirmation | Pass | Cancel keeps the note; confirm deletes only that note |
 
-### Home window (branch `Charan/home-window`)
+### Home window
 
-The old Notes panel is replaced by a liquid-glass home window (blue tint,
-bright rim, lime text; Bricolage Grotesque and Fraunces): compact mode (top
-left), a live clock with the save status under it (top centre), settings
-(top right, placeholder sheet), recent-note cards (four visible; chevrons or
-a drag page through more; tap a card to open that note on the tablet) and
-New note (bottom centre). Compact mode shrinks it to a glass pill with the
-clock, expand and New note. The glass is clear (faint white fill and a bright
-rim, no tint).
-
-Launch view: the home window is the only thing in the scene, centred at eye
-height 1.2 m ahead and about 2.9 m wide (roughly 70% of the headset view), with passthrough (the real room) behind it in the
-headset. The tablet, the tools panel (camera trial, device status) and the
-classroom backdrop are out of the scene for now; their code stays. Scripts
-that need them (`smoke:camera`, `record:demo`, `record:writing`,
-`record:headset`, and the writing step of `record:home`) will fail until they
-are placed again. New notes
-get a date-and-time title. Headset walkthrough: `npm run record:home`.
+The first screen is laid out like a document app's home, on clear frosted
+glass in the warm "calm and studious" theme (warm ink, warm paper, one clay
+accent; Bricolage Grotesque and Fraunces): a top bar (app name,
+clock, settings, compact toggle), "Start a new note" paper templates (Blank,
+Lined, Grid, Dotted, Cornell, Checklist; Blank is the clay main action) and
+"Recent notes" cards that preview each note's real ink on its paper, with a
+Recent / A-Z sort and chevrons (or a drag) for more. Minimise swaps the
+window for the compact dock: five floating glass buttons with only
+passthrough between them (Expand, Recent | New note | Templates, Settings).
+Recent and Templates open a small pop-up above the buttons; a grab bar
+underneath moves the dock, which turns to face you on release, and Expand
+opens the window where the dock is. The window has its own grab bar too.
+Minimising fades the window out and the dock fades in with a small pop and
+a shine; expanding fades the window in with a warm glow behind it. The pin
+(window top bar, and beside the dock's grab bar) is stick mode: while on,
+the window and dock follow your head (IWSDK Follower, thresholded and
+smooth); while off, they stay where you put them. Saving is silent; a line with a
+retry button appears only when a save fails. Headset walkthrough:
+`npm run record:home`.
 
 | Check | Result | Evidence |
 | --- | --- | --- |

@@ -43,7 +43,6 @@ export async function waitForApp(page) {
       const hooks = window.__metaNotes;
       return (
         hooks?.session?.loaded === true &&
-        hooks.session.active !== null &&
         hooks.world.scene.getObjectByName('note-new-button') !== undefined
       );
     },
@@ -67,10 +66,11 @@ export async function waitForApp(page) {
 /** Project a named 3D object's world position to viewport pixels. */
 export async function screenPointOf(page, objectName) {
   const point = await page.evaluate((name) => {
-    const { world } = window.__metaNotes;
-    const object = world.scene.getObjectByName(name);
-    if (!object) return null;
-    const p = object.getWorldPosition(object.position.clone()).project(world.camera);
+    const { world, demo } = window.__metaNotes;
+    // The app's own helper knows where nested UIKit elements really are.
+    const center = demo.objectCenter(name);
+    if (!center) return null;
+    const p = world.camera.position.clone().set(center.x, center.y, center.z).project(world.camera);
     return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight };
   }, objectName);
   if (!point) throw new Error(`3D object "${objectName}" not found.`);

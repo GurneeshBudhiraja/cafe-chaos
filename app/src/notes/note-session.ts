@@ -18,6 +18,7 @@ import {
   createNote,
   type Note,
   type Page,
+  type PaperStyle,
   type Stroke,
 } from './note-model.js';
 import type { NoteStore, NoteSummary } from './note-store.js';
@@ -63,7 +64,11 @@ export class NoteSession implements InkDocument {
 
   // ---------------------------------------------------------------- loading
 
-  /** Load the library and open the most recent note (or create the first). */
+  /**
+   * Load the library and open the most recent note. A first launch opens
+   * nothing: the home window shows its empty state until the user starts
+   * a note.
+   */
   async load(): Promise<void> {
     try {
       this.summaries = await this.store.list();
@@ -73,17 +78,13 @@ export class NoteSession implements InkDocument {
     }
     this.loaded = true;
     this.emit('library');
-    if (this.summaries.length > 0) {
-      await this.openNote(this.summaries[0].id);
-    } else {
-      await this.createNote();
-    }
+    if (this.summaries.length > 0) await this.openNote(this.summaries[0].id);
   }
 
   // --------------------------------------------------------------- commands
 
-  async createNote(title?: string): Promise<Note> {
-    const note = createNote(title);
+  async createNote(title?: string, paper?: PaperStyle): Promise<Note> {
+    const note = createNote(title, Date.now(), paper);
     this.active = note;
     this.markDirty(note);
     this.emit('active');
@@ -115,6 +116,21 @@ export class NoteSession implements InkDocument {
     }
     this.active = note;
     this.emit('active');
+  }
+
+  /**
+   * Read a note without opening it (for previews): the open or unsaved copy
+   * when there is one, else the stored note. Null if it cannot be read.
+   */
+  async getNote(id: string): Promise<Note | null> {
+    if (this.active?.id === id) return this.active;
+    const unsaved = this.dirty.get(id)?.note;
+    if (unsaved) return unsaved;
+    try {
+      return await this.store.get(id);
+    } catch {
+      return null;
+    }
   }
 
   renameActive(title: string): void {
@@ -170,7 +186,7 @@ export class NoteSession implements InkDocument {
       this.active = null;
       const next = this.summaries[0];
       if (next) await this.openNote(next.id);
-      else await this.createNote();
+      else this.emit('active');
     }
     return true;
   }

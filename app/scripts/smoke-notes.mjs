@@ -2,21 +2,26 @@
  * Notes acceptance smoke test (roadmap checks for 18 October).
  *
  * Runs in a fresh browser profile (empty IndexedDB) against the dev server:
- *  1. Add two strokes to the first note, wait for "Saved". The tablet is out
- *     of the launch view for now, so strokes go in through the note session
+ *  0. A first launch opens on the dock with the New note hint; New note
+ *     starts the first note.
+ *  1. Add two strokes to the note, wait for "Saved". The tablet is out of
+ *     the launch view for now, so strokes go in through the note session
  *     (the same command the tablet uses).
  *  2. Reload five times; the note's title and strokes must match.
- *  3. Make writes fail, add a stroke: the app must show "Save failed", keep
- *     the stroke, and save it after "Try saving again".
- *  4. Home window: New note adds a recent card; tapping the older card
- *     reopens that note; compact mode hides the full window and restores it;
- *     with more notes than fit, the strip scrolls.
+ *  3. Make writes fail, add a stroke: the app must raise the save-failure
+ *     toast, keep the stroke, and save it after the toast's "Try again".
+ *  4. The dock: New note adds a note, Recent reopens the older one,
+ *     Templates creates a note with its paper, the grab bar moves the dock,
+ *     stick mode is on by default and its Settings switch is remembered,
+ *     and with
+ *     more notes than fit the Recent pop-up scrolls.
  *
  * Usage: start the dev server (`npm run dev`), then `npm run smoke:notes`.
  */
 
 import {
   activeNoteSnapshot,
+  clickObject,
   clickStats,
   clickUntil,
   createChecklist,
@@ -59,6 +64,31 @@ try {
   const { page } = app;
   logs = app.logs;
 
+  // UIKit's isVisible signal shows whether an element is displayed.
+  // Predicates run inside the page, so the helper is installed there.
+  const installShown = () =>
+    page.evaluate(() => {
+      window.__shown = (name) =>
+        window.__metaNotes.world.scene.getObjectByName(name)?.isVisible.peek() === true;
+    });
+  await installShown();
+
+  // 0. A first launch opens on the dock (no window), with no note open and
+  //    the hint pointing at New note; New note starts the first page.
+  await page.waitForFunction(() => window.__shown('dock-root'), undefined, { timeout: 8000 });
+  const firstLaunch = await page.evaluate(() => ({
+    notes: window.__metaNotes.session.summaries.length,
+    dock: window.__shown('dock-root'),
+    window: window.__shown('home-root'),
+    hint: window.__shown('dock-hint'),
+  }));
+  checks.check(
+    'first launch opens on the dock with the New note hint',
+    firstLaunch.notes === 0 && firstLaunch.dock && !firstLaunch.window && firstLaunch.hint,
+    JSON.stringify(firstLaunch),
+  );
+  await clickUntil(page, 'dock-new', () => window.__metaNotes.session.active !== null && !window.__shown('dock-hint'));
+
   // 1. Create content.
   await addStroke(page, [0.15, 0.3], [0.8, 0.4]);
   await addStroke(page, [0.2, 0.7], [0.6, 0.55]);
@@ -95,7 +125,7 @@ try {
   });
   const failedState = await page.evaluate(() => {
     const { session, world } = window.__metaNotes;
-    const retry = world.scene.getObjectByName('save-retry-button');
+    const retry = world.scene.getObjectByName('toast-action');
     return {
       status: session.saveStatus,
       unsaved: session.hasUnsavedChanges,
@@ -114,7 +144,7 @@ try {
   );
 
   await page.evaluate(() => (window.__metaNotes.store.failWrites = false));
-  await clickUntil(page, 'save-retry-button', () => {
+  await clickUntil(page, 'toast-action', () => {
     const { session } = window.__metaNotes;
     return session.saveStatus === 'saved' && !session.hasUnsavedChanges;
   });
@@ -123,72 +153,109 @@ try {
   const recovered = await activeNoteSnapshot(page);
   checks.check('retry saves the kept stroke', recovered.strokes === 3, `strokes=${recovered.strokes}`);
 
-  // 4. Home window: new note, recent cards, compact mode.
-  await clickUntil(page, 'note-new-button', () => window.__metaNotes.session.summaries.length === 2);
+  // 4. The dock: New note adds a note; Recent reopens the older one.
+  await installShown();
+  await page.waitForFunction(() => window.__shown('dock-root'), undefined, { timeout: 8000 });
+  await clickUntil(page, 'dock-new', () => window.__metaNotes.session.summaries.length === 2);
   await waitForSaved(page);
   const second = await activeNoteSnapshot(page);
   // Cards are most recent first, so the original note is now card 1.
-  await clickUntil(page, 'recent-card-1', () => window.__metaNotes.session.active?.pages[0].strokes.length === 3);
+  await clickUntil(page, 'dock-recent', () => window.__shown('dock-popover-recent'));
+  await clickUntil(
+    page,
+    'dock-recent-card-1',
+    () => window.__metaNotes.session.active?.pages[0].strokes.length === 3 && !window.__shown('dock-popover'),
+  );
   const reopened = await activeNoteSnapshot(page);
   checks.check(
-    'new note adds a card; tapping the older card reopens it',
+    'dock New note adds a note; Recent reopens the older one',
     second.notes === 2 && second.id !== original.id && reopened.id === original.id && reopened.strokes === 3,
     `notes=${second.notes}, reopened strokes=${reopened.strokes}`,
   );
 
-  // UIKit's isVisible signal shows whether an element is displayed.
-  const recentShown = () =>
-    window.__metaNotes.world.scene.getObjectByName('recent-section').isVisible.peek() === true;
-  const recentHidden = () =>
-    window.__metaNotes.world.scene.getObjectByName('recent-section').isVisible.peek() === false;
-  await clickUntil(page, 'compact-toggle', recentHidden);
-  await clickUntil(page, 'expand-toggle', recentShown);
-  checks.check('compact mode collapses and expands the home window', true);
-
-  // Settings in the compact pill opens the full window with the sheet shown.
-  await clickUntil(page, 'compact-toggle', recentHidden);
-  await clickUntil(page, 'compact-settings-button', () => {
-    const scene = window.__metaNotes.world.scene;
-    return (
-      scene.getObjectByName('recent-section').isVisible.peek() === true &&
-      scene.getObjectByName('settings-sheet').isVisible.peek() === true
-    );
-  });
+  // Templates creates a note with that paper and closes the pop-up.
+  await clickUntil(page, 'dock-templates', () => window.__shown('dock-popover-templates'));
   await clickUntil(
     page,
-    'settings-button',
-    () => window.__metaNotes.world.scene.getObjectByName('settings-sheet').isVisible.peek() === false,
+    'dock-template-dotted',
+    () => window.__metaNotes.session.active?.paper === 'dotted' && !window.__shown('dock-popover'),
   );
-  checks.check('settings in the compact pill opens the full window', true);
+  checks.check('dock Templates creates a note with that paper', true);
 
-  // With more notes than fit, the recent strip scrolls. On desktop a mouse
+  // The grab bar moves the dock.
+  const before = await page.evaluate(() => window.__metaNotes.world.getSceneObject('compact-dock').position.x);
+  const grab = await screenPointOf(page, 'dock-grab');
+  await page.mouse.move(grab.x, grab.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 12; i++) {
+    await page.mouse.move(grab.x + i * 12, grab.y);
+    await page.waitForTimeout(40);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(() => window.__metaNotes.world.getSceneObject('compact-dock').position.x);
+  checks.check('dragging the grab bar moves the dock', after - before > 0.05, `x ${before.toFixed(3)} -> ${after.toFixed(3)}`);
+  // Put the dock back in front of the test camera.
+  await page.evaluate(() => {
+    const dock = window.__metaNotes.world.getSceneObject('compact-dock');
+    dock.position.set(0, 1.32, -1.16);
+    dock.quaternion.identity();
+    // Stick mode is on: re-anchor following to the new place.
+    window.__metaNotes.world.globals['metaNotes.homeMode'].notifyMoved();
+  });
+  await page.waitForTimeout(200);
+
+  // Stick mode is on by default: the dock follows the head.
+  const stick = await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.homeMode'].pinned);
+  checks.check('stick mode is on by default', stick === true, `pinned=${stick}`);
+
+  // Settings: the stick mode switch turns it off and on, and is remembered;
+  // Connect (not built yet) answers with a toast.
+  await page.evaluate(() => (window.__homeMode = window.__metaNotes.world.globals['metaNotes.homeMode']));
+  await clickUntil(page, 'dock-settings', () => window.__shown('dock-popover-settings'));
+  await clickUntil(page, 'set-stick', () => window.__homeMode.pinned === false);
+  const savedOff = await page.evaluate(() => JSON.parse(localStorage.getItem('metaNotes.preferences') ?? '{}').stickMode);
+  await clickUntil(page, 'set-stick', () => window.__homeMode.pinned === true);
+  // Connect (not built yet) answers in place; the recording shows its label.
+  await clickObject(page, 'set-connect-drive');
+  checks.check('settings: stick mode switch is remembered', savedOff === false, `saved off=${savedOff}`);
+  // A pinch outside the panel closes Settings (the buttons' fade itself is
+  // checked in the headset recording).
+  await page.waitForTimeout(500);
+  let closedOutside = false;
+  for (let attempt = 0; attempt < 3 && !closedOutside; attempt++) {
+    // Hover first (the pointer must be over the catcher), then pinch.
+    await page.mouse.move(60, 60);
+    await page.waitForTimeout(150);
+    await page.mouse.down();
+    await page.waitForTimeout(100);
+    await page.mouse.up();
+    closedOutside = await page
+      .waitForFunction(() => !window.__shown('dock-popover'), undefined, { timeout: 2000 })
+      .then(() => true, () => false);
+  }
+  checks.check('settings closes with a pinch outside the panel', closedOutside, `outside=${closedOutside}`);
+
+  // With more notes than fit, the Recent pop-up scrolls. On desktop a mouse
   // scrolls UIKit with the wheel; XR rays and hands scroll by dragging.
   await page.evaluate(async () => {
     for (let i = 0; i < 4; i++) await window.__metaNotes.session.createNote(`Extra ${i + 1}`);
   });
   await waitForSaved(page);
-  const strip = await screenPointOf(page, 'recent-card-1');
+  await clickUntil(page, 'dock-recent', () => window.__shown('dock-popover-recent'));
+  const strip = await screenPointOf(page, 'dock-recent-card-1');
   await page.mouse.move(strip.x, strip.y);
   for (let i = 0; i < 5; i++) {
     await page.mouse.wheel(80, 0);
     await page.waitForTimeout(150);
   }
   const scrollX = await page.waitForFunction(() => {
-    // The strip has no bound id, so find the scroll container above a card.
-    let node = window.__metaNotes.world.scene.getObjectByName('recent-card-0').parent;
+    let node = window.__metaNotes.world.scene.getObjectByName('dock-recent-card-0').parent;
     while (node && !node.scrollPosition) node = node.parent;
     const x = node?.scrollPosition.peek()[0] ?? 0;
     return x > 0 ? x : false;
   }, undefined, { timeout: 5000 }).then((h) => h.jsonValue(), () => 0);
-  checks.check('recent notes strip scrolls', scrollX > 0, `scrollX=${scrollX}`);
-
-  // The left chevron pages back to the start of the strip.
-  await clickUntil(page, 'recent-prev', () => {
-    let node = window.__metaNotes.world.scene.getObjectByName('recent-card-0').parent;
-    while (node && !node.scrollPosition) node = node.parent;
-    return node?.scrollPosition.peek()[0] === 0;
-  });
-  checks.check('chevron pages the strip back', true);
+  checks.check('Recent pop-up scrolls through more notes', scrollX > 0, `scrollX=${scrollX}`);
 
   console.log(`  (click retries for dropped presses: ${clickStats.retries})`);
   const pageErrors = logs.filter((l) => l.startsWith('pageerror') || l.startsWith('error'));

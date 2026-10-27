@@ -1,0 +1,413 @@
+<!--
+  The dock: Meta Notes' home, and the only screen at launch. Floating glass
+  buttons with nothing between them but passthrough: Settings, Templates,
+  Recent in one line, and New note, the main action, at the right end
+  (where the dominant hand finds it; mirrored for left-handed use later).
+  Settings opens a panel with preferences (stick mode, on by default) and
+  account connections (Google Drive, Microsoft). While it is open the
+  buttons fade away and the panel takes their place, centred where the eye
+  already is; a pinch anywhere outside it (on an invisible catcher the dock
+  system places behind it) brings them back. Recent and Templates open a small glass pop-up
+  just above the buttons (Recent scrolls sideways through up to eight
+  notes); picking an item closes it. The thin bar underneath is the grab
+  handle for moving the dock.
+
+  First launch (no notes): #dock-hint, one short line above the buttons,
+  points at New note; it goes once the first note exists.
+
+  The round buttons, the pop-up and the hint have no background here: the
+  dock system puts a liquid-glass slab behind each (src/ui/liquid-glass.ts).
+  New note is the theme's primary action, clay with white ink. Element ids
+  are addressed from src/systems/compact-dock-system.ts; keep them stable.
+-->
+<style>
+  @font-face {
+    font-family: ui;
+    src: url(../fonts/bricolage-ui.ttf);
+    font-weight: 500;
+  }
+
+  @font-face {
+    font-family: ui;
+    src: url(../fonts/bricolage-ui-strong.ttf);
+    font-weight: 600;
+  }
+
+  .dock {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .dock-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .dock-button {
+    width: 56px;
+    height: 56px;
+    border-radius: 28px;
+    align-items: center;
+    justify-content: center;
+    color: #f7f2ea;
+    cursor: pointer;
+  }
+
+  .dock-new {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 56px;
+    padding-left: 22px;
+    padding-right: 26px;
+    border-radius: 28px;
+    background-color: #d4704f;
+    color: #ffffff;
+    cursor: pointer;
+  }
+
+  .dock-new-label {
+    font-family: ui;
+    font-size: 17px;
+    font-weight: 600;
+    color: #ffffff;
+  }
+
+  .grab {
+    width: 160px;
+    height: 30px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 15px;
+    cursor: pointer;
+  }
+
+  .grab-bar {
+    width: 110px;
+    height: 10px;
+    border-radius: 5px;
+    background-color: rgba(255, 250, 242, 0.5);
+  }
+
+  .popover {
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 28px;
+  }
+
+  .popover-title {
+    font-family: ui;
+    font-size: 16px;
+    font-weight: 600;
+    color: #b3aba1;
+    padding-left: 6px;
+  }
+
+  .pop-empty {
+    font-family: ui;
+    font-size: 15px;
+    font-weight: 500;
+    color: #b3aba1;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-bottom: 4px;
+  }
+
+  .pop-strip {
+    flex-direction: row;
+    gap: 8px;
+    width: 440px;
+    overflow: scroll;
+    scrollbar-width: 0px;
+    scrollbar-color: rgba(0, 0, 0, 0);
+  }
+
+  .hint {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    padding-left: 20px;
+    padding-right: 20px;
+    border-radius: 22px;
+  }
+
+  .hint-text {
+    font-family: ui;
+    font-size: 16px;
+    font-weight: 500;
+    color: #f7f2ea;
+  }
+
+  .settings {
+    flex-direction: column;
+    gap: 6px;
+    width: 460px;
+  }
+
+  .set-section {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 600;
+    color: #b3aba1;
+    padding-left: 6px;
+    padding-top: 6px;
+  }
+
+  .set-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 12px;
+    padding-right: 10px;
+    border-radius: 18px;
+    background-color: rgba(255, 250, 242, 0.06);
+    cursor: pointer;
+  }
+
+  .set-text {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .set-title {
+    font-family: ui;
+    font-size: 16px;
+    font-weight: 600;
+    color: #f7f2ea;
+  }
+
+  .set-sub {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 500;
+    color: #b3aba1;
+  }
+
+  .switch {
+    width: 48px;
+    height: 28px;
+    border-radius: 14px;
+    padding-left: 3px;
+    padding-right: 3px;
+    flex-direction: row;
+    align-items: center;
+    background-color: #d4704f;
+  }
+
+  .knob {
+    width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    background-color: #ffffff;
+  }
+
+  .set-button {
+    height: 36px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 18px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 250, 242, 0.12);
+    cursor: pointer;
+  }
+
+  .set-button-label {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 600;
+    color: #f7f2ea;
+  }
+
+  .set-foot {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 500;
+    color: #b3aba1;
+    padding-left: 6px;
+    padding-top: 4px;
+  }
+
+  .pop-row {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .pop-card {
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 8px;
+    width: 104px;
+    padding-top: 4px;
+    padding-bottom: 6px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: 18px;
+    cursor: pointer;
+  }
+
+  .paper-frame {
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .paper-blank {
+    width: 96px;
+    height: 72px;
+    border-radius: 12px;
+    align-items: center;
+    justify-content: center;
+    background-color: #f4eee4;
+  }
+
+  .plus-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    align-items: center;
+    justify-content: center;
+    background-color: #d4704f;
+    color: #ffffff;
+  }
+
+  .pop-thumb {
+    width: 96px;
+    height: 72px;
+  }
+
+  .pop-title {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 500;
+    color: #f7f2ea;
+    padding-left: 2px;
+  }
+</style>
+<div id="dock-root" class="dock">
+  <div id="dock-popover" class="popover" style="display: none">
+    <div id="dock-popover-title" class="popover-title">Recent notes</div>
+    <div id="dock-recent-empty" class="pop-empty" style="display: none">No notes yet. Tap New note to start one.</div>
+    <div id="dock-popover-recent" class="pop-strip">
+        <div id="dock-recent-card-0" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-0" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-0" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-1" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-1" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-1" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-2" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-2" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-2" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-3" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-3" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-3" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-4" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-4" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-4" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-5" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-5" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-5" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-6" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-6" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-6" class="pop-title">Note</div>
+        </div>
+        <div id="dock-recent-card-7" class="pop-card">
+          <div class="paper-frame"><img id="dock-recent-thumb-7" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div id="dock-recent-title-7" class="pop-title">Note</div>
+        </div>
+    </div>
+    <div id="dock-popover-settings" class="settings" style="display: none">
+      <div class="set-section">Preferences</div>
+      <div id="set-stick" class="set-row">
+        <div class="set-text">
+          <div class="set-title">Stick mode</div>
+          <div class="set-sub">The dock follows your view</div>
+        </div>
+        <div id="set-stick-switch" class="switch">
+          <div id="set-stick-knob" class="knob"></div>
+        </div>
+      </div>
+      <div class="set-section">Connections</div>
+      <div class="set-row">
+        <div class="set-text">
+          <div class="set-title">Google Drive</div>
+          <div class="set-sub">Back up and export your notes</div>
+        </div>
+        <div id="set-connect-drive" class="set-button">
+          <div id="set-connect-drive-label" class="set-button-label">Connect</div>
+        </div>
+      </div>
+      <div class="set-row">
+        <div class="set-text">
+          <div class="set-title">Microsoft</div>
+          <div class="set-sub">Outlook and OneDrive account</div>
+        </div>
+        <div id="set-connect-microsoft" class="set-button">
+          <div id="set-connect-microsoft-label" class="set-button-label">Connect</div>
+        </div>
+      </div>
+      <div class="set-foot">Your notes are saved on this device.</div>
+    </div>
+    <div id="dock-popover-templates" class="pop-row" style="display: none">
+        <div id="dock-template-blank" class="pop-card">
+          <div class="paper-blank"><div class="plus-circle"><Plus width="18" height="18"></Plus></div></div>
+          <div class="pop-title">Blank</div>
+        </div>
+        <div id="dock-template-lined" class="pop-card">
+          <div class="paper-frame"><img id="dock-template-img-lined" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="pop-title">Lined</div>
+        </div>
+        <div id="dock-template-grid" class="pop-card">
+          <div class="paper-frame"><img id="dock-template-img-grid" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="pop-title">Grid</div>
+        </div>
+        <div id="dock-template-dotted" class="pop-card">
+          <div class="paper-frame"><img id="dock-template-img-dotted" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="pop-title">Dotted</div>
+        </div>
+        <div id="dock-template-cornell" class="pop-card">
+          <div class="paper-frame"><img id="dock-template-img-cornell" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="pop-title">Cornell</div>
+        </div>
+        <div id="dock-template-checklist" class="pop-card">
+          <div class="paper-frame"><img id="dock-template-img-checklist" class="pop-thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
+          <div class="pop-title">Checklist</div>
+        </div>
+    </div>
+  </div>
+  <div id="dock-hint" class="hint" style="display: none">
+    <div class="hint-text">Pinch New note to start your first page</div>
+  </div>
+  <div id="dock-row" class="dock-row">
+    <div id="dock-settings" class="dock-button">
+      <Settings width="22" height="22"></Settings>
+    </div>
+    <div id="dock-templates" class="dock-button">
+      <LayoutGrid width="22" height="22"></LayoutGrid>
+    </div>
+    <div id="dock-recent" class="dock-button">
+      <History width="22" height="22"></History>
+    </div>
+    <div id="dock-new" class="dock-new">
+      <Plus width="20" height="20"></Plus>
+      <div class="dock-new-label">New note</div>
+    </div>
+  </div>
+  <div id="dock-grab" class="grab">
+    <div id="dock-grab-bar" class="grab-bar"></div>
+  </div>
+</div>

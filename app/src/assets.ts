@@ -13,6 +13,16 @@ import {
   teacherDeskPrototype,
 } from './scene-assets/classroom-furniture.scene-asset.js';
 import { classroomRoomPrototype } from './scene-assets/classroom-room.scene-asset.js';
+import { stylusPrototype } from './scene-assets/stylus.scene-asset.js';
+import { toolWheelPrototype } from './scene-assets/tool-wheel.scene-asset.js';
+import {
+  stickyBlushPrototype,
+  stickyClassicPrototype,
+  stickyFormalPrototype,
+  stickyMintPrototype,
+  stickySkyPrototype,
+} from './scene-assets/sticky-notes.scene-asset.js';
+import { pushPinPrototype, washiTapePrototype } from './scene-assets/pins-and-tape.scene-asset.js';
 import {
   tabletHandlePrototype,
   tabletPrototype,
@@ -29,17 +39,29 @@ export default defineAssets({
   'student-chair': studentChairPrototype,
   'teacher-desk': teacherDeskPrototype,
   'tablet-handle': tabletHandlePrototype,
+  stylus: stylusPrototype,
+  'tool-wheel': toolWheelPrototype,
+  'sticky-classic': stickyClassicPrototype,
+  'sticky-formal': stickyFormalPrototype,
+  'sticky-mint': stickyMintPrototype,
+  'sticky-blush': stickyBlushPrototype,
+  'sticky-sky': stickySkyPrototype,
+  'push-pin': pushPinPrototype,
+  'washi-tape': washiTapePrototype,
   'home-window': {
     url: publicAssetUrl('ui/home-window.uikitml'),
     type: AssetType.UIKitML,
     name: 'Home Window',
   },
-  // Lock-screen wallpaper inside the home window. Photo: Alexey
-  // Topolyanskiy on Unsplash (Unsplash License); see public/images/README.md.
-  'home-wallpaper': {
-    url: publicAssetUrl('images/wallpaper-fjord.jpg'),
-    type: AssetType.Texture,
-    name: 'Home Wallpaper',
+  'compact-dock': {
+    url: publicAssetUrl('ui/compact-dock.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Compact Dock',
+  },
+  toast: {
+    url: publicAssetUrl('ui/toast.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Toast',
   },
   'tools-panel': {
     url: publicAssetUrl('ui/tools-panel.uikitml'),
