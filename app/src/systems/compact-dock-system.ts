@@ -50,6 +50,7 @@ import {
   setVisible,
   type PanelElement,
 } from '../ui/panel-helpers.js';
+import { AllNotesGrid } from '../ui/all-notes-grid.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import { THEME } from '../ui/theme.js';
@@ -84,7 +85,7 @@ const PREVIEW_PX = 224;
 const BUTTON_RADIUS_PX = 28;
 const GLASS_FROST_ALPHA = 0.8;
 /** Must match .popover border-radius in compact-dock.uikitml. */
-const POPOVER_RADIUS_PX = 28;
+const POPOVER_RADIUS_PX = 32;
 /**
  * Where the full window sits relative to the dock, in the dock's own frame
  * (metres): a little higher and further away, so the dock appears about
@@ -98,9 +99,11 @@ const SHOW_DELAY_MS = 160;
 const SHINE_MS = 900;
 
 type Popover = 'recent' | 'templates' | 'settings' | null;
+/** Recent's two views: the latest few, or every note in a scrolling grid. */
+type RecentView = 'recent' | 'all';
 
 const POPOVER_TITLES: Record<Exclude<Popover, null>, string> = {
-  recent: 'Recent notes',
+  recent: 'Notes',
   templates: 'Start a new note',
   settings: 'Settings',
 };
@@ -170,6 +173,11 @@ export class CompactDockSystem extends createSystem({}) {
   private popoverPanel!: PanelElement;
   private popoverTitle!: UIKit.Text;
   private popoverCount!: UIKit.Text;
+  private recentView: RecentView = 'recent';
+  private recentToggle!: PanelElement;
+  private readonly recentTabs = {} as Record<RecentView, { tab: PanelElement; label: UIKit.Text }>;
+  private popoverAll!: PanelElement;
+  private allNotes!: AllNotesGrid;
   private popoverRecent!: PanelElement;
   private popoverTemplates!: PanelElement;
   private recentEmpty!: PanelElement;
@@ -260,6 +268,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.popoverTemplates = ui.element('dock-popover-templates');
     this.recentEmpty = ui.element('dock-recent-empty');
     this.recentRows.push(ui.element('dock-recent-row-0'), ui.element('dock-recent-row-1'));
+    this.bindRecentToggle(ui);
     this.popoverSettings = ui.element('dock-popover-settings');
     this.bindSettings(ui);
     this.hint = ui.element('dock-hint');
@@ -441,7 +450,11 @@ export class CompactDockSystem extends createSystem({}) {
     // One thing at a time: an open panel replaces any toast.
     this.toasts.dismiss();
     // Edit times ("5 min ago") move on while the dock waits.
-    if (which === 'recent') this.renderRecent();
+    // Recent opens on the latest notes, the quick glance.
+    if (which === 'recent') {
+      this.recentView = 'recent';
+      this.renderRecent();
+    }
     this.renderPopover();
     this.animateFocus(true);
   }
@@ -562,6 +575,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.root.setProperties(fade);
     // UIKit images do not inherit opacity; fade them directly.
     for (const image of this.images) image.setProperties(fade);
+    this.allNotes.setOpacity(opacity);
     for (const slab of this.glassSlabs) slab.setOpacity(opacity);
     this.dock.scale.setScalar(this.baseScale * scale);
     if (this.focus > 0) this.paintFocus();
@@ -569,25 +583,16 @@ export class CompactDockSystem extends createSystem({}) {
 
   private renderPopover(): void {
     setVisible(this.popoverPanel, this.popover !== null);
-    // With no notes only the empty state shows (an empty grid adds its gap).
-    setVisible(this.popoverRecent, this.popover === 'recent' && this.session.summaries.length > 0);
     setVisible(this.popoverTemplates, this.popover === 'templates');
     setVisible(this.popoverSettings, this.popover === 'settings');
-    this.renderRecentImages();
     for (const image of this.templateImages) setVisible(image, this.popover === 'templates');
     setText(this.popoverTitle, POPOVER_TITLES[this.popover ?? 'recent']);
-    // Only Recent counts its items.
-    const count = this.session.summaries.length;
-    setVisible(this.popoverCount, this.popover === 'recent' && count > 0);
-    if (count > 0) setText(this.popoverCount, noteCountLabel(count));
+    this.renderRecentSections();
     this.renderHint();
   }
 
   private renderRecent(): void {
     const summaries = this.session.summaries;
-    setVisible(this.recentEmpty, summaries.length === 0);
-    setVisible(this.popoverRecent, this.popover === 'recent' && summaries.length > 0);
-    this.recentRows.forEach((row, r) => setVisible(row, summaries.length > r * RECENT_PER_ROW));
     this.renderHint();
     this.recentCards.forEach((card, i) => {
       const summary = summaries[i];
@@ -598,17 +603,63 @@ export class CompactDockSystem extends createSystem({}) {
       setText(card.meta, `Edited ${formatRelativeTime(summary.updatedAt)}`);
       void card.thumbnail.show(summary, (id) => this.session.getNote(id));
     });
-    this.renderRecentImages();
+    this.renderRecentSections();
   }
 
   /**
-   * Each thumbnail shows only with its own card: an image whose card is
-   * hidden (an empty slot) otherwise draws at a stale place once the panel
-   * glides.
+   * Which of Recent's parts show: the empty state, or the toggle and one of
+   * its two views. With no notes only the empty state shows (an empty grid
+   * adds its gap). Images follow their own card and view: an image whose
+   * card or section is hidden otherwise draws at a stale place once the
+   * panel glides.
    */
-  private renderRecentImages(): void {
-    this.recentCards.forEach((card, i) => {
-      setVisible(this.recentImages[i], this.popover === 'recent' && card.noteId !== null);
+  private renderRecentSections(): void {
+    const summaries = this.session.summaries;
+    const total = summaries.length;
+    const open = this.popover === 'recent';
+    const showLatest = open && total > 0 && this.recentView === 'recent';
+    const showAll = open && total > 0 && this.recentView === 'all';
+    setVisible(this.recentEmpty, total === 0);
+    setVisible(this.recentToggle, open && total > 0);
+    setVisible(this.popoverRecent, showLatest);
+    setVisible(this.popoverAll, showAll);
+    this.recentRows.forEach((row, r) => setVisible(row, total > r * RECENT_PER_ROW));
+    this.recentCards.forEach((card, i) => setVisible(this.recentImages[i], showLatest && card.noteId !== null));
+    this.allNotes.render(summaries, showAll);
+    // Only Recent counts its items.
+    setVisible(this.popoverCount, open && total > 0);
+    if (total > 0) setText(this.popoverCount, this.recentView === 'all' ? notesLabel(total) : noteCountLabel(total));
+    for (const view of ['recent', 'all'] as const) {
+      const selected = view === this.recentView;
+      // The selected view wears the theme's clay, like other on states.
+      this.recentTabs[view].tab.setProperties({ backgroundColor: selected ? THEME.clay : 'rgba(255, 250, 242, 0)' });
+      this.recentTabs[view].label.setProperties({ color: selected ? '#ffffff' : THEME.inkSoft });
+    }
+  }
+
+  /** Recents / Show all: switch Recent between the latest notes and every note. */
+  private bindRecentToggle(ui: PanelBinding): void {
+    this.recentToggle = ui.element('recent-toggle');
+    this.popoverAll = ui.element('dock-popover-all');
+    for (const view of ['recent', 'all'] as const) {
+      const tab = ui.onClick(`recent-tab-${view}`, () => {
+        this.recentView = view;
+        this.renderRecentSections();
+      });
+      addPressMotion(tab, this.tweens, this.cleanupFuncs, { hover: 1.05, pressed: 0.95 });
+      this.recentTabs[view] = { tab, label: ui.text(`recent-tab-${view}-label`) };
+    }
+    this.allNotes = new AllNotesGrid(this.popoverAll, {
+      perRow: RECENT_PER_ROW,
+      titleMaxChars: TITLE_MAX_CHARS,
+      thumbnailPx: PREVIEW_PX,
+      tweens: this.tweens,
+      cleanupFuncs: this.cleanupFuncs,
+      loadNote: (id) => this.session.getNote(id),
+      onOpen: (id) => {
+        void openNoteFromHome(this.session, this.toasts, id);
+        this.closePanel();
+      },
     });
   }
 
@@ -634,5 +685,10 @@ export class CompactDockSystem extends createSystem({}) {
 /** Recent's header count: "3 notes", or "8 of 12" once there are more than fit. */
 function noteCountLabel(total: number): string {
   if (total > RECENT_SLOTS) return `${RECENT_SLOTS} of ${total}`;
+  return notesLabel(total);
+}
+
+/** "1 note", "12 notes". */
+function notesLabel(total: number): string {
   return total === 1 ? '1 note' : `${total} notes`;
 }
