@@ -17,8 +17,8 @@ import {
   type BufferGeometry,
   type Material,
 } from '@iwsdk/core';
-import { classroomMaterials as m } from './classroom-materials.js';
-import { bevelBox } from './lib/hardsurface.js';
+import { classroomMaterials as m } from './materials.js';
+import { bevelBox } from '../lib/hardsurface.js';
 
 /** Top surface height of a student desk; the tablet rests just above it. */
 export const STUDENT_DESK_HEIGHT_M = 0.72;

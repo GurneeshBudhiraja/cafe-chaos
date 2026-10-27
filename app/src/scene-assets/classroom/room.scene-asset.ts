@@ -11,7 +11,7 @@
  */
 
 import { BoxGeometry, CylinderGeometry, Group, Mesh, type BufferGeometry, type Material } from '@iwsdk/core';
-import { classroomMaterials as m } from './classroom-materials.js';
+import { classroomMaterials as m } from './materials.js';
 
 export const ROOM = { minX: -3.5, maxX: 3.5, minZ: -4.6, maxZ: 4.0, height: 3.0 } as const;
 const WALL_T = 0.1;

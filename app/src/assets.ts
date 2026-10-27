@@ -7,12 +7,7 @@
  */
 
 import { AssetType, defineAssets } from '@iwsdk/core';
-import {
-  studentChairPrototype,
-  studentDeskPrototype,
-  teacherDeskPrototype,
-} from './scene-assets/classroom-furniture.scene-asset.js';
-import { classroomRoomPrototype } from './scene-assets/classroom-room.scene-asset.js';
+import { classroomAssets } from './scene-assets/classroom/classroom-assets.js';
 import { stylusPrototype } from './scene-assets/stylus.scene-asset.js';
 import { toolWheelPrototype } from './scene-assets/tool-wheel.scene-asset.js';
 import {
@@ -33,11 +28,8 @@ const publicAssetUrl = (filePath: string): string =>
 
 export default defineAssets({
   tablet: tabletPrototype,
-  // Classroom backdrop (desktop view and recordings only; hidden in XR).
-  'classroom-room': classroomRoomPrototype,
-  'student-desk': studentDeskPrototype,
-  'student-chair': studentChairPrototype,
-  'teacher-desk': teacherDeskPrototype,
+  // Classroom backdrop (desktop view and recordings only; self-contained).
+  ...classroomAssets,
   'tablet-handle': tabletHandlePrototype,
   stylus: stylusPrototype,
   'tool-wheel': toolWheelPrototype,

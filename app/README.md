@@ -84,7 +84,9 @@ src/components.ts              component manifest (shared by runtime and editor)
 src/note-components.ts         app ECS component declarations (no systems)
 src/scene-assets/              procedural 3D assets: tablet, stylus, tool wheel, sticky
                                notes, push pin, washi tape (shared theme materials,
-                               paper grain); classroom backdrop for the desktop view
+                               paper grain)
+src/scene-assets/classroom/    classroom backdrop for the desktop view (not placed;
+                               self-contained, so it can be dropped as one folder)
 src/notes/                     note model, IndexedDB store, editing session (autosave)
 src/ink/                       stroke sampling rules and stroke rendering
 src/systems/                   ECS systems: dock, toasts, stick mode (follow), tweens,
