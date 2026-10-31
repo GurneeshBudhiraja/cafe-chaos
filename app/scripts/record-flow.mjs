@@ -9,8 +9,10 @@
  *
  * Flow: only the dock at launch; Recent (the latest six), Show all
  * (scroll, then this week's notes), closed with its X; Templates: start a
- * lined page, which lands on the desk with the pen beside it; pinch the pen
- * up, write, let it go; close the page (the dock returns); open a note from
+ * lined page, which lands on the desk with the pen beside it; take notes
+ * like a student: pinch the pen up, glance at the board between lines and
+ * write each line on the page's rules, then set the pen back down beside
+ * the tablet; close the page (the dock returns); open a note from
  * Recent, which lands with its ink, and close it; Settings: stick mode off
  * and on, then close.
  *
@@ -42,6 +44,25 @@ const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
 const FACING_DEG = 90;
 const CLASSROOM_ORIGIN = { x: -1.045, z: 0.28 };
 const HAND_REST = { x: SEAT.x - 0.15, y: 0.98, z: SEAT.z + 0.15 };
+/** The chalkboard, where a student glances between lines (the classroom's front wall). */
+const BOARD = { x: CLASSROOM_ORIGIN.x - 4.55, y: 1.55, z: CLASSROOM_ORIGIN.z };
+/** What the student writes: one line per rule of the lined page, the heading underlined. */
+const NOTES = [
+  { text: 'Mitosis - ch. 5', rule: 2, underline: true },
+  { text: 'cells divide in 4 stages', rule: 3 },
+  { text: 'prophase, metaphase', rule: 4 },
+  { text: 'anaphase, telophase', rule: 5 },
+];
+/** Lined paper has a rule every twelfth of the page; letters are about 1.5 cm tall. */
+const RULE_V = 1 / 12;
+const LETTER_SIZE = 0.0021;
+/** One note line as pen strokes, sitting on its rule. */
+const noteLine = ({ text, rule, underline }, seed = rule * 7) => {
+  const v = rule * RULE_V - 0.006;
+  const { strokes, right } = layoutLine(text, { u: 0.07, v, size: LETTER_SIZE, seed });
+  if (underline) strokes.push([[0.065, v + 0.018], [right + 0.01, v + 0.016]]);
+  return strokes;
+};
 
 async function prepare(r) {
   await r.page.evaluate(
@@ -160,14 +181,22 @@ await pause(1600);
 await lookDownAtTablet(1400);
 await pause(1000);
 
-// --- The pen: pinch it up, write, let it go.
+// --- Taking notes like a student: glance at the board, then write a line
+// on the page's rules, small and steady, and again; then set the pen down.
 await rec.pickUpPen(1400);
+await pause(300);
+for (const [i, line] of NOTES.entries()) {
+  if (i > 0) {
+    await rec.lookAt(BOARD, 700);
+    await pause(900);
+    await lookDownAtTablet(700);
+    await pause(200);
+  }
+  await rec.penWrite(noteLine(line));
+}
 await pause(500);
-await rec.penWrite(layoutLine('Bio class', { u: 0.1, v: 0.22, size: 0.011, seed: 5 }).strokes, 90);
-await rec.penWrite(layoutLine('cells divide', { u: 0.1, v: 0.4, size: 0.011, seed: 9 }).strokes, 90);
-await pause(600);
 await rec.putDownPen();
-await pause(1200);
+await pause(1000);
 
 // --- Close the page: the dock comes back.
 await closeNote();

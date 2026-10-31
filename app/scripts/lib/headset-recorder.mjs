@@ -76,11 +76,15 @@ export async function startHeadsetRecording({ size = SIZE, fovDeg, captions = tr
     rayDrag: (from, to, ms) => page.evaluate(([f, t, d]) => window.__rec.rayDrag(f, t, d), [from, to, ms * speedUp]),
     /** Reach for the pen beside the tablet and pinch it up (a held writing grip). */
     pickUpPen: (ms) => page.evaluate((d) => window.__rec.pickUpPen(d), ms * speedUp),
-    /** Write strokes (page [u, v] points) with the held pen's nib, lifting between them. */
-    penWrite: (strokes, msPerPoint) =>
-      page.evaluate(([s, d]) => window.__rec.penWrite(s, d), [strokes, msPerPoint * speedUp]),
-    /** Open the pinch: the pen goes back beside the tablet. */
-    putDownPen: () => page.evaluate(() => window.__rec.putDownPen()),
+    /**
+     * Write strokes (page [u, v] points) with the held pen's nib, the way a
+     * hand writes: the nib moves at `speed` (metres a second, on screen)
+     * along each stroke, hops a centimetre between strokes, and the
+     * hand never jumps, however slowly the page renders.
+     */
+    penWrite: (strokes, speed = 0.06) => page.evaluate(([s, v]) => window.__rec.penWrite(s, v), [strokes, speed / speedUp]),
+    /** Carry the pen back to its place beside the tablet and let go of it there. */
+    putDownPen: (ms = 900) => page.evaluate((d) => window.__rec.putDownPen(d), ms * speedUp),
     writeStroke,
     /** Handwrite `text` on the tablet (see handwriting.mjs for options). */
     async writeLine(text, options) {
@@ -341,38 +345,60 @@ function installHelpers(page) {
           throw new Error(`pickUpPen: the pinch closed ${p.distanceTo(at).toFixed(3)} m from the pen, which stayed put.`);
         }
       },
-      async penWrite(strokes, msPerPoint) {
+      async penWrite(strokes, speed) {
         const held = world.globals['metaNotes.pen'];
         if (!held?.held) throw new Error('penWrite: the pen is not in hand.');
         const s = surface();
         const up = new V(0, 0, 1).transformDirection(s.matrixWorld);
-        // The nib's offset from the hand, measured with the pen held in the air.
+        // The nib's offset from the hand (fixed while the grip holds).
         const nibOffset = held.nib.clone().sub(await this.handPosition());
-        const handFor = (u, v, lift) => {
+        const nibAt = (u, v, lift) => {
           const p = toWorld(u, v);
-          return new V(p.x, p.y, p.z).addScaledVector(up, lift).sub(nibOffset);
+          return new V(p.x, p.y, p.z).addScaledVector(up, lift);
         };
+        // The nib's whole path: from where it is, hop to each stroke, trace
+        // it pressed a hair into the page (it rests on it), lift, and so on.
+        // Lifted clear of the page between strokes (the app lifts the pen off above 6 mm).
+        const HOP_M = 0.01;
+        const path = [held.nib.clone()];
         for (const points of strokes) {
-          // Hover over the first point, touch down (a hair into the page: it rests on it), trace, lift.
-          await this.moveHandTo(handFor(points[0][0], points[0][1], 0.02), 260, this.grip);
-          await this.moveHandTo(handFor(points[0][0], points[0][1], -0.001), 120, this.grip);
-          const t0 = performance.now();
-          let sent = 0;
-          while (sent < points.length - 1) {
-            const due = Math.min(points.length - 1, Math.floor((performance.now() - t0) / msPerPoint));
-            if (due > sent) {
-              sent = due;
-              const p = handFor(points[sent][0], points[sent][1], -0.001);
-              await call('set_transform', { device: 'hand-right', position: { x: p.x, y: p.y, z: p.z }, orientation: this.grip });
-            }
-            await nextFrame();
-          }
-          await nextFrame();
+          path.push(nibAt(points[0][0], points[0][1], HOP_M));
+          for (const [u, v] of points) path.push(nibAt(u, v, -0.001));
           const last = points[points.length - 1];
-          await this.moveHandTo(handFor(last[0], last[1], 0.02), 120, this.grip);
+          path.push(nibAt(last[0], last[1], HOP_M));
+        }
+        const along = [0];
+        for (let i = 1; i < path.length; i++) along.push(along[i - 1] + path[i].distanceTo(path[i - 1]));
+        const total = along[along.length - 1];
+        const t0 = performance.now();
+        const hand = new V();
+        let i = 1;
+        for (;;) {
+          const travelled = Math.min(total, ((performance.now() - t0) / 1000) * speed);
+          while (i < path.length - 1 && along[i] < travelled) i++;
+          const span = along[i] - along[i - 1];
+          const t = span > 0 ? (travelled - along[i - 1]) / span : 1;
+          hand.lerpVectors(path[i - 1], path[i], t).sub(nibOffset);
+          await call('set_transform', { device: 'hand-right', position: { x: hand.x, y: hand.y, z: hand.z }, orientation: this.grip });
+          if (travelled >= total) return;
+          await nextFrame();
         }
       },
-      async putDownPen() {
+      async putDownPen(ms) {
+        // Back to its place beside the tablet (PenSystem's resting pose), then let go.
+        const pens = world.getSystems().find((system) => system.constructor.name === 'PenSystem');
+        const tablet = world.scene.getObjectByName('Tablet');
+        const stylus = world.scene.getObjectByName('Stylus');
+        if (pens && tablet && stylus) {
+          const rest = tablet.localToWorld(pens.restPosition.clone());
+          const pinchToCentre = stylus.getWorldPosition(new V()).sub(await this.pinchPoint());
+          const pinchOffset = (await this.pinchPoint()).sub(await this.handPosition());
+          // Lift off the page first, so the nib never drags across it, then
+          // let go just above its place: it settles there, lying flat.
+          await this.moveHandTo((await this.handPosition()).add(new V(0, 0.05, 0)), ms * 0.3, this.grip);
+          const above = rest.add(new V(0, 0.02, 0));
+          await this.moveHandTo(above.sub(pinchToCentre).sub(pinchOffset), ms * 0.7, this.grip);
+        }
         await call('set_select_value', { device: 'hand-right', value: 0 });
         await sleep(300);
         for (let i = 0; i < 3; i++) await nextFrame();

@@ -92,8 +92,8 @@ await pause(1200);
 // Pinch the pen up and write with its nib, then let it go.
 await rec.pickUpPen(1400);
 await pause(500);
-await rec.penWrite(layoutLine('Hello class', { u: 0.1, v: 0.28, size: 0.011, seed: 5 }).strokes, 90);
-await rec.penWrite(layoutLine('ch. 5 notes', { u: 0.1, v: 0.46, size: 0.011, seed: 9 }).strokes, 90);
+await rec.penWrite(layoutLine('Hello class', { u: 0.07, v: 0.16, size: 0.0021, seed: 5 }).strokes);
+await rec.penWrite(layoutLine('ch. 5 notes', { u: 0.07, v: 0.24, size: 0.0021, seed: 9 }).strokes);
 await pause(500);
 await rec.putDownPen();
 // Draw the hand back from the page (close up it would touch, not point).

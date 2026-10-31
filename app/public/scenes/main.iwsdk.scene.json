@@ -105,7 +105,7 @@
       "components": {
         "WritingSurface": {
           "inkColor": "#1f1c19",
-          "inkWidth": 0.006
+          "inkWidth": 0.0035
         }
       }
     },
