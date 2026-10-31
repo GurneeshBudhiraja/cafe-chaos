@@ -7,6 +7,9 @@
 
 import {
   BackSide,
+  DirectionalLight,
+  Group,
+  HemisphereLight,
   Mesh,
   MeshBasicMaterial,
   SphereGeometry,
@@ -34,6 +37,14 @@ interface DemoHooks {
    * emulates indoor rooms; on a headset, real passthrough is the backdrop.
    */
   showPanorama(url: string, yawDeg?: number): Promise<void>;
+  /**
+   * Recording only: surround the viewer with the 3D classroom (rows of
+   * student desks facing the chalkboard), its origin at the seated
+   * student's chair, turned by `yawDeg`. The student's own desk is
+   * stretched to `deskHeightM`, so it can sit exactly on an emulated table
+   * (the desk Quest would detect) and the tablet visibly lands on it.
+   */
+  showClassroom(origin: { x: number; z: number }, yawDeg: number, deskHeightM: number): Promise<void>;
   /** Recording only: scale UI animation time (see Tweens.timeScale). */
   setAnimationSpeed(scale: number): void;
   /** Recording only: bring the home back in front of the head (a recenter). */
@@ -56,6 +67,39 @@ export function installDevHooks(hooks: DevHooks): void {
       sphere.renderOrder = -10;
       sphere.rotation.y = (yawDeg * Math.PI) / 180;
       hooks.world.scene.add(sphere);
+    },
+    async showClassroom(origin, yawDeg, deskHeightM) {
+      // Loaded on demand: the backdrop is not part of the app's scene.
+      const [{ classroomRoomPrototype }, furniture] = await Promise.all([
+        import('../scene-assets/classroom-room.scene-asset.js'),
+        import('../scene-assets/classroom-furniture.scene-asset.js'),
+      ]);
+      const room = new Group();
+      room.name = 'DemoClassroom';
+      const add = (prototype: Group, x: number, z: number) => {
+        const copy = prototype.clone();
+        copy.position.set(x, 0, z);
+        room.add(copy);
+        return copy;
+      };
+      add(classroomRoomPrototype, 0, 0);
+      add(furniture.teacherDeskPrototype, 0, -3.7);
+      // Four rows of five desks, each with its chair behind it; the seated
+      // student is in the third row, middle (the room's origin).
+      for (const z of [-2.85, -1.6, -0.35, 0.9]) {
+        for (const x of [-2.4, -1.2, 0, 1.2, 2.4]) {
+          const desk = add(furniture.studentDeskPrototype, x, z);
+          if (x === 0 && z === -0.35) desk.scale.y = deskHeightM / furniture.STUDENT_DESK_HEIGHT_M;
+          add(furniture.studentChairPrototype, x, z + 0.5);
+        }
+      }
+      const fill = new HemisphereLight(0xfffaf0, 0x9e856b, 1.8);
+      const sun = new DirectionalLight(0xfff5e0, 1.4);
+      sun.position.set(-3, 2.6, 0);
+      room.add(fill, sun);
+      room.position.set(origin.x, 0, origin.z);
+      room.rotation.y = (yawDeg * Math.PI) / 180;
+      hooks.world.scene.add(room);
     },
     setAnimationSpeed(scale) {
       getTweens(hooks.world).timeScale = scale;
