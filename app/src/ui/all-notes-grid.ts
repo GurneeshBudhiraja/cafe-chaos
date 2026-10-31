@@ -88,6 +88,8 @@ export class AllNotesGrid {
     const text = new UIKit.Container({}, ['note-text']);
     text.add(title, meta);
     const root = new UIKit.Container({}, ['note-card']);
+    // Named like markup elements, so debugging tools and tests can address it.
+    root.name = `dock-all-card-${this.cards.length}`;
     root.add(paper, text);
     this.rows[this.rows.length - 1].add(root);
 

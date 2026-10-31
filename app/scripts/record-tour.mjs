@@ -5,8 +5,10 @@
  * photo stands in for passthrough, since IWER only emulates indoor rooms.
  *
  * Flow (a returning user; the first launch is in the smoke test): the dock
- * appears with its shine; open Recent (its panel takes the buttons' place),
- * point across the grid of notes and open one (a toast: writing is next);
+ * appears with its shine; open Recent (its panel takes the buttons' place)
+ * on the latest six notes, switch to Show all, scroll through every note,
+ * filter to this week's lined pages, then open one (a toast: writing is
+ * next);
  * open Templates, point along the papers and start a grid page (a toast
  * confirms it); open Settings, switch stick mode off and on, try Connect
  * (it answers "Coming soon" in place) and close it with its close button;
@@ -40,7 +42,15 @@ const notes = [
   { title: 'Standup', paper: 'lined', strokes: lines(['ship grid', 'record tour'], 0.0036, 61) },
   { title: 'Sketches', paper: 'blank', strokes: lines(['tree', 'bench'], 0.005, 71) },
   { title: 'Spanish verbs', paper: 'lined', strokes: lines(['ser, estar', 'tener'], 0.0036, 81) },
+  { title: 'Book club', paper: 'lined', strokes: lines(['ch. 7 by Fri'], 0.0036, 91) },
+  { title: 'Gym plan', paper: 'checklist', strokes: lines(['squats', 'rows'], 0.0036, 101) },
+  { title: 'Recipes', paper: 'lined', strokes: lines(['dal tadka', 'naan'], 0.0036, 111) },
+  { title: 'Chem quiz', paper: 'grid', strokes: lines(['NaCl', 'H2O'], 0.0045, 121) },
+  { title: 'Gift ideas', paper: 'dotted', strokes: lines(['scarf', 'book'], 0.0038, 131) },
+  { title: 'Budget', paper: 'grid', strokes: lines(['rent 900', 'food 250'], 0.004, 141) },
 ];
+/** Days since some notes were edited, so Show all's When filters have something to sort. */
+const EDITED_DAYS_AGO = { 'Trip ideas': 30, Groceries: 3, 'Physics ch. 4': 12, 'Lab notes': 5, 'Reading list': 45, Standup: 2 };
 const HEAD = { x: 0, y: 1.55, z: 0.05 };
 
 // Set the stage off camera: outdoors, standing, a few handwritten notes.
@@ -57,6 +67,17 @@ async function prepare(r) {
     }
     await session.flush();
   }, notes);
+  await r.page.evaluate(async (ages) => {
+    const { session, store } = window.__metaNotes;
+    for (const summary of session.summaries) {
+      const days = ages[summary.title];
+      if (!days) continue;
+      const note = await store.get(summary.id);
+      note.updatedAt = Date.now() - days * 86400000;
+      await store.put(note);
+    }
+    session.summaries = await store.list();
+  }, EDITED_DAYS_AGO);
   // Standing eye height, the hand held low and forward like a relaxed pinch.
   await r.moveHead(HEAD);
   await r.moveHand({ x: 0.2, y: 1.2, z: -0.22 });
@@ -101,16 +122,38 @@ await lookAtPanel('compact-dock', 300, 0.1);
 await rest();
 await pause(2000);
 
-// --- Recent: point across the grid, open a note (a toast: writing is next).
+// --- Recent: the latest six, then Show all: scroll, filter, open a note.
 await rec.tap('dock-recent');
 await rest();
 await lookAtOpenPanel(700);
 await pause(1000);
-for (const card of [0, 1, 2, 6, 5]) {
+for (const card of [0, 1, 2, 5]) {
   await rec.point(`dock-recent-card-${card}`);
-  await pause(550);
+  await pause(500);
 }
-await rec.tap('dock-recent-card-5');
+await rec.tap('recent-tab-all');
+await rest();
+await lookAtOpenPanel(600);
+await pause(1200);
+// Drag the grid up with the ray to scroll down to older notes, then back.
+const grid = await rec.objectCenter('dock-popover-all');
+await rec.rayDrag({ x: grid.x, y: grid.y - 0.08, z: grid.z }, { x: grid.x, y: grid.y + 0.2, z: grid.z }, 1400);
+await rest();
+await pause(900);
+await rec.rayDrag({ x: grid.x, y: grid.y + 0.08, z: grid.z }, { x: grid.x, y: grid.y - 0.25, z: grid.z }, 1200);
+await rest();
+await pause(700);
+// This week's lined pages ("5 of 14"); pinching Lined again would clear it.
+await rec.tap('when-week');
+await rest();
+await pause(900);
+await rec.tap('paper-lined');
+await rest();
+await lookAtOpenPanel(500);
+await pause(1200);
+await rec.point('dock-all-card-1');
+await pause(500);
+await rec.tap('dock-all-card-1');
 await rest();
 await pause(2400);
 
