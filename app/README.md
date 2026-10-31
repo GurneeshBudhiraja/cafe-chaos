@@ -39,9 +39,11 @@ note write fail (for checking error handling by hand).
   was edited. Its Recents / Show all toggle switches to a scrolling grid of
   every note, filtered by when it was edited and sorted by date or title.
 - **Note page:** New note, a template, or a note picked from Recent opens
-  it on a tablet right in front of you, a little below eye level and
-  facing you, showing its paper and ink, with its title and a close button
-  above it. The dock fades away while it is open; closing it brings the
+  it on a tablet lying flat on the desk in front of you, like an iPad on a
+  table: the nearest table or desk that Quest knows from Space Setup,
+  within reach and below your eyes. With no desk it floats straight ahead,
+  a little below eye level and facing you. It shows the note's paper and
+  ink, with its title and a close button in a bar just beyond it. The dock fades away while it is open; closing it brings the
   dock back. Ink can be drawn on the page with a ray (pointer).
 - **Templates:** six papers (Blank, Lined, Grid, Dotted, Cornell, Checklist),
   each with a line on what it is for; picking one starts a note on it.

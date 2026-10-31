@@ -1,12 +1,14 @@
 /**
- * NoteViewSystem: shows the open note on the tablet, right in front of the
- * viewer, with a slim bar above it (the note's title and a close button).
+ * NoteViewSystem: shows the open note on the tablet, with a slim bar above
+ * it (the note's title and a close button).
  *
  * Starting or opening a note from the home opens the view (NoteViewState):
- * the dock fades away, and the tablet and bar fade in centred in the view,
- * a little below eye level and turned to face the eyes, so nothing needs
- * looking for. The bar's close button fades them out and the dock returns.
- * The page shows the note's paper; InkSystem draws its ink on top.
+ * the dock fades away and the tablet fades in lying flat on the desk in
+ * front of the viewer, like an iPad on a table (see desk-placement.ts), with
+ * the bar standing just behind its far edge. With no desk found it floats
+ * straight ahead instead, a little below eye level and turned to face the
+ * eyes. The bar's close button fades them out and the dock returns. The
+ * page shows the note's paper; InkSystem draws its ink on top.
  *
  * Hidden, the tablet and bar also leave pointer input (no RayInteractable),
  * since rays still hit invisible meshes.
@@ -18,6 +20,7 @@ import {
   Mesh,
   RayInteractable,
   Vector3,
+  XRPlane as DetectedPlane,
   type Entity,
   type MeshPhysicalMaterial,
   type Object3D,
@@ -28,6 +31,7 @@ import type { PaperStyle } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
 import { TABLET_TOP_M, WRITING_SURFACE_NAME } from '../scene-assets/tablet.scene-asset.js';
+import { findDeskSpot, type DetectedSurface } from '../ui/desk-placement.js';
 import { faceViewer } from '../ui/drag.js';
 import { truncate } from '../ui/format.js';
 import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
@@ -40,9 +44,11 @@ import { easeInCubic, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.
 
 const TABLET_NODE = 'tablet';
 const BAR_NODE = 'note-bar';
-/** Metres out from the eyes, and degrees below eye level, of the page's centre. */
+/** With no desk: metres out from the eyes, and degrees below eye level, of the page's centre. */
 const DISTANCE_M = 0.55;
 const BELOW_EYE_LEVEL_DEG = 4;
+/** On a desk the page sits this high above the desk's surface: the tablet's body (metres). */
+const ON_DESK_M = 0.01;
 /** Space between the tablet's top edge and the bar (metres). */
 const BAR_GAP_M = 0.025;
 /** Must match .bar border-radius in note-bar.uikitml. */
@@ -62,7 +68,9 @@ const CLOSE_STATES = {
   pressed: 'rgba(255, 250, 242, 0.3)',
 };
 
-export class NoteViewSystem extends createSystem({}) {
+export class NoteViewSystem extends createSystem({
+  planes: { required: [DetectedPlane] },
+}) {
   private session!: NoteSession;
   private noteView!: NoteViewState;
   private tweens!: Tweens;
@@ -80,6 +88,11 @@ export class NoteViewSystem extends createSystem({}) {
   private drawnPaper: PaperStyle | null = null;
   private readonly headPosition = new Vector3();
   private readonly euler = new Euler(0, 0, 0, 'YXZ');
+  private readonly deskSpot = new Vector3();
+  // Bound once; reads the detected planes for desk-placement.ts.
+  private readonly surfaces: Iterable<DetectedSurface> = {
+    [Symbol.iterator]: () => this.surfaceList(),
+  };
 
   init(): void {
     const tabletEntity = this.world.getSceneEntity(TABLET_NODE);
@@ -190,11 +203,33 @@ export class NoteViewSystem extends createSystem({}) {
 
   // ------------------------------------------------------------- placement
 
-  /** Straight ahead of the head (its yaw), a little below eye level, facing the eyes. */
+  /** Flat on the desk in front of the viewer, or floating straight ahead without one. */
   private place(): void {
     this.player.head.getWorldPosition(this.headPosition);
     this.player.head.getWorldQuaternion(this.tablet.quaternion);
     const yaw = this.euler.setFromQuaternion(this.tablet.quaternion, 'YXZ').y;
+    const barHeightPx = panelSize(this.barRoot).peek()?.[1] ?? 0;
+    const barHalfM = (barHeightPx / 2) * UIKIT_PIXEL_M * this.bar.scale.y;
+
+    if (findDeskSpot(this.surfaces, this.headPosition, yaw, this.deskSpot)) {
+      // Page up, its bottom edge toward the viewer.
+      this.tablet.position.copy(this.deskSpot);
+      this.tablet.position.y += ON_DESK_M;
+      const toViewer = Math.atan2(
+        this.headPosition.x - this.deskSpot.x,
+        this.headPosition.z - this.deskSpot.z,
+      );
+      this.tablet.quaternion.setFromEuler(this.euler.set(-Math.PI / 2, toViewer, 0, 'YXZ'));
+      // The bar stands just behind the far edge, facing the eyes.
+      this.tablet.updateMatrixWorld();
+      this.bar.position.set(0, TABLET_TOP_M + BAR_GAP_M, 0);
+      this.tablet.localToWorld(this.bar.position);
+      this.bar.position.y += barHalfM;
+      faceViewer(this.bar, this.world);
+      return;
+    }
+
+    // No desk: straight ahead, a little below eye level, facing the eyes.
     this.tablet.position.set(
       this.headPosition.x - Math.sin(yaw) * DISTANCE_M,
       this.headPosition.y - Math.tan((BELOW_EYE_LEVEL_DEG * Math.PI) / 180) * DISTANCE_M,
@@ -202,11 +237,18 @@ export class NoteViewSystem extends createSystem({}) {
     );
     faceViewer(this.tablet, this.world);
     // The bar sits on the tablet's top edge, in the tablet's own plane.
-    const barHeightPx = panelSize(this.barRoot).peek()?.[1] ?? 0;
-    const barHalfM = (barHeightPx / 2) * UIKIT_PIXEL_M * this.bar.scale.y;
+    this.tablet.updateMatrixWorld();
     this.bar.position.set(0, TABLET_TOP_M + BAR_GAP_M + barHalfM, 0);
     this.tablet.localToWorld(this.bar.position);
     this.bar.quaternion.copy(this.tablet.quaternion);
+  }
+
+  /** The detected planes, as desk-placement.ts reads them. */
+  private *surfaceList(): Generator<DetectedSurface> {
+    for (const entity of this.queries.planes.entities) {
+      const plane = entity.getValue(DetectedPlane, '_plane') as XRPlane | undefined;
+      if (plane && entity.object3D) yield { object: entity.object3D, plane };
+    }
   }
 
   // ------------------------------------------------------------- rendering
