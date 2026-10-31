@@ -35,8 +35,14 @@ note write fail (for checking error handling by hand).
   one is open the dock's buttons fade away and the panel takes their place,
   where you are already looking; its close button (or picking an item)
   brings the buttons back.
-- **Recent:** a grid of up to eight notes, each with its ink, title and when
-  it was edited; the header counts your notes.
+- **Recent:** the latest six notes, each with its ink, title and when it
+  was edited. Its Recents / Show all toggle switches to a scrolling grid of
+  every note, filtered by when it was edited and sorted by date or title.
+- **Note page:** New note, a template, or a note picked from Recent opens
+  it on a tablet right in front of you, a little below eye level and
+  facing you, showing its paper and ink, with its title and a close button
+  above it. The dock fades away while it is open; closing it brings the
+  dock back. Ink can be drawn on the page with a ray (pointer).
 - **Templates:** six papers (Blank, Lined, Grid, Dotted, Cornell, Checklist),
   each with a line on what it is for; picking one starts a note on it.
 - **Settings:** the stick mode switch (remembered on this device) and Google
@@ -50,9 +56,9 @@ note write fail (for checking error handling by hand).
 
 ## Not wired up yet
 
-- **Writing.** Opening a note shows a toast; the tablet (`src/scene-assets/`)
-  and `InkSystem` exist but no tablet is placed in the scene, so
-  `npm run record:writing` does not run.
+- **Handwriting with your hand.** The page takes ink from a ray today;
+  writing with a fingertip or pen on the page comes next, and
+  `npm run record:writing` has not been updated for the note page.
 - **Camera capture and XR status.** `camera-capture-system.ts` and
   `xr-status-system.ts` are kept but not registered in `src/index.ts`, so
   `smoke-camera.mjs` cannot pass until capture returns.
@@ -88,8 +94,8 @@ src/scene-assets/              procedural 3D assets: tablet, stylus, tool wheel,
                                paper grain); classroom backdrop for the desktop view
 src/notes/                     note model, IndexedDB store, editing session (autosave)
 src/ink/                       stroke sampling rules and stroke rendering
-src/systems/                   ECS systems: dock, toasts, stick mode (follow), tweens,
-                               home window (parked), ink, tablet handle, XR scroll fix
+src/systems/                   ECS systems: dock, note page, toasts, stick mode (follow),
+                               tweens, home window (parked), ink, tablet handle, XR scroll fix
 src/ui/                        UI services and helpers: theme, liquid glass, toasts,
                                home mode, preferences, press motion, sounds, drag
 src/util/                      dev-only logging and test hooks

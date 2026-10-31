@@ -47,6 +47,9 @@ const RAIL_LENGTH_M = 0.17;
 const RAIL_HEIGHT_M = 0.004;
 const RAIL_DEPTH_M = 0.007;
 
+/** Height of the tablet's top edge (the stylus rail's top) above the page centre. */
+export const TABLET_TOP_M = SURFACE_HEIGHT_M / 2 + BEZEL_M + RAIL_HEIGHT_M;
+
 /**
  * The page: paper grain under a light clear coat, so the room's light
  * slides across it like a real tablet screen (the "screen reflection"),

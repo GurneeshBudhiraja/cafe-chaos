@@ -65,6 +65,7 @@ import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import { THEME } from '../ui/theme.js';
 import { openNoteFromHome, startNote } from '../ui/note-actions.js';
+import { getNoteView, type NoteViewState } from '../ui/note-view.js';
 import { getToasts, type ToastService } from '../ui/toasts.js';
 import { easeInCubic, easeOutBack, easeOutCubic, getTweens, pulse, type Tweens } from '../ui/tweens.js';
 
@@ -168,6 +169,8 @@ export class CompactDockSystem extends createSystem({}) {
   private session!: NoteSession;
   private toasts!: ToastService;
   private homeMode!: HomeModeState;
+  /** While a note is open on the page in front of the viewer, the dock steps aside. */
+  private noteView!: NoteViewState;
   private tweens!: Tweens;
   private dock!: Object3D;
   private baseScale = 1;
@@ -236,6 +239,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.session = getNoteSession(this.world);
     this.toasts = getToasts(this.world);
     this.homeMode = getHomeMode(this.world);
+    this.noteView = getNoteView(this.world);
     const panel = this.world.getSceneObject<UIKitMLAsset>(DOCK_NODE);
     if (!panel) {
       console.warn('[CompactDockSystem] Compact dock missing from the scene.');
@@ -311,7 +315,7 @@ export class CompactDockSystem extends createSystem({}) {
       const card: RecentCard = {
         root: ui.onClick(`dock-recent-card-${i}`, () => {
           if (!card.noteId) return;
-          void openNoteFromHome(this.session, this.toasts, card.noteId);
+          void openNoteFromHome(this.session, this.noteView, card.noteId);
           this.closePanel();
         }),
         title: ui.text(`dock-recent-title-${i}`),
@@ -347,6 +351,13 @@ export class CompactDockSystem extends createSystem({}) {
     this.cleanupFuncs.push(
       this.session.subscribe(() => this.renderRecent()),
       this.homeMode.subscribe((mode) => this.applyMode(mode)),
+      // A note open in front of the viewer takes the dock's place; closing
+      // it brings the dock back.
+      this.noteView.subscribe((open) => {
+        if (!this.shown) return;
+        if (open) this.hideDock();
+        else this.showDock();
+      }),
     );
     this.cleanupFuncs.push(this.homeMode.subscribeRecenter(() => (this.placeInFrames = SETTLE_FRAMES)));
     this.cleanupFuncs.push(() => this.recenterSpace?.removeEventListener('reset', this.onRecenter));
@@ -369,7 +380,7 @@ export class CompactDockSystem extends createSystem({}) {
     if (this.placeInFrames > 0 && --this.placeInFrames === 0) {
       this.placeInFrontOfHead();
       // Appear (again) in the new place, with the fade and shine.
-      if (this.homeMode.mode === 'compact') this.showDock();
+      if (this.homeMode.mode === 'compact' && !this.noteView.isOpen) this.showDock();
     }
   }
 
@@ -399,7 +410,7 @@ export class CompactDockSystem extends createSystem({}) {
   // -------------------------------------------------------------- commands
 
   private newNote(paper: PaperStyle): void {
-    startNote(this.session, this.toasts, paper);
+    void startNote(this.session, this.noteView, paper);
     this.closePanel();
   }
 
@@ -569,7 +580,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.shown = compact;
     if (compact) {
       this.placeRelativeToWindow();
-      this.showDock();
+      if (!this.noteView.isOpen) this.showDock();
     } else {
       this.placeWindowAtDock();
       this.popover = null;
@@ -717,7 +728,7 @@ export class CompactDockSystem extends createSystem({}) {
       cleanupFuncs: this.cleanupFuncs,
       loadNote: (id) => this.session.getNote(id),
       onOpen: (id) => {
-        void openNoteFromHome(this.session, this.toasts, id);
+        void openNoteFromHome(this.session, this.noteView, id);
         this.closePanel();
       },
     });

@@ -1,0 +1,62 @@
+<!--
+  Note bar: one slim glass line just above the open note's page. It names
+  the note and its paper, and its close button puts the page away and
+  brings the dock back. NoteViewSystem (src/systems/note-view-system.ts)
+  fills it in, puts a glass slab behind #note-bar-root and keeps it on the
+  tablet's top edge. Keep the ids stable.
+-->
+<style>
+  @font-face {
+    font-family: ui;
+    src: url(../fonts/bricolage-text.ttf);
+    font-weight: 400;
+  }
+
+  @font-face {
+    font-family: ui;
+    src: url(../fonts/bricolage-ui.ttf);
+    font-weight: 500;
+  }
+
+  .bar {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    height: 52px;
+    padding-left: 20px;
+    padding-right: 8px;
+    border-radius: 26px;
+  }
+
+  .bar-title {
+    font-family: ui;
+    font-size: 17px;
+    font-weight: 500;
+    color: #f7f2ea;
+  }
+
+  .bar-paper {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 400;
+    color: #b3aba1;
+  }
+
+  .close-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 250, 242, 0.1);
+    color: #f7f2ea;
+    cursor: pointer;
+  }
+</style>
+<div id="note-bar-root" class="bar">
+  <div id="note-bar-title" class="bar-title">Note</div>
+  <div id="note-bar-paper" class="bar-paper">Blank page</div>
+  <div id="note-bar-close" class="close-button">
+    <X width="18" height="18"></X>
+  </div>
+</div>
