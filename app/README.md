@@ -27,8 +27,9 @@ note write fail (for checking error handling by hand).
 
 - **Home:** the dock, a row of floating glass buttons (Settings, Templates,
   Recent, then New note at the right end). It is the only screen at launch:
-  entering XR places it about 85 cm out and 20 degrees below the gaze, and a
-  headset recenter brings it back there. Stick mode (it follows your view) is
+  entering XR places it about 85 cm out, straight ahead at eye level, and a
+  headset recenter brings it back there. Open panels shrink if needed to fit
+  50 degrees of the view's height, so nothing needs a look up or down. Stick mode (it follows your view) is
   on by default.
 - **Panels:** Settings, Templates and Recent each open a glass panel. While
   one is open the dock's buttons fade away and the panel takes their place,

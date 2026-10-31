@@ -4,7 +4,7 @@
  *
  * Settings, Templates, Recent in one line, then New note at the right end,
  * with nothing between them but passthrough. Entering XR (or a headset
- * recenter) places it in the bottom half of the view, centred. A grab bar
+ * recenter) places it straight ahead at eye level, centred. A grab bar
  * under the row moves the dock (pinch and drag); on release it turns to
  * face the viewer.
  *
@@ -78,13 +78,20 @@ const HINT_RADIUS_PX = 22;
 const PULSE_MS = 1400;
 const PULSE_DELAY_MS = 900;
 /**
- * Launch placement: the button row about 85 cm out and 20 degrees below the
- * gaze, in the bottom half of the view, centred. The dock's origin is its
- * bottom edge, about 0.15 m below the row's centre (at the scene's scale).
+ * Launch placement: the button row about 85 cm out, straight ahead at eye
+ * level, so the eye lands on it without looking up or down. The dock's
+ * origin is its bottom edge, about 0.15 m below the row's centre (at the
+ * scene's scale).
  */
 const HOME_DISTANCE_M = 0.85;
-const HOME_BELOW_GAZE_DEG = 20;
 const ROW_ABOVE_ORIGIN_M = 0.15;
+/**
+ * An open panel shrinks, if needed, to fit this much of the view's height
+ * (degrees, centred on the row), so it reads without looking up or down.
+ */
+const PANEL_FIT_DEG = 50;
+/** UIKit's default pixel size (metres per UIKit pixel before scaling); the dock does not change it. */
+const UIKIT_PIXEL_M = 0.01;
 /** Frames to wait after XR starts (or a recenter) for a settled head pose. */
 const SETTLE_FRAMES = 12;
 const TITLE_MAX_CHARS = 18;
@@ -378,10 +385,9 @@ export class CompactDockSystem extends createSystem({}) {
     head.getWorldPosition(this.headPosition);
     head.getWorldQuaternion(this.headQuaternion);
     const yaw = this.euler.setFromQuaternion(this.headQuaternion, 'YXZ').y;
-    const drop = HOME_DISTANCE_M * Math.tan((HOME_BELOW_GAZE_DEG * Math.PI) / 180);
     this.dock.position.set(
       this.headPosition.x - Math.sin(yaw) * HOME_DISTANCE_M,
-      this.headPosition.y - drop - ROW_ABOVE_ORIGIN_M,
+      this.headPosition.y - ROW_ABOVE_ORIGIN_M,
       this.headPosition.z - Math.cos(yaw) * HOME_DISTANCE_M,
     );
     faceViewer(this.dock, this.world);
@@ -522,10 +528,27 @@ export class CompactDockSystem extends createSystem({}) {
       el.setProperties({ opacity: buttons, pointerEvents: hidden ? 'none' : 'auto' } as Record<string, unknown>);
     }
     for (const slab of this.rowSlabs) slab.setOpacity(buttons);
-    // Glide the panel down so its centre lands on the row's centre.
+    // Glide the panel down so its centre lands on the row's centre, shrunk
+    // if needed to fit the view's height (its centre stays put).
     const height = panelSize(this.popoverPanel).peek()?.[1] ?? 0;
     const glide = Math.max(0, height / 2 - ROW_CENTRE_PX) * f;
-    this.popoverPanel.setProperties({ transformTranslateY: glide } as Record<string, unknown>);
+    const scale = 1 + (this.fitScale(height) - 1) * f;
+    this.popoverPanel.setProperties({
+      // UIKit applies the translate in the panel's scaled space.
+      transformTranslateY: glide / scale,
+      transformScaleX: scale,
+      transformScaleY: scale,
+    } as Record<string, unknown>);
+  }
+
+  /** The scale (at most 1) that fits a panel this tall into PANEL_FIT_DEG at its distance. */
+  private fitScale(heightPx: number): number {
+    if (heightPx <= 0) return 1;
+    this.player.head.getWorldPosition(this.headPosition);
+    const distance = this.headPosition.distanceTo(this.dock.position);
+    const fitHeightM = 2 * distance * Math.tan((PANEL_FIT_DEG * Math.PI) / 360);
+    const heightM = heightPx * UIKIT_PIXEL_M * this.baseScale;
+    return Math.min(1, fitHeightM / heightM);
   }
 
   // ------------------------------------------------------------- rendering
