@@ -82,7 +82,7 @@ export async function startHeadsetRecording({ size = SIZE, fovDeg, captions = tr
      * along each stroke, hops a centimetre between strokes, and the
      * hand never jumps, however slowly the page renders.
      */
-    penWrite: (strokes, speed = 0.06) => page.evaluate(([s, v]) => window.__rec.penWrite(s, v), [strokes, speed / speedUp]),
+    penWrite: (strokes, speed = 0.09) => page.evaluate(([s, v]) => window.__rec.penWrite(s, v), [strokes, speed / speedUp]),
     /** Carry the pen back to its place beside the tablet and let go of it there. */
     putDownPen: (ms = 900) => page.evaluate((d) => window.__rec.putDownPen(d), ms * speedUp),
     writeStroke,
@@ -360,7 +360,8 @@ function installHelpers(page) {
         // it pressed a hair into the page (it rests on it), lift, and so on.
         // Lifted clear of the page between strokes (the app lifts the pen off above 6 mm).
         const HOP_M = 0.01;
-        const path = [held.nib.clone()];
+        // First up and clear of the page (the pen may start beside it, lower).
+        const path = [held.nib.clone(), held.nib.clone().addScaledVector(up, 0.03)];
         for (const points of strokes) {
           path.push(nibAt(points[0][0], points[0][1], HOP_M));
           for (const [u, v] of points) path.push(nibAt(u, v, -0.001));
