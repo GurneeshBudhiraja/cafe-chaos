@@ -360,8 +360,9 @@ function installHelpers(page) {
         // it pressed a hair into the page (it rests on it), lift, and so on.
         // Lifted clear of the page between strokes (the app lifts the pen off above 6 mm).
         const HOP_M = 0.01;
-        // First up and clear of the page (the pen may start beside it, lower).
-        const path = [held.nib.clone(), held.nib.clone().addScaledVector(up, 0.03)];
+        // First up and clear of the page: picked up from beside the tablet,
+        // the nib starts a few centimetres below the page's surface.
+        const path = [held.nib.clone(), held.nib.clone().addScaledVector(up, 0.06)];
         for (const points of strokes) {
           path.push(nibAt(points[0][0], points[0][1], HOP_M));
           for (const [u, v] of points) path.push(nibAt(u, v, -0.001));
