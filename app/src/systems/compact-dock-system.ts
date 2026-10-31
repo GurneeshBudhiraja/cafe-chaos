@@ -148,8 +148,6 @@ const SWITCH_MS = 220;
  */
 const CONNECT_SOON_MS = 2200;
 const CLEAR = 'rgba(255, 250, 242, 0)';
-/** Must match .chip background-color in compact-dock.uikitml. */
-const CHIP_FILL = 'rgba(255, 250, 242, 0.08)';
 
 interface RecentCard {
   root: PanelElement;
@@ -192,12 +190,7 @@ export class CompactDockSystem extends createSystem({}) {
   private allNotes!: AllNotesGrid;
   private filters: NoteFilters = { ...DEFAULT_FILTERS };
   /** Each filter option's chip, painted clay while it is chosen. */
-  private readonly filterChips: Array<{
-    chip: PanelElement;
-    label: UIKit.Text;
-    chosen: () => boolean;
-    restFill: string;
-  }> = [];
+  private readonly filterChips: Array<{ chip: PanelElement; label: UIKit.Text; chosen: () => boolean }> = [];
   private popoverRecent!: PanelElement;
   private popoverTemplates!: PanelElement;
   private recentEmpty!: PanelElement;
@@ -661,7 +654,7 @@ export class CompactDockSystem extends createSystem({}) {
     for (const view of ['recent', 'all'] as const) {
       paintChoice(this.recentTabs[view].tab, this.recentTabs[view].label, view === this.recentView);
     }
-    for (const { chip, label, chosen, restFill } of this.filterChips) paintChoice(chip, label, chosen(), restFill);
+    for (const { chip, label, chosen } of this.filterChips) paintChoice(chip, label, chosen());
   }
 
   private countLabel(total: number, matching: number): string {
@@ -697,22 +690,18 @@ export class CompactDockSystem extends createSystem({}) {
     });
   }
 
-  /** Show all's filters: when a note was edited, its paper, and the order. */
+  /** Show all's filters: when a note was edited, and the order. */
   private bindFilters(ui: PanelBinding): void {
-    // Segments sit on their own track; paper chips stand alone, so they keep a faint fill.
-    // A paper chip is a toggle: pinching the chosen one again shows every paper.
-    const option = <K extends keyof NoteFilters>(key: K, value: NoteFilters[K], id: string, restFill = CLEAR) => {
+    const option = <K extends keyof NoteFilters>(key: K, value: NoteFilters[K], id: string) => {
       const chip = ui.onClick(id, () => {
-        const clears = key === 'paper' && this.filters[key] === value;
-        this.filters = { ...this.filters, [key]: clears ? DEFAULT_FILTERS[key] : value };
+        this.filters = { ...this.filters, [key]: value };
         this.renderRecentSections();
       });
       addPressMotion(chip, this.tweens, this.cleanupFuncs, { hover: 1.05, pressed: 0.95 });
-      this.filterChips.push({ chip, label: ui.text(`${id}-label`), chosen: () => this.filters[key] === value, restFill });
+      this.filterChips.push({ chip, label: ui.text(`${id}-label`), chosen: () => this.filters[key] === value });
     };
     for (const when of ['all', 'today', 'week', 'older'] as WhenFilter[]) option('when', when, `when-${when}`);
     for (const sort of ['recent', 'title'] as NoteSort[]) option('sort', sort, `sort-${sort}`);
-    for (const paper of PAPER_STYLES) option('paper', paper, `paper-${paper}`, CHIP_FILL);
   }
 
   // ------------------------------------------------------------- placement
@@ -746,8 +735,8 @@ function notesLabel(total: number): string {
 }
 
 /** A chosen option (a tab or filter chip) wears the theme's clay. */
-function paintChoice(chip: PanelElement, label: UIKit.Text, chosen: boolean, restFill = CLEAR): void {
-  chip.setProperties({ backgroundColor: chosen ? THEME.clay : restFill });
+function paintChoice(chip: PanelElement, label: UIKit.Text, chosen: boolean): void {
+  chip.setProperties({ backgroundColor: chosen ? THEME.clay : CLEAR });
   label.setProperties({ color: chosen ? '#ffffff' : THEME.inkSoft });
 }
 

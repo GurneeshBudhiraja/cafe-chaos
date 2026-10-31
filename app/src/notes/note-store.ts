@@ -9,20 +9,18 @@
  * browser. A backup export arrives in a later phase.
  */
 
-import { parseNote, type Note, type PaperStyle } from './note-model.js';
+import { parseNote, type Note } from './note-model.js';
 
 /** What the note list needs, without loading every page of every note. */
 export interface NoteSummary {
   id: string;
   title: string;
   updatedAt: number;
-  /** The note's paper, so lists can filter by it without loading the note. */
-  paper: PaperStyle;
 }
 
 /** The list entry for a note. */
 export function summarize(note: Note): NoteSummary {
-  return { id: note.id, title: note.title, updatedAt: note.updatedAt, paper: note.paper };
+  return { id: note.id, title: note.title, updatedAt: note.updatedAt };
 }
 
 export interface NoteStore {

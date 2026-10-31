@@ -7,7 +7,7 @@
   account connections (Google Drive, Microsoft); Recent a grid of up to
   six notes (ink, title and when it was edited), with a Recents / Show all
   toggle for a scrolling grid of every note (filtered by when it was
-  edited and its paper, sorted by date or title); Templates a grid of six
+  edited, sorted by date or title); Templates a grid of six
   papers with a line on what each is for. While a panel is open the
   buttons fade away and it takes their place, centred where the eye
   already is; its close button (or picking an item) brings them back. The
@@ -185,28 +185,8 @@
     justify-content: space-between;
   }
 
-  .chip-row {
-    flex-direction: row;
-    gap: 6px;
-  }
 
-  .chip {
-    height: 30px;
-    padding-left: 12px;
-    padding-right: 12px;
-    border-radius: 15px;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(255, 250, 242, 0.08);
-    cursor: pointer;
-  }
 
-  .chip-label {
-    font-family: ui;
-    font-size: 13px;
-    font-weight: 500;
-    color: #b3aba1;
-  }
 
   .no-match {
     font-family: ui;
@@ -564,26 +544,6 @@
             <div id="sort-title" class="segment">
               <div id="sort-title-label" class="segment-label">A-Z</div>
             </div>
-          </div>
-        </div>
-        <div class="chip-row">
-          <div id="paper-blank" class="chip">
-            <div id="paper-blank-label" class="chip-label">Blank</div>
-          </div>
-          <div id="paper-lined" class="chip">
-            <div id="paper-lined-label" class="chip-label">Lined</div>
-          </div>
-          <div id="paper-grid" class="chip">
-            <div id="paper-grid-label" class="chip-label">Grid</div>
-          </div>
-          <div id="paper-dotted" class="chip">
-            <div id="paper-dotted-label" class="chip-label">Dotted</div>
-          </div>
-          <div id="paper-cornell" class="chip">
-            <div id="paper-cornell-label" class="chip-label">Cornell</div>
-          </div>
-          <div id="paper-checklist" class="chip">
-            <div id="paper-checklist-label" class="chip-label">Checklist</div>
           </div>
         </div>
       </div>

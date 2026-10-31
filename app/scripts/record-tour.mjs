@@ -7,7 +7,7 @@
  * Flow (a returning user; the first launch is in the smoke test): the dock
  * appears with its shine; open Recent (its panel takes the buttons' place)
  * on the latest six notes, switch to Show all, scroll through every note,
- * filter to this week's lined pages, then open one (a toast: writing is
+ * filter to this week's notes, then open one (a toast: writing is
  * next);
  * open Templates, point along the papers and start a grid page (a toast
  * confirms it); open Settings, switch stick mode off and on, try Connect
@@ -143,11 +143,8 @@ await pause(900);
 await rec.rayDrag({ x: grid.x, y: grid.y + 0.08, z: grid.z }, { x: grid.x, y: grid.y - 0.25, z: grid.z }, 1200);
 await rest();
 await pause(700);
-// This week's lined pages ("5 of 14"); pinching Lined again would clear it.
+// This week's notes ("11 of 14").
 await rec.tap('when-week');
-await rest();
-await pause(900);
-await rec.tap('paper-lined');
 await rest();
 await lookAtOpenPanel(500);
 await pause(1200);
