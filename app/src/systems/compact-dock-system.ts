@@ -45,9 +45,11 @@ import {
   addStateColors,
   NEUTRAL_STATES,
   PanelBinding,
+  panelSize,
   PRIMARY_STATES,
   setText,
   setVisible,
+  UIKIT_PIXEL_M,
   type PanelElement,
 } from '../ui/panel-helpers.js';
 import { AllNotesGrid } from '../ui/all-notes-grid.js';
@@ -90,8 +92,6 @@ const ROW_ABOVE_ORIGIN_M = 0.15;
  * (degrees, centred on the row), so it reads without looking up or down.
  */
 const PANEL_FIT_DEG = 50;
-/** UIKit's default pixel size (metres per UIKit pixel before scaling); the dock does not change it. */
-const UIKIT_PIXEL_M = 0.01;
 /** Frames to wait after XR starts (or a recenter) for a settled head pose. */
 const SETTLE_FRAMES = 12;
 const TITLE_MAX_CHARS = 18;
@@ -172,12 +172,14 @@ export class CompactDockSystem extends createSystem({}) {
   private dock!: Object3D;
   private baseScale = 1;
   private glassSlabs: LiquidGlass[] = [];
+  /** Glass behind the open panel (faded with the panel). */
+  private popoverSlab!: LiquidGlass;
   /** Pop-up thumbnails and paper previews (faded with the dock). */
   private readonly images: PanelElement[] = [];
   /**
    * The same images by pop-up. Each is hidden with its own pop-up section:
    * a hidden section's images otherwise keep drawing at stale positions
-   * once a panel glides (white sheets across the view).
+   * once the panel moves (white sheets across the view).
    */
   private readonly recentImages: PanelElement[] = [];
   private readonly templateImages: PanelElement[] = [];
@@ -287,7 +289,7 @@ export class CompactDockSystem extends createSystem({}) {
     const closeButton = ui.onClick('dock-popover-close', () => this.closePanel());
     addStateColors(closeButton, CLOSE_STATES, this.cleanupFuncs);
     addPressMotion(closeButton, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
-    glass(this.popoverPanel, POPOVER_RADIUS_PX);
+    this.popoverSlab = glass(this.popoverPanel, POPOVER_RADIUS_PX);
     this.popoverTitle = ui.text('dock-popover-title');
     this.popoverCount = ui.text('dock-popover-count');
     this.popoverRecent = ui.element('dock-popover-recent');
@@ -467,8 +469,8 @@ export class CompactDockSystem extends createSystem({}) {
   }
 
   /**
-   * A panel takes the stage: the buttons fade away and the panel glides
-   * down into their place, centred where the eye already is.
+   * A panel takes the stage: the buttons fade away as the panel fades in
+   * over them, already in place, centred where the eye already is.
    */
   private openPanel(which: Exclude<Popover, null>): void {
     this.popover = which;
@@ -519,7 +521,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.paintFocus();
   }
 
-  /** The buttons' fade and the panel's glide for the current focus. */
+  /** The buttons fade out as the panel fades in (and back), for the current focus. */
   private paintFocus(): void {
     const f = this.focus;
     const buttons = this.dockOpacity * (1 - f);
@@ -528,14 +530,22 @@ export class CompactDockSystem extends createSystem({}) {
       el.setProperties({ opacity: buttons, pointerEvents: hidden ? 'none' : 'auto' } as Record<string, unknown>);
     }
     for (const slab of this.rowSlabs) slab.setOpacity(buttons);
-    // Glide the panel down so its centre lands on the row's centre, shrunk
-    // if needed to fit the view's height (its centre stays put).
+    // The panel fades in place: it never moves or grows. UIKit images do
+    // not inherit opacity, so they fade with it directly.
+    const panel = this.dockOpacity * f;
+    const fade = { opacity: panel } as Record<string, unknown>;
+    for (const image of this.images) image.setProperties(fade);
+    this.allNotes.setOpacity(panel);
+    this.popoverSlab.setOpacity(panel);
+    // Its centre sits on the row's centre, shrunk if needed to fit the
+    // view's height (the centre stays put).
     const height = panelSize(this.popoverPanel).peek()?.[1] ?? 0;
-    const glide = Math.max(0, height / 2 - ROW_CENTRE_PX) * f;
-    const scale = 1 + (this.fitScale(height) - 1) * f;
+    const lift = Math.max(0, height / 2 - ROW_CENTRE_PX);
+    const scale = this.fitScale(height);
     this.popoverPanel.setProperties({
+      opacity: f,
       // UIKit applies the translate in the panel's scaled space.
-      transformTranslateY: glide / scale,
+      transformTranslateY: lift / scale,
       transformScaleX: scale,
       transformScaleY: scale,
     } as Record<string, unknown>);
@@ -654,7 +664,7 @@ export class CompactDockSystem extends createSystem({}) {
    * its two views. With no notes only the empty state shows (an empty grid
    * adds its gap). Images follow their own card and view: an image whose
    * card or section is hidden otherwise draws at a stale place once the
-   * panel glides.
+   * panel moves.
    */
   private renderRecentSections(): void {
     const summaries = this.session.summaries;
@@ -761,12 +771,4 @@ function notesLabel(total: number): string {
 function paintChoice(chip: PanelElement, label: UIKit.Text, chosen: boolean): void {
   chip.setProperties({ backgroundColor: chosen ? THEME.clay : CLEAR });
   label.setProperties({ color: chosen ? '#ffffff' : THEME.inkSoft });
-}
-
-/** A UIKit element's laid-out size signal (UIKit pixels), missing from its public type. */
-function panelSize(element: PanelElement): {
-  peek(): [number, number] | undefined;
-  subscribe(listener: () => void): () => void;
-} {
-  return (element as unknown as { size: ReturnType<typeof panelSize> }).size;
 }
