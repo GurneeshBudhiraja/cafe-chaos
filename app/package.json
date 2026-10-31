@@ -17,7 +17,8 @@
     "smoke:notes": "node scripts/smoke-notes.mjs",
     "record:writing": "node scripts/record-writing-flow.mjs",
     "record:tour": "node scripts/record-tour.mjs",
-    "record:desk": "node scripts/record-desk.mjs"
+    "record:desk": "node scripts/record-desk.mjs",
+    "record:flow": "node scripts/record-flow.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",
