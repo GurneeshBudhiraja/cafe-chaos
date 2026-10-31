@@ -10,9 +10,11 @@
  * passthrough take their place.
  *
  * Flow: seated at the desk, looking ahead, only the dock shows; New note:
- * the dock fades and the tablet lands flat on the desk; look down at it and
- * draw a stroke with the pointer; close it with the bar's X (the dock comes
- * back); open a note from Recent: it lands on the desk with its ink.
+ * the dock fades and the tablet lands flat on the desk, the pen beside it;
+ * look down, pinch the pen up and write two lines with its nib, then let it
+ * go (it goes back beside the tablet); close the page with the bar's X (the
+ * dock comes back); open a note from Recent: it lands on the desk with its
+ * ink.
  *
  * Usage: start the dev server (`npm run dev`), then npm run record:desk
  * Output: artifacts/desk.mp4
@@ -33,6 +35,8 @@ const TABLE_HEIGHT_M = 0.79;
 const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
 /** Facing -X: the head's yaw, and the classroom's (its chalkboard ahead). */
 const FACING_DEG = 90;
+/** The right hand at rest: low, in front of the body and to the right. */
+const HAND_REST = { x: SEAT.x - 0.15, y: 0.98, z: SEAT.z + 0.15 };
 /** Where the classroom's origin (the student's chair) goes: the desk then sits on the table. */
 const CLASSROOM_ORIGIN = { x: -1.045, z: 0.28 };
 
@@ -53,7 +57,7 @@ async function prepare(r) {
   }, notes);
   // Seated at the desk, the hand resting low; the home comes in front.
   await r.moveHead(SEAT);
-  await r.moveHand({ x: SEAT.x - 0.15, y: 0.98, z: SEAT.z + 0.15 });
+  await r.moveHand(HAND_REST);
   await r.turnHead(FACING_DEG, 0, 100);
   await r.page.evaluate(() => window.__metaNotes.demo.recenterHome());
   await r.pause(800);
@@ -67,6 +71,7 @@ const rest = () =>
     SEAT.x - 0.2,
     SEAT.z + 0.3,
   ]);
+const noteOpen = () => page.evaluate(() => window.__metaNotes.world.globals['metaNotes.noteView'].isOpen);
 const tabletAt = () =>
   page.evaluate(() => {
     const p = window.__metaNotes.world.getSceneObject('tablet').position;
@@ -84,12 +89,15 @@ await pause(1600);
 const tablet = await tabletAt();
 await rec.lookAt({ ...tablet, x: tablet.x - 0.02 }, 1400);
 await pause(1200);
-// A stroke with the pointer, across the page.
-await rec.rayDrag(
-  { x: tablet.x + 0.04, y: tablet.y + 0.002, z: tablet.z - 0.1 },
-  { x: tablet.x - 0.05, y: tablet.y + 0.002, z: tablet.z + 0.08 },
-  1400,
-);
+// Pinch the pen up and write with its nib, then let it go.
+await rec.pickUpPen(1400);
+await pause(500);
+await rec.penWrite(layoutLine('Hello class', { u: 0.1, v: 0.28, size: 0.011, seed: 5 }).strokes, 90);
+await rec.penWrite(layoutLine('ch. 5 notes', { u: 0.1, v: 0.46, size: 0.011, seed: 9 }).strokes, 90);
+await pause(500);
+await rec.putDownPen();
+// Draw the hand back from the page (close up it would touch, not point).
+await rec.moveHand(HAND_REST);
 await rest();
 await pause(1400);
 
@@ -97,6 +105,11 @@ await pause(1400);
 await rec.point('note-bar-close');
 await pause(500);
 await rec.tap('note-bar-close');
+// The emulated pinch can miss a small button at low frame rates: tap again if needed.
+if (await noteOpen()) {
+  await pause(400);
+  await rec.tap('note-bar-close');
+}
 await rest();
 await rec.turnHead(FACING_DEG, 0, 1200);
 await pause(1400);

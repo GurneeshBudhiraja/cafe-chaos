@@ -44,7 +44,13 @@ note write fail (for checking error handling by hand).
   within reach and below your eyes. With no desk it floats straight ahead,
   a little below eye level and facing you. It shows the note's paper and
   ink, with its title and a close button in a bar just beyond it. The dock fades away while it is open; closing it brings the
-  dock back. Ink can be drawn on the page with a ray (pointer).
+  dock back.
+- **The pen:** it lies beside the tablet's right edge. Pinch next to it with
+  a tracked hand to pick it up: it sits in the pinch like a real pen, from
+  the web of the thumb to just past the fingertips, and ink flows while its
+  nib touches the page (the nib rests on the page, never through it). Open
+  the pinch and it goes back beside the tablet. Without the pen in hand, a
+  ray (pointer) can still draw on the page.
 - **Templates:** six papers (Blank, Lined, Grid, Dotted, Cornell, Checklist),
   each with a line on what it is for; picking one starts a note on it.
 - **Settings:** the stick mode switch (remembered on this device) and Google
@@ -58,9 +64,9 @@ note write fail (for checking error handling by hand).
 
 ## Not wired up yet
 
-- **Handwriting with your hand.** The page takes ink from a ray today;
-  writing with a fingertip or pen on the page comes next, and
-  `npm run record:writing` has not been updated for the note page.
+- **The pen with controllers.** Only tracked hands pick up the pen so far;
+  `npm run record:writing` has not been updated for the note page
+  (`npm run record:desk` films the pen on a classroom desk).
 - **Camera capture and XR status.** `camera-capture-system.ts` and
   `xr-status-system.ts` are kept but not registered in `src/index.ts`, so
   `smoke-camera.mjs` cannot pass until capture returns.
@@ -96,7 +102,7 @@ src/scene-assets/              procedural 3D assets: tablet, stylus, tool wheel,
                                paper grain); classroom backdrop for the desktop view
 src/notes/                     note model, IndexedDB store, editing session (autosave)
 src/ink/                       stroke sampling rules and stroke rendering
-src/systems/                   ECS systems: dock, note page, toasts, stick mode (follow),
+src/systems/                   ECS systems: dock, note page, pen, toasts, stick mode (follow),
                                tweens, home window (parked), ink, tablet handle, XR scroll fix
 src/ui/                        UI services and helpers: theme, liquid glass, toasts,
                                home mode, preferences, press motion, sounds, drag

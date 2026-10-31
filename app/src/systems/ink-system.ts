@@ -1,9 +1,13 @@
 /**
  * InkSystem: turns pointer input on a tablet into strokes.
  *
- * Input comes from IWSDK's pointer events (RayInteractable on the tablet), so
- * the same code handles a desktop mouse, XR controller rays, hand rays, and
- * hand pokes (index finger touching the surface).
+ * Two kinds of input:
+ * - The pen in hand (PenSystem, PenState): ink flows while its nib touches
+ *   the page, like a real pen on paper. While the pen is held, rays do not
+ *   ink, so the hand's ray cannot draw alongside it.
+ * - IWSDK's pointer events (RayInteractable on the tablet): a desktop mouse,
+ *   XR controller rays, hand rays, and hand pokes (index finger touching
+ *   the surface).
  *
  * Interaction rules from the product plan:
  * - Ink starts only on the writing surface and stops when the pointer leaves.
@@ -29,6 +33,7 @@ import { classifySample, isOnPage } from '../ink/stroke-sampling.js';
 import { StrokeMesh, type SurfaceSize } from '../ink/stroke-mesh.js';
 import { createStroke, type Page, type Stroke } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
+import { getPen, type PenState } from '../ui/pen-state.js';
 import type { InkDocument } from '../notes/note-session.js';
 import { TabletHandle, WritingSurface } from '../note-components.js';
 import { devLog } from '../util/dev-log.js';
@@ -55,6 +60,11 @@ interface PointerEventTarget {
 
 /** Ink floats this far in front of the page (meters) to avoid z-fighting. */
 const INK_OFFSET_M = 0.0012;
+/** The pen's nib touches the page within this height of it, and lifts off above LIFT (metres). */
+const PEN_TOUCH_M = 0.003;
+const PEN_LIFT_M = 0.006;
+/** Stands in for a pointer id for the pen's strokes (pointer ids are not negative). */
+const PEN_POINTER_ID = -1;
 
 const SURFACE_SIZE: SurfaceSize = {
   widthM: SURFACE_WIDTH_M,
@@ -80,9 +90,11 @@ export class InkSystem extends createSystem({
   private readonly tablets = new Map<Entity, TabletInk>();
   private readonly localPoint = new Vector3();
   private document!: InkDocument;
+  private pen!: PenState;
 
   init(): void {
     this.document = getNoteSession(this.world);
+    this.pen = getPen(this.world);
 
     // 'qualify' only reports entities that match later, so attach the tablets
     // that already exist (the level loads before app systems register).
@@ -107,6 +119,26 @@ export class InkSystem extends createSystem({
         for (const entity of [...this.tablets.keys()]) this.detachTablet(entity);
       },
     );
+  }
+
+  /** The pen: ink while its nib touches a page. */
+  update(): void {
+    for (const tablet of this.tablets.values()) {
+      const penStroke = tablet.active?.pointerId === PEN_POINTER_ID;
+      if (!this.pen.held || !tablet.page || this.queries.movingHandles.entities.size > 0) {
+        if (penStroke) this.endStroke(tablet);
+        continue;
+      }
+      tablet.surface.updateWorldMatrix(true, false);
+      const height = tablet.surface.worldToLocal(this.localPoint.copy(this.pen.nib)).z;
+      const touching = height < (penStroke ? PEN_LIFT_M : PEN_TOUCH_M);
+      if (!touching || !this.toPageCoords(tablet, this.pen.nib)) {
+        if (penStroke) this.endStroke(tablet);
+        continue;
+      }
+      if (penStroke) this.extendStroke(tablet, PEN_POINTER_ID);
+      else if (!tablet.active) this.startStroke(tablet, PEN_POINTER_ID);
+    }
   }
 
   /** Replace the page shown on every tablet (used when opening a note). */
@@ -183,6 +215,7 @@ export class InkSystem extends createSystem({
 
   private handleDown(tablet: TabletInk, event: InkPointerEvent): void {
     if (tablet.active || !tablet.page) return; // One stroke; a note is open.
+    if (this.pen.held) return; // The pen writes; the ray does not.
     if (this.queries.movingHandles.entities.size > 0) return; // Tablet moving.
     if (event.object !== tablet.surface) return; // Bezel, not page.
     if (!this.toPageCoords(tablet, event.point)) return;
@@ -198,7 +231,13 @@ export class InkSystem extends createSystem({
       this.endStroke(tablet);
       return;
     }
+    this.extendStroke(tablet, event.pointerId);
+  }
 
+  /** Add the page point in `this.localPoint` to the active stroke. */
+  private extendStroke(tablet: TabletInk, pointerId: number): void {
+    const active = tablet.active;
+    if (!active) return;
     const points = active.mesh.stroke.points;
     const x = this.localPoint.x;
     const y = this.localPoint.y;
@@ -212,7 +251,7 @@ export class InkSystem extends createSystem({
     if (decision === 'split') {
       // Treat a large jump as tracking recovery: start fresh at the new point.
       this.endStroke(tablet);
-      this.startStroke(tablet, event.pointerId);
+      this.startStroke(tablet, pointerId);
       return;
     }
     points.push(x, y);

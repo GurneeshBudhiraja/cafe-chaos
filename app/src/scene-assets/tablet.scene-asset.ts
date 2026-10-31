@@ -49,6 +49,10 @@ const RAIL_DEPTH_M = 0.007;
 
 /** Height of the tablet's top edge (the stylus rail's top) above the page centre. */
 export const TABLET_TOP_M = SURFACE_HEIGHT_M / 2 + BEZEL_M + RAIL_HEIGHT_M;
+/** Half the tablet's width, bezel included. */
+export const TABLET_HALF_WIDTH_M = SURFACE_WIDTH_M / 2 + BEZEL_M;
+/** How far the tablet's back sits behind the page (the body's depth). */
+export const TABLET_BACK_M = BODY_DEPTH_M;
 
 /**
  * The page: paper grain under a light clear coat, so the room's light
