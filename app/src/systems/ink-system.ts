@@ -14,7 +14,10 @@
  * does (ToolState, set on the tool wheel):
  * - pen, marker, highlighter: draws a stroke in the tool's colour and width;
  * - eraser: rubs out every stroke it passes over (its ring shows its size
- *   while the pen hovers); one rub is one undoable edit.
+ *   while the pen hovers); one rub is one undoable edit;
+ * - lasso: draws a loop that selects the strokes inside it; a touch inside
+ *   the selection's box then drags it, and lifting moves it (lasso.ts).
+ *   Delete (on the lasso's options ring) removes the selection.
  * Undo and redo, picked on the wheel, reverse and re-apply ink edits.
  *
  * Interaction rules from the product plan:
@@ -38,10 +41,11 @@ import {
   type Entity,
 } from '@iwsdk/core';
 import { EraserCursor } from '../ink/eraser-cursor.js';
+import { LassoSelection } from '../ink/lasso.js';
 import { strokeTouchesCircle } from '../ink/stroke-hit.js';
 import { classifySample, isOnPage } from '../ink/stroke-sampling.js';
 import { StrokeMesh, type SurfaceSize } from '../ink/stroke-mesh.js';
-import { isInkTool, type ActionId } from '../ink/tool-catalog.js';
+import { isInkTool, type PageAction } from '../ink/tool-catalog.js';
 import { createStroke, type Page, type Stroke } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
@@ -89,7 +93,11 @@ const SURFACE_SIZE: SurfaceSize = {
 type Contact =
   | { kind: 'ink'; pointerId: number; mesh: StrokeMesh }
   /** The strokes rubbed out so far (hidden now, removed from the note on lift). */
-  | { kind: 'erase'; pointerId: number; erased: Set<string> };
+  | { kind: 'erase'; pointerId: number; erased: Set<string> }
+  /** Drawing a lasso loop. */
+  | { kind: 'lasso'; pointerId: number }
+  /** Dragging the lasso's selection. */
+  | { kind: 'move'; pointerId: number };
 
 /** Per-tablet runtime state. */
 interface TabletInk {
@@ -97,6 +105,7 @@ interface TabletInk {
   surface: Mesh;
   inkLayer: Group;
   eraserCursor: EraserCursor;
+  lasso: LassoSelection;
   /** The page currently rendered, or null while no note is open. */
   page: Page | null;
   meshes: Map<string, StrokeMesh>;
@@ -128,10 +137,20 @@ export class InkSystem extends createSystem({
       this.document.subscribe((change) => {
         // Another note opened (or the first one loaded): show its page.
         if (change === 'active') this.showPage(this.document.getActivePage());
-        // The page's ink changed by an edit (erase, undo, redo): match it.
-        if (change === 'strokes') for (const tablet of this.tablets.values()) this.syncMeshes(tablet);
+        // The page's ink changed by an edit (erase, move, undo, redo): match it.
+        if (change === 'strokes') {
+          for (const tablet of this.tablets.values()) {
+            this.syncMeshes(tablet);
+            if (tablet.page) tablet.lasso.refresh(tablet.page);
+          }
+        }
       }),
       this.tools.onAction((action) => this.runAction(action)),
+      // The selection belongs to the lasso: picking another tool drops it.
+      this.tools.subscribe((change) => {
+        if (change !== 'tool' || this.tools.tool === 'lasso') return;
+        for (const tablet of this.tablets.values()) tablet.lasso.clear(tablet.meshes);
+      }),
       this.queries.tablets.subscribe('qualify', (entity) =>
         this.attachTablet(entity),
       ),
@@ -194,10 +213,18 @@ export class InkSystem extends createSystem({
     tablet.eraserCursor.show(local.x, local.y, radius * SURFACE_WIDTH_M);
   }
 
-  /** Undo or redo, picked on the tool wheel. */
-  private runAction(action: ActionId): void {
+  /** Undo, redo or delete the selection, picked on the tool wheel. */
+  private runAction(action: PageAction): void {
     // An edit half-made (a stroke being drawn) is finished first, so it can be undone too.
     for (const tablet of this.tablets.values()) this.endContact(tablet);
+    if (action === 'delete-selection') {
+      for (const tablet of this.tablets.values()) {
+        const ids = new Set(tablet.lasso.ids);
+        tablet.lasso.clear(tablet.meshes);
+        this.document.eraseStrokes(ids);
+      }
+      return;
+    }
     const done = action === 'undo' ? this.document.undo() : this.document.redo();
     devLog('ink', `${action}: ${done ? 'done' : 'nothing to ' + action}`);
   }
@@ -213,6 +240,7 @@ export class InkSystem extends createSystem({
     // Drop (do not commit) an unfinished stroke, so it cannot land in the
     // newly opened note. Its mesh is removed with the others below.
     tablet.active = null;
+    tablet.lasso.clear(tablet.meshes);
     this.clearMeshes(tablet);
     tablet.page = page;
     for (const stroke of page?.strokes ?? []) this.addStrokeMesh(tablet, stroke);
@@ -282,6 +310,7 @@ export class InkSystem extends createSystem({
       surface,
       inkLayer,
       eraserCursor: new EraserCursor(inkLayer),
+      lasso: new LassoSelection(inkLayer, SURFACE_SIZE),
       page: null,
       meshes: new Map(),
       active: null,
@@ -317,6 +346,7 @@ export class InkSystem extends createSystem({
     const tablet = this.tablets.get(entity);
     if (!tablet) return;
     tablet.detach();
+    tablet.lasso.dispose(tablet.meshes);
     this.clearMeshes(tablet);
     tablet.eraserCursor.dispose();
     tablet.inkLayer.removeFromParent();
@@ -351,6 +381,18 @@ export class InkSystem extends createSystem({
   /** Touch down at the page point in `this.localPoint`: begin what the current tool does. */
   private startContact(tablet: TabletInk, pointerId: number): void {
     const tool = this.tools.tool;
+    const { x, y } = this.localPoint;
+    if (tool === 'lasso') {
+      // Inside the selection's box: drag it. Anywhere else: a new loop.
+      if (tablet.lasso.contains(x, y)) {
+        tablet.lasso.startMove(x, y);
+        tablet.active = { kind: 'move', pointerId };
+      } else {
+        tablet.lasso.startLoop(x, y, tablet.meshes);
+        tablet.active = { kind: 'lasso', pointerId };
+      }
+      return;
+    }
     if (tool === 'eraser') {
       tablet.active = { kind: 'erase', pointerId, erased: new Set() };
       this.rubOut(tablet, tablet.active.erased);
@@ -373,6 +415,14 @@ export class InkSystem extends createSystem({
       this.rubOut(tablet, active.erased);
       return;
     }
+    if (active.kind === 'lasso') {
+      tablet.lasso.extendLoop(this.localPoint.x, this.localPoint.y);
+      return;
+    }
+    if (active.kind === 'move') {
+      tablet.lasso.moveTo(this.localPoint.x, this.localPoint.y, tablet.meshes);
+      return;
+    }
     const points = active.mesh.stroke.points;
     const x = this.localPoint.x;
     const y = this.localPoint.y;
@@ -393,11 +443,20 @@ export class InkSystem extends createSystem({
     active.mesh.appendLatestPoint();
   }
 
-  /** Lift: hand the finished stroke, or the rubbed-out strokes, to the note. */
+  /** Lift: hand the finished stroke, the rubbed-out strokes or the moved ones to the note; or close a loop. */
   private endContact(tablet: TabletInk): void {
     const active = tablet.active;
     if (!active) return;
     tablet.active = null;
+    if (active.kind === 'lasso') {
+      if (tablet.page) devLog('ink', `lasso selected ${tablet.lasso.finishLoop(tablet.page)} strokes`);
+      return;
+    }
+    if (active.kind === 'move') {
+      const moved = tablet.page ? tablet.lasso.finishMove(tablet.page) : null;
+      if (moved) this.document.replaceStrokes(moved);
+      return;
+    }
     if (active.kind === 'erase') {
       this.document.eraseStrokes(active.erased);
       if (active.erased.size > 0) devLog('ink', `erased ${active.erased.size} strokes`);

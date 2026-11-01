@@ -319,6 +319,67 @@ await pickOnWheel(() => aimPoint('undo'), () => aimPoint(null));
 s = await state();
 expect(s.strokes === beforeWrite && !s.wheelOpen, 'undo takes back a stroke just written', { ...s, beforeWrite });
 
+// --- Phase 4: the lasso. Loop around "Cells", drag it lower, undo; delete it, undo.
+/** The lasso's selection and where the first selected stroke starts (page units). */
+const selection = () =>
+  page.evaluate(() => {
+    const { world, session } = window.__metaNotes;
+    const ink = world.getSystems().find((x) => x.constructor.name === 'InkSystem');
+    const lasso = [...ink.tablets.values()][0].lasso;
+    const first = session.active.pages[0].strokes.find((st) => lasso.ids.has(st.id));
+    return { count: lasso.ids.size, ids: [...lasso.ids], at: first ? [first.points[0], first.points[1]] : null };
+  });
+const strokeStart = (id) =>
+  page.evaluate((i) => {
+    const st = window.__metaNotes.session.active.pages[0].strokes.find((x) => x.id === i);
+    return st ? [st.points[0], st.points[1]] : null;
+  }, id);
+await liftPen();
+await pickOnWheel(() => aimPoint('lasso'), () => aimPoint(null));
+s = await state();
+expect(s.tool === 'lasso' && !s.wheelOpen, 'the lasso is picked', s);
+// A loose loop around "Cells" (and its highlight), clear of the writing below it.
+const loop = [];
+for (let i = 0; i <= 28; i++) {
+  const a = (i / 28) * Math.PI * 2;
+  loop.push([0.2 + Math.cos(a) * 0.15, 0.415 + Math.sin(a) * 0.075]);
+}
+await rec.penWrite([loop], 0.08);
+let sel = await selection();
+expect(sel.count > 0, `the loop selects the strokes inside it (${sel.count})`, sel);
+await liftPen();
+await closeLook('15-lasso-selected', 0.2, 0.45);
+const firstId = sel.ids[0];
+const startBefore = await strokeStart(firstId);
+await rec.penWrite([[[0.2, 0.42], [0.45, 0.7]]], 0.06);
+const startAfter = await strokeStart(firstId);
+const moved = [startAfter[0] - startBefore[0], startAfter[1] - startBefore[1]];
+expect(Math.abs(moved[0] - 0.25) < 0.03 && Math.abs(moved[1] - 0.28) < 0.03, `dragging inside the box moves it (${moved.map((m) => m.toFixed(3))})`, { moved });
+sel = await selection();
+expect(sel.count > 0, 'the moved strokes stay selected', sel);
+await liftPen();
+await closeLook('16-lasso-moved', 0.4, 0.62);
+await pickOnWheel(() => aimPoint('undo'), () => aimPoint(null));
+const startUndone = await strokeStart(firstId);
+expect(Math.abs(startUndone[0] - startBefore[0]) < 1e-9 && Math.abs(startUndone[1] - startBefore[1]) < 1e-9, 'undo puts the moved strokes back', { startUndone, startBefore });
+// Delete, from the lasso's options ring (below the wheel).
+const beforeDelete = (await state()).strokes;
+sel = await selection();
+await liftPen();
+await rec.penTap(2);
+await lookAtWheel();
+await rec.moveNibTo(await aimToward(270, OPTIONS_REACH), 450);
+await shot('17-lasso-delete-option');
+await rec.penTap(1);
+await rec.moveNibTo(await aimPoint(null), 300);
+await rec.penTap(1);
+s = await state();
+expect(s.strokes === beforeDelete - sel.count && !s.wheelOpen, `Delete removes the selection (${beforeDelete} -> ${s.strokes})`, s);
+await closeLook('18-lasso-deleted', 0.2, 0.45);
+await pickOnWheel(() => aimPoint('undo'), () => aimPoint('pen'), () => aimPoint(null));
+s = await state();
+expect(s.strokes === beforeDelete && s.tool === 'pen', 'undo brings the deleted strokes back; back to the pen', s);
+
 // --- Writing again works, and putting the pen down still lets go.
 await rec.putDownPen();
 s = await state();

@@ -16,6 +16,9 @@ export type ToolId = 'pen' | 'marker' | 'highlighter' | 'eraser' | 'lasso';
 /** One-shot actions on the wheel: picking them does something once. */
 export type ActionId = 'undo' | 'redo';
 
+/** Things done to the page at once: the wheel's actions, and deleting the lasso's selection (on its options ring). */
+export type PageAction = ActionId | 'delete-selection';
+
 /** Everything on the wheel's ring of segments. */
 export type WheelItemId = ToolId | ActionId;
 

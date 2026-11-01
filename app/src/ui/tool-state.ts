@@ -9,7 +9,7 @@
  */
 
 import type { World } from '@iwsdk/core';
-import { TOOL_SPECS, type ActionId, type SizeId, type ToolId } from '../ink/tool-catalog.js';
+import { TOOL_SPECS, type PageAction, type SizeId, type ToolId } from '../ink/tool-catalog.js';
 
 /** A tool's chosen colour (index into its swatches) and size. */
 export interface ToolStyle {
@@ -26,7 +26,7 @@ export class ToolState {
   wheelOpen = false;
   private readonly styles = new Map<ToolId, ToolStyle>();
   private readonly listeners = new Set<(change: ToolChange) => void>();
-  private readonly actionListeners = new Set<(action: ActionId) => void>();
+  private readonly actionListeners = new Set<(action: PageAction) => void>();
 
   /** The chosen colour and size of `tool` (the current tool by default). */
   style(tool: ToolId = this.tool): ToolStyle {
@@ -75,12 +75,12 @@ export class ToolState {
     this.emit('wheel');
   }
 
-  /** Ask for a one-shot action (undo, redo); whoever owns the note carries it out. */
-  runAction(action: ActionId): void {
+  /** Ask for a one-shot action (undo, redo, delete the selection); whoever owns the note carries it out. */
+  runAction(action: PageAction): void {
     for (const listener of this.actionListeners) listener(action);
   }
 
-  onAction(listener: (action: ActionId) => void): () => void {
+  onAction(listener: (action: PageAction) => void): () => void {
     this.actionListeners.add(listener);
     return () => this.actionListeners.delete(listener);
   }

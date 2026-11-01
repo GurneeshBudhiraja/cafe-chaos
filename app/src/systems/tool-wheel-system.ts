@@ -20,8 +20,8 @@
  *
  * Picking what is aimed at: a single tap on the pen, or (free hand) letting
  * go of the pinch. A tool becomes the current tool (the ring then shows its
- * colours and sizes); a colour or size applies to the current tool; undo
- * and redo run once.
+ * colours and sizes); a colour or size applies to the current tool; undo,
+ * redo and the lasso's Delete run once.
  * The wheel stays open, so several picks can follow; it fades away when
  * the hub is picked, the nib touches the page (writing again), the pen is
  * put down or the page closes.
@@ -258,7 +258,8 @@ export class ToolWheelSystem extends createSystem({}) {
     if (option) {
       playUiSound('press');
       if (option.kind === 'swatch') this.tools.selectSwatch(option.index);
-      else this.tools.selectSize(option.size);
+      else if (option.kind === 'size') this.tools.selectSize(option.size);
+      else this.tools.runAction('delete-selection');
       return;
     }
     if (this.hovered === null) {

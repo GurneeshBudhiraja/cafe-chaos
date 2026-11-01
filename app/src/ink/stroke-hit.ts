@@ -1,5 +1,6 @@
 /**
- * Which strokes a point on the page touches: what the eraser rubs out.
+ * Which strokes a point on the page touches (what the eraser rubs out), and
+ * which a lasso loop surrounds.
  *
  * Page coordinates run 0..1 across the page's width (x) and height (y);
  * the page is wider than tall (PAGE_ASPECT), so y distances are scaled to
@@ -9,7 +10,8 @@
 
 import { PAGE_ASPECT, type Stroke } from '../notes/note-model.js';
 
-interface Bounds {
+/** A box on the page (page units). */
+export interface Bounds {
   minX: number;
   minY: number;
   maxX: number;
@@ -65,4 +67,46 @@ function distanceToSegment(x: number, y: number, ax: number, ay: number, bx: num
   const length2 = sx * sx + sy * sy;
   const t = length2 > 0 ? Math.min(1, Math.max(0, (px * sx + py * sy) / length2)) : 0;
   return Math.hypot(px - sx * t, py - sy * t);
+}
+
+/**
+ * Whether a lasso loop (page points [x0, y0, x1, y1, ...], closed from its
+ * last point back to its first) surrounds `stroke`: at least half of the
+ * stroke's points inside, so a loose loop still catches a word.
+ */
+export function strokeInsideLoop(stroke: Stroke, loop: readonly number[]): boolean {
+  const p = stroke.points;
+  if (p.length < 2 || loop.length < 6) return false;
+  let inside = 0;
+  for (let i = 0; i < p.length; i += 2) if (pointInLoop(p[i], p[i + 1], loop)) inside++;
+  return inside * 2 >= p.length / 2;
+}
+
+/** The box around several strokes' ink (their points, grown by half their widths), or null for none. */
+export function strokesBounds(strokes: readonly Stroke[]): Bounds | null {
+  if (strokes.length === 0) return null;
+  const all: Bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  for (const stroke of strokes) {
+    const b = boundsOf(stroke.points);
+    const half = stroke.width / 2;
+    all.minX = Math.min(all.minX, b.minX - half);
+    all.maxX = Math.max(all.maxX, b.maxX + half);
+    all.minY = Math.min(all.minY, b.minY - half * PAGE_ASPECT);
+    all.maxY = Math.max(all.maxY, b.maxY + half * PAGE_ASPECT);
+  }
+  return all;
+}
+
+/** Even-odd point-in-polygon test on page points. */
+function pointInLoop(x: number, y: number, loop: readonly number[]): boolean {
+  let inside = false;
+  const n = loop.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const ax = loop[i * 2];
+    const ay = loop[i * 2 + 1];
+    const bx = loop[j * 2];
+    const by = loop[j * 2 + 1];
+    if (ay > y !== by > y && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) inside = !inside;
+  }
+  return inside;
 }
