@@ -9,6 +9,11 @@
  * - Writing: each sticky note is a writing surface with its own page
  *   (StickyBoard), so the pen, the tool wheel, the eraser, the lasso and
  *   undo work on it as on the tablet.
+ * - Carrying: pinch a sticky note (with a hand not holding the pen) and it
+ *   follows the pinch, facing you. Brought near a wall, desk or other
+ *   surface Quest knows (Space Setup), it lies flat on it (surface-snap.ts),
+ *   so you see where it will stick; let go and it stays there. Let go in
+ *   mid-air and it floats where you left it.
  * - Sticky notes belong to the room, not to a note: they stay where they
  *   are, whether or not a note is open.
  *
@@ -20,6 +25,7 @@ import {
   Matrix4,
   Quaternion,
   Vector3,
+  XRPlane as DetectedPlane,
   type Entity,
   type Group,
   type Object3D,
@@ -29,6 +35,7 @@ import {
   createPinchReading,
   HANDS,
   PINCH_CLOSED_M,
+  PINCH_OPEN_M,
   readPinch,
   type Hand,
   type HandFrame,
@@ -38,7 +45,9 @@ import { stickyPadPrototype } from '../scene-assets/sticky-pad.scene-asset.js';
 import { TABLET_BACK_M, TABLET_HALF_WIDTH_M } from '../scene-assets/tablet.scene-asset.js';
 import { getStickyBoard, type StickyBoard } from '../stickies/sticky-board.js';
 import { STICKY_KINDS, type StickyKind, type StickyNote } from '../stickies/sticky-model.js';
-import { createStickyObject, disposeStickyObject } from '../stickies/sticky-object.js';
+import { createStickyObject, disposeStickyObject, stickySize } from '../stickies/sticky-object.js';
+import { snapToSurface } from '../stickies/surface-snap.js';
+import type { DetectedSurface } from '../ui/desk-placement.js';
 import { faceViewer } from '../ui/drag.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
 import { easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
@@ -56,6 +65,9 @@ const UP_M = 0.06;
 const LEFT_M = 0.16;
 /** How long a new note takes to peel off and float up (ms). */
 const PEEL_MS = 380;
+/** A pinch this close to a sticky note (metres: off its face, or past its edges) picks it up. */
+const GRAB_OFF_FACE_M = 0.04;
+const GRAB_PAST_EDGE_M = 0.02;
 
 interface StickyView {
   sticky: StickyNote;
@@ -63,7 +75,16 @@ interface StickyView {
   object: Group;
 }
 
-export class StickySystem extends createSystem({}) {
+/** A sticky note being carried: by which hand, and where on it the pinch holds it (its own space). */
+interface Carry {
+  view: StickyView;
+  hand: Hand;
+  grip: Vector3;
+}
+
+export class StickySystem extends createSystem({
+  planes: { required: [DetectedPlane] },
+}) {
   private board!: StickyBoard;
   private surfaces!: InkSurfaces;
   private pen!: PenState;
@@ -71,6 +92,11 @@ export class StickySystem extends createSystem({}) {
   private tablet!: Object3D;
   private pad!: Object3D;
   private readonly views = new Map<string, StickyView>();
+  private carry: Carry | null = null;
+  // Bound once; reads the detected planes for surface-snap.ts.
+  private readonly surfaceList: Iterable<DetectedSurface> = {
+    [Symbol.iterator]: () => this.detectedSurfaces(),
+  };
   private readonly readings = { left: createPinchReading(), right: createPinchReading() };
   private readonly wasClosed: Record<Hand, boolean> = { left: false, right: false };
   private readonly handFrame: HandFrame = { frame: null!, space: null!, origin: new Matrix4() };
@@ -80,6 +106,9 @@ export class StickySystem extends createSystem({}) {
   private readonly fromPosition = new Vector3();
   private readonly fromQuaternion = new Quaternion();
   private readonly toQuaternion = new Quaternion();
+  private readonly free = new Vector3();
+  private readonly snapPosition = new Vector3();
+  private readonly snapQuaternion = new Quaternion();
 
   init(): void {
     const tabletEntity = this.world.getSceneEntity(TABLET_NODE);
@@ -119,31 +148,47 @@ export class StickySystem extends createSystem({}) {
   }
 
   update(): void {
-    if (!this.pad || !this.tablet.visible) return;
-    this.pinchPad();
+    if (!this.pad || !this.readHands()) return;
+    if (this.carry) {
+      this.updateCarry(this.carry);
+      return;
+    }
+    for (const hand of HANDS) {
+      const reading = this.readings[hand];
+      const closed = reading.gap < PINCH_CLOSED_M;
+      const justPinched = closed && !this.wasClosed[hand];
+      this.wasClosed[hand] = closed;
+      // The hand holding the pen is writing, not picking things up.
+      if (!justPinched || this.pen.holder === hand) continue;
+      const kind = this.tablet.visible ? this.stackNear(reading.point) : null;
+      if (kind) {
+        this.peelOff(kind);
+        return;
+      }
+      const view = this.stickyNear(reading.point);
+      if (view) {
+        this.pickUp(view, hand);
+        return;
+      }
+    }
   }
 
-  // ------------------------------------------------------------ the pad
-
-  /** A pinch closing on a stack (with a hand not holding the pen) peels a note off it. */
-  private pinchPad(): void {
+  /** Read both hands' pinches for this frame; false outside an XR frame. */
+  private readHands(): boolean {
     const frame = this.xrFrame;
     const space = this.xrManager.getReferenceSpace();
-    if (!frame || !space) return;
+    if (!frame || !space) return false;
     this.handFrame.frame = frame;
     this.handFrame.space = space;
     this.handFrame.origin.copy(this.player.matrixWorld);
     for (const hand of HANDS) {
-      const reading = this.readings[hand];
-      readPinch(this.world.input.xr.getPrimaryInputSource(hand), this.handFrame, reading);
-      const closed = reading.gap < PINCH_CLOSED_M;
-      const justPinched = closed && !this.wasClosed[hand];
-      this.wasClosed[hand] = closed;
-      if (!justPinched || this.pen.holder === hand) continue;
-      const kind = this.stackNear(reading.point);
-      if (kind) this.peelOff(kind);
+      readPinch(this.world.input.xr.getPrimaryInputSource(hand), this.handFrame, this.readings[hand]);
     }
+    return true;
   }
+
+  // ------------------------------------------------------------ the pad
+
 
   /** The stack whose top is within reach of a world point, if any. */
   private stackNear(point: Vector3): StickyKind | null {
@@ -190,6 +235,70 @@ export class StickySystem extends createSystem({}) {
     devLog('stickies', `new ${kind} sticky note`);
   }
 
+  // ------------------------------------------------------------ carrying
+
+  /** The sticky note a pinch at `point` would pick up: the nearest one it is on or just off. */
+  private stickyNear(point: Vector3): StickyView | null {
+    let best: StickyView | null = null;
+    let bestDistance = GRAB_OFF_FACE_M;
+    for (const view of this.views.values()) {
+      const [width, height] = stickySize(view.sticky.kind);
+      view.object.updateWorldMatrix(true, false);
+      const local = view.object.worldToLocal(this.point.copy(point));
+      const onIt = Math.abs(local.x) <= width / 2 + GRAB_PAST_EDGE_M && Math.abs(local.y) <= height / 2 + GRAB_PAST_EDGE_M;
+      if (onIt && Math.abs(local.z) < bestDistance) {
+        best = view;
+        bestDistance = Math.abs(local.z);
+      }
+    }
+    return best;
+  }
+
+  private pickUp(view: StickyView, hand: Hand): void {
+    this.tweens.cancel(`sticky-peel-${view.sticky.id}`);
+    view.object.updateWorldMatrix(true, false);
+    const grip = view.object.worldToLocal(this.point.copy(this.readings[hand].point)).clone();
+    grip.z = 0;
+    this.carry = { view, hand, grip };
+    playUiSound('press');
+  }
+
+  /** The note follows the pinch; near a surface it lies flat on it. Opening the pinch lets go. */
+  private updateCarry(carry: Carry): void {
+    const reading = this.readings[carry.hand];
+    if (!reading.tracked || reading.gap > PINCH_OPEN_M) {
+      this.letGo(carry);
+      return;
+    }
+    const object = carry.view.object;
+    // Free: held by the pinch where it was gripped, turned to face you.
+    faceViewer(object, this.world);
+    this.free.copy(carry.grip).applyQuaternion(object.quaternion);
+    object.position.copy(reading.point).sub(this.free);
+    faceViewer(object, this.world);
+    // Near a surface: flat on it instead.
+    this.player.head.getWorldPosition(this.head);
+    if (snapToSurface(this.surfaceList, object.position, this.head, this.snapPosition, this.snapQuaternion)) {
+      object.position.copy(this.snapPosition);
+      object.quaternion.copy(this.snapQuaternion);
+    }
+  }
+
+  private letGo(carry: Carry): void {
+    this.carry = null;
+    this.wasClosed[carry.hand] = false;
+    this.recordPlace(carry.view);
+    devLog('stickies', `sticky note put down at ${carry.view.object.position.toArray().map((n) => n.toFixed(2)).join(', ')}`);
+  }
+
+  /** The detected planes, as surface-snap.ts reads them. */
+  private *detectedSurfaces(): Generator<DetectedSurface> {
+    for (const entity of this.queries.planes.entities) {
+      const plane = entity.getValue(DetectedPlane, '_plane') as XRPlane | undefined;
+      if (plane && entity.object3D) yield { object: entity.object3D, plane };
+    }
+  }
+
   // ---------------------------------------------------- the sticky notes
 
   /** Put a sticky note in the room, as a writing surface with its own page. */
@@ -213,6 +322,7 @@ export class StickySystem extends createSystem({}) {
   private hide(id: string): void {
     const view = this.views.get(id);
     if (!view) return;
+    if (this.carry?.view === view) this.carry = null;
     this.views.delete(id);
     this.tweens.cancel(`sticky-peel-${id}`);
     this.surfaces.unregister(view.entity);

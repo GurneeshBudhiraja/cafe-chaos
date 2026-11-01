@@ -5,7 +5,10 @@
  * Seated at the classroom desk, a new note open and the pen in hand:
  * - pinch the mint stack on the pad with the left hand: a mint sticky note
  *   peels off and floats up in front;
- * - write on it with the pen: its strokes go to the sticky note's own page.
+ * - write on it with the pen: its strokes go to the sticky note's own page;
+ * - pinch it with the left hand and carry it: brought to the desk it lies
+ *   flat on it, face up; let go and it stays; carried to the wall ahead it
+ *   sticks flat to the wall, upright; carried into mid-air it floats.
  *
  * Each step asserts the app's state; a failure stops the check with a
  * reason. Usage: dev server running, then `npm run check:stickies`.
@@ -102,6 +105,57 @@ const tabletStrokes = await page.evaluate(() => window.__metaNotes.session.activ
 expect(tabletStrokes === 0, 'the tablet page stays empty', { tabletStrokes });
 await rec.lookAt(await worldOf(stickyName), 400);
 await shot('3-written-on-sticky');
+
+// --- Phase 2: carry it. Onto the desk, right of the tablet: flat, face up.
+/** A sticky note's pose: its position and the direction its face points. */
+const pose = (name) =>
+  page.evaluate((n) => {
+    const object = window.__metaNotes.world.scene.getObjectByName(n);
+    const p = object.getWorldPosition(new object.position.constructor());
+    const face = new object.position.constructor(0, 0, 1).transformDirection(object.matrixWorld);
+    return { position: p.toArray().map((v) => +v.toFixed(3)), face: face.toArray().map((v) => +v.toFixed(2)) };
+  }, name);
+const carrying = () =>
+  page.evaluate(() => !!window.__metaNotes.world.getSystems().find((x) => x.constructor.name === 'StickySystem').carry);
+const top = await worldOf(stickyName);
+await rec.leftPinchAt({ ...top, y: top.y + 0.04 }, 700);
+expect(await carrying(), 'pinching the sticky note picks it up', {});
+const onDesk = { x: tablet.x - 0.02, y: tablet.y + 0.05, z: tablet.z - 0.33 };
+await rec.moveLeftPinchTo(onDesk, 900);
+let p = await pose(stickyName);
+expect(p.face[1] > 0.95 && Math.abs(p.position[1] - 0.79) < 0.02, 'over the desk it lies flat on it, face up', p);
+await rec.lookAt({ ...onDesk, y: onDesk.y - 0.05 }, 400);
+await shot('4-carried-onto-desk');
+await rec.leftPinch(0);
+expect(!(await carrying()), 'letting go puts it down', {});
+await rec.moveLeftHand(LEFT_REST);
+await pause(400);
+p = await pose(stickyName);
+expect(p.face[1] > 0.95, 'it stays on the desk', p);
+await shot('5-stuck-on-desk');
+
+// --- To the wall ahead: flat on it, upright, facing back into the room.
+const desk = await worldOf(stickyName);
+await rec.leftPinchAt({ ...desk, y: desk.y + 0.005 }, 600);
+expect(await carrying(), 'picked up again from the desk', {});
+await rec.moveLeftPinchTo({ x: -2.86, y: 1.35, z: 0.25 }, 1200);
+p = await pose(stickyName);
+expect(p.face[0] > 0.95 && Math.abs(p.position[0] + 2.94) < 0.02, 'near the wall it sticks flat to it, facing back into the room', p);
+await rec.leftPinch(0);
+await rec.lookAt({ x: -2.94, y: 1.3, z: 0.25 }, 600);
+await shot('6-stuck-on-wall');
+
+// --- And into mid-air: it floats where it is let go, facing you.
+const wall = await worldOf(stickyName);
+await rec.leftPinchAt({ ...wall, x: wall.x + 0.005 }, 600);
+const midAir = { x: tablet.x + 0.12, y: tablet.y + 0.3, z: tablet.z + 0.15 };
+await rec.moveLeftPinchTo(midAir, 1200);
+await rec.leftPinch(0);
+await rec.moveLeftHand(LEFT_REST);
+p = await pose(stickyName);
+expect(p.face[0] > 0.3 && p.position[1] > tablet.y + 0.2, 'let go in mid-air, it floats there facing you', p);
+await rec.lookAt(await worldOf(stickyName), 500);
+await shot('7-floating');
 
 const errors = await rec.finish('stickies');
 console.log(`errors ${errors.length}`);
