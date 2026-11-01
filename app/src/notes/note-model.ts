@@ -11,13 +11,16 @@
  * and the enlarged note view can render the same data at another size.
  */
 
+import { isInkTool, type InkToolId } from '../ink/tool-catalog.js';
+
 /** Bump when the saved shape changes, and add a migration in `parseNote`. */
 export const NOTE_SCHEMA_VERSION = 1;
 
 /** Width / height of every page. Tablet surfaces use the same aspect ratio. */
 export const PAGE_ASPECT = 4 / 3;
 
-export type ToolKind = 'pen';
+/** The tool that drew a stroke: how it renders (a highlighter draws see-through, under the ink). */
+export type ToolKind = InkToolId;
 
 /** The page background a note was created with (a template). */
 export type PaperStyle = 'blank' | 'lined' | 'grid' | 'dotted' | 'cornell' | 'checklist';
@@ -86,8 +89,8 @@ export function createNote(
   };
 }
 
-export function createStroke(color: string, width: number): Stroke {
-  return { id: createId(), tool: 'pen', color, width, points: [] };
+export function createStroke(color: string, width: number, tool: ToolKind = 'pen'): Stroke {
+  return { id: createId(), tool, color, width, points: [] };
 }
 
 /** Number of sampled points in a stroke. */
@@ -138,7 +141,8 @@ function isStroke(value: unknown): value is Stroke {
   const s = value as Record<string, unknown>;
   return (
     typeof s.id === 'string' &&
-    s.tool === 'pen' &&
+    typeof s.tool === 'string' &&
+    isInkTool(s.tool as ToolKind) &&
     typeof s.color === 'string' &&
     typeof s.width === 'number' &&
     Array.isArray(s.points) &&

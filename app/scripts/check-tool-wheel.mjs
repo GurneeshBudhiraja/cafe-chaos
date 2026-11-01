@@ -22,6 +22,10 @@ import { startHeadsetRecording } from './lib/headset-recorder.mjs';
 
 const SHOTS = 'artifacts/tool-wheel';
 const WHEEL_ITEMS = ['pen', 'marker', 'highlighter', 'eraser', 'lasso', 'undo', 'redo'];
+const WHEEL_SCALE = 0.85;
+/** The options ring (tool-options-ring.ts): its radius (wheel asset metres) and spacing. */
+const OPTIONS_RADIUS = 0.118;
+const OPTIONS_SPACING_DEG = 22;
 /** How far to slide the nib over the page to aim at a segment (metres; the hub is the first 3.9 cm). */
 const AIM_REACH = 0.06;
 /** Seated at the emulated room's desk-height table, facing it (see record-desk.mjs). */
@@ -65,23 +69,53 @@ const state = () =>
     };
   });
 
-/** World point for the nib to aim at item `name` (or the hub for null): a slide over the page in its direction. */
-const aimPoint = (name) =>
+/** World point for the nib to aim in direction `angleDeg` (null: the hub), sliding `reach` metres over the page. */
+const aimToward = (angleDeg, reach) =>
   page.evaluate(
-    ([index, count, reach]) => {
+    ([deg, distance]) => {
       const { world } = window.__metaNotes;
       const system = world.getSystems().find((s) => s.constructor.name === 'ToolWheelSystem');
       const local = system.aimOrigin.clone();
-      if (index >= 0) {
-        const angle = Math.PI / 2 - (index * Math.PI * 2) / count;
-        local.x += Math.cos(angle) * reach;
-        local.y += Math.sin(angle) * reach;
+      if (deg !== null) {
+        local.x += Math.cos((deg * Math.PI) / 180) * distance;
+        local.y += Math.sin((deg * Math.PI) / 180) * distance;
       }
       const p = system.surface.localToWorld(local);
       return { x: p.x, y: p.y, z: p.z };
     },
-    [name ? WHEEL_ITEMS.indexOf(name) : -1, WHEEL_ITEMS.length, AIM_REACH],
+    [angleDeg, reach],
   );
+/** Aim at wheel item `name` (null: the hub). */
+const aimPoint = (name) => aimToward(name ? 90 - (WHEEL_ITEMS.indexOf(name) * 360) / WHEEL_ITEMS.length : null, AIM_REACH);
+const OPTIONS_REACH = OPTIONS_RADIUS * WHEEL_SCALE;
+/** Aim at colour `index` of `count` on the options ring (above the wheel). */
+const aimSwatch = (index, count) => aimToward(90 + ((count - 1) / 2 - index) * OPTIONS_SPACING_DEG, OPTIONS_REACH);
+/** Aim at a size on the options ring (below the wheel). */
+const aimSize = (size) => aimToward(270 - (1 - ['fine', 'medium', 'bold'].indexOf(size)) * OPTIONS_SPACING_DEG, OPTIONS_REACH);
+/** The newest stroke on the page. */
+const lastStroke = () =>
+  page.evaluate(() => {
+    const strokes = window.__metaNotes.session.active.pages[0].strokes;
+    const s = strokes[strokes.length - 1];
+    return { tool: s.tool, color: s.color, width: s.width };
+  });
+/** Lift the nib off the page (as when pausing to change tools). */
+const liftPen = async () =>
+  rec.moveNibTo(
+    await page.evaluate(() => {
+      const n = window.__metaNotes.world.globals['metaNotes.pen'].nib;
+      return { x: n.x, y: n.y + 0.04, z: n.z };
+    }),
+    400,
+  );
+/** Open the wheel with a double-tap, aim at each target in turn and tap to pick it. */
+const pickOnWheel = async (...targets) => {
+  await rec.penTap(2);
+  for (const target of targets) {
+    await rec.moveNibTo(await target(), 450);
+    await rec.penTap(1);
+  }
+};
 
 /** A full headset view, and a close-up of its middle (where the wheel is looked at). */
 const shot = async (name) => {
@@ -160,10 +194,7 @@ const strokesBefore = s.strokes;
 await rec.penWrite(layoutLine('ok', { u: 0.4, v: 0.3, size: 0.0028, seed: 4 }).strokes);
 s = await state();
 expect(!s.wheelOpen && s.strokes > strokesBefore, 'writing again closes the wheel and inks', s);
-await rec.moveNibTo(await page.evaluate(() => {
-  const n = window.__metaNotes.world.globals['metaNotes.pen'].nib;
-  return { x: n.x, y: n.y + 0.04, z: n.z };
-}), 400);
+await liftPen();
 
 // --- The free left hand: pinch to open, aim at Highlighter, let go to pick.
 const leftInView = await page.evaluate((t) => ({ x: t.x + 0.05, y: t.y + 0.22, z: t.z - 0.25 }), tablet);
@@ -184,6 +215,52 @@ await rec.leftPinch(0);
 await pause(400);
 s = await state();
 expect(!s.wheelOpen && s.penHeld, 'pinch and let go over the hub closes the wheel', s);
+
+// --- Phase 2: the options ring. Marker in Clay, bold; then write.
+await liftPen();
+await rec.penTap(2);
+await lookAtWheel();
+await rec.moveNibTo(await aimPoint('marker'), 450);
+await rec.penTap(1);
+await rec.moveNibTo(await aimSwatch(2, 5), 450);
+s = await state();
+await shot('8-options-ring-aim-clay');
+await rec.penTap(1);
+await rec.moveNibTo(await aimSize('bold'), 450);
+await rec.penTap(1);
+await shot('9-marker-clay-bold-chosen');
+s = await state();
+expect(s.tool === 'marker' && s.wheelOpen, 'marker, then Clay and Bold from the ring; the wheel stays open', s);
+await rec.penWrite(layoutLine('Cells', { u: 0.1, v: 0.42, size: 0.004, seed: 6 }).strokes);
+let stroke = await lastStroke();
+expect(stroke.tool === 'marker' && stroke.color === '#d4704f' && stroke.width === 0.015, 'the marker writes in clay, bold', stroke);
+
+// --- Highlighter in Pink over the marker writing, then back to the pen.
+await liftPen();
+await pickOnWheel(() => aimPoint('highlighter'), () => aimSwatch(1, 4));
+await rec.penWrite([[[0.08, 0.425], [0.3, 0.425]]]);
+stroke = await lastStroke();
+expect(stroke.tool === 'highlighter' && stroke.color === '#f0a3b8', 'the highlighter draws in pink', stroke);
+await liftPen();
+await pickOnWheel(() => aimPoint('pen'));
+await rec.penWrite(layoutLine('divide', { u: 0.1, v: 0.55, size: 0.003, seed: 8 }).strokes);
+stroke = await lastStroke();
+expect(stroke.tool === 'pen' && stroke.color === '#1f1c19', 'the pen keeps its own ink colour', stroke);
+await liftPen();
+await rec.lookAt(tablet, 600);
+await shot('10-page-marker-highlighter-pen');
+// Lean in over the page, as one does to read it, for a close look at the ink.
+const page40 = await page.evaluate(() => {
+  const s = window.__metaNotes.world.scene.getObjectByName('WritingSurface');
+  const { width, height } = s.geometry.parameters;
+  const p = s.localToWorld(new s.position.constructor((0.2 - 0.5) * width, (0.5 - 0.48) * height, 0));
+  return { x: p.x, y: p.y, z: p.z };
+});
+await rec.moveHead({ x: page40.x + 0.12, y: page40.y + 0.3, z: page40.z });
+await rec.lookAt(page40, 400);
+await shot('11-ink-close');
+await rec.moveHead(SEAT);
+await rec.lookAt(tablet, 400);
 
 // --- Writing again works, and putting the pen down still lets go.
 await rec.putDownPen();

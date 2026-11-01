@@ -16,6 +16,9 @@
  * - A large jump between samples splits the stroke instead of drawing a long
  *   accidental line (tracking loss and recovery).
  *
+ * Strokes take the current tool's kind, colour and width (ToolState, set on
+ * the tool wheel): pen, marker or highlighter.
+ *
  * The system renders the active page of the NoteSession and hands finished
  * strokes to it; it never writes note data itself.
  */
@@ -31,6 +34,7 @@ import {
 } from '@iwsdk/core';
 import { classifySample, isOnPage } from '../ink/stroke-sampling.js';
 import { StrokeMesh, type SurfaceSize } from '../ink/stroke-mesh.js';
+import { isInkTool } from '../ink/tool-catalog.js';
 import { createStroke, type Page, type Stroke } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
@@ -274,11 +278,13 @@ export class InkSystem extends createSystem({
     active.mesh.appendLatestPoint();
   }
 
-  /** Start a stroke at the page point stored in `this.localPoint`. */
+  /** Start a stroke with the current ink tool at the page point stored in `this.localPoint`. */
   private startStroke(tablet: TabletInk, pointerId: number): void {
-    const color = tablet.entity.getValue(WritingSurface, 'inkColor') as string;
-    const width = tablet.entity.getValue(WritingSurface, 'inkWidth') as number;
-    const stroke = createStroke(color, width);
+    const tool = this.tools.tool;
+    const color = this.tools.colour();
+    const width = this.tools.width();
+    if (!isInkTool(tool) || color === null || width === null) return;
+    const stroke = createStroke(color, width, tool);
     stroke.points.push(this.localPoint.x, this.localPoint.y);
     const mesh = this.addStrokeMesh(tablet, stroke);
     tablet.active = { pointerId, mesh };

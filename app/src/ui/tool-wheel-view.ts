@@ -9,7 +9,8 @@
  * - the aim dot: a small warm-white dot on the wheel's face where the nib
  *   points, so aiming always shows where it is;
  * - current tool: its glowing clay rim shows;
- * - the hub's plaque names the aimed-at item, or the current tool.
+ * - the hub's plaque names the aimed-at item, or the current tool;
+ * - around the outside, the current tool's colours and sizes (tool-options-ring.ts).
  */
 
 import {
@@ -25,13 +26,15 @@ import {
 import { WHEEL_ITEMS, WHEEL_LABELS, type ToolId } from '../ink/tool-catalog.js';
 import { MeshFade } from './mesh-fade.js';
 import { THEME } from './theme.js';
+import { OPTIONS_RING_RADIUS_M, ToolOptionsRing, type ToolOption } from './tool-options-ring.js';
+import type { ToolStyle } from './tool-state.js';
 
 /** How far an aimed-at segment rises off the wheel (asset metres) and how much it grows. */
 const HOVER_LIFT_M = 0.008;
 const HOVER_SCALE = 1.12;
 /** The aim dot: its radius, and the furthest it goes from the centre (asset metres). */
 const AIM_DOT_RADIUS_M = 0.0045;
-const AIM_DOT_MAX_M = 0.1;
+const AIM_DOT_MAX_M = OPTIONS_RING_RADIUS_M;
 /** Just in front of the segments' faces, and of a raised segment (asset metres). */
 const AIM_DOT_Z_M = 0.02;
 /** The hub label's size (asset metres, inside the 60 x 20 mm plaque) and canvas resolution. */
@@ -52,6 +55,7 @@ export class ToolWheelView {
   private readonly currentInk: Mesh | undefined;
   private readonly label: HubLabel;
   private readonly aimDot: Mesh;
+  private readonly options: ToolOptionsRing;
   private hovered: number | null = null;
   private current: ToolId | null = null;
   /** The text on the hub when nothing is aimed at. */
@@ -80,6 +84,21 @@ export class ToolWheelView {
     this.aimDot.name = 'AimDot';
     this.aimDot.renderOrder = 2;
     root.add(this.aimDot);
+    this.options = new ToolOptionsRing(root);
+  }
+
+  /** Show `tool`'s colours and sizes around the wheel, the chosen ones marked. */
+  showOptions(tool: ToolId, style: ToolStyle): void {
+    this.options.show(tool, style);
+  }
+
+  /** The colour or size at an angle on the options ring (radians), if any. */
+  optionAt(angle: number): ToolOption | null {
+    return this.options.optionAt(angle);
+  }
+
+  setHoveredOption(option: ToolOption | null): void {
+    this.options.setHovered(option);
   }
 
   /** Put the aim dot where the nib points (asset metres from the centre), kept on the wheel. */
@@ -117,6 +136,7 @@ export class ToolWheelView {
 
   dispose(): void {
     this.fade.restore();
+    this.options.dispose();
     this.label.dispose();
     this.aimDot.geometry.dispose();
     (this.aimDot.material as MeshBasicMaterial).dispose();

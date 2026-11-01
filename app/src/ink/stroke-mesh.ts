@@ -16,6 +16,7 @@ import {
   Mesh,
   MeshBasicMaterial,
 } from '@iwsdk/core';
+import { INK_OPACITY } from './tool-catalog.js';
 import type { Stroke } from '../notes/note-model.js';
 
 /** Maps page coordinates (0..1) onto a surface of the given size in meters. */
@@ -26,22 +27,31 @@ export interface SurfaceSize {
 
 const INITIAL_CAPACITY = 64;
 
-/** One shared material per colour; strokes never mutate a material. */
+/** One shared material per colour and opacity; strokes never mutate a material. */
 const materialCache = new Map<string, MeshBasicMaterial>();
 
-function materialFor(color: string): MeshBasicMaterial {
-  let material = materialCache.get(color);
+function materialFor(color: string, opacity: number): MeshBasicMaterial {
+  const key = `${color}/${opacity}`;
+  let material = materialCache.get(key);
   if (!material) {
     material = new MeshBasicMaterial({
       color: new Color(color),
+      opacity,
+      // All ink draws in the transparent pass, so render order alone sets
+      // what lies on top (highlighter under pen); see INK_RENDER_ORDER.
+      transparent: true,
       // Ink sits on one plane. Skipping depth writes avoids z-fighting where
       // strokes overlap; later strokes simply draw over earlier ones.
       depthWrite: false,
     });
-    materialCache.set(color, material);
+    materialCache.set(key, material);
   }
   return material;
 }
+
+/** Highlighter strokes draw first, under the ink, like a highlighter under a pen's writing. */
+const HIGHLIGHT_RENDER_ORDER = 1;
+const INK_RENDER_ORDER = 2;
 
 /** Ignore pointer rays on ink so drawing over existing strokes still works. */
 function noRaycast(): void {}
@@ -58,7 +68,8 @@ export class StrokeMesh {
     private readonly surface: SurfaceSize,
   ) {
     this.allocate(Math.max(INITIAL_CAPACITY, stroke.points.length / 2));
-    this.mesh = new Mesh(this.geometry, materialFor(stroke.color));
+    this.mesh = new Mesh(this.geometry, materialFor(stroke.color, INK_OPACITY[stroke.tool]));
+    this.mesh.renderOrder = stroke.tool === 'highlighter' ? HIGHLIGHT_RENDER_ORDER : INK_RENDER_ORDER;
     this.mesh.name = `Stroke:${stroke.id}`;
     this.mesh.raycast = noRaycast;
     // Opt out of IWSDK/pmndrs pointer events as well.

@@ -15,8 +15,13 @@
  * direction the nib has moved since the wheel opened picks a segment;
  * staying put picks the hub (nothing). A dot on the wheel shows the aim.
  *
+ * Sliding further, past the segments, aims at the options ring outside
+ * them: the current tool's colours (above) and sizes (below).
+ *
  * Picking what is aimed at: a single tap on the pen, or (free hand) letting
- * go of the pinch. A tool becomes the current tool; undo and redo run once.
+ * go of the pinch. A tool becomes the current tool (the ring then shows its
+ * colours and sizes); a colour or size applies to the current tool; undo
+ * and redo run once.
  * The wheel stays open, so several picks can follow; it fades away when
  * the hub is picked, the nib touches the page (writing again), the pen is
  * put down or the page closes.
@@ -35,7 +40,6 @@ import {
 } from '../input/hand-pinch.js';
 import {
   TOOL_WHEEL_INNER_RADIUS_M,
-  TOOL_WHEEL_RADIUS_M,
   toolWheelPrototype,
   wheelSegmentAt,
 } from '../scene-assets/tool-wheel.scene-asset.js';
@@ -43,6 +47,7 @@ import { SURFACE_HEIGHT_M, SURFACE_WIDTH_M, WRITING_SURFACE_NAME } from '../scen
 import { getNoteView } from '../ui/note-view.js';
 import { getPen, type PenState, type PenTap } from '../ui/pen-state.js';
 import { getTools, type ToolState } from '../ui/tool-state.js';
+import { OPTIONS_AIM_FROM_M, OPTIONS_RING_RADIUS_M, sameOption, type ToolOption } from '../ui/tool-options-ring.js';
 import { ToolWheelView } from '../ui/tool-wheel-view.js';
 import { easeInCubic, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 import { playUiSound } from '../ui/ui-sounds.js';
@@ -58,8 +63,6 @@ const BESIDE_NIB_M = 0.11;
 const CLEAR_OF_PAGE_M = 0.02;
 /** The nib this close to the page puts the wheel away: the user is writing again (metres). */
 const TOUCHING_PAGE_M = 0.004;
-/** The nib moved this far over the page (metres) leaves the hub: the wheel's hub, at its size in the room. */
-const HUB_REACH_M = TOOL_WHEEL_INNER_RADIUS_M * WHEEL_SCALE;
 const FADE_IN_MS = 180;
 const FADE_OUT_MS = 150;
 
@@ -74,8 +77,10 @@ export class ToolWheelSystem extends createSystem({}) {
   private view!: ToolWheelView;
   private wheel!: Object3D;
   private opener: Opener | null = null;
-  /** The aimed-at segment (index into WHEEL_ITEMS), or null for the hub. */
+  /** The aimed-at segment (index into WHEEL_ITEMS), or null. */
   private hovered: number | null = null;
+  /** The aimed-at colour or size on the options ring, or null. */
+  private hoveredOption: ToolOption | null = null;
   /** Where the nib was when the wheel opened, in the page's space: aiming is relative to it. */
   private readonly aimOrigin = new Vector3();
   /** The free hand's pinch, read each frame while the pen is held. */
@@ -171,8 +176,7 @@ export class ToolWheelSystem extends createSystem({}) {
     this.opener = opener;
     this.tools.setWheelOpen(true);
     this.place();
-    this.hovered = null;
-    this.view.setHovered(null);
+    this.setHover(null, null);
     this.view.setAim(0, 0);
     this.wheel.visible = true;
     this.view.fade.set(0);
@@ -208,7 +212,7 @@ export class ToolWheelSystem extends createSystem({}) {
       .addScaledVector(this.headRight, awayFromHand * BESIDE_NIB_M);
     // Keep the whole wheel above the page (the tablet lies flat on a desk).
     this.surface.getWorldPosition(this.local);
-    const lowestEdge = wheel.position.y - TOOL_WHEEL_RADIUS_M * WHEEL_SCALE;
+    const lowestEdge = wheel.position.y - OPTIONS_RING_RADIUS_M * WHEEL_SCALE;
     const floor = this.local.y + CLEAR_OF_PAGE_M;
     if (lowestEdge < floor) wheel.position.y += floor - lowestEdge;
     wheel.lookAt(this.head);
@@ -219,20 +223,44 @@ export class ToolWheelSystem extends createSystem({}) {
 
   // -------------------------------------------------------- aiming, picking
 
-  /** The nib's slide over the page since the wheel opened picks a segment by its direction; a short one, the hub. */
+  /**
+   * The nib's slide over the page since the wheel opened aims by its
+   * direction: a short slide, the hub (nothing); further, a segment;
+   * further still, past the segments, the options ring.
+   */
   private aim(): void {
     // The page's x is to the right, its y away from the viewer (toward its top edge).
     this.surface.worldToLocal(this.local.copy(this.pen.nib)).sub(this.aimOrigin);
-    const distance = Math.hypot(this.local.x, this.local.y);
-    // The dot shows the slide on the wheel, at the wheel's scale.
-    this.view.setAim(this.local.x / WHEEL_SCALE, this.local.y / WHEEL_SCALE);
-    const hovered = distance < HUB_REACH_M ? null : wheelSegmentAt(Math.atan2(this.local.y, this.local.x));
-    if (hovered === this.hovered) return;
-    this.hovered = hovered;
-    this.view.setHovered(hovered);
+    // In the wheel's own (asset) units, so the zones match what is drawn.
+    const x = this.local.x / WHEEL_SCALE;
+    const y = this.local.y / WHEEL_SCALE;
+    this.view.setAim(x, y);
+    const distance = Math.hypot(x, y);
+    const angle = Math.atan2(y, x);
+    if (distance < TOOL_WHEEL_INNER_RADIUS_M) this.setHover(null, null);
+    else if (distance < OPTIONS_AIM_FROM_M) this.setHover(wheelSegmentAt(angle), null);
+    else this.setHover(null, this.view.optionAt(angle));
+  }
+
+  private setHover(segment: number | null, option: ToolOption | null): void {
+    if (segment !== this.hovered) {
+      this.hovered = segment;
+      this.view.setHovered(segment);
+    }
+    if (!sameOption(option, this.hoveredOption)) {
+      this.hoveredOption = option;
+      this.view.setHoveredOption(option);
+    }
   }
 
   private pick(): void {
+    const option = this.hoveredOption;
+    if (option) {
+      playUiSound('press');
+      if (option.kind === 'swatch') this.tools.selectSwatch(option.index);
+      else this.tools.selectSize(option.size);
+      return;
+    }
     if (this.hovered === null) {
       this.close();
       return;
@@ -253,5 +281,8 @@ export class ToolWheelSystem extends createSystem({}) {
 
   private showCurrentTool(): void {
     this.view.setCurrent(this.tools.tool, this.tools.colour());
+    this.view.showOptions(this.tools.tool, this.tools.style());
+    // Rebuilt options are new objects: aim at them afresh.
+    this.hoveredOption = null;
   }
 }
