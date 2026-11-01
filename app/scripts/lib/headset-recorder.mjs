@@ -50,6 +50,8 @@ export async function startHeadsetRecording({ size = SIZE, fovDeg, captions = tr
   // The video is sped up by `speedUp`, so slow the app's UI animation clock
   // by the same factor: transitions and follow keep their true speed.
   await page.evaluate((s) => window.__metaNotes.demo?.setAnimationSpeed(s), 1 / speedUp);
+  // In-page helpers that wait on the app's (slowed) clock need the factor too.
+  await page.evaluate((s) => (window.__rec.speedUp = s), speedUp);
 
   const msPerPoint = (STEP / PEN_SPEED) * 1000 * speedUp;
   const writeStroke = (points) =>
@@ -410,8 +412,8 @@ function installHelpers(page) {
           await this.moveHandTo(above.sub(pinchToCentre).sub(pinchOffset), ms * 0.7, this.grip);
         }
         await call('set_select_value', { device: 'hand-right', value: 0 });
-        // Fingers must stay open a moment for the pen to be let go (a quick open is a tap).
-        await sleep(650);
+        // Fingers must stay open a moment (on the app's clock) for the pen to be let go: a quick open is a tap.
+        await sleep(650 * (this.speedUp ?? 1));
         for (let i = 0; i < 3; i++) await nextFrame();
       },
       async penTap(count) {
@@ -422,6 +424,9 @@ function installHelpers(page) {
           await call('set_select_value', { device: 'hand-right', value: 1 });
           await nextFrame();
         }
+        // The emulator applies input a frame late: let the app see the last close.
+        await nextFrame();
+        await nextFrame();
       },
       async moveNibTo(point, ms) {
         const held = world.globals['metaNotes.pen'];
@@ -431,6 +436,7 @@ function installHelpers(page) {
       },
       async leftPinch(value) {
         await call('set_select_value', { device: 'hand-left', value });
+        await nextFrame();
         await nextFrame();
         await nextFrame();
       },

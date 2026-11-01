@@ -5,13 +5,16 @@
  * It drives one copy of the `tool-wheel` asset (tool-wheel.scene-asset.ts)
  * and knows its named parts; ToolWheelSystem decides when it opens and what
  * is aimed at. Visual states:
- * - aimed at (hovered): the segment rises off the wheel and grows a little;
+ * - aimed at (hovered): the segment rises off the wheel and grows;
+ * - the aim dot: a small warm-white dot on the wheel's face where the nib
+ *   points, so aiming always shows where it is;
  * - current tool: its glowing clay rim shows;
  * - the hub's plaque names the aimed-at item, or the current tool.
  */
 
 import {
   CanvasTexture,
+  CircleGeometry,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
@@ -24,8 +27,13 @@ import { MeshFade } from './mesh-fade.js';
 import { THEME } from './theme.js';
 
 /** How far an aimed-at segment rises off the wheel (asset metres) and how much it grows. */
-const HOVER_LIFT_M = 0.006;
-const HOVER_SCALE = 1.08;
+const HOVER_LIFT_M = 0.008;
+const HOVER_SCALE = 1.12;
+/** The aim dot: its radius, and the furthest it goes from the centre (asset metres). */
+const AIM_DOT_RADIUS_M = 0.0045;
+const AIM_DOT_MAX_M = 0.1;
+/** Just in front of the segments' faces, and of a raised segment (asset metres). */
+const AIM_DOT_Z_M = 0.02;
 /** The hub label's size (asset metres, inside the 60 x 20 mm plaque) and canvas resolution. */
 const LABEL_W_M = 0.056;
 const LABEL_H_M = 0.017;
@@ -43,6 +51,7 @@ export class ToolWheelView {
   private readonly segments: SegmentParts[];
   private readonly currentInk: Mesh | undefined;
   private readonly label: HubLabel;
+  private readonly aimDot: Mesh;
   private hovered: number | null = null;
   private current: ToolId | null = null;
   /** The text on the hub when nothing is aimed at. */
@@ -64,6 +73,20 @@ export class ToolWheelView {
     this.label = new HubLabel();
     const anchor = root.getObjectByName('LabelAnchor');
     (anchor ?? root).add(this.label.mesh);
+    this.aimDot = new Mesh(
+      new CircleGeometry(AIM_DOT_RADIUS_M, 24),
+      new MeshBasicMaterial({ color: THEME.ink, transparent: true, depthWrite: false }),
+    );
+    this.aimDot.name = 'AimDot';
+    this.aimDot.renderOrder = 2;
+    root.add(this.aimDot);
+  }
+
+  /** Put the aim dot where the nib points (asset metres from the centre), kept on the wheel. */
+  setAim(x: number, y: number): void {
+    const distance = Math.hypot(x, y);
+    const keep = distance > AIM_DOT_MAX_M ? AIM_DOT_MAX_M / distance : 1;
+    this.aimDot.position.set(x * keep, y * keep, AIM_DOT_Z_M);
   }
 
   /** Raise the aimed-at segment (an index into WHEEL_ITEMS), or none. */
@@ -95,6 +118,8 @@ export class ToolWheelView {
   dispose(): void {
     this.fade.restore();
     this.label.dispose();
+    this.aimDot.geometry.dispose();
+    (this.aimDot.material as MeshBasicMaterial).dispose();
     if (this.currentInk) (this.currentInk.material as MeshStandardMaterial).dispose();
   }
 

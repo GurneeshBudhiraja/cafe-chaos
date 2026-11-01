@@ -6,16 +6,21 @@
  *   the holding fingers, twice; PenSystem reports it), or
  * - with the free hand: a pinch.
  *
- * It appears just in front of the pen's nib, facing the eyes, with the
- * current tool's segment rimmed in glowing clay. Moving the nib aims: like
- * a game's weapon wheel, the direction from where the nib was when the
- * wheel opened picks a segment (the hub, in the middle, picks nothing).
+ * It appears beside the pen's nib, on the side away from the holding hand
+ * (so the hand and pen never hide it), facing the eyes, with the current
+ * tool's segment rimmed in glowing clay. Sliding the pen over the page
+ * aims, like a game's weapon wheel: away from you for the wheel's top,
+ * toward you for its bottom, left and right for its sides (the page's own
+ * directions, so aiming never needs to come down onto the page). The
+ * direction the nib has moved since the wheel opened picks a segment;
+ * staying put picks the hub (nothing). A dot on the wheel shows the aim.
  *
  * Picking what is aimed at: a single tap on the pen, or (free hand) letting
  * go of the pinch. A tool becomes the current tool; undo and redo run once.
  * The wheel stays open, so several picks can follow; it fades away when
- * the hub is picked, the nib touches the page, the pen is put down or the
- * page closes. The pen never inks while the wheel is open (ToolState).
+ * the hub is picked, the nib touches the page (writing again), the pen is
+ * put down or the page closes.
+ * The pen never inks while the wheel is open (ToolState).
  */
 
 import { createSystem, Matrix4, Mesh, Vector3, type Entity, type Object3D } from '@iwsdk/core';
@@ -43,14 +48,18 @@ import { easeInCubic, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.
 import { playUiSound } from '../ui/ui-sounds.js';
 
 const TABLET_NODE = 'tablet';
-/** The wheel's size in the room: the asset is 20 cm across; this makes it 13 cm. */
-const WHEEL_SCALE = 0.65;
+/** The wheel's size in the room: the asset is 20 cm across; this makes it 17 cm (labels readable at arm's length). */
+const WHEEL_SCALE = 0.85;
 /** How far in front of the nib (toward the eyes) the wheel opens (metres). */
-const TOWARD_EYES_M = 0.06;
+const TOWARD_EYES_M = 0.08;
+/** How far to the side of the nib, away from the holding hand, the wheel's centre opens (metres). */
+const BESIDE_NIB_M = 0.11;
 /** The wheel's lowest edge stays at least this far above the page (metres). */
 const CLEAR_OF_PAGE_M = 0.02;
 /** The nib this close to the page puts the wheel away: the user is writing again (metres). */
 const TOUCHING_PAGE_M = 0.004;
+/** The nib moved this far over the page (metres) leaves the hub: the wheel's hub, at its size in the room. */
+const HUB_REACH_M = TOOL_WHEEL_INNER_RADIUS_M * WHEEL_SCALE;
 const FADE_IN_MS = 180;
 const FADE_OUT_MS = 150;
 
@@ -67,13 +76,14 @@ export class ToolWheelSystem extends createSystem({}) {
   private opener: Opener | null = null;
   /** The aimed-at segment (index into WHEEL_ITEMS), or null for the hub. */
   private hovered: number | null = null;
-  /** Where the nib was when the wheel opened, in the wheel's own (asset) space: aiming is relative to it. */
+  /** Where the nib was when the wheel opened, in the page's space: aiming is relative to it. */
   private readonly aimOrigin = new Vector3();
   /** The free hand's pinch, read each frame while the pen is held. */
   private readonly freeHand = createPinchReading();
   private freeHandClosed = false;
   private readonly handFrame: HandFrame = { frame: null!, space: null!, origin: new Matrix4() };
   private readonly head = new Vector3();
+  private readonly headRight = new Vector3();
   private readonly local = new Vector3();
 
   init(): void {
@@ -163,6 +173,7 @@ export class ToolWheelSystem extends createSystem({}) {
     this.place();
     this.hovered = null;
     this.view.setHovered(null);
+    this.view.setAim(0, 0);
     this.wheel.visible = true;
     this.view.fade.set(0);
     this.tweens.play(FADE_IN_MS, (t) => this.view.fade.set(easeOutCubic(t)), { key: 'tool-wheel' });
@@ -181,30 +192,41 @@ export class ToolWheelSystem extends createSystem({}) {
     });
   }
 
-  /** In front of the nib, toward the eyes, facing them; lifted clear of the page if needed. */
+  /** Beside the nib, toward the eyes, facing them; lifted clear of the page if needed. */
   private place(): void {
     this.player.head.getWorldPosition(this.head);
+    this.headRight.set(1, 0, 0).applyQuaternion(this.player.head.getWorldQuaternion(this.wheel.quaternion));
     const nib = this.pen.nib;
     const wheel = this.wheel;
-    wheel.position.copy(this.head).sub(nib).normalize().multiplyScalar(TOWARD_EYES_M).add(nib);
+    const awayFromHand = this.pen.holder === 'left' ? 1 : -1;
+    wheel.position
+      .copy(this.head)
+      .sub(nib)
+      .normalize()
+      .multiplyScalar(TOWARD_EYES_M)
+      .add(nib)
+      .addScaledVector(this.headRight, awayFromHand * BESIDE_NIB_M);
     // Keep the whole wheel above the page (the tablet lies flat on a desk).
     this.surface.getWorldPosition(this.local);
     const lowestEdge = wheel.position.y - TOOL_WHEEL_RADIUS_M * WHEEL_SCALE;
     const floor = this.local.y + CLEAR_OF_PAGE_M;
     if (lowestEdge < floor) wheel.position.y += floor - lowestEdge;
     wheel.lookAt(this.head);
-    wheel.updateMatrixWorld();
-    // Aim from where the nib is now, wherever the wheel ended up.
-    wheel.worldToLocal(this.aimOrigin.copy(nib));
+    // Aim from where the nib is now.
+    this.surface.updateWorldMatrix(true, false);
+    this.surface.worldToLocal(this.aimOrigin.copy(nib));
   }
 
   // -------------------------------------------------------- aiming, picking
 
-  /** The nib's offset from where it started picks a segment by direction; near the start, the hub. */
+  /** The nib's slide over the page since the wheel opened picks a segment by its direction; a short one, the hub. */
   private aim(): void {
-    this.wheel.worldToLocal(this.local.copy(this.pen.nib)).sub(this.aimOrigin);
+    // The page's x is to the right, its y away from the viewer (toward its top edge).
+    this.surface.worldToLocal(this.local.copy(this.pen.nib)).sub(this.aimOrigin);
     const distance = Math.hypot(this.local.x, this.local.y);
-    const hovered = distance < TOOL_WHEEL_INNER_RADIUS_M ? null : wheelSegmentAt(Math.atan2(this.local.y, this.local.x));
+    // The dot shows the slide on the wheel, at the wheel's scale.
+    this.view.setAim(this.local.x / WHEEL_SCALE, this.local.y / WHEEL_SCALE);
+    const hovered = distance < HUB_REACH_M ? null : wheelSegmentAt(Math.atan2(this.local.y, this.local.x));
     if (hovered === this.hovered) return;
     this.hovered = hovered;
     this.view.setHovered(hovered);

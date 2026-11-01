@@ -22,8 +22,8 @@ import { startHeadsetRecording } from './lib/headset-recorder.mjs';
 
 const SHOTS = 'artifacts/tool-wheel';
 const WHEEL_ITEMS = ['pen', 'marker', 'highlighter', 'eraser', 'lasso', 'undo', 'redo'];
-/** How far from the aim origin to move the nib to aim at a segment (wheel asset metres; ring is 0.046 to 0.1). */
-const AIM_REACH = 0.075;
+/** How far to slide the nib over the page to aim at a segment (metres; the hub is the first 3.9 cm). */
+const AIM_REACH = 0.06;
 /** Seated at the emulated room's desk-height table, facing it (see record-desk.mjs). */
 const TABLE_HEIGHT_M = 0.79;
 const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
@@ -61,10 +61,11 @@ const state = () =>
       penHeld: pen?.held,
       hovered: wheel?.hovered ?? null,
       wheelVisible: wheel?.wheel?.visible,
+      strokes: window.__metaNotes.session.active?.pages[0].strokes.length ?? 0,
     };
   });
 
-/** World point for the nib to aim at item `name` (or the hub for null), on the open wheel. */
+/** World point for the nib to aim at item `name` (or the hub for null): a slide over the page in its direction. */
 const aimPoint = (name) =>
   page.evaluate(
     ([index, count, reach]) => {
@@ -76,20 +77,34 @@ const aimPoint = (name) =>
         local.x += Math.cos(angle) * reach;
         local.y += Math.sin(angle) * reach;
       }
-      const p = system.wheel.localToWorld(local);
+      const p = system.surface.localToWorld(local);
       return { x: p.x, y: p.y, z: p.z };
     },
     [name ? WHEEL_ITEMS.indexOf(name) : -1, WHEEL_ITEMS.length, AIM_REACH],
   );
 
+/** A full headset view, and a close-up of its middle (where the wheel is looked at). */
 const shot = async (name) => {
   await pause(250);
   await page.screenshot({ path: `${SHOTS}/${name}.png` });
+  const { width, height } = page.viewportSize();
+  const w = 420;
+  const h = 300;
+  await page.screenshot({ path: `${SHOTS}/${name}-closeup.png`, clip: { x: (width - w) / 2, y: (height - h) / 2, width: w, height: h } });
+};
+/** Look at the open wheel, as one would to pick from it. */
+const lookAtWheel = async () => {
+  const centre = await page.evaluate(() => {
+    const system = window.__metaNotes.world.getSystems().find((s) => s.constructor.name === 'ToolWheelSystem');
+    const p = system.wheel.position;
+    return { x: p.x, y: p.y, z: p.z };
+  });
+  await rec.lookAt(centre, 500);
 };
 
 function expect(condition, message, s) {
   if (!condition) {
-    console.log(rec.logs.filter((l) => l.includes('[pen]') || l.includes('error')).slice(-12).join('\n'));
+    console.log(rec.logs.filter((l) => l.includes('MetaNotes:pen') || l.includes('error')).slice(-12).join('\n'));
     throw new Error(`${message}: ${JSON.stringify(s)}`);
   }
   console.log(`ok - ${message}`);
@@ -107,10 +122,16 @@ await rec.pickUpPen(1200);
 await rec.penWrite(layoutLine('Notes', { u: 0.1, v: 0.2, size: 0.0028, seed: 3 }).strokes);
 await pause(300);
 
-// --- Double-tap the pen: the wheel opens in front of the nib.
+// --- Lift the pen off the page, as one does to change tools, and double-tap it.
+const nibNow = await page.evaluate(() => {
+  const n = window.__metaNotes.world.globals['metaNotes.pen'].nib;
+  return { x: n.x, y: n.y + 0.04, z: n.z };
+});
+await rec.moveNibTo(nibNow, 400);
 await rec.penTap(2);
 let s = await state();
 expect(s.wheelOpen && s.penHeld, 'double-tap opens the wheel, pen still in hand', s);
+await lookAtWheel();
 await shot('1-double-tap-opens');
 
 // --- Aim at Marker, then tap to pick it.
@@ -131,12 +152,26 @@ s = await state();
 expect(!s.wheelOpen && s.penHeld && s.tool === 'marker', 'a tap on the hub closes the wheel; pen still held', s);
 await shot('4-hub-closes');
 
+// --- Open it again, then just write: touching the page puts the wheel away and inks.
+await rec.penTap(2);
+s = await state();
+expect(s.wheelOpen, 'double-tap opens the wheel again', s);
+const strokesBefore = s.strokes;
+await rec.penWrite(layoutLine('ok', { u: 0.4, v: 0.3, size: 0.0028, seed: 4 }).strokes);
+s = await state();
+expect(!s.wheelOpen && s.strokes > strokesBefore, 'writing again closes the wheel and inks', s);
+await rec.moveNibTo(await page.evaluate(() => {
+  const n = window.__metaNotes.world.globals['metaNotes.pen'].nib;
+  return { x: n.x, y: n.y + 0.04, z: n.z };
+}), 400);
+
 // --- The free left hand: pinch to open, aim at Highlighter, let go to pick.
 const leftInView = await page.evaluate((t) => ({ x: t.x + 0.05, y: t.y + 0.22, z: t.z - 0.25 }), tablet);
 await rec.moveLeftHand(leftInView);
 await rec.leftPinch(1);
 s = await state();
 expect(s.wheelOpen, 'a free-hand pinch opens the wheel', s);
+await lookAtWheel();
 await rec.moveNibTo(await aimPoint('highlighter'), 500);
 await shot('5-free-hand-aim-highlighter');
 await rec.leftPinch(0);

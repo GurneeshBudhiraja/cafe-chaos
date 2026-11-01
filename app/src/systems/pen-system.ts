@@ -76,6 +76,11 @@ export class PenSystem extends createSystem({}) {
   private readonly wasClosed: Record<Hand, boolean> = { left: false, right: false };
   /** Taps and letting go, read from the holding hand. */
   private readonly taps = new PinchTapDetector();
+  /**
+   * The gesture clock (ms): frame time scaled like the UI animations
+   * (Tweens.timeScale), so tap timing stays true in slowed-down recordings.
+   */
+  private clockMs = 0;
   private readonly handFrame: HandFrame = { frame: null!, space: null!, origin: new Matrix4() };
   private readonly restPosition = new Vector3();
   private readonly restQuaternion = new Quaternion();
@@ -124,8 +129,10 @@ export class PenSystem extends createSystem({}) {
     );
   }
 
-  update(): void {
-    if (!this.stylus || !this.tablet.visible) return;
+  update(delta: number): void {
+    if (!this.stylus) return;
+    this.clockMs += delta * 1000 * this.tweens.timeScale;
+    if (!this.tablet.visible) return;
     if (!this.readHands()) return;
 
     if (this.holder) {
@@ -183,7 +190,7 @@ export class PenSystem extends createSystem({}) {
 
   /** The pen in hand: a tap, letting go, or following the hand. */
   private updateHeld(reading: PinchReading): void {
-    const event = this.taps.update(reading.gap, performance.now());
+    const event = this.taps.update(reading.gap, this.clockMs);
     this.pen.loosened = this.taps.loosened;
     if (event === 'release') {
       this.putDown(true);
