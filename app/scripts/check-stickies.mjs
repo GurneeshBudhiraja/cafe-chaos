@@ -91,6 +91,8 @@ await rec.leftPinchAt(mint, 700);
 await pause(800);
 let list = await stickies();
 expect(list.length === 1 && list[0].kind === 'mint', 'pinching the mint stack peels off a mint sticky note', list);
+const wheelOpen = () => page.evaluate(() => window.__metaNotes.world.globals['metaNotes.tools'].wheelOpen);
+expect(!(await wheelOpen()), 'that pinch does not open the tool wheel (it picked something up)', {});
 await rec.leftPinch(0);
 await rec.moveLeftHand(LEFT_REST);
 await shot('2-sticky-peeled-off');
@@ -156,6 +158,37 @@ p = await pose(stickyName);
 expect(p.face[0] > 0.3 && p.position[1] > tablet.y + 0.2, 'let go in mid-air, it floats there facing you', p);
 await rec.lookAt(await worldOf(stickyName), 500);
 await shot('7-floating');
+
+// --- Phase 3: the bin. Carrying shows it low in the view; over it, it opens; let go: gone, with Undo.
+const sticky = await worldOf(stickyName);
+await rec.lookAt({ ...tablet, y: tablet.y - 0.1 }, 400);
+await rec.leftPinchAt(sticky, 600);
+const binState = () =>
+  page.evaluate(() => {
+    const bin = window.__metaNotes.world.getSystems().find((x) => x.constructor.name === 'StickySystem').bin;
+    const p = bin.bin.position;
+    return { shown: bin.shown, opening: bin.opening, scale: +bin.bin.scale.x.toFixed(2), mouth: { x: p.x, y: p.y + 0.11 * bin.bin.scale.y, z: p.z } };
+  });
+let bin = await binState();
+expect(bin.shown, 'picking up a sticky note shows the bin', bin);
+expect(!(await wheelOpen()), 'picking it up does not open the tool wheel', {});
+await shot('8-bin-shows-while-carrying');
+await rec.moveLeftPinchTo(bin.mouth, 900);
+await pause(500);
+bin = await binState();
+expect(bin.opening && bin.scale > 1.2, 'over the bin, it grows and its lid opens', bin);
+await shot('9-over-the-bin');
+await rec.leftPinch(0);
+await pause(900);
+list = await stickies();
+const toast = await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.toasts']?.current?.title ?? null);
+expect(list.length === 0, 'letting go over the bin throws the sticky note away', { list, toast });
+await rec.moveLeftHand(LEFT_REST);
+await shot('10-thrown-away-toast');
+await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.toasts']?.current?.action?.run());
+await pause(400);
+list = await stickies();
+expect(list.length === 1 && list[0].strokes > 4, 'Undo on the toast brings it back, writing and all', list);
 
 const errors = await rec.finish('stickies');
 console.log(`errors ${errors.length}`);

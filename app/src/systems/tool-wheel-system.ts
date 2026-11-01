@@ -4,7 +4,8 @@
  * Opening it (only while the pen is in hand):
  * - with the pen hand: a double-tap on the pen (a quick open-and-close of
  *   the holding fingers, twice; PenSystem reports it), or
- * - with the free hand: a pinch.
+ * - with the free hand: a pinch in the air (not one closing on something to
+ *   pick up, such as a sticky note: pinch-targets.ts).
  *
  * It appears beside the pen's nib, on the side away from the holding hand
  * (so the hand and pen never hide it), facing the eyes, with the current
@@ -30,6 +31,7 @@
 
 import { createSystem, Matrix4, Mesh, Vector3, type Entity, type Object3D } from '@iwsdk/core';
 import { isAction, WHEEL_ITEMS, type WheelItemId } from '../ink/tool-catalog.js';
+import { getPinchTargets, type PinchTargets } from '../input/pinch-targets.js';
 import {
   createPinchReading,
   PINCH_CLOSED_M,
@@ -73,6 +75,7 @@ export class ToolWheelSystem extends createSystem({}) {
   private pen!: PenState;
   private tools!: ToolState;
   private tweens!: Tweens;
+  private pinchTargets!: PinchTargets;
   private surface!: Mesh;
   private view!: ToolWheelView;
   private wheel!: Object3D;
@@ -102,6 +105,7 @@ export class ToolWheelSystem extends createSystem({}) {
     this.pen = getPen(this.world);
     this.tools = getTools(this.world);
     this.tweens = getTweens(this.world);
+    this.pinchTargets = getPinchTargets(this.world);
 
     this.wheel = toolWheelPrototype.clone();
     this.wheel.scale.setScalar(WHEEL_SCALE);
@@ -166,7 +170,8 @@ export class ToolWheelSystem extends createSystem({}) {
     const wasClosed = this.freeHandClosed;
     if (this.freeHand.gap < PINCH_CLOSED_M) this.freeHandClosed = true;
     else if (this.freeHand.gap > PINCH_OPEN_M) this.freeHandClosed = false;
-    if (this.freeHandClosed && !wasClosed && !this.opener) this.open('free-hand');
+    const pinchedInAir = this.freeHandClosed && !wasClosed && !this.pinchTargets.onTarget(this.freeHand.point);
+    if (pinchedInAir && !this.opener) this.open('free-hand');
     else if (!this.freeHandClosed && wasClosed && this.opener) this.pick();
   }
 

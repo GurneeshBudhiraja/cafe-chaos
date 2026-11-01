@@ -14,6 +14,9 @@
  *   surface Quest knows (Space Setup), it lies flat on it (surface-snap.ts),
  *   so you see where it will stick; let go and it stays there. Let go in
  *   mid-air and it floats where you left it.
+ * - Throwing away: while a note is carried, a bin shows at the bottom of
+ *   the view (sticky-bin.ts). Over it, the bin grows and opens; let go and
+ *   the note drops in, with an Undo on the toast in case of a slip.
  * - Sticky notes belong to the room, not to a note: they stay where they
  *   are, whether or not a note is open.
  *
@@ -31,6 +34,7 @@ import {
   type Object3D,
 } from '@iwsdk/core';
 import { getInkSurfaces, type InkSurfaces } from '../ink/ink-surfaces.js';
+import { getPinchTargets } from '../input/pinch-targets.js';
 import {
   createPinchReading,
   HANDS,
@@ -46,9 +50,11 @@ import { TABLET_BACK_M, TABLET_HALF_WIDTH_M } from '../scene-assets/tablet.scene
 import { getStickyBoard, type StickyBoard } from '../stickies/sticky-board.js';
 import { STICKY_KINDS, type StickyKind, type StickyNote } from '../stickies/sticky-model.js';
 import { createStickyObject, disposeStickyObject, stickySize } from '../stickies/sticky-object.js';
+import { StickyBin } from '../stickies/sticky-bin.js';
 import { snapToSurface } from '../stickies/surface-snap.js';
 import type { DetectedSurface } from '../ui/desk-placement.js';
 import { faceViewer } from '../ui/drag.js';
+import { getToasts, type ToastService } from '../ui/toasts.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
 import { easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 import { playUiSound } from '../ui/ui-sounds.js';
@@ -63,8 +69,9 @@ const PICK_RADIUS_M = 0.04;
 const TOWARD_EYES = 0.3;
 const UP_M = 0.06;
 const LEFT_M = 0.16;
-/** How long a new note takes to peel off and float up (ms). */
+/** How long a new note takes to peel off and float up (ms), and to drop into the bin. */
 const PEEL_MS = 380;
+const DROP_MS = 260;
 /** A pinch this close to a sticky note (metres: off its face, or past its edges) picks it up. */
 const GRAB_OFF_FACE_M = 0.04;
 const GRAB_PAST_EDGE_M = 0.02;
@@ -89,6 +96,8 @@ export class StickySystem extends createSystem({
   private surfaces!: InkSurfaces;
   private pen!: PenState;
   private tweens!: Tweens;
+  private toasts!: ToastService;
+  private bin!: StickyBin;
   private tablet!: Object3D;
   private pad!: Object3D;
   private readonly views = new Map<string, StickyView>();
@@ -107,6 +116,7 @@ export class StickySystem extends createSystem({
   private readonly fromQuaternion = new Quaternion();
   private readonly toQuaternion = new Quaternion();
   private readonly free = new Vector3();
+  private readonly headRotation = new Quaternion();
   private readonly snapPosition = new Vector3();
   private readonly snapQuaternion = new Quaternion();
 
@@ -120,6 +130,8 @@ export class StickySystem extends createSystem({
     this.surfaces = getInkSurfaces(this.world);
     this.pen = getPen(this.world);
     this.tweens = getTweens(this.world);
+    this.toasts = getToasts(this.world);
+    this.bin = new StickyBin(this.world, this.tweens);
     this.tablet = tabletEntity.object3D;
 
     // The pad is part of the tablet (a child entity, like the pen): it lies
@@ -135,6 +147,10 @@ export class StickySystem extends createSystem({
     }
 
     this.cleanupFuncs.push(
+      // A pinch on a stack or a sticky note picks it up: not an air gesture (the tool wheel's).
+      getPinchTargets(this.world).register(
+        (point) => (this.tablet.visible && this.stackNear(point) !== null) || this.stickyNear(point) !== null,
+      ),
       this.board.subscribe((event) => {
         if (event.kind === 'added') this.show(event.sticky);
         else this.hide(event.sticky.id);
@@ -147,10 +163,10 @@ export class StickySystem extends createSystem({
     void this.board.load();
   }
 
-  update(): void {
+  update(delta: number): void {
     if (!this.pad || !this.readHands()) return;
     if (this.carry) {
-      this.updateCarry(this.carry);
+      this.updateCarry(this.carry, delta);
       return;
     }
     for (const hand of HANDS) {
@@ -260,11 +276,12 @@ export class StickySystem extends createSystem({
     const grip = view.object.worldToLocal(this.point.copy(this.readings[hand].point)).clone();
     grip.z = 0;
     this.carry = { view, hand, grip };
+    this.bin.show();
     playUiSound('press');
   }
 
-  /** The note follows the pinch; near a surface it lies flat on it. Opening the pinch lets go. */
-  private updateCarry(carry: Carry): void {
+  /** The note follows the pinch; over the bin it opens, near a surface it lies flat on it. Opening the pinch lets go. */
+  private updateCarry(carry: Carry, delta: number): void {
     const reading = this.readings[carry.hand];
     if (!reading.tracked || reading.gap > PINCH_OPEN_M) {
       this.letGo(carry);
@@ -276,8 +293,11 @@ export class StickySystem extends createSystem({
     this.free.copy(carry.grip).applyQuaternion(object.quaternion);
     object.position.copy(reading.point).sub(this.free);
     faceViewer(object, this.world);
-    // Near a surface: flat on it instead.
     this.player.head.getWorldPosition(this.head);
+    this.player.head.getWorldQuaternion(this.headRotation);
+    this.bin.follow(this.head, this.headRotation, delta);
+    if (this.bin.over(object.position)) return;
+    // Near a surface: flat on it instead.
     if (snapToSurface(this.surfaceList, object.position, this.head, this.snapPosition, this.snapQuaternion)) {
       object.position.copy(this.snapPosition);
       object.quaternion.copy(this.snapQuaternion);
@@ -287,8 +307,43 @@ export class StickySystem extends createSystem({
   private letGo(carry: Carry): void {
     this.carry = null;
     this.wasClosed[carry.hand] = false;
+    const intoBin = this.bin.over(carry.view.object.position);
+    this.bin.hide();
+    if (intoBin) {
+      this.throwAway(carry.view);
+      return;
+    }
     this.recordPlace(carry.view);
     devLog('stickies', `sticky note put down at ${carry.view.object.position.toArray().map((n) => n.toFixed(2)).join(', ')}`);
+  }
+
+  /** The note drops into the bin, shrinking as it goes; the toast offers it back. */
+  private throwAway(view: StickyView): void {
+    const object = view.object;
+    const id = view.sticky.id;
+    this.fromPosition.copy(object.position);
+    const into = this.bin.mouthPosition(new Vector3());
+    playUiSound('press');
+    this.tweens.play(
+      DROP_MS,
+      (t) => {
+        const e = easeOutCubic(t);
+        object.position.lerpVectors(this.fromPosition, into, e);
+        object.scale.setScalar(1 - 0.85 * e);
+      },
+      {
+        key: `sticky-drop-${id}`,
+        done: () => {
+          this.board.remove(id);
+          this.toasts.show({
+            kind: 'info',
+            title: 'Sticky note thrown away',
+            action: { label: 'Undo', run: () => this.board.bringBack() },
+          });
+        },
+      },
+    );
+    devLog('stickies', 'sticky note thrown away');
   }
 
   /** The detected planes, as surface-snap.ts reads them. */
@@ -325,6 +380,7 @@ export class StickySystem extends createSystem({
     if (this.carry?.view === view) this.carry = null;
     this.views.delete(id);
     this.tweens.cancel(`sticky-peel-${id}`);
+    this.tweens.cancel(`sticky-drop-${id}`);
     this.surfaces.unregister(view.entity);
     view.entity.dispose();
     disposeStickyObject(view.object);
