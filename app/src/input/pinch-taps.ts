@@ -13,11 +13,11 @@
 import { PINCH_CLOSED_M, PINCH_OPEN_M } from './hand-pinch.js';
 
 /** Fingers open for less than this, then closed again, are a tap (ms). */
-const TAP_MAX_MS = 400;
+const TAP_MAX_MS = 500;
 /** A second tap ending within this of the first one's end makes a double-tap (ms). */
 const DOUBLE_TAP_MS = 800;
 /** Fingers open for this long let go of the pen (ms). */
-const RELEASE_AFTER_MS = 450;
+const RELEASE_AFTER_MS = 550;
 
 export type PinchTapEvent = 'tap' | 'double-tap' | 'release';
 

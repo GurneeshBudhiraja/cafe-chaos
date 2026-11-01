@@ -88,7 +88,10 @@ const shot = async (name) => {
 };
 
 function expect(condition, message, s) {
-  if (!condition) throw new Error(`${message}: ${JSON.stringify(s)}`);
+  if (!condition) {
+    console.log(rec.logs.filter((l) => l.includes('[pen]') || l.includes('error')).slice(-12).join('\n'));
+    throw new Error(`${message}: ${JSON.stringify(s)}`);
+  }
   console.log(`ok - ${message}`);
 }
 

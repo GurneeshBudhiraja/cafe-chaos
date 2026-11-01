@@ -45,6 +45,7 @@ import {
 } from '../scene-assets/tablet.scene-asset.js';
 import { getNoteView } from '../ui/note-view.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
+import { devLog } from '../util/dev-log.js';
 import { easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 
 const TABLET_NODE = 'tablet';
@@ -188,7 +189,10 @@ export class PenSystem extends createSystem({}) {
       this.putDown(true);
       return;
     }
-    if (event) this.pen.emitTap(event);
+    if (event) {
+      devLog('pen', event);
+      this.pen.emitTap(event);
+    }
     // Mid-tap the fingers part and their midpoint jumps: the pen stays where it was.
     if (!this.taps.loosened) this.followHand(reading);
   }
