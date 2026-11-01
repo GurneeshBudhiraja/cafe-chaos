@@ -14,6 +14,7 @@ npm run typecheck    # always run before testing in the browser
 npm run build        # production build into dist/
 npm run smoke:notes  # notes, reloads, save failure, the dock and its panels (dev server running)
 npm run record:tour -- <360-photo.jpg>  # headset-view video of the home into artifacts/tour.mp4
+npm run check:tool-wheel   # tool wheel check, screenshots in artifacts/tool-wheel/ (~12 min)
 ```
 
 The smoke and recording scripts launch their own Chromium. Set `CHROMIUM_PATH` if Playwright
@@ -49,8 +50,24 @@ note write fail (for checking error handling by hand).
   a tracked hand to pick it up: it sits in the pinch like a real pen, from
   the web of the thumb to just past the fingertips, and ink flows while its
   nib touches the page (the nib rests on the page, never through it). Open
-  the pinch and it goes back beside the tablet. Without the pen in hand, a
-  ray (pointer) can still draw on the page.
+  your fingers for a moment and it goes back beside the tablet. Without the
+  pen in hand, a ray (pointer) can still draw on the page.
+- **The tool wheel:** while holding the pen, double-tap it (open and close
+  the holding fingers twice, quickly) or pinch with the other hand. A wheel
+  opens beside the pen with seven segments: Pen, Marker, Highlighter,
+  Eraser, Lasso, Undo and Redo, with the current tool's colours and sizes
+  around it.
+  - **Aiming:** slide the pen above the page (away from you for the top,
+    toward you for the bottom); a dot shows the aim and the hub names it.
+  - **Picking:** tap the pen once, or let go of the other hand's pinch.
+    The wheel stays open for more picks; the hub, or writing again,
+    closes it.
+  - **Tools:**
+    - The **highlighter** draws see-through, under the writing.
+    - The **eraser** removes whole strokes; its ring shows its size.
+    - The **lasso** selects the strokes inside a loop; drag inside its box
+      to move them, or pick Delete on its ring.
+  - **Undo and redo** cover writing, erasing, moving and deleting.
 - **Templates:** six papers (Blank, Lined, Grid, Dotted, Cornell, Checklist),
   each with a line on what it is for; picking one starts a note on it.
 - **Settings:** the stick mode switch (remembered on this device) and Google
@@ -102,8 +119,9 @@ src/scene-assets/              procedural 3D assets: tablet, stylus, tool wheel,
                                paper grain); classroom backdrop for the desktop view
 src/notes/                     note model, IndexedDB store, editing session (autosave)
 src/ink/                       stroke sampling rules and stroke rendering
-src/systems/                   ECS systems: dock, note page, pen, toasts, stick mode (follow),
-                               tweens, home window (parked), ink, tablet handle, XR scroll fix
+src/systems/                   ECS systems: dock, note page, pen, tool wheel, toasts, stick mode
+                               (follow), tweens, home window (parked), ink, tablet handle, XR scroll fix
+src/input/                     hand pinch reading and pen taps
 src/ui/                        UI services and helpers: theme, liquid glass, toasts,
                                home mode, preferences, press motion, sounds, drag
 src/util/                      dev-only logging and test hooks
