@@ -14,7 +14,7 @@
  *     Templates creates a note with its paper, the grab bar moves the dock,
  *     stick mode is on by default and its Settings switch is remembered,
  *     every panel closes with its close button, and with more notes than
- *     fit the Recent grid shows the latest eight with edit times.
+ *     fit the Recent grid shows the latest six with edit times.
  *
  * Usage: start the dev server (`npm run dev`), then `npm run smoke:notes`.
  */
@@ -159,6 +159,12 @@ try {
   await clickUntil(page, 'dock-new', () => window.__metaNotes.session.summaries.length === 2);
   await waitForSaved(page);
   const second = await activeNoteSnapshot(page);
+  // New note opens the page at once (the dock steps aside); close it to get back to the dock.
+  const opened = await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.noteView'].isOpen);
+  checks.check('New note opens the page straight away', opened, `open=${opened}`);
+  await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.noteView'].close());
+  await page.waitForFunction(() => window.__shown('dock-row'), undefined, { timeout: 8000 });
+  await page.waitForTimeout(600);
   // Cards are most recent first, so the original note is now card 1.
   await clickUntil(page, 'dock-recent', () => window.__shown('dock-popover-recent'));
   await clickUntil(
@@ -172,15 +178,17 @@ try {
     second.notes === 2 && second.id !== original.id && reopened.id === original.id && reopened.strokes === 3,
     `notes=${second.notes}, reopened strokes=${reopened.strokes}`,
   );
+  // Opening from Recent opens the page too: back to the dock for the rest.
+  await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.noteView'].close());
+  await page.waitForFunction(() => window.__shown('dock-row'), undefined, { timeout: 8000 });
+  await page.waitForTimeout(600);
 
-  // Templates creates a note with that paper and closes the pop-up.
-  await clickUntil(page, 'dock-templates', () => window.__shown('dock-popover-templates'));
-  await clickUntil(
-    page,
-    'dock-template-dotted',
-    () => window.__metaNotes.session.active?.paper === 'dotted' && !window.__shown('dock-popover'),
-  );
-  checks.check('dock Templates creates a note with that paper', true);
+  // No note types to choose: New note starts a dotted canvas straight away, and there is no Templates button.
+  const quickStart = await page.evaluate(() => ({
+    paper: window.__metaNotes.session.active?.paper,
+    templates: window.__metaNotes.world.scene.getObjectByName('dock-templates') !== undefined,
+  }));
+  checks.check('New note starts straight away (dotted canvas, no Templates step)', quickStart.paper === 'dotted' && !quickStart.templates, JSON.stringify(quickStart));
 
   // The grab bar moves the dock.
   const before = await page.evaluate(() => window.__metaNotes.world.getSceneObject('compact-dock').position.x);
@@ -224,13 +232,11 @@ try {
   const closeWithButton = () =>
     clickUntil(page, 'dock-popover-close', () => !window.__shown('dock-popover') && window.__shown('dock-row'));
   await closeWithButton();
-  await clickUntil(page, 'dock-templates', () => window.__shown('dock-popover-templates'));
-  await closeWithButton();
   await clickUntil(page, 'dock-recent', () => window.__shown('dock-popover-recent'));
   await closeWithButton();
   checks.check('every panel closes with its close button', true);
 
-  // With more notes than fit, the Recent grid shows the latest eight, each
+  // With more notes than fit, the Recent grid shows the latest six, each
   // with when it was edited, and the header says how many there are.
   await page.evaluate(async () => {
     for (let i = 0; i < 6; i++) await window.__metaNotes.session.createNote(`Extra ${i + 1}`);
@@ -251,12 +257,12 @@ try {
     };
   });
   checks.check(
-    'Recent grid shows the latest eight with edit times and a count',
-    grid.notes === 9 &&
-      grid.cards === 8 &&
+    'Recent grid shows the latest six with edit times and a count',
+    grid.notes === 8 &&
+      grid.cards === 6 &&
       grid.firstTitle === grid.newest &&
       /^Edited /.test(grid.meta ?? '') &&
-      grid.count === '8 of 9',
+      grid.count === '6 of 8',
     JSON.stringify(grid),
   );
 

@@ -167,15 +167,8 @@ await rec.tap('dock-popover-close');
 await rest();
 await pause(1200);
 
-// --- Templates: start a lined page; it lands on the desk with the pen beside it.
-await rec.tap('dock-templates');
-await rest();
-await pause(1300);
-for (const paper of ['dock-template-blank', 'dock-template-lined', 'dock-template-grid']) {
-  await rec.point(paper);
-  await pause(500);
-}
-await tapUntil('dock-template-lined', noteOpen);
+// --- New note: the page lands on the desk with the pen beside it, straight away.
+await tapUntil('dock-new', noteOpen);
 await rest();
 await pause(1600);
 await lookDownAtTablet(1400);

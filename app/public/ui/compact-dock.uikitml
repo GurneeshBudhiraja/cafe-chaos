@@ -1,14 +1,14 @@
 <!--
   The dock: Meta Notes' home, and the only screen at launch. Floating glass
-  buttons with nothing between them but passthrough: Settings, Templates,
-  Recent in one line, and New note, the main action, at the right end
+  buttons with nothing between them but passthrough: Settings and Recent
+  in one line, and New note, the main action, at the right end
   (where the dominant hand finds it; mirrored for left-handed use later).
   Settings opens a panel with preferences (stick mode, on by default) and
   account connections (Google Drive, Microsoft); Recent a grid of up to
   six notes (ink, title and when it was edited), with a Recents / Show all
   toggle for a scrolling grid of every note (filtered by when it was
-  edited, sorted by date or title); Templates a grid of six
-  papers with a line on what each is for. While a panel is open the
+  edited, sorted by date or title). New note opens a page straight away:
+  there are no note types to choose. While a panel is open the
   buttons fade away and it takes their place, centred where the eye
   already is; its close button (or picking an item) brings them back. The
   thin bar underneath is the grab handle for moving the dock.
@@ -403,49 +403,10 @@
     color: #b3aba1;
   }
 
-  .tpl-card {
-    flex-direction: column;
-    gap: 10px;
-    width: 176px;
-    padding-top: 8px;
-    padding-bottom: 10px;
-    padding-left: 8px;
-    padding-right: 8px;
-    border-radius: 18px;
-    background-color: rgba(255, 250, 242, 0.06);
-    cursor: pointer;
-  }
 
-  .tpl-paper {
-    border-radius: 12px;
-    overflow: hidden;
-  }
 
-  .tpl-img {
-    flex-shrink: 0;
-    width: 160px;
-    height: 120px;
-  }
 
-  .tpl-blank {
-    flex-shrink: 0;
-    width: 160px;
-    height: 120px;
-    border-radius: 12px;
-    align-items: center;
-    justify-content: center;
-    background-color: #f4eee4;
-  }
 
-  .plus-circle {
-    width: 40px;
-    height: 40px;
-    border-radius: 20px;
-    align-items: center;
-    justify-content: center;
-    background-color: #d4704f;
-    color: #ffffff;
-  }
 </style>
 <div id="dock-root" class="dock">
   <div id="dock-popover" class="popover" style="display: none">
@@ -550,54 +511,6 @@
       <div id="all-no-match" class="no-match" style="display: none">No notes match these filters.</div>
       <div id="dock-popover-all" class="all-scroll"></div>
     </div>
-    <div id="dock-popover-templates" class="grid" style="display: none">
-      <div class="grid-row">
-        <div id="dock-template-blank" class="tpl-card">
-          <div class="tpl-blank"><div class="plus-circle"><Plus width="22" height="22"></Plus></div></div>
-          <div class="note-text">
-            <div class="note-title">Blank</div>
-            <div class="note-meta">Start fresh</div>
-          </div>
-        </div>
-        <div id="dock-template-lined" class="tpl-card">
-          <div class="tpl-paper"><img id="dock-template-img-lined" class="tpl-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="note-text">
-            <div class="note-title">Lined</div>
-            <div class="note-meta">Writing</div>
-          </div>
-        </div>
-        <div id="dock-template-grid" class="tpl-card">
-          <div class="tpl-paper"><img id="dock-template-img-grid" class="tpl-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="note-text">
-            <div class="note-title">Grid</div>
-            <div class="note-meta">Maths and sketches</div>
-          </div>
-        </div>
-      </div>
-      <div class="grid-row">
-        <div id="dock-template-dotted" class="tpl-card">
-          <div class="tpl-paper"><img id="dock-template-img-dotted" class="tpl-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="note-text">
-            <div class="note-title">Dotted</div>
-            <div class="note-meta">Bullet journal</div>
-          </div>
-        </div>
-        <div id="dock-template-cornell" class="tpl-card">
-          <div class="tpl-paper"><img id="dock-template-img-cornell" class="tpl-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="note-text">
-            <div class="note-title">Cornell</div>
-            <div class="note-meta">Study notes</div>
-          </div>
-        </div>
-        <div id="dock-template-checklist" class="tpl-card">
-          <div class="tpl-paper"><img id="dock-template-img-checklist" class="tpl-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAD0lEQVR42mNgGAWjgAoAAAJJAAFgJMPaAAAAAElFTkSuQmCC" /></div>
-          <div class="note-text">
-            <div class="note-title">Checklist</div>
-            <div class="note-meta">To-dos</div>
-          </div>
-        </div>
-      </div>
-    </div>
     <div id="dock-popover-settings" class="settings" style="display: none">
       <div class="set-section">Preferences</div>
       <div id="set-stick" class="set-row">
@@ -637,9 +550,6 @@
   <div id="dock-row" class="dock-row">
     <div id="dock-settings" class="dock-button">
       <Settings width="22" height="22"></Settings>
-    </div>
-    <div id="dock-templates" class="dock-button">
-      <LayoutGrid width="22" height="22"></LayoutGrid>
     </div>
     <div id="dock-recent" class="dock-button">
       <History width="22" height="22"></History>

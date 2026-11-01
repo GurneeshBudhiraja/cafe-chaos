@@ -2,8 +2,8 @@
  * The infinite canvas, start to end, as the headset shows it (Quest 3 field
  * of view, no captions), seated at the classroom desk:
  *
- * 1. Templates → Grid: a grid-paper note on the desk. Pick up the pen and
- *    write a heading and a line.
+ * 1. New note: a dotted canvas on the desk, straight away. Pick up the pen
+ *    and write a heading and a line.
  * 2. With the pen in hand, the free hand pinches the page and slides it:
  *    the canvas pans to empty space on the right; write there.
  * 3. Pen down. Both hands pinch the page and push together: zoom out to see
@@ -85,15 +85,11 @@ async function twoHands(leftFrom, rightFrom, leftTo, rightTo, ms) {
   await grab.pinch('right', 0);
 }
 
-// --- 1. Templates → Grid; write a heading and a line.
+// --- 1. New note (straight to the page); write a heading and a line.
 await pause(800);
-await rec.point('dock-templates');
+await rec.point('dock-new');
 await pause(400);
-await rec.tap('dock-templates');
-await pause(900);
-await rec.point('dock-template-grid');
-await pause(400);
-await rec.tap('dock-template-grid');
+await rec.tap('dock-new');
 await rec.moveHand(HAND_REST);
 await page.waitForFunction(() => window.__metaNotes.world.getSceneObject('tablet').position.y < 1.2, null, { timeout: 60000 });
 await pause(1000);

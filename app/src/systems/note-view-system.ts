@@ -5,7 +5,8 @@
  * Starting or opening a note from the home opens the view (NoteViewState):
  * the dock fades away and the tablet fades in lying flat on the desk in
  * front of the viewer, like an iPad on a table (see desk-placement.ts), with
- * the bar standing just behind its far edge. With no desk found it floats
+ * the bar (its title, the canvas zoom, Write / Type, close) standing just
+ * behind its far edge. With no desk found it floats
  * straight ahead instead, a little below eye level and turned to face the
  * eyes. The bar's close button fades them out and the dock returns. The
  * page shows the note's paper; InkSystem draws its ink on top. The paper's
@@ -92,7 +93,6 @@ export class NoteViewSystem extends createSystem({
   private barRoot!: PanelElement;
   private barGlass!: LiquidGlass;
   private title!: UIKit.Text;
-  private paperLabel!: UIKit.Text;
   private fade!: MeshFade;
   private paper!: PaperPreview;
   /** The paper whose pattern is on the page, so it is made only when it changes. */
@@ -136,7 +136,6 @@ export class NoteViewSystem extends createSystem({
       host: bar,
     });
     this.title = ui.text('note-bar-title');
-    this.paperLabel = ui.text('note-bar-paper');
     const close = ui.onClick('note-bar-close', () => this.noteView.close());
     addStateColors(close, CLOSE_STATES, this.cleanupFuncs);
     addPressMotion(close, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
@@ -309,13 +308,7 @@ export class NoteViewSystem extends createSystem({
     const note = this.session.active;
     if (!note) return;
     setText(this.title, truncate(note.title || 'Untitled note', TITLE_MAX_CHARS));
-    setText(this.paperLabel, paperLabel(note.paper));
     this.usePattern(note.paper);
     this.aimPattern();
   }
-}
-
-/** "Lined page", "Blank page": what the bar says under the title. */
-function paperLabel(paper: PaperStyle): string {
-  return `${paper.charAt(0).toUpperCase()}${paper.slice(1)} page`;
 }

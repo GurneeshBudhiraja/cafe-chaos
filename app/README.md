@@ -19,6 +19,8 @@ npm run check:stickies     # sticky notes check, screenshots in artifacts/sticki
 npm run check:text-editor  # the typing editor's rules and layout, no browser (seconds)
 npm run check:typing       # typing mode check, screenshots in artifacts/typing/ (~9 min)
 npm run record:typing      # headset-view video of typing mode into artifacts/typing.mp4
+npm run check:canvas       # infinite canvas check, screenshots in artifacts/canvas/ (~8 min)
+npm run record:canvas      # headset-view video of the infinite canvas into artifacts/canvas.mp4
 ```
 
 The smoke and recording scripts launch their own Chromium. Set `CHROMIUM_PATH` if Playwright
@@ -30,25 +32,27 @@ note write fail (for checking error handling by hand).
 
 ## What the app does today
 
-- **Home:** the dock, a row of floating glass buttons (Settings, Templates,
-  Recent, then New note at the right end). It is the only screen at launch:
+- **Home:** the dock, a row of floating glass buttons (Settings, Recent,
+  then New note at the right end). It is the only screen at launch:
   entering XR places it about 85 cm out, straight ahead at eye level, and a
   headset recenter brings it back there. Open panels shrink if needed to fit
   50 degrees of the view's height, so nothing needs a look up or down. Stick mode (it follows your view) is
   on by default.
-- **Panels:** Settings, Templates and Recent each open a glass panel. While
+- **Panels:** Settings and Recent each open a glass panel. While
   one is open the dock's buttons fade away and the panel takes their place,
   where you are already looking; its close button (or picking an item)
   brings the buttons back.
 - **Recent:** the latest six notes, each with its ink, title and when it
   was edited. Its Recents / Show all toggle switches to a scrolling grid of
   every note, filtered by when it was edited and sorted by date or title.
-- **Note page:** New note, a template, or a note picked from Recent opens
+- **Note page:** New note (one pinch: there are no note types to choose,
+  and every new note is a dotted canvas) or a note picked from Recent opens
   it on a tablet lying flat on the desk in front of you, like an iPad on a
   table: the nearest table or desk that Quest knows from Space Setup,
   within reach and below your eyes. With no desk it floats straight ahead,
   a little below eye level and facing you. It shows the note's paper and
-  ink, with its title and a close button in a bar just beyond it. The dock fades away while it is open; closing it brings the
+  ink, with a bar just beyond it: the title, the canvas zoom, Write / Type
+  and close. The dock fades away while it is open; closing it brings the
   dock back.
 - **The pen:** it lies beside the tablet's right edge. Pinch next to it with
   a tracked hand to pick it up: it sits in the pinch like a real pen, from
@@ -108,8 +112,12 @@ note write fail (for checking error handling by hand).
   - **The page:** move it by the grab bar under the toolbar, resize it from
     its bottom corners. Write flies it back to the tablet; the typed text
     stays on the page with the ink, saved with the note.
-- **Templates:** six papers (Blank, Lined, Grid, Dotted, Cornell, Checklist),
-  each with a line on what it is for; picking one starts a note on it.
+- **Infinite canvas:** every page is a window onto an endless canvas, as
+  in Excalidraw. Pinch the page with one hand and slide it to pan (with the
+  pen in the other hand, the free hand pans); pinch it with both hands and
+  move them apart or together to zoom around the point between them. The
+  dots pan and zoom with the ink; the zoom shows on the note bar, and a tap
+  on it glides back to the start. The view is saved with the note.
 - **Settings:** the stick mode switch (remembered on this device) and Google
   Drive / Microsoft connections (not built yet: Connect answers "Coming
   soon").

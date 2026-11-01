@@ -136,16 +136,9 @@ await rec.tap('dock-all-card-1');
 await rest();
 await pause(2400);
 
-// --- Templates: point along the papers, start a grid page (a toast confirms it).
-await rec.tap('dock-templates');
-await rest();
-await pause(1900);
-for (const paper of ['dock-template-blank', 'dock-template-lined', 'dock-template-cornell', 'dock-template-grid']) {
-  await rec.point(paper);
-  await pause(600);
-}
+// --- New note: a page starts straight away (no note types to choose).
 const before = await page.evaluate(() => window.__metaNotes.session.summaries.length);
-await rec.tap('dock-template-grid');
+await rec.tap('dock-new');
 await until((n) => window.__metaNotes.session.summaries.length > n, before);
 await rest();
 await pause(2600);

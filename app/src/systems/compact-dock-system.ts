@@ -2,17 +2,19 @@
  * CompactDockSystem: the home, a row of floating glass buttons. It is the
  * only screen at launch (no big window in front of you: see home-mode.ts).
  *
- * Settings, Templates, Recent in one line, then New note at the right end,
+ * Settings and Recent in one line, then New note at the right end,
  * with nothing between them but passthrough. Entering XR (or a headset
  * recenter) places it straight ahead at eye level, centred. A grab bar
  * under the row moves the dock (pinch and drag); on release it turns to
  * face the viewer.
  *
- * Settings, Templates and Recent each open a panel that takes the stage:
+ * Settings and Recent each open a panel that takes the stage:
  * the buttons fade away and the panel takes their place, centred where the
  * eye already is; its close button brings the buttons back.
- * Recent is a grid of up to eight notes (ink, title, when it was edited),
- * Templates a grid of papers; picking an item closes the panel. Settings
+ * Recent is a grid of up to eight notes (ink, title, when it was edited);
+ * picking one closes the panel. New note opens a page straight away, on
+ * dotted paper (NEW_NOTE_PAPER): there are no note types to choose, so
+ * starting a note is one pinch. Settings
  * holds stick mode (the dock follows the head; on by default and
  * remembered) and account connections (not built yet: Connect says so in
  * place).
@@ -34,7 +36,7 @@ import {
   type UIKit,
   type UIKitMLAsset,
 } from '@iwsdk/core';
-import { PAPER_STYLES, type PaperStyle } from '../notes/note-model.js';
+import { type PaperStyle } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
 import { formatRelativeTime, truncate } from '../ui/format.js';
@@ -61,7 +63,7 @@ import {
   type NoteSort,
   type WhenFilter,
 } from '../ui/note-filters.js';
-import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
+import { NoteThumbnail } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import { THEME } from '../ui/theme.js';
 import { openNoteFromHome, startNote } from '../ui/note-actions.js';
@@ -114,13 +116,17 @@ const SHOW_MS = 360;
 const SHOW_DELAY_MS = 160;
 const SHINE_MS = 900;
 
-type Popover = 'recent' | 'templates' | 'settings' | null;
+type Popover = 'recent' | 'settings' | null;
+/**
+ * Every new note's paper. Dots give the infinite canvas something to move
+ * against when it pans and zooms, without the ruled lines' layout.
+ */
+const NEW_NOTE_PAPER: PaperStyle = 'dotted';
 /** Recent's two views: the latest few, or every note in a scrolling grid. */
 type RecentView = 'recent' | 'all';
 
 const POPOVER_TITLES: Record<Exclude<Popover, null>, string> = {
   recent: 'Notes',
-  templates: 'Start a new note',
   settings: 'Settings',
 };
 const FOCUS_IN_MS = 320;
@@ -185,7 +191,6 @@ export class CompactDockSystem extends createSystem({}) {
    * once the panel moves (white sheets across the view).
    */
   private readonly recentImages: PanelElement[] = [];
-  private readonly templateImages: PanelElement[] = [];
   /** Whether the dock is (or is becoming) visible. */
   private shown = false;
   private window: Object3D | null = null;
@@ -204,7 +209,6 @@ export class CompactDockSystem extends createSystem({}) {
   /** Each filter option's chip, painted clay while it is chosen. */
   private readonly filterChips: Array<{ chip: PanelElement; label: UIKit.Text; chosen: () => boolean }> = [];
   private popoverRecent!: PanelElement;
-  private popoverTemplates!: PanelElement;
   private recentEmpty!: PanelElement;
   /** The grid's two rows of four cards. */
   private readonly recentRows: PanelElement[] = [];
@@ -268,7 +272,6 @@ export class CompactDockSystem extends createSystem({}) {
 
     const round = [
       ui.onClick('dock-recent', () => this.openPanel('recent')),
-      ui.onClick('dock-templates', () => this.openPanel('templates')),
       ui.onClick('dock-settings', () => this.openPanel('settings')),
     ];
     for (const el of round) {
@@ -276,7 +279,7 @@ export class CompactDockSystem extends createSystem({}) {
       addStateColors(el, NEUTRAL_STATES, this.cleanupFuncs);
       addPressMotion(el, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
     }
-    const newNote = ui.onClick('dock-new', () => this.newNote('blank'));
+    const newNote = ui.onClick('dock-new', () => this.newNote(NEW_NOTE_PAPER));
     this.newNoteButton = newNote;
     addStateColors(newNote, PRIMARY_STATES, this.cleanupFuncs);
     addPressMotion(newNote, this.tweens, this.cleanupFuncs);
@@ -297,7 +300,6 @@ export class CompactDockSystem extends createSystem({}) {
     this.popoverTitle = ui.text('dock-popover-title');
     this.popoverCount = ui.text('dock-popover-count');
     this.popoverRecent = ui.element('dock-popover-recent');
-    this.popoverTemplates = ui.element('dock-popover-templates');
     this.recentEmpty = ui.element('dock-recent-empty');
     this.recentRows.push(ui.element('dock-recent-row-0'), ui.element('dock-recent-row-1'));
     this.bindRecentToggle(ui);
@@ -327,20 +329,6 @@ export class CompactDockSystem extends createSystem({}) {
       addPressMotion(card.root, this.tweens, this.cleanupFuncs);
       this.recentCards.push(card);
       this.cleanupFuncs.push(() => thumbnail.dispose());
-    }
-
-    for (const paper of PAPER_STYLES) {
-      const card = ui.onClick(`dock-template-${paper}`, () => this.newNote(paper));
-      addStateColors(card, NEUTRAL_STATES, this.cleanupFuncs);
-      addPressMotion(card, this.tweens, this.cleanupFuncs);
-      if (paper === 'blank') continue;
-      const preview = new PaperPreview(PREVIEW_PX);
-      preview.draw(paper);
-      const image = ui.element(`dock-template-img-${paper}`);
-      image.setProperties({ src: preview.texture });
-      this.images.push(image);
-      this.templateImages.push(image);
-      this.cleanupFuncs.push(() => preview.dispose());
     }
 
     makeDraggable(ui.element('dock-grab'), ui.element('dock-grab-bar'), panel, this.world, this.cleanupFuncs, {
@@ -647,9 +635,7 @@ export class CompactDockSystem extends createSystem({}) {
 
   private renderPopover(): void {
     setVisible(this.popoverPanel, this.popover !== null);
-    setVisible(this.popoverTemplates, this.popover === 'templates');
     setVisible(this.popoverSettings, this.popover === 'settings');
-    for (const image of this.templateImages) setVisible(image, this.popover === 'templates');
     setText(this.popoverTitle, POPOVER_TITLES[this.popover ?? 'recent']);
     this.renderRecentSections();
     this.renderHint();
