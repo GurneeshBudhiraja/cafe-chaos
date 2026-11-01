@@ -110,9 +110,72 @@ Read `app/AGENTS.md` first. The rules that matter most here:
 
 ---
 
+## 4A. First: make the hero objects look real
+
+The owner's top priority, added after this brief was first written. The tablet, the pen and the tool wheel already exist as procedural models (`tablet.scene-asset.ts`, `stylus.scene-asset.ts`, `tool-wheel.scene-asset.ts`). They work, but they read as simple shapes in flat colours. **They must look like real, premium objects**: the person should believe there is an iPad and an Apple Pencil on their desk. Upgrade them in place. Keep every contract (sizes, origins, named parts, `WritingSurface`, `NibTip`, `StylusDock`, the `Segment-<item>` parts), so no system code breaks.
+
+**How to get realism on a Quest:**
+- **Generate textures in code** (canvas, drawn once when the asset is built, in the style of `paper-texture.ts`). Do not download photo textures. Use 512 px or smaller per map, and share them between copies.
+- Use the maps that matter most for metal and glass:
+  - a **roughness map** (micro-variation, so light breaks up),
+  - a **normal map** (brushed grain, fine seams),
+  - **clear coat** on `MeshPhysicalMaterial` for glass.
+- **Bevels catch light:** every visible edge gets a small bevel or chamfer, so a highlight runs along it. Hard 90° edges look fake.
+- **Reflections need something to reflect.** Check whether the scene has an environment map (IWSDK `IBLGradient` on the level root). Without one, metal looks flat grey. If none exists, add a soft warm gradient environment, or ask the owner first if it changes the room's look.
+- Budget: the tablet under about 15k triangles, the pen under about 4k, and the wheel under about 12k. Check `renderStats`.
+
+### Asset A: The tablet, as a real iPad-style tablet
+
+**What it looks like:**
+- **Body:** anodised aluminium.
+  - **Finish: space grey** (a warm, dark aluminium matching the theme's `#2a2420` family). This is the default; the owner may choose silver instead (open question 5).
+  - A **fine brushed grain** (a normal map with very fine straight lines) and a roughness of about 0.35–0.45.
+  - Metalness about 0.9, and a slightly lighter, polished **chamfered edge** all the way round (the "diamond-cut" highlight on an iPad).
+- **Front:** a thin black glass bezel around the page, flush with it, under one continuous **glass layer**.
+  - Clear coat about 0.9, clear-coat roughness about 0.05.
+  - It shows a soft reflection of the room, and a faint, barely visible smudge texture in the clear-coat roughness map. That smudge is what sells real glass; keep it subtle.
+- **The page** keeps its paper grain and paper colours, under the glass.
+- **Details** (small, but they make it real):
+  - A front camera dot in the bezel, at the middle of the long top edge: a tiny dark lens with a faint blue-violet glint.
+  - Two speaker slot groups on the short edges.
+  - A slim **magnetic pen strip** on the top edge where the pen docks: slightly darker, matte.
+  - Rounded corners with a radius of about 2 cm (as now).
+- **Back** (seen when the tablet is tilted, phase 2): the same aluminium, a small embossed mark (an abstract shape, **not** an Apple or Meta logo), and a camera bump in one corner.
+- **Size:** keep the current page (36 × 27 cm) and the bezel width. Thickness 7–9 mm.
+
+**Done when:**
+- Close-up stills on the classroom desk (`demo.showClassroom`) show the brushed metal, the glass reflection and the edge highlight.
+- Side by side with a photo of a real iPad, it reads as the same kind of object.
+- Ink and the nib still behave exactly as before.
+
+### Asset B: The pen, as a real stylus
+
+**What it looks like:**
+- **Body:** a soft-touch matte white (warm, `#efe8dc` family), like an Apple Pencil.
+  - Roughness about 0.55, with a very faint speckle in the roughness map, so it reads as a coated material rather than plastic.
+  - One **flat side** (the existing docking facet) with a slightly glossier finish.
+- **Nib:** a slightly translucent off-white tip (a little transmission or a subsurface look via emissive), with a faint grey wear mark at the very point. The **metal ferrule** between body and nib is polished satin metal.
+- **Clay band:** keep it. It's the brand accent and helps find the pen in the dark. Give it a satin anodised look instead of flat colour.
+- **Seams:** a hairline seam where the cap meets the body, and one where the ferrule meets it.
+- **Size:** unchanged (155 mm × 11.6 mm). Keep `NibTip` at the writing point.
+
+**Done when:** close-ups on the desk and in the hand (with `pickUpPen` in the recorder) read as a real, premium stylus, and picking up and writing work as before.
+
+### Asset C: The tool wheel, real glass
+
+**Being built now** on branch `feature/tool-wheel`: gestures, tools, colours and sizes, eraser, undo, lasso. Coordinate before touching it.
+
+Once that work lands, the realism pass:
+- **Segments:** frosted **liquid glass** matching the panels (`src/ui/liquid-glass.ts`): warm tint, bright rim on the lit edge, soft inner glow, instead of today's flat smoked plastic.
+- **Glyphs:** crisper, with the same material quality as the new pen (soft-touch white, satin metal, the clay accent).
+- **Hover:** the aimed-at segment lifts and its rim brightens (as now), with a soft warm light underneath.
+- **Options ring:** colour swatches as small glossy enamel discs, and size dots as polished beads.
+
+---
+
 ## 4. The five assets to build
 
-They are listed in priority order. Build and verify them one at a time, and pause after each for the owner's review (section 7).
+They come after section 4A. They are listed in priority order. Build and verify them one at a time, and pause after each for the owner's review (section 7).
 
 ### Asset 1: Nib shadow (the "hover dot")
 
@@ -320,7 +383,6 @@ These were considered and dropped. Don't build them, even though some already ex
 | A toggle band on the pen for typing mode | A switch on the note bar is easier to find than a ring on a pen you may not be holding. Phase 4 will add a small writing/typing switch to the note bar instead. |
 | The separate tablet handle (`tablet-handle`) | Replaced by the edge glow. Leave the code alone for now; just don't show it. |
 | Push pin, washi tape and the five sticky-note colours | For a far-off feature (pinning notes in the room). When it comes, one sticky note is enough. Leave the existing code alone. |
-| The tool wheel (radial menu) | A few colour dots on the note bar beat a menu you have to summon. Leave the existing code alone. |
 | Polaroid photo frame and camera viewfinder | Camera capture isn't ready on the headset yet. |
 | Extra sounds beyond one soft pen sound and the key tick | Sound in a classroom must stay minimal. |
 
@@ -365,6 +427,24 @@ If the owner hasn't answered these yet, use the default and say you did.
 2. **Keyboard layout.** *Default:* US QWERTY only. The owner is in Canada, so French AZERTY or Canadian Multilingual may matter later.
 3. **Does the keyboard always show with the tablet, or only in typing mode?** *Default:* only in typing mode, so the desk stays clear for writing.
 4. **When typing, does the tablet slide back or tilt up like a laptop screen?** *Default:* it tilts up about 60° and slides back about 12 cm. Confirm with the owner when phase 4 starts.
+5. **The tablet's finish: space grey or silver?** *Default:* space grey (dark, warm aluminium matching the theme). Silver is closer to a stock iPad but brighter in a dim room.
+
+---
+
+## 8A. Smaller assets that come with upcoming features
+
+These aren't separate projects. Each is built as part of its feature, but it must meet the same look and feel (section 2).
+
+| Feature | Asset | What it looks like / why |
+|---|---|---|
+| Tool wheel (in progress) | Colour and size ring | Swatches and size dots around the wheel's outer edge, so one visit sets tool, colour and size. |
+| Tool wheel (in progress) | Eraser ring | A thin warm-white circle on the page under the nib, showing exactly what the eraser will remove. |
+| Tool wheel (in progress) | Lasso loop and selection box | A dashed clay line while drawing the loop; then a soft clay-tinted box around the selected strokes. |
+| Tool wheel (in progress) | Undo / redo glyphs | Curved arrows on the wheel (built). |
+| Infinite canvas (next, to brainstorm) | Zoom level badge | A small glass pill on the note bar ("120%") while zooming, fading after a second. |
+| Infinite canvas | Mini-map | A tiny overview in a tablet corner showing where you are on the canvas, only while panning. |
+| Infinite canvas | Two-hand grab hint | A soft highlight on both hands' pinch points while they hold the canvas. |
+| Move and tilt (phase 2) | Shadow under the tablet | A soft contact shadow on the real desk, so the tablet looks like it rests on it, not floats. |
 
 ---
 
