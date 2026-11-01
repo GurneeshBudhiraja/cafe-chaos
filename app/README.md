@@ -16,6 +16,9 @@ npm run smoke:notes  # notes, reloads, save failure, the dock and its panels (de
 npm run record:tour -- <360-photo.jpg>  # headset-view video of the home into artifacts/tour.mp4
 npm run check:tool-wheel   # tool wheel check, screenshots in artifacts/tool-wheel/ (~12 min)
 npm run check:stickies     # sticky notes check, screenshots in artifacts/stickies/ (~9 min)
+npm run check:text-editor  # the typing editor's rules and layout, no browser (seconds)
+npm run check:typing       # typing mode check, screenshots in artifacts/typing/ (~12 min)
+npm run record:typing      # headset-view video of typing mode into artifacts/typing.mp4
 ```
 
 The smoke and recording scripts launch their own Chromium. Set `CHROMIUM_PATH` if Playwright
@@ -84,6 +87,29 @@ note write fail (for checking error handling by hand).
   - **Keeping:** sticky notes belong to the room: they show with or without
     a note open, and come back to the same spot next session (kept
     relative to the room's anchor), saved on the headset.
+- **Typing mode:** the Write / Type toggle on the note bar.
+  - **Type:** the tablet goes away; the page (with its handwriting) floats
+    ahead of you, larger, with a formatting toolbar under it, and a
+    keyboard appears on the desk where the tablet lay (with no desk, it
+    floats low ahead, tilted up). The caret waits just below the
+    handwriting; tap anywhere on the page to type there instead (a new text
+    box, as in Excalidraw).
+  - **Keys:** type with your index fingertips on the desk keyboard (a key
+    strikes when the fingertip comes down onto it; the cap goes down and
+    clicks). Shift is one-shot (double tap locks it), 123 locks the number
+    row's symbols, delete repeats when held, hide goes back to Write. A
+    real (Bluetooth) keyboard types too, with Google Docs' shortcuts.
+  - **Formatting:** the toolbar has Docs' main tools: undo and redo,
+    Normal text and three headings, bold, italic, underline,
+    strikethrough, bulleted, numbered and checklists, a quote, indent,
+    alignment and clear formatting; buttons light up for the style at the
+    caret. Enter continues a list and leaves it on an empty item; Markdown
+    shortcuts work ("- ", "1. ", "[] ", "# ", **bold**, *italic*).
+  - **Selecting:** drag across text with a ray; a quick double tap selects
+    a word; a tap on a checklist's box ticks it.
+  - **The page:** move it by the grab bar under the toolbar, resize it from
+    its bottom corners. Write flies it back to the tablet; the typed text
+    stays on the page with the ink, saved with the note.
 - **Templates:** six papers (Blank, Lined, Grid, Dotted, Cornell, Checklist),
   each with a line on what it is for; picking one starts a note on it.
 - **Settings:** the stick mode switch (remembered on this device) and Google
@@ -135,9 +161,11 @@ src/scene-assets/              procedural 3D assets: tablet, stylus, tool wheel,
                                paper grain); classroom backdrop for the desktop view
 src/notes/                     note model, IndexedDB store, editing session (autosave)
 src/ink/                       stroke sampling rules and stroke rendering
-src/systems/                   ECS systems: dock, note page, pen, tool wheel, toasts, stick mode
+src/systems/                   ECS systems: dock, note page, pen, tool wheel, typing (text, Type
+                               mode staging, desk keyboard, toolbar), toasts, stick mode
                                (follow), tweens, home window (parked), ink, tablet handle, XR scroll fix
-src/input/                     hand pinch reading, pen taps, pinch targets
+src/input/                     hand pinch and fingertip reading, pen taps, pinch targets
+src/text/                      typing: rich-text editor, layout, canvas rendering, key commands
 src/stickies/                  sticky notes: model, store, board, 3D object, surfaces, bin
 src/ui/                        UI services and helpers: theme, liquid glass, toasts,
                                home mode, preferences, press motion, sounds, drag
