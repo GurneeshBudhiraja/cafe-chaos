@@ -1,6 +1,7 @@
 <!--
   Note bar: one slim glass line just above the open note's page. It names
-  the note and its paper, and its close button puts the page away and
+  the note and its paper; the Write / Type toggle switches between the pen
+  and the keyboard (TypingSystem); its close button puts the page away and
   brings the dock back. NoteViewSystem (src/systems/note-view-system.ts)
   fills it in, puts a glass slab behind #note-bar-root and keeps it on the
   tablet's top edge. Keep the ids stable.
@@ -42,6 +43,34 @@
     color: #b3aba1;
   }
 
+  .mode-toggle {
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    margin-left: 8px;
+    border-radius: 19px;
+    background-color: rgba(255, 250, 242, 0.08);
+  }
+
+  .mode-segment {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding-left: 12px;
+    padding-right: 14px;
+    border-radius: 16px;
+    color: #f7f2ea;
+    cursor: pointer;
+  }
+
+  .mode-label {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
   .close-button {
     width: 36px;
     height: 36px;
@@ -56,6 +85,16 @@
 <div id="note-bar-root" class="bar">
   <div id="note-bar-title" class="bar-title">Note</div>
   <div id="note-bar-paper" class="bar-paper">Blank page</div>
+  <div id="note-bar-mode" class="mode-toggle">
+    <div id="note-bar-mode-write" class="mode-segment">
+      <PenLine width="16" height="16"></PenLine>
+      <div class="mode-label">Write</div>
+    </div>
+    <div id="note-bar-mode-type" class="mode-segment">
+      <Keyboard width="16" height="16"></Keyboard>
+      <div class="mode-label">Type</div>
+    </div>
+  </div>
   <div id="note-bar-close" class="close-button">
     <X width="18" height="18"></X>
   </div>

@@ -15,6 +15,7 @@
  */
 
 import {
+  AssetManager,
   createSystem,
   Euler,
   Mesh,
@@ -56,8 +57,10 @@ const BAR_RADIUS_PX = 26;
 const TITLE_MAX_CHARS = 32;
 /** Canvas width of the page's paper texture (pixels). */
 const PAPER_PX = 1024;
-/** How much the page lights itself (0 to 1) on top of the room's light. */
-const PAGE_GLOW = 0.3;
+/** How much the page lights itself (0 to 1) on top of the room's light: a little, so it reads as lit paper, not a light box. */
+const PAGE_GLOW = 0.12;
+/** The paper picture drawn under the page's lines (asset ID). */
+const PAPER_IMAGE_ASSET = 'paper-image';
 /** Fades (ms): the page comes in once the dock has faded away. */
 const SHOW_MS = 320;
 const SHOW_DELAY_MS = 140;
@@ -148,6 +151,8 @@ export class NoteViewSystem extends createSystem({
     const surface = this.tablet.getObjectByName(WRITING_SURFACE_NAME);
     if (!(surface instanceof Mesh)) return;
     this.paper = new PaperPreview(PAPER_PX);
+    const paperImage = AssetManager.getTexture(PAPER_IMAGE_ASSET)?.image as CanvasImageSource | undefined;
+    if (paperImage) this.paper.setPaperImage(paperImage);
     const material = (surface.material as MeshPhysicalMaterial).clone();
     material.map = this.paper.texture;
     // A faint glow of its own, so the page reads as white paper in a dim
@@ -211,7 +216,11 @@ export class NoteViewSystem extends createSystem({
     const barHeightPx = panelSize(this.barRoot).peek()?.[1] ?? 0;
     const barHalfM = (barHeightPx / 2) * UIKIT_PIXEL_M * this.bar.scale.y;
 
-    if (findDeskSpot(this.surfaces, this.headPosition, yaw, this.deskSpot)) {
+    const onDesk = findDeskSpot(this.surfaces, this.headPosition, yaw, this.deskSpot);
+    // The tablet model's soft contact shadow belongs on a desk, not in mid-air.
+    const deskShadow = this.tablet.getObjectByName('DeskShadow');
+    if (deskShadow) deskShadow.visible = onDesk;
+    if (onDesk) {
       // Page up, its bottom edge toward the viewer.
       this.tablet.position.copy(this.deskSpot);
       this.tablet.position.y += ON_DESK_M;

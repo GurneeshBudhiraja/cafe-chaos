@@ -11,13 +11,17 @@
  * and the enlarged note view can render the same data at another size.
  */
 
+import { isInkTool, type InkToolId } from '../ink/tool-catalog.js';
+import { parseFrames, type TextFrame } from './typed-text.js';
+
 /** Bump when the saved shape changes, and add a migration in `parseNote`. */
 export const NOTE_SCHEMA_VERSION = 1;
 
 /** Width / height of every page. Tablet surfaces use the same aspect ratio. */
 export const PAGE_ASPECT = 4 / 3;
 
-export type ToolKind = 'pen';
+/** The tool that drew a stroke: how it renders (a highlighter draws see-through, under the ink). */
+export type ToolKind = InkToolId;
 
 /** The page background a note was created with (a template). */
 export type PaperStyle = 'blank' | 'lined' | 'grid' | 'dotted' | 'cornell' | 'checklist';
@@ -39,18 +43,28 @@ export interface Stroke {
   width: number;
   /** Flat list of sampled points: [x0, y0, x1, y1, ...] in page coordinates. */
   points: number[];
+  /**
+   * Optional width multiplier per point (around 1), for pen strokes whose
+   * ink varies with speed. Missing means an even line (older notes, rays).
+   */
+  widths?: number[];
 }
 
 export interface Page {
   id: string;
   strokes: Stroke[];
+  /**
+   * Typed text boxes (typing mode, typed-text.ts), drawn over the ink.
+   * Optional in storage: pages from before typing mode have none.
+   */
+  frames?: TextFrame[];
 }
 
 export interface Note {
   schemaVersion: typeof NOTE_SCHEMA_VERSION;
   id: string;
   title: string;
-  /** Typed text content. Rich typing arrives with keyboard mode. */
+  /** Legacy plain text (unused). Typed text now lives on each page as text frames (typed-text.ts). */
   text: string;
   /** Page background. Optional in storage: older notes read as 'blank'. */
   paper: PaperStyle;
@@ -86,8 +100,8 @@ export function createNote(
   };
 }
 
-export function createStroke(color: string, width: number): Stroke {
-  return { id: createId(), tool: 'pen', color, width, points: [] };
+export function createStroke(color: string, width: number, tool: ToolKind = 'pen'): Stroke {
+  return { id: createId(), tool, color, width, points: [] };
 }
 
 /** Number of sampled points in a stroke. */
@@ -125,12 +139,14 @@ export function parseNote(value: unknown): Note | null {
   };
 }
 
-function parsePage(value: unknown): Page | null {
+/** Validate one stored page (also used for sticky notes); null when it cannot be trusted. */
+export function parsePage(value: unknown): Page | null {
   if (typeof value !== 'object' || value === null) return null;
   const raw = value as Record<string, unknown>;
   if (typeof raw.id !== 'string' || !Array.isArray(raw.strokes)) return null;
   const strokes = (raw.strokes as unknown[]).filter(isStroke);
-  return { id: raw.id, strokes };
+  const frames = parseFrames(raw.frames);
+  return frames.length > 0 ? { id: raw.id, strokes, frames } : { id: raw.id, strokes };
 }
 
 function isStroke(value: unknown): value is Stroke {
@@ -138,11 +154,16 @@ function isStroke(value: unknown): value is Stroke {
   const s = value as Record<string, unknown>;
   return (
     typeof s.id === 'string' &&
-    s.tool === 'pen' &&
+    typeof s.tool === 'string' &&
+    isInkTool(s.tool as ToolKind) &&
     typeof s.color === 'string' &&
     typeof s.width === 'number' &&
     Array.isArray(s.points) &&
     s.points.length % 2 === 0 &&
-    s.points.every((n) => typeof n === 'number' && Number.isFinite(n))
+    s.points.every((n) => typeof n === 'number' && Number.isFinite(n)) &&
+    (s.widths === undefined ||
+      (Array.isArray(s.widths) &&
+        s.widths.length === s.points.length / 2 &&
+        s.widths.every((n) => typeof n === 'number' && Number.isFinite(n) && n > 0)))
   );
 }

@@ -13,8 +13,6 @@ import {
   teacherDeskPrototype,
 } from './scene-assets/classroom-furniture.scene-asset.js';
 import { classroomRoomPrototype } from './scene-assets/classroom-room.scene-asset.js';
-import { stylusPrototype } from './scene-assets/stylus.scene-asset.js';
-import { toolWheelPrototype } from './scene-assets/tool-wheel.scene-asset.js';
 import {
   stickyBlushPrototype,
   stickyClassicPrototype,
@@ -23,24 +21,42 @@ import {
   stickySkyPrototype,
 } from './scene-assets/sticky-notes.scene-asset.js';
 import { pushPinPrototype, washiTapePrototype } from './scene-assets/pins-and-tape.scene-asset.js';
-import {
-  tabletHandlePrototype,
-  tabletPrototype,
-} from './scene-assets/tablet.scene-asset.js';
+import { tabletHandlePrototype } from './scene-assets/tablet.scene-asset.js';
 
 const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
 
 export default defineAssets({
-  tablet: tabletPrototype,
+  // The iPad-style tablet (made in Blender). Same contract as the code-built
+  // one in tablet.scene-asset.ts, whose size constants the systems still use.
+  tablet: {
+    url: publicAssetUrl('models/tablet.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Tablet',
+  },
   // Classroom backdrop (desktop view and recordings only; hidden in XR).
   'classroom-room': classroomRoomPrototype,
   'student-desk': studentDeskPrototype,
   'student-chair': studentChairPrototype,
   'teacher-desk': teacherDeskPrototype,
   'tablet-handle': tabletHandlePrototype,
-  stylus: stylusPrototype,
-  'tool-wheel': toolWheelPrototype,
+  // The Apple Pencil-style pen (made in Blender). Same contract as the
+  // code-built one in stylus.scene-asset.ts, whose size constants PenSystem uses.
+  stylus: {
+    url: publicAssetUrl('models/stylus.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Stylus',
+  },
+  // The tool wheel (made in Blender): frosted glass segments with a 3D icon each. Same
+  // contract as the code-built one in tool-wheel.scene-asset.ts, whose sizes the system uses.
+  'tool-wheel': {
+    url: publicAssetUrl('models/tool-wheel.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Tool Wheel',
+  },
   'sticky-classic': stickyClassicPrototype,
   'sticky-formal': stickyFormalPrototype,
   'sticky-mint': stickyMintPrototype,
@@ -48,6 +64,42 @@ export default defineAssets({
   'sticky-sky': stickySkyPrototype,
   'push-pin': pushPinPrototype,
   'washi-tape': washiTapePrototype,
+  // Glow along the tablet's rim where a hand comes near (made in Blender).
+  'edge-glow': {
+    url: publicAssetUrl('models/edge-glow.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Edge Glow',
+  },
+  // The realistic sticky note (made in Blender): the paper of the sticky notes
+  // in the room. Critical, since saved ones show as soon as the app starts.
+  'sticky-note': {
+    url: publicAssetUrl('models/sticky-note.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Sticky Note',
+  },
+  // Keyboard that lies on the desk for typing mode (made in Blender). Loaded when first shown.
+  'desk-keyboard': {
+    url: publicAssetUrl('models/desk-keyboard.glb'),
+    type: AssetType.GLTF,
+    priority: 'lazy',
+    name: 'Desk Keyboard',
+  },
+  // Soft spot under the held pen's nib, and its body's streak (made in Blender).
+  'nib-shadow': {
+    url: publicAssetUrl('models/nib-shadow.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Nib Shadow',
+  },
+  // The page's paper picture: warm off-white with fibres and a soft edge shadow (drawn under the template lines).
+  'paper-image': {
+    url: publicAssetUrl('textures/paper.jpg'),
+    type: AssetType.Texture,
+    priority: 'critical',
+    name: 'Paper Image',
+  },
   'home-window': {
     url: publicAssetUrl('ui/home-window.uikitml'),
     type: AssetType.UIKitML,
@@ -67,6 +119,11 @@ export default defineAssets({
     url: publicAssetUrl('ui/note-bar.uikitml'),
     type: AssetType.UIKitML,
     name: 'Note Bar',
+  },
+  'type-toolbar': {
+    url: publicAssetUrl('ui/type-toolbar.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Type Toolbar',
   },
   'tools-panel': {
     url: publicAssetUrl('ui/tools-panel.uikitml'),

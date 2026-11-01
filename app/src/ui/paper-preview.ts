@@ -9,7 +9,8 @@
  */
 
 import { CanvasTexture, SRGBColorSpace } from '@iwsdk/core';
-import { PAGE_ASPECT, type Note, type PaperStyle } from '../notes/note-model.js';
+import { INK_OPACITY } from '../ink/tool-catalog.js';
+import { PAGE_ASPECT, type Note, type PaperStyle, type Stroke } from '../notes/note-model.js';
 
 const PAPER_COLOR = '#fffdf9';
 const RULE_COLOR = '#cfc5b8';
@@ -23,6 +24,8 @@ export class PaperPreview {
   readonly texture: CanvasTexture;
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
+  /** A photo-like paper picture to draw under the lines instead of a flat colour (the tablet's page). */
+  private paperImage: CanvasImageSource | null = null;
 
   /** `width` in canvas pixels; the height follows the page aspect ratio. */
   constructor(width: number) {
@@ -36,18 +39,25 @@ export class PaperPreview {
     this.texture.colorSpace = SRGBColorSpace;
   }
 
+  /** Use a paper picture (fibres, tone, a soft edge shadow) as the background; null goes back to flat colour. */
+  setPaperImage(image: CanvasImageSource | null): void {
+    this.paperImage = image;
+  }
+
   /** Redraw the paper, then the note's first page of ink if given. */
   draw(paper: PaperStyle, note?: Note): void {
     const { ctx } = this;
     const { width: w, height: h } = this.canvas;
-    drawPaper(ctx, paper, w, h);
+    drawPaper(ctx, paper, w, h, this.paperImage);
     const page = note?.pages[0];
     if (page) {
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      for (const stroke of page.strokes) {
+      // Highlighter first, see-through, under the ink (as on the tablet).
+      for (const stroke of [...page.strokes].sort(highlightsFirst)) {
         const p = stroke.points;
         if (p.length < 2) continue;
+        ctx.globalAlpha = INK_OPACITY[stroke.tool];
         ctx.strokeStyle = stroke.color;
         // Never thinner than one pixel, so small previews keep fine ink.
         ctx.lineWidth = Math.max(1, stroke.width * w);
@@ -57,6 +67,7 @@ export class PaperPreview {
         if (p.length === 2) ctx.lineTo(p[0] * w + 0.1, p[1] * h);
         ctx.stroke();
       }
+      ctx.globalAlpha = 1;
     }
     this.texture.needsUpdate = true;
   }
@@ -102,9 +113,19 @@ export class NoteThumbnail {
   }
 }
 
-function drawPaper(ctx: CanvasRenderingContext2D, paper: PaperStyle, w: number, h: number): void {
-  ctx.fillStyle = PAPER_COLOR;
-  ctx.fillRect(0, 0, w, h);
+function drawPaper(
+  ctx: CanvasRenderingContext2D,
+  paper: PaperStyle,
+  w: number,
+  h: number,
+  image: CanvasImageSource | null = null,
+): void {
+  if (image) {
+    ctx.drawImage(image, 0, 0, w, h);
+  } else {
+    ctx.fillStyle = PAPER_COLOR;
+    ctx.fillRect(0, 0, w, h);
+  }
   const line = Math.max(1, Math.round(w / 300));
   switch (paper) {
     case 'lined':
@@ -164,4 +185,9 @@ function rules(
 ): void {
   ctx.fillStyle = RULE_COLOR;
   for (let y = step; y < h; y += step) ctx.fillRect(left, Math.round(y), w - left, line);
+}
+
+/** Sort order: highlighter strokes before ink, otherwise as drawn. */
+function highlightsFirst(a: Stroke, b: Stroke): number {
+  return Number(b.tool === 'highlighter') - Number(a.tool === 'highlighter');
 }

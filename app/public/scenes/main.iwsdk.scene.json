@@ -2,26 +2,14 @@
   "version": "iwsdk.scene.v1",
   "units": "meters",
   "components": {
-    "com.iwsdk.components.IBLGradient": {
-      "sky": [
-        0.6902,
-        0.749,
-        0.7843,
-        1
-      ],
-      "equator": [
-        0.6584,
-        0.7084,
-        0.7913,
-        1
-      ],
-      "ground": [
-        0.807,
-        0.7758,
-        0.7454,
-        1
-      ],
-      "intensity": 1
+    "com.iwsdk.components.IBLTexture": {
+      "src": "./envs/meta-studio.hdr",
+      "intensity": 0.7,
+      "rotation": [
+        0,
+        0,
+        0
+      ]
     }
   },
   "resources": {},
@@ -125,6 +113,27 @@
         "position": [
           0,
           1.64,
+          -0.55
+        ],
+        "scale": 0.175
+      }
+    },
+    {
+      "id": "type-toolbar",
+      "name": "Type Toolbar",
+      "metadata": {
+        "iwsdk.validation": {
+          "allowFloating": true
+        }
+      },
+      "content": {
+        "type": "asset",
+        "asset": "type-toolbar"
+      },
+      "transform": {
+        "position": [
+          0,
+          1.3,
           -0.55
         ],
         "scale": 0.175

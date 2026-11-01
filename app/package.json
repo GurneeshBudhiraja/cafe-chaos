@@ -18,7 +18,14 @@
     "record:writing": "node scripts/record-writing-flow.mjs",
     "record:tour": "node scripts/record-tour.mjs",
     "record:desk": "node scripts/record-desk.mjs",
-    "record:flow": "node scripts/record-flow.mjs"
+    "record:flow": "node scripts/record-flow.mjs",
+    "check:tool-wheel": "node scripts/check-tool-wheel.mjs",
+    "record:tool-wheel": "node scripts/record-tool-wheel.mjs",
+    "check:stickies": "node scripts/check-stickies.mjs",
+    "record:demo": "node scripts/record-demo.mjs",
+    "check:text-editor": "node scripts/check-text-editor.mjs",
+    "check:typing": "node scripts/check-typing.mjs",
+    "record:typing": "node scripts/record-typing.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

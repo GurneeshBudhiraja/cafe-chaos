@@ -14,6 +14,11 @@ npm run typecheck    # always run before testing in the browser
 npm run build        # production build into dist/
 npm run smoke:notes  # notes, reloads, save failure, the dock and its panels (dev server running)
 npm run record:tour -- <360-photo.jpg>  # headset-view video of the home into artifacts/tour.mp4
+npm run check:tool-wheel   # tool wheel check, screenshots in artifacts/tool-wheel/ (~12 min)
+npm run check:stickies     # sticky notes check, screenshots in artifacts/stickies/ (~9 min)
+npm run check:text-editor  # the typing editor's rules and layout, no browser (seconds)
+npm run check:typing       # typing mode check, screenshots in artifacts/typing/ (~9 min)
+npm run record:typing      # headset-view video of typing mode into artifacts/typing.mp4
 ```
 
 The smoke and recording scripts launch their own Chromium. Set `CHROMIUM_PATH` if Playwright
@@ -49,8 +54,60 @@ note write fail (for checking error handling by hand).
   a tracked hand to pick it up: it sits in the pinch like a real pen, from
   the web of the thumb to just past the fingertips, and ink flows while its
   nib touches the page (the nib rests on the page, never through it). Open
-  the pinch and it goes back beside the tablet. Without the pen in hand, a
-  ray (pointer) can still draw on the page.
+  your fingers for a moment and it goes back beside the tablet. Without the
+  pen in hand, a ray (pointer) can still draw on the page.
+- **The tool wheel:** while holding the pen, double-tap it (open and close
+  the holding fingers twice, quickly) or pinch with the other hand. A wheel
+  opens beside the pen with seven segments: Pen, Marker, Highlighter,
+  Eraser, Lasso, Undo and Redo, with the current tool's colours and sizes
+  around it.
+  - **Aiming:** slide the pen above the page (away from you for the top,
+    toward you for the bottom); a dot shows the aim and the hub names it.
+  - **Picking:** tap the pen once, or let go of the other hand's pinch.
+    The wheel stays open for more picks; the hub, or writing again,
+    closes it.
+  - **Tools:**
+    - The **highlighter** draws see-through, under the writing.
+    - The **eraser** removes whole strokes; its ring shows its size.
+    - The **lasso** selects the strokes inside a loop; drag inside its box
+      to move them, or pick Delete on its ring.
+  - **Undo and redo** cover writing, erasing, moving and deleting.
+- **Sticky notes:**
+  - **New:** five small stacks (yellow, mint, pink, blue, an index card)
+    lie on the desk along the tablet's left edge. Pinch one with your free
+    hand (or tap it with a ray) and a sticky note peels off and floats up.
+  - **Writing:** write on it with the pen, as on the tablet. The tool
+    wheel, eraser, lasso and undo work on it too.
+  - **Sticking:** pinch it to carry it. Near a wall, desk or any surface
+    Quest knows from Space Setup, it lies flat on it; let go to stick it
+    there, or let go in mid-air to leave it floating.
+  - **Throwing away:** while you carry one, a bin shows low in your view.
+    Over it, the bin grows and opens; let go to drop the note in (the
+    toast's Undo brings it back).
+  - **Keeping:** sticky notes belong to the room: they show with or without
+    a note open, and come back to the same spot next session (kept
+    relative to the room's anchor), saved on the headset.
+- **Typing mode:** the Write / Type toggle on the note bar.
+  - **Type:** the tablet goes away; the page (with its handwriting) floats
+    ahead of you, larger, with a formatting toolbar under it, and the
+    headset's own keyboard (Meta Quest's system keyboard; Quest Browser
+    26.1 or later) comes up. The caret waits just below the handwriting;
+    tap anywhere on the page to type there instead (a new text box, as in
+    Excalidraw), which also brings the keyboard back if it was closed, as
+    does the keyboard button at the toolbar's left end.
+  - **Keys:** Meta's keyboard types at the caret (suggestions included). A
+    real (Bluetooth) keyboard types too, with Google Docs' shortcuts.
+  - **Formatting:** the toolbar has Docs' main tools: undo and redo,
+    Normal text and three headings, bold, italic, underline,
+    strikethrough, bulleted, numbered and checklists, a quote, indent,
+    alignment and clear formatting; buttons light up for the style at the
+    caret. Enter continues a list and leaves it on an empty item; Markdown
+    shortcuts work ("- ", "1. ", "[] ", "# ", **bold**, *italic*).
+  - **Selecting:** drag across text with a ray; a quick double tap selects
+    a word; a tap on a checklist's box ticks it.
+  - **The page:** move it by the grab bar under the toolbar, resize it from
+    its bottom corners. Write flies it back to the tablet; the typed text
+    stays on the page with the ink, saved with the note.
 - **Templates:** six papers (Blank, Lined, Grid, Dotted, Cornell, Checklist),
   each with a line on what it is for; picking one starts a note on it.
 - **Settings:** the stick mode switch (remembered on this device) and Google
@@ -73,8 +130,8 @@ note write fail (for checking error handling by hand).
 - **The full home window** (`home-window.uikitml`, `HomeWindowSystem`) is
   hidden and kept for a future "all notes" view; it still raises the
   save-failure toast.
-- **3D assets** (stylus, tool wheel, sticky notes, push pin, washi tape) are
-  registered in `src/assets.ts` but not placed in the scene.
+- **3D assets** (push pin, washi tape) are registered in `src/assets.ts`
+  but not placed in the scene.
 - **Account connections, a light theme and handedness** are planned for
   Settings.
 
@@ -102,8 +159,13 @@ src/scene-assets/              procedural 3D assets: tablet, stylus, tool wheel,
                                paper grain); classroom backdrop for the desktop view
 src/notes/                     note model, IndexedDB store, editing session (autosave)
 src/ink/                       stroke sampling rules and stroke rendering
-src/systems/                   ECS systems: dock, note page, pen, toasts, stick mode (follow),
-                               tweens, home window (parked), ink, tablet handle, XR scroll fix
+src/systems/                   ECS systems: dock, note page, pen, tool wheel, typing (text, Type
+                               mode staging, toolbar), toasts, stick mode
+                               (follow), tweens, home window (parked), ink, tablet handle, XR scroll fix
+src/input/                     hand pinch reading, pen taps, pinch targets
+src/text/                      typing: rich-text editor, layout, canvas rendering, key commands,
+                               the headset's system keyboard
+src/stickies/                  sticky notes: model, store, board, 3D object, surfaces, bin
 src/ui/                        UI services and helpers: theme, liquid glass, toasts,
                                home mode, preferences, press motion, sounds, drag
 src/util/                      dev-only logging and test hooks

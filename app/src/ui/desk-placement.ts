@@ -129,8 +129,8 @@ function spotOnSurface(polygon: readonly DOMPointReadOnly[], x: number, z: numbe
   out.set(nearestX + (cx - nearestX) * step, 0, nearestZ + (cz - nearestZ) * step);
 }
 
-/** Even-odd point-in-polygon test on the plane's x, z. */
-function contains(polygon: readonly DOMPointReadOnly[], x: number, z: number): boolean {
+/** Even-odd point-in-polygon test on the plane's x, z (plane-local). */
+export function contains(polygon: readonly DOMPointReadOnly[], x: number, z: number): boolean {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const a = polygon[i];

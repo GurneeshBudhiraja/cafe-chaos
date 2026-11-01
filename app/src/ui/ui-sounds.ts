@@ -7,7 +7,7 @@
  * allow sound after a user gesture).
  */
 
-export type UiSound = 'press' | 'toast';
+export type UiSound = 'press' | 'toast' | 'pen-touch';
 
 let context: AudioContext | null = null;
 
@@ -39,6 +39,9 @@ export function playUiSound(sound: UiSound): void {
   if (!ctx) return;
   if (sound === 'press') {
     blip(ctx, 1320, 0, 0.05, 0.05);
+  } else if (sound === 'pen-touch') {
+    // Low, short and quiet (under half the press tick): a nib meeting paper, for a classroom.
+    blip(ctx, 540, 0, 0.03, 0.02);
   } else {
     blip(ctx, 784, 0, 0.18, 0.045);
     blip(ctx, 1175, 0.09, 0.26, 0.04);

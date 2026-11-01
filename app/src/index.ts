@@ -18,12 +18,19 @@ import { CompactDockSystem } from './systems/compact-dock-system.js';
 import { DesktopBackdropSystem } from './systems/desktop-backdrop-system.js';
 import { FollowModeSystem } from './systems/follow-mode-system.js';
 import { InkSystem } from './systems/ink-system.js';
+import { NibShadowSystem } from './systems/nib-shadow-system.js';
 import { NoteViewSystem } from './systems/note-view-system.js';
 import { PenSystem } from './systems/pen-system.js';
 import { HomeWindowSystem } from './systems/home-window-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
+import { StickySystem } from './systems/sticky-system.js';
+import { TabletEdgeSystem } from './systems/tablet-edge-system.js';
 import { ToastSystem } from './systems/toast-system.js';
+import { ToolWheelSystem } from './systems/tool-wheel-system.js';
 import { TweenSystem } from './systems/tween-system.js';
+import { TypingSystem } from './systems/typing-system.js';
+import { TypeModeSystem } from './systems/type-mode-system.js';
+import { TypeToolbarSystem } from './systems/type-toolbar-system.js';
 import { XrScrollFixSystem } from './systems/xr-scroll-fix-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
 
@@ -45,10 +52,23 @@ World.create(
     .registerSystem(TabletHandleSystem)
     // The pen moves before the ink system reads where its nib is.
     .registerSystem(PenSystem)
+    // After the pen, so the shadow follows where its nib is this frame.
+    .registerSystem(NibShadowSystem)
+    // After the pen, so a pen picked up this frame already turns the rim's glow off.
+    .registerSystem(TabletEdgeSystem)
+    // After the pen (its taps and nib), before the ink (which pauses while the wheel is open).
+    .registerSystem(ToolWheelSystem)
     .registerSystem(InkSystem)
+    // After the ink: in Type mode the page's touches are the caret's.
+    .registerSystem(TypingSystem)
+    .registerSystem(StickySystem)
     .registerSystem(HomeWindowSystem)
     .registerSystem(CompactDockSystem)
     .registerSystem(NoteViewSystem)
+    // After the note view: Type mode moves the page and bar it placed.
+    .registerSystem(TypeModeSystem)
+    // After TypingSystem, whose editor its buttons drive.
+    .registerSystem(TypeToolbarSystem)
     // After both panels, so followers re-anchor once they have placed themselves.
     .registerSystem(FollowModeSystem)
     .registerSystem(ToastSystem)

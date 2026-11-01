@@ -12,6 +12,9 @@
  *   an explicit retry.
  * - A revision counter detects edits made while a write was in flight, so
  *   those edits are saved by the next cycle instead of being marked clean.
+ *
+ * Ink edits (writing, erasing, moving strokes) go into the open note's
+ * undo history (stroke-history.ts); opening another note starts afresh.
  */
 
 import {
@@ -22,17 +25,30 @@ import {
   type Stroke,
 } from './note-model.js';
 import { summarize, type NoteStore, type NoteSummary } from './note-store.js';
+import { removeStrokes, replaceStrokes, StrokeHistory } from './stroke-history.js';
 import { devLog } from '../util/dev-log.js';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'failed';
 
-/** What changed; listeners re-read the session state they care about. */
-export type NoteSessionChange = 'library' | 'active' | 'save';
+/**
+ * What changed; listeners re-read the session state they care about.
+ * 'strokes' is the open page's ink changing by an edit other than a new
+ * stroke (erase, move, undo, redo).
+ */
+export type NoteSessionChange = 'library' | 'active' | 'save' | 'strokes';
 
 /** The surface the ink system needs; keeps InkSystem independent of storage. */
 export interface InkDocument {
   getActivePage(): Page | null;
   commitStroke(stroke: Stroke): void;
+  /** Remove strokes from the open page, as one undoable edit. */
+  eraseStrokes(ids: ReadonlySet<string>): void;
+  /** Swap strokes for changed copies with the same ids (a move), as one undoable edit. */
+  replaceStrokes(strokes: readonly Stroke[]): void;
+  /** Reverse the open page's newest ink edit; false when there is none. */
+  undo(): boolean;
+  /** Re-apply the most recently undone ink edit; false when there is none. */
+  redo(): boolean;
   subscribe(listener: (change: NoteSessionChange) => void): () => void;
 }
 
@@ -53,6 +69,8 @@ export class NoteSession implements InkDocument {
   loaded = false;
 
   private readonly dirty = new Map<string, DirtyEntry>();
+  /** Undo and redo for the open note's ink. */
+  private readonly history = new StrokeHistory();
   private readonly listeners = new Set<(change: NoteSessionChange) => void>();
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private saving: Promise<boolean> | null = null;
@@ -86,6 +104,7 @@ export class NoteSession implements InkDocument {
   async createNote(title?: string, paper?: PaperStyle): Promise<Note> {
     const note = createNote(title, Date.now(), paper);
     this.active = note;
+    this.history.clear();
     this.markDirty(note);
     this.emit('active');
     // Save right away so a brand-new note survives an immediate reload.
@@ -115,6 +134,7 @@ export class NoteSession implements InkDocument {
       return;
     }
     this.active = note;
+    this.history.clear();
     this.emit('active');
   }
 
@@ -151,6 +171,14 @@ export class NoteSession implements InkDocument {
     this.markDirty(note);
   }
 
+  /**
+   * The open page's typed text was edited (TextEditor changes the page's
+   * frames in place, with its own undo history): save it.
+   */
+  textEdited(): void {
+    if (this.active) this.markDirty(this.active);
+  }
+
   getActivePage(): Page | null {
     return this.active?.pages[0] ?? null;
   }
@@ -160,7 +188,45 @@ export class NoteSession implements InkDocument {
     const page = this.getActivePage();
     if (!note || !page) return;
     page.strokes.push(stroke);
+    this.history.record({ kind: 'add', stroke });
     this.markDirty(note);
+  }
+
+  eraseStrokes(ids: ReadonlySet<string>): void {
+    const note = this.active;
+    const page = this.getActivePage();
+    if (!note || !page || ids.size === 0) return;
+    const removed = removeStrokes(page, ids);
+    if (removed.length === 0) return;
+    this.history.record({ kind: 'remove', removed });
+    this.inkChanged(note);
+  }
+
+  replaceStrokes(strokes: readonly Stroke[]): void {
+    const note = this.active;
+    const page = this.getActivePage();
+    if (!note || !page || strokes.length === 0) return;
+    const ids = new Set(strokes.map((stroke) => stroke.id));
+    const before = page.strokes.filter((stroke) => ids.has(stroke.id));
+    replaceStrokes(page, strokes);
+    this.history.record({ kind: 'replace', before, after: [...strokes] });
+    this.inkChanged(note);
+  }
+
+  undo(): boolean {
+    const note = this.active;
+    const page = this.getActivePage();
+    if (!note || !page || !this.history.undo(page)) return false;
+    this.inkChanged(note);
+    return true;
+  }
+
+  redo(): boolean {
+    const note = this.active;
+    const page = this.getActivePage();
+    if (!note || !page || !this.history.redo(page)) return false;
+    this.inkChanged(note);
+    return true;
   }
 
   /** Permanently delete a note. The UI must confirm before calling this. */
@@ -184,6 +250,7 @@ export class NoteSession implements InkDocument {
     this.emit('library');
     if (this.active?.id === id) {
       this.active = null;
+      this.history.clear();
       const next = this.summaries[0];
       if (next) await this.openNote(next.id);
       else this.emit('active');
@@ -238,6 +305,12 @@ export class NoteSession implements InkDocument {
   }
 
   // ---------------------------------------------------------------- private
+
+  /** The open page's ink changed by an edit: save it and let the ink re-render. */
+  private inkChanged(note: Note): void {
+    this.markDirty(note);
+    this.emit('strokes');
+  }
 
   private markDirty(note: Note): void {
     note.updatedAt = Date.now();

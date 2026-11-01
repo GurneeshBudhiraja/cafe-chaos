@@ -1,7 +1,8 @@
 /**
  * Small 3D glyphs for the tool wheel's segments: each tool as a tiny
  * object you would recognise on a desk, not a flat icon (Snap: 3D forms
- * for interactive things, read better and invite a pinch).
+ * for interactive things, read better and invite a pinch). Undo and redo
+ * are curved arrows, turning back and forward.
  *
  * Every glyph is about 36 mm long, lies in the X/Y plane facing +Z, and is
  * centred on its origin; the wheel places and tilts it.
@@ -15,14 +16,12 @@ import {
   SphereGeometry,
   TorusGeometry,
 } from '@iwsdk/core';
+import type { WheelItemId } from '../ink/tool-catalog.js';
 import { bevelBox } from './lib/hardsurface.js';
 import { clayMaterial, paperWhiteMaterial, trimMaterial } from './notes-materials.js';
 
-export type ToolId = 'pen' | 'marker' | 'highlighter' | 'eraser' | 'lasso' | 'colour';
-export const TOOL_IDS: ToolId[] = ['pen', 'marker', 'highlighter', 'eraser', 'lasso', 'colour'];
-
 const highlighterInk = new MeshStandardMaterial({ color: 0xf2d35b, roughness: 0.5, transparent: true, opacity: 0.85 });
-const inkColours = [0x1f1c19, 0x2f5d8a, 0xd4704f].map((color) => new MeshStandardMaterial({ color, roughness: 0.35 }));
+const markerInk = new MeshStandardMaterial({ color: 0x2f5d8a, roughness: 0.35 });
 
 function mesh(name: string, geometry: ConstructorParameters<typeof Mesh>[0], material: MeshStandardMaterial): Mesh {
   const m = new Mesh(geometry, material);
@@ -37,7 +36,7 @@ function barrel(group: Group, radius: number, length: number, material: MeshStan
   group.add(mesh('Barrel', geometry, material));
 }
 
-export function createToolGlyph(tool: ToolId): Group {
+export function createToolGlyph(tool: WheelItemId): Group {
   const g = new Group();
   g.name = `Glyph-${tool}`;
   switch (tool) {
@@ -58,7 +57,7 @@ export function createToolGlyph(tool: ToolId): Group {
     }
     case 'marker': {
       barrel(g, 0.0034, 0.026, paperWhiteMaterial);
-      const chisel = mesh('Chisel', bevelBox(0.007, 0.004, 0.0024, 0.0005), inkColours[0]);
+      const chisel = mesh('Chisel', bevelBox(0.007, 0.004, 0.0024, 0.0005), markerInk);
       chisel.position.x = 0.016;
       g.add(chisel);
       break;
@@ -86,16 +85,32 @@ export function createToolGlyph(tool: ToolId): Group {
       g.add(knot);
       break;
     }
-    case 'colour': {
-      inkColours.forEach((material, i) => {
-        const dot = mesh(`Ink${i}`, new SphereGeometry(0.0048, 20, 14), material);
-        const a = (i / 3) * Math.PI * 2 + Math.PI / 2;
-        dot.position.set(Math.cos(a) * 0.0065, Math.sin(a) * 0.0065, 0);
-        dot.scale.z = 0.55;
-        g.add(dot);
-      });
+    case 'undo':
+    case 'redo':
+      g.add(...curvedArrow(tool === 'undo' ? 1 : -1));
       break;
-    }
   }
   return g;
+}
+
+/**
+ * A three-quarter arc with an arrowhead at its end: turning back
+ * (anticlockwise, `turn` 1) for undo, forward (clockwise, -1) for redo.
+ */
+function curvedArrow(turn: 1 | -1): Mesh[] {
+  const RADIUS = 0.0085;
+  const SWEEP = Math.PI * 1.35;
+  const arc = mesh('Arc', new TorusGeometry(RADIUS, 0.0013, 10, 40, SWEEP), paperWhiteMaterial);
+  // Open at the bottom, sweeping over the top.
+  arc.rotation.z = -Math.PI / 2 + (Math.PI * 2 - SWEEP) / 2;
+  if (turn === -1) arc.scale.x = -1;
+  const end = arc.rotation.z + SWEEP;
+  const head = new CylinderGeometry(0, 0.0034, 0.0055, 16);
+  const arrow = mesh('Arrowhead', head, clayMaterial);
+  // At the arc's end, pointing along it (the tangent).
+  const x = Math.cos(end) * RADIUS * turn;
+  const y = Math.sin(end) * RADIUS;
+  arrow.position.set(x, y, 0);
+  arrow.rotation.z = turn * end;
+  return [arc, arrow];
 }

@@ -13,7 +13,9 @@ import { createComponent, Types } from '@iwsdk/core';
 
 /**
  * Marks a tablet entity whose `WritingSurface` mesh accepts ink.
- * The pen settings are per tablet so later tools can change them.
+ * Ink now takes its colour and width from the tool picked on the tool wheel
+ * (ToolState); these fields are no longer read, and stay so saved scenes
+ * still load.
  */
 export const WritingSurface = createComponent(
   'WritingSurface',
