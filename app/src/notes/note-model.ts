@@ -5,13 +5,16 @@
  * rendering, and persistence layers all depend on these types, so they must
  * stay stable and versioned.
  *
- * Coordinate system: strokes live in *page coordinates*, not world or tablet
- * meters. A page spans x = 0..1 (left to right) and y = 0..1 (top to bottom).
- * Moving, tilting, or resizing the tablet therefore never changes saved ink,
- * and the enlarged note view can render the same data at another size.
+ * Coordinate system: strokes live in *canvas coordinates*, not world or
+ * tablet meters. Each page is a window onto an infinite canvas
+ * (page-view.ts); the first page's area spans x = 0..1 (left to right) and
+ * y = 0..1 (top to bottom), and the canvas goes on in every direction.
+ * Moving, tilting, or resizing the tablet therefore never changes saved
+ * ink, and the floating page shows the same data at another size.
  */
 
 import { isInkTool, type InkToolId } from '../ink/tool-catalog.js';
+import { parseView, type PageView } from './page-view.js';
 import { parseFrames, type TextFrame } from './typed-text.js';
 
 /** Bump when the saved shape changes, and add a migration in `parseNote`. */
@@ -58,6 +61,11 @@ export interface Page {
    * Optional in storage: pages from before typing mode have none.
    */
   frames?: TextFrame[];
+  /**
+   * Where the page looks on its infinite canvas (page-view.ts). Optional in
+   * storage: a page without one shows its first page's area (HOME_VIEW).
+   */
+  view?: PageView;
 }
 
 export interface Note {
@@ -145,8 +153,12 @@ export function parsePage(value: unknown): Page | null {
   const raw = value as Record<string, unknown>;
   if (typeof raw.id !== 'string' || !Array.isArray(raw.strokes)) return null;
   const strokes = (raw.strokes as unknown[]).filter(isStroke);
+  const page: Page = { id: raw.id, strokes };
   const frames = parseFrames(raw.frames);
-  return frames.length > 0 ? { id: raw.id, strokes, frames } : { id: raw.id, strokes };
+  if (frames.length > 0) page.frames = frames;
+  const view = parseView(raw.view);
+  if (view) page.view = view;
+  return page;
 }
 
 function isStroke(value: unknown): value is Stroke {

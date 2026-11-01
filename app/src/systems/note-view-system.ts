@@ -8,7 +8,10 @@
  * the bar standing just behind its far edge. With no desk found it floats
  * straight ahead instead, a little below eye level and turned to face the
  * eyes. The bar's close button fades them out and the dock returns. The
- * page shows the note's paper; InkSystem draws its ink on top.
+ * page shows the note's paper; InkSystem draws its ink on top. The paper's
+ * photo stays put while its pattern (ruled lines, grid, dots) belongs to the
+ * page's infinite canvas, so it pans and zooms with the ink
+ * (paper-pattern.ts).
  *
  * Hidden, the tablet and bar also leave pointer input (no RayInteractable),
  * since rays still hit invisible meshes.
@@ -19,6 +22,8 @@ import {
   createSystem,
   Euler,
   Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
   RayInteractable,
   Vector3,
   XRPlane as DetectedPlane,
@@ -31,7 +36,7 @@ import {
 import type { PaperStyle } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
-import { TABLET_TOP_M, WRITING_SURFACE_NAME } from '../scene-assets/tablet.scene-asset.js';
+import { SURFACE_HEIGHT_M, SURFACE_WIDTH_M, TABLET_TOP_M, WRITING_SURFACE_NAME } from '../scene-assets/tablet.scene-asset.js';
 import { findDeskSpot, type DetectedSurface } from '../ui/desk-placement.js';
 import { faceViewer } from '../ui/drag.js';
 import { truncate } from '../ui/format.js';
@@ -39,6 +44,7 @@ import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
 import { MeshFade } from '../ui/mesh-fade.js';
 import { getNoteView, type NoteViewState } from '../ui/note-view.js';
 import { addStateColors, PanelBinding, panelSize, setText, setVisible, UIKIT_PIXEL_M, type PanelElement } from '../ui/panel-helpers.js';
+import { aimPaperPattern, createPaperPattern, type PaperPattern } from '../ui/paper-pattern.js';
 import { PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import { easeInCubic, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
@@ -61,6 +67,8 @@ const PAPER_PX = 1024;
 const PAGE_GLOW = 0.12;
 /** The paper picture drawn under the page's lines (asset ID). */
 const PAPER_IMAGE_ASSET = 'paper-image';
+/** The pattern lies this far over the page (metres): under the ink, never flickering into the paper. */
+const PATTERN_LIFT_M = 0.0003;
 /** Fades (ms): the page comes in once the dock has faded away. */
 const SHOW_MS = 320;
 const SHOW_DELAY_MS = 140;
@@ -87,8 +95,12 @@ export class NoteViewSystem extends createSystem({
   private paperLabel!: UIKit.Text;
   private fade!: MeshFade;
   private paper!: PaperPreview;
-  /** The paper drawn on the page, so it is redrawn only when it changes. */
+  /** The paper whose pattern is on the page, so it is made only when it changes. */
   private drawnPaper: PaperStyle | null = null;
+  /** The page's pattern on the canvas (null for blank paper), and the mesh showing it. */
+  private pattern: PaperPattern | null = null;
+  private patternMesh!: Mesh;
+  private patternMaterial!: MeshBasicMaterial;
   private readonly headPosition = new Vector3();
   private readonly euler = new Euler(0, 0, 0, 'YXZ');
   private readonly deskSpot = new Vector3();
@@ -134,7 +146,8 @@ export class NoteViewSystem extends createSystem({
       this.noteView.subscribe((open) => (open ? this.present() : this.dismiss())),
       // Another note can open while the view is up (or the open one is renamed).
       this.session.subscribe((change) => {
-        if (change !== 'save' && this.noteView.isOpen) this.renderNote();
+        if (change === 'view') this.aimPattern();
+        else if (change !== 'save' && this.noteView.isOpen) this.renderNote();
       }),
       () => {
         this.tweens.cancel('note-view');
@@ -153,6 +166,8 @@ export class NoteViewSystem extends createSystem({
     this.paper = new PaperPreview(PAPER_PX);
     const paperImage = AssetManager.getTexture(PAPER_IMAGE_ASSET)?.image as CanvasImageSource | undefined;
     if (paperImage) this.paper.setPaperImage(paperImage);
+    // The sheet itself (the photo); its pattern is a separate layer on the canvas.
+    this.paper.draw('blank');
     const material = (surface.material as MeshPhysicalMaterial).clone();
     material.map = this.paper.texture;
     // A faint glow of its own, so the page reads as white paper in a dim
@@ -161,10 +176,38 @@ export class NoteViewSystem extends createSystem({
     material.emissive.set(0xffffff);
     material.emissiveIntensity = PAGE_GLOW;
     surface.material = material;
+
+    this.patternMaterial = new MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false });
+    this.patternMesh = new Mesh(new PlaneGeometry(SURFACE_WIDTH_M, SURFACE_HEIGHT_M), this.patternMaterial);
+    this.patternMesh.name = 'PaperPattern';
+    this.patternMesh.position.z = PATTERN_LIFT_M;
+    this.patternMesh.raycast = () => {};
+    this.patternMesh.visible = false;
+    surface.add(this.patternMesh);
     this.cleanupFuncs.push(() => {
       material.dispose();
       this.paper.dispose();
+      this.pattern?.texture.dispose();
+      this.patternMaterial.dispose();
+      this.patternMesh.geometry.dispose();
     });
+  }
+
+  /** Show `paper`'s pattern on the page (made once per paper style). */
+  private usePattern(paper: PaperStyle): void {
+    if (!this.patternMesh || paper === this.drawnPaper) return;
+    this.drawnPaper = paper;
+    this.pattern?.texture.dispose();
+    this.pattern = createPaperPattern(paper);
+    this.patternMaterial.map = this.pattern?.texture ?? null;
+    this.patternMaterial.needsUpdate = true;
+    this.patternMesh.visible = this.pattern !== null;
+    this.aimPattern();
+  }
+
+  /** Line the pattern up with the page's view of its canvas. */
+  private aimPattern(): void {
+    if (this.pattern) aimPaperPattern(this.pattern, this.session.getView());
   }
 
   // ----------------------------------------------------------- transitions
@@ -267,10 +310,8 @@ export class NoteViewSystem extends createSystem({
     if (!note) return;
     setText(this.title, truncate(note.title || 'Untitled note', TITLE_MAX_CHARS));
     setText(this.paperLabel, paperLabel(note.paper));
-    if (note.paper !== this.drawnPaper) {
-      this.paper?.draw(note.paper);
-      this.drawnPaper = note.paper;
-    }
+    this.usePattern(note.paper);
+    this.aimPattern();
   }
 }
 

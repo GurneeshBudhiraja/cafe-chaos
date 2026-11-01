@@ -33,6 +33,12 @@
  * the tablet's page), so a pen line is as thick on a sticky note as on the
  * tablet. Undo and redo act on the surface written on last.
  *
+ * The tablet's page is a window onto an infinite canvas (page-view.ts):
+ * its strokes sit in a canvas layer that the page's view pans and zooms,
+ * cut off at the page's edges (page-clip.ts), and touches are turned into
+ * canvas coordinates. Tool sizes stay the same on the page whatever the
+ * zoom (a line drawn zoomed out covers more of the canvas).
+ *
  * The system renders each surface's page and hands edits to its document;
  * it never writes note data itself.
  */
@@ -48,6 +54,8 @@ import {
   type PlaneGeometry,
 } from '@iwsdk/core';
 import { getInkSurfaces, type InkSurfaces } from '../ink/ink-surfaces.js';
+import { PageClip } from '../ink/page-clip.js';
+import { applyViewTransform, pageToCanvas, type PageView } from '../notes/page-view.js';
 import { EraserCursor } from '../ink/eraser-cursor.js';
 import { InkWeight } from '../ink/ink-weight.js';
 import { LassoSelection } from '../ink/lasso.js';
@@ -122,6 +130,10 @@ interface TabletInk {
   size: SurfaceSize;
   aspect: number;
   inkLayer: Group;
+  /** Holds the strokes and the lasso, posed by the page's view (the ink layer itself stays on the page). */
+  canvasLayer: Group;
+  /** The page's edges, for pages that pan and zoom (the tablet); null for sticky notes. */
+  clip: PageClip | null;
   eraserCursor: EraserCursor;
   lasso: LassoSelection;
   /** The page currently rendered, or null while no note is open. */
@@ -153,6 +165,8 @@ export class InkSystem extends createSystem({
   private focused: TabletInk | null = null;
 
   init(): void {
+    // Ink (and typed text) on a panned or zoomed page is cut at its edges.
+    this.world.renderer.localClippingEnabled = true;
     this.session = getNoteSession(this.world);
     this.surfaces = getInkSurfaces(this.world);
     this.pen = getPen(this.world);
@@ -188,6 +202,7 @@ export class InkSystem extends createSystem({
 
   /** The pen: touch the page while its nib is on it. */
   update(): void {
+    for (const tablet of this.tablets.values()) tablet.clip?.update();
     for (const tablet of this.tablets.values()) {
       const penContact = tablet.active?.pointerId === PEN_POINTER_ID;
       if (!this.penCanWrite() || !tablet.page) {
@@ -262,6 +277,7 @@ export class InkSystem extends createSystem({
   private onDocumentChange(tablet: TabletInk, change: NoteSessionChange): void {
     // Another note opened (or the first one loaded): show its page.
     if (change === 'active') this.renderPage(tablet, tablet.document.getActivePage());
+    if (change === 'active' || change === 'view') this.applyView(tablet);
     // The page's ink changed by an edit (erase, move, undo, redo): match it.
     if (change === 'strokes') {
       this.syncMeshes(tablet);
@@ -303,10 +319,21 @@ export class InkSystem extends createSystem({
     }
   }
 
+  /** Pose the canvas layer for the page's view (pages that pan only). */
+  private applyView(tablet: TabletInk): void {
+    const view = this.viewOf(tablet);
+    if (view) applyViewTransform(tablet.canvasLayer, view, tablet.size.widthM, tablet.size.heightM);
+  }
+
+  /** The surface's view of its canvas, or null for one that does not pan (a sticky note). */
+  private viewOf(tablet: TabletInk): PageView | null {
+    return tablet.document.getView?.() ?? null;
+  }
+
   private addStrokeMesh(tablet: TabletInk, stroke: Stroke): StrokeMesh {
-    const mesh = new StrokeMesh(stroke, tablet.size);
+    const mesh = new StrokeMesh(stroke, tablet.size, tablet.clip?.planes ?? null);
     tablet.meshes.set(stroke.id, mesh);
-    tablet.inkLayer.add(mesh.mesh);
+    tablet.canvasLayer.add(mesh.mesh);
     return mesh;
   }
 
@@ -341,18 +368,26 @@ export class InkSystem extends createSystem({
     // ink then draws after the page and the nib shadow (INK_RENDER_ORDER - 1).
     inkLayer.renderOrder = INK_RENDER_ORDER;
     surface.add(inkLayer);
+    const canvasLayer = new Group();
+    canvasLayer.name = 'InkCanvas';
+    // A nested group sets its own draw order for what is inside it: keep the ink's.
+    canvasLayer.renderOrder = INK_RENDER_ORDER;
+    inkLayer.add(canvasLayer);
 
     const { width, height } = writingAreaSize(surface);
     const size: SurfaceSize = { widthM: width, heightM: height };
+    const document = this.surfaces.documentFor(entity) ?? this.session;
     const tablet: TabletInk = {
       entity,
       surface,
-      document: this.surfaces.documentFor(entity) ?? this.session,
+      document,
       size,
       aspect: width / height,
       inkLayer,
+      canvasLayer,
+      clip: document.getView ? new PageClip(surface, width, height) : null,
       eraserCursor: new EraserCursor(inkLayer),
-      lasso: new LassoSelection(inkLayer, size),
+      lasso: new LassoSelection(canvasLayer, size),
       page: null,
       meshes: new Map(),
       active: null,
@@ -384,6 +419,7 @@ export class InkSystem extends createSystem({
 
     this.tablets.set(entity, tablet);
     this.renderPage(tablet, tablet.document.getActivePage());
+    this.applyView(tablet);
   }
 
   private detachTablet(entity: Entity): void {
@@ -500,9 +536,10 @@ export class InkSystem extends createSystem({
   private weighPenPoint(tablet: TabletInk, stroke: Stroke, x: number, y: number): void {
     if (!stroke.widths) return;
     const p = stroke.points;
+    const zoom = this.viewOf(tablet)?.zoom ?? 1;
     const distanceM = Math.hypot(
-      (x - p[p.length - 2]) * tablet.size.widthM,
-      (y - p[p.length - 1]) * tablet.size.heightM,
+      (x - p[p.length - 2]) * tablet.size.widthM * zoom,
+      (y - p[p.length - 1]) * tablet.size.heightM * zoom,
     );
     const now = performance.now();
     stroke.widths.push(this.inkWeight.next(distanceM, (now - this.lastPenSampleMs) / 1000));
@@ -560,20 +597,27 @@ export class InkSystem extends createSystem({
   }
 
   /**
-   * Convert a world-space hit point into page coordinates, stored in
-   * `this.localPoint.x/y`. Returns false when the point is off the page.
+   * Convert a world-space hit point into the surface's canvas coordinates
+   * (page coordinates through its view), stored in `this.localPoint.x/y`.
+   * Returns false when the point is off the page.
    */
   private toPageCoords(tablet: TabletInk, worldPoint: Vector3): boolean {
     const local = tablet.surface.worldToLocal(this.localPoint.copy(worldPoint));
     const u = local.x / tablet.size.widthM + 0.5;
     const v = 0.5 - local.y / tablet.size.heightM;
     local.set(u, v, 0);
+    const view = this.viewOf(tablet);
+    if (view) pageToCanvas(view, u, v, local);
     return isOnPage(u, v);
   }
 
-  /** A tool size (a fraction of the tablet's page width) as a fraction of this surface's width. */
+  /**
+   * A tool size (a fraction of the tablet's page width) in this surface's
+   * canvas units: the same on the page whatever its size or zoom.
+   */
   private onSurface(toolFraction: number, tablet: TabletInk): number {
-    return (toolFraction * TOOL_SCALE_WIDTH_M) / tablet.size.widthM;
+    const zoom = this.viewOf(tablet)?.zoom ?? 1;
+    return (toolFraction * TOOL_SCALE_WIDTH_M) / tablet.size.widthM / zoom;
   }
 }
 

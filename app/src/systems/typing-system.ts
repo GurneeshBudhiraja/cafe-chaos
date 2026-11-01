@@ -20,14 +20,16 @@
  */
 
 import { createSystem, Mesh, Vector3, type Object3D, type UIKitMLAsset } from '@iwsdk/core';
+import { PageClip } from '../ink/page-clip.js';
 import { INK_RENDER_ORDER } from '../ink/stroke-mesh.js';
+import { pageToCanvas, visibleArea } from '../notes/page-view.js';
 import { getNoteSession } from '../notes/note-services.js';
 import type { NoteSession } from '../notes/note-session.js';
 import type { Page } from '../notes/note-model.js';
 import { SURFACE_HEIGHT_M, SURFACE_WIDTH_M, WRITING_SURFACE_NAME } from '../scene-assets/tablet.scene-asset.js';
 import { applyKey, type KeyStroke } from '../text/key-commands.js';
 import { SystemKeyboard } from '../text/system-keyboard.js';
-import { FRAME_MARGIN, TextEditor } from '../text/text-editor.js';
+import { FRAME_MARGIN, TextEditor, type VisibleArea } from '../text/text-editor.js';
 import { TextLayout, PAGE_UNITS_HEIGHT } from '../text/text-layout.js';
 import { createCanvasMeasure, loadTextFonts, PageTextView } from '../text/text-renderer.js';
 import { getNoteView, type NoteViewState } from '../ui/note-view.js';
@@ -58,6 +60,8 @@ export class TypingSystem extends createSystem({}) {
   private editor!: TextEditor;
   private layout!: TextLayout;
   private view!: PageTextView;
+  /** The page's edges: text panned or zoomed past them is cut off. */
+  private clip!: PageClip;
   private keyboard!: SystemKeyboard;
   private tablet!: Object3D;
   private surface!: Mesh;
@@ -88,7 +92,9 @@ export class TypingSystem extends createSystem({}) {
     this.keyboard = new SystemKeyboard(this.editor);
     this.typing.setKeyboardOpener(() => this.showKeyboard());
     // Text draws over the ink.
-    this.view = new PageTextView(surface, SURFACE_WIDTH_M, SURFACE_HEIGHT_M, this.layout, INK_RENDER_ORDER + 1);
+    this.clip = new PageClip(surface, SURFACE_WIDTH_M, SURFACE_HEIGHT_M);
+    this.view = new PageTextView(surface, SURFACE_WIDTH_M, SURFACE_HEIGHT_M, this.layout, INK_RENDER_ORDER + 1, this.clip.planes);
+    this.view.setView(this.session.getView());
 
     void loadTextFonts().then(() => {
       // The real fonts measure differently from the fallback: lay out again.
@@ -105,6 +111,8 @@ export class TypingSystem extends createSystem({}) {
 
     this.cleanupFuncs.push(
       this.session.subscribe((change) => {
+        // The page panned or zoomed on its canvas: the text follows.
+        if (change === 'view' || change === 'active') this.view.setView(this.session.getView());
         if (change !== 'active') return;
         this.editor.setPage(this.session.getActivePage());
         this.render();
@@ -129,7 +137,9 @@ export class TypingSystem extends createSystem({}) {
   }
 
   update(): void {
-    this.view?.update(performance.now());
+    if (!this.view) return;
+    this.clip.update();
+    this.view.update(performance.now());
   }
 
   // ------------------------------------------------------------ the modes
@@ -149,29 +159,43 @@ export class TypingSystem extends createSystem({}) {
   }
 
   /**
-   * Where typing starts on entering Type mode: at the end of the text typed
-   * last if it is the lowest thing on the page, else in a new frame just
-   * below the handwriting ("below where they stopped writing").
+   * Where typing starts on entering Type mode, within the part of the
+   * canvas the page shows: at the end of the text typed last if it is the
+   * lowest thing in view, else in a new frame just below the handwriting
+   * ("below where they stopped writing").
    */
   private placeStartingCaret(): void {
     const page = this.session.getActivePage();
     if (!page) return;
-    const inkBottom = lowestInk(page);
+    const area = this.visible();
+    const across = area.right - area.left;
+    const down = area.bottom - area.top;
+    const inkBottom = lowestInk(page, area);
     let lowestFrame = null;
     let frameBottom = -Infinity;
     for (const frame of page.frames ?? []) {
       const bottom = frame.y + this.layout.layoutFrame(frame).height / PAGE_UNITS_HEIGHT;
-      if (bottom > frameBottom) {
+      const inView = frame.y < area.bottom && bottom > area.top && frame.x < area.right && frame.x + frame.width > area.left;
+      if (inView && bottom > frameBottom) {
         frameBottom = bottom;
         lowestFrame = frame;
       }
     }
-    if (lowestFrame && frameBottom >= inkBottom) {
+    if (lowestFrame && frameBottom >= (inkBottom ?? -Infinity)) {
       this.editor.focusEnd(lowestFrame);
       return;
     }
-    const top = Math.min(0.9, Math.max(FRAME_MARGIN, inkBottom + GAP_BELOW_WRITING));
-    this.editor.newFrame(FRAME_MARGIN, top, 1 - FRAME_MARGIN * 2);
+    const margin = FRAME_MARGIN * across;
+    const top = Math.min(
+      area.bottom - 0.1 * down,
+      Math.max(area.top + margin, (inkBottom ?? area.top) + GAP_BELOW_WRITING * down),
+    );
+    this.editor.newFrame(area.left + margin, top, across - margin * 2);
+  }
+
+  /** The part of the canvas the page shows now. */
+  private visible(): VisibleArea {
+    return visibleArea(this.session.getView());
   }
 
   /** The Write / Type segmented toggle on the note bar. */
@@ -210,7 +234,7 @@ export class TypingSystem extends createSystem({}) {
       const now = performance.now();
       const again = now - this.lastTap.at < DOUBLE_TAP_MS && Math.hypot(x - this.lastTap.x, y - this.lastTap.y) < DOUBLE_TAP_REACH;
       this.lastTap = { at: again ? -Infinity : now, x, y };
-      this.editor.typeAt(x, y);
+      this.editor.typeAt(x, y, this.visible());
       if (!this.keyboard.open) this.keyboard.show();
       if (again) {
         this.editor.selectWord(this.editor.caret);
@@ -237,15 +261,14 @@ export class TypingSystem extends createSystem({}) {
     });
   }
 
-  /** A world point on the page, into `pagePoint` (page coordinates); false when off the page. */
+  /** A world point on the page, into `pagePoint` (canvas coordinates, through the page's view); false when off the page. */
   private toPage(point: Vector3): boolean {
     this.surface.updateWorldMatrix(true, false);
     const local = this.surface.worldToLocal(this.local.copy(point));
     const x = local.x / SURFACE_WIDTH_M + 0.5;
     const y = 0.5 - local.y / SURFACE_HEIGHT_M;
     if (x < 0 || x > 1 || y < 0 || y > 1) return false;
-    this.pagePoint.x = x;
-    this.pagePoint.y = y;
+    pageToCanvas(this.session.getView(), x, y, this.pagePoint);
     return true;
   }
 
@@ -294,9 +317,9 @@ export class TypingSystem extends createSystem({}) {
 /** Strokes smaller than this across (page widths) are specks (a pen set down, a slip), not writing. */
 const SPECK_SIZE = 0.02;
 
-/** The bottom of the page's lowest handwriting (page coordinates), or 0 for a page without any. */
-function lowestInk(page: Page): number {
-  let bottom = 0;
+/** The bottom of the lowest handwriting in view (canvas coordinates), or null when none is in view. */
+function lowestInk(page: Page, area: VisibleArea): number | null {
+  let bottom: number | null = null;
   for (const stroke of page.strokes) {
     const points = stroke.points;
     let minX = Infinity;
@@ -310,7 +333,8 @@ function lowestInk(page: Page): number {
       maxY = Math.max(maxY, points[i + 1]);
     }
     if (Math.hypot(maxX - minX, maxY - minY) < SPECK_SIZE) continue;
-    bottom = Math.max(bottom, maxY);
+    if (maxX < area.left || minX > area.right || maxY < area.top || minY > area.bottom) continue;
+    bottom = Math.max(bottom ?? -Infinity, maxY);
   }
   return bottom;
 }

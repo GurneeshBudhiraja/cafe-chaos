@@ -11,6 +11,7 @@
 import { CanvasTexture, SRGBColorSpace } from '@iwsdk/core';
 import { INK_OPACITY } from '../ink/tool-catalog.js';
 import { PAGE_ASPECT, type Note, type PaperStyle, type Stroke } from '../notes/note-model.js';
+import { HOME_VIEW } from '../notes/page-view.js';
 
 const PAPER_COLOR = '#fffdf9';
 const RULE_COLOR = '#cfc5b8';
@@ -51,6 +52,11 @@ export class PaperPreview {
     drawPaper(ctx, paper, w, h, this.paperImage);
     const page = note?.pages[0];
     if (page) {
+      // The ink as the page last showed it (its view of the infinite canvas).
+      const view = page.view ?? HOME_VIEW;
+      ctx.save();
+      ctx.translate(w * (0.5 - view.zoom * view.x), h * (0.5 - view.zoom * view.y));
+      ctx.scale(view.zoom, view.zoom);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       // Highlighter first, see-through, under the ink (as on the tablet).
@@ -68,6 +74,7 @@ export class PaperPreview {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+      ctx.restore();
     }
     this.texture.needsUpdate = true;
   }
@@ -126,6 +133,11 @@ function drawPaper(
     ctx.fillStyle = PAPER_COLOR;
     ctx.fillRect(0, 0, w, h);
   }
+  drawPaperPattern(ctx, paper, w, h);
+}
+
+/** A paper style's lines, grid, dots or layout (no background), on a page `w` by `h` pixels. */
+export function drawPaperPattern(ctx: CanvasRenderingContext2D, paper: PaperStyle, w: number, h: number): void {
   const line = Math.max(1, Math.round(w / 300));
   switch (paper) {
     case 'lined':

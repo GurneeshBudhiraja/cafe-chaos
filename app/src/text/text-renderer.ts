@@ -12,6 +12,10 @@
  *
  * Text meshes never take rays, so taps fall through to the page (the
  * typing system places the caret from where the page was touched).
+ *
+ * Frames are laid out on the page's infinite canvas: they sit in a canvas
+ * group that the page's view pans and zooms (`setView`), cut off at the
+ * page's edges.
  */
 
 import {
@@ -22,7 +26,9 @@ import {
   PlaneGeometry,
   SRGBColorSpace,
   type Object3D,
+  type Plane,
 } from '@iwsdk/core';
+import { applyViewTransform, HOME_VIEW, type PageView } from '../notes/page-view.js';
 import { blockLength, type TextFrame } from '../notes/typed-text.js';
 import { comparePositions, type TextPosition } from './text-editor.js';
 import { PAGE_UNITS, PAGE_UNITS_HEIGHT, type FrameLayout, type TextLayout } from './text-layout.js';
@@ -99,6 +105,8 @@ const unitPlane = new PlaneGeometry(1, 1);
 
 export class PageTextView {
   readonly root = new Group();
+  /** The frames and caret, posed by the page's view. */
+  private readonly canvas = new Group();
   private readonly frames = new Map<string, FrameView>();
   private readonly caret: Mesh;
   private readonly metresPerUnit: number;
@@ -112,22 +120,32 @@ export class PageTextView {
     private readonly heightM: number,
     private readonly layout: TextLayout,
     renderOrder: number,
+    /** The page's edges to cut text at (page-clip.ts), or null. */
+    private readonly clipPlanes: Plane[] | null = null,
   ) {
     this.metresPerUnit = widthM / PAGE_UNITS;
     this.root.name = 'TypedText';
     this.root.position.z = TEXT_LIFT_M;
     this.root.renderOrder = renderOrder;
+    this.canvas.renderOrder = renderOrder;
+    this.root.add(this.canvas);
     surface.add(this.root);
     this.caret = new Mesh(
       unitPlane,
-      new MeshBasicMaterial({ color: CARET_COLOR, transparent: true, depthWrite: false, toneMapped: false }),
+      new MeshBasicMaterial({ color: CARET_COLOR, transparent: true, depthWrite: false, toneMapped: false, clippingPlanes: clipPlanes }),
     );
     this.caret.name = 'TextCaret';
     this.caret.visible = false;
     this.caret.raycast = () => {};
     this.caret.renderOrder = renderOrder + 1;
     this.caret.position.z = TEXT_LIFT_M;
-    this.root.add(this.caret);
+    this.canvas.add(this.caret);
+    this.setView(HOME_VIEW);
+  }
+
+  /** Pan and zoom the text with the page's view of its canvas. */
+  setView(view: PageView): void {
+    applyViewTransform(this.canvas, view, this.widthM, this.heightM);
   }
 
   /** Draw `frames` as they are now, with the editor's caret and selection. */
@@ -223,12 +241,13 @@ export class PageTextView {
       premultipliedAlpha: true,
       depthWrite: false,
       toneMapped: false,
+      clippingPlanes: this.clipPlanes,
     });
     const mesh = new Mesh(unitPlane, material);
     mesh.name = 'TextFrame';
     mesh.raycast = () => {};
     mesh.renderOrder = this.root.renderOrder;
-    this.root.add(mesh);
+    this.canvas.add(mesh);
     return { canvas, ctx, texture, material, mesh, drawn: '', heightUnits };
   }
 

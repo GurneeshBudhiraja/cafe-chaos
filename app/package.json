@@ -25,7 +25,8 @@
     "record:demo": "node scripts/record-demo.mjs",
     "check:text-editor": "node scripts/check-text-editor.mjs",
     "check:typing": "node scripts/check-typing.mjs",
-    "record:typing": "node scripts/record-typing.mjs"
+    "record:typing": "node scripts/record-typing.mjs",
+    "check:canvas": "node scripts/check-canvas.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

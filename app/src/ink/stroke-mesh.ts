@@ -15,6 +15,7 @@ import {
   Color,
   Mesh,
   MeshBasicMaterial,
+  type Plane,
 } from '@iwsdk/core';
 import { INK_OPACITY } from './tool-catalog.js';
 import type { Stroke } from '../notes/note-model.js';
@@ -27,10 +28,19 @@ export interface SurfaceSize {
 
 const INITIAL_CAPACITY = 64;
 
-/** One shared material per colour and opacity; strokes never mutate a material. */
-const materialCache = new Map<string, MeshBasicMaterial>();
+/**
+ * One shared material per colour and opacity (and per page clipped to its
+ * edges, page-clip.ts); strokes never mutate a material.
+ */
+const unclipped = new Map<string, MeshBasicMaterial>();
+const clippedByPage = new WeakMap<Plane[], Map<string, MeshBasicMaterial>>();
 
-function materialFor(color: string, opacity: number): MeshBasicMaterial {
+function materialFor(color: string, opacity: number, clipPlanes: Plane[] | null): MeshBasicMaterial {
+  let materialCache = unclipped;
+  if (clipPlanes) {
+    materialCache = clippedByPage.get(clipPlanes) ?? new Map();
+    clippedByPage.set(clipPlanes, materialCache);
+  }
   const key = `${color}/${opacity}`;
   let material = materialCache.get(key);
   if (!material) {
@@ -43,6 +53,8 @@ function materialFor(color: string, opacity: number): MeshBasicMaterial {
       // Ink sits on one plane. Skipping depth writes avoids z-fighting where
       // strokes overlap; later strokes simply draw over earlier ones.
       depthWrite: false,
+      // Ink panned or zoomed past the page's edges is cut off there.
+      clippingPlanes: clipPlanes,
     });
     materialCache.set(key, material);
   }
@@ -70,9 +82,11 @@ export class StrokeMesh {
   constructor(
     readonly stroke: Stroke,
     private readonly surface: SurfaceSize,
+    /** The page's edges to cut the ink at (a page on an infinite canvas), or null. */
+    clipPlanes: Plane[] | null = null,
   ) {
     this.allocate(Math.max(INITIAL_CAPACITY, stroke.points.length / 2));
-    this.mesh = new Mesh(this.geometry, materialFor(stroke.color, INK_OPACITY[stroke.tool]));
+    this.mesh = new Mesh(this.geometry, materialFor(stroke.color, INK_OPACITY[stroke.tool], clipPlanes));
     this.mesh.renderOrder = stroke.tool === 'highlighter' ? HIGHLIGHT_RENDER_ORDER : INK_RENDER_ORDER;
     this.mesh.name = `Stroke:${stroke.id}`;
     this.mesh.raycast = noRaycast;

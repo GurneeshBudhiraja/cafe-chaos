@@ -25,6 +25,7 @@ import {
   type Stroke,
 } from './note-model.js';
 import { summarize, type NoteStore, type NoteSummary } from './note-store.js';
+import { HOME_VIEW, type PageView } from './page-view.js';
 import { removeStrokes, replaceStrokes, StrokeHistory } from './stroke-history.js';
 import { devLog } from '../util/dev-log.js';
 
@@ -33,9 +34,10 @@ export type SaveStatus = 'idle' | 'saving' | 'saved' | 'failed';
 /**
  * What changed; listeners re-read the session state they care about.
  * 'strokes' is the open page's ink changing by an edit other than a new
- * stroke (erase, move, undo, redo).
+ * stroke (erase, move, undo, redo). 'view' is the open page panning or
+ * zooming on its canvas.
  */
-export type NoteSessionChange = 'library' | 'active' | 'save' | 'strokes';
+export type NoteSessionChange = 'library' | 'active' | 'save' | 'strokes' | 'view';
 
 /** The surface the ink system needs; keeps InkSystem independent of storage. */
 export interface InkDocument {
@@ -49,6 +51,8 @@ export interface InkDocument {
   undo(): boolean;
   /** Re-apply the most recently undone ink edit; false when there is none. */
   redo(): boolean;
+  /** Where the page looks on its infinite canvas; absent for surfaces that do not pan (sticky notes). */
+  getView?(): PageView;
   subscribe(listener: (change: NoteSessionChange) => void): () => void;
 }
 
@@ -177,6 +181,24 @@ export class NoteSession implements InkDocument {
    */
   textEdited(): void {
     if (this.active) this.markDirty(this.active);
+  }
+
+  /** Where the open page looks on its canvas. */
+  getView(): PageView {
+    return this.getActivePage()?.view ?? HOME_VIEW;
+  }
+
+  /**
+   * Pan or zoom the open page. `save`: keep it with the note (at the end of
+   * a gesture; while it moves, only listeners hear of it).
+   */
+  setView(view: PageView, save = false): void {
+    const note = this.active;
+    const page = this.getActivePage();
+    if (!note || !page) return;
+    page.view = { ...view };
+    this.emit('view');
+    if (save) this.markDirty(note);
   }
 
   getActivePage(): Page | null {

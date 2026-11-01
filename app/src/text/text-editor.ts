@@ -90,6 +90,15 @@ export type CaretMove = 'left' | 'right' | 'up' | 'down' | 'line-start' | 'line-
 /** Left margin new frames keep from the page's edges, and the narrowest frame (page widths). */
 export const FRAME_MARGIN = 0.06;
 export const MIN_FRAME_WIDTH = 0.3;
+
+/** The part of the canvas the page shows (canvas coordinates). */
+export interface VisibleArea {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+const FIRST_PAGE: VisibleArea = { left: 0, top: 0, right: 1, bottom: 1 };
 /** Typing within this long of the last keystroke is one undo step, until a space or a new line (ms). */
 const TYPING_GROUP_MS = 1500;
 const MAX_UNDO = 300;
@@ -187,10 +196,11 @@ export class TextEditor {
   // ---------------------------------------------------------- caret placing
 
   /**
-   * Start typing at a page point: in the frame there, or in a new frame
-   * whose top-left corner is the point (kept inside the page's margins).
+   * Start typing at a canvas point: in the frame there, or in a new frame
+   * whose top-left corner is the point, kept inside the margins of the part
+   * of the canvas the page shows (`visible`; the first page's area by default).
    */
-  typeAt(x: number, y: number, extend = false): void {
+  typeAt(x: number, y: number, visible: VisibleArea = FIRST_PAGE, extend = false): void {
     if (!this.page) return;
     const hit = this.locator.frameAt(this.frames, x, y);
     if (hit) {
@@ -202,9 +212,12 @@ export class TextEditor {
       this.afterCaretMove();
       return;
     }
-    const left = Math.min(Math.max(x, FRAME_MARGIN), 1 - FRAME_MARGIN - MIN_FRAME_WIDTH);
-    const top = Math.min(Math.max(y, FRAME_MARGIN * 0.5), 0.95);
-    this.newFrame(left, top, 1 - FRAME_MARGIN - left);
+    const across = visible.right - visible.left;
+    const down = visible.bottom - visible.top;
+    const margin = FRAME_MARGIN * across;
+    const left = Math.min(Math.max(x, visible.left + margin), visible.right - margin - MIN_FRAME_WIDTH * across);
+    const top = Math.min(Math.max(y, visible.top + margin * 0.5), visible.bottom - 0.05 * down);
+    this.newFrame(left, top, visible.right - margin - left);
   }
 
   /** Start typing in a new, empty frame (`x`, `y`: its top-left corner; `width` in page widths). */
