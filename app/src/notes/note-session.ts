@@ -171,6 +171,14 @@ export class NoteSession implements InkDocument {
     this.markDirty(note);
   }
 
+  /**
+   * The open page's typed text was edited (TextEditor changes the page's
+   * frames in place, with its own undo history): save it.
+   */
+  textEdited(): void {
+    if (this.active) this.markDirty(this.active);
+  }
+
   getActivePage(): Page | null {
     return this.active?.pages[0] ?? null;
   }

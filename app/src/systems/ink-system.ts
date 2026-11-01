@@ -59,6 +59,7 @@ import { createStroke, type Page, type Stroke } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
 import { getTools, type ToolState } from '../ui/tool-state.js';
+import { getTyping, type TypingState } from '../ui/typing-state.js';
 import type { InkDocument, NoteSessionChange } from '../notes/note-session.js';
 import { TabletHandle, WritingSurface } from '../note-components.js';
 import { playUiSound } from '../ui/ui-sounds.js';
@@ -146,6 +147,8 @@ export class InkSystem extends createSystem({
   private surfaces!: InkSurfaces;
   private pen!: PenState;
   private tools!: ToolState;
+  /** In Type mode touches on the page place the caret (TypingSystem), not ink. */
+  private typing!: TypingState;
   /** The surface written on last: undo and redo act on it. */
   private focused: TabletInk | null = null;
 
@@ -154,6 +157,7 @@ export class InkSystem extends createSystem({
     this.surfaces = getInkSurfaces(this.world);
     this.pen = getPen(this.world);
     this.tools = getTools(this.world);
+    this.typing = getTyping(this.world);
 
     // 'qualify' only reports entities that match later, so attach the tablets
     // that already exist (the level loads before app systems register).
@@ -217,6 +221,7 @@ export class InkSystem extends createSystem({
     return (
       this.pen.held &&
       !this.pen.loosened &&
+      !this.typing.typing &&
       !this.tools.wheelOpen &&
       this.queries.movingHandles.entities.size === 0
     );
@@ -398,6 +403,7 @@ export class InkSystem extends createSystem({
   private handleDown(tablet: TabletInk, event: InkPointerEvent): void {
     if (tablet.active || !tablet.page) return; // One contact; a note is open.
     if (this.pen.held) return; // The pen writes; the ray does not.
+    if (this.typing.typing) return; // Touches place the caret while typing.
     if (this.queries.movingHandles.entities.size > 0) return; // Tablet moving.
     if (event.object !== tablet.surface) return; // Bezel, not page.
     if (!this.toPageCoords(tablet, event.point)) return;

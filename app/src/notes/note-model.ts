@@ -12,6 +12,7 @@
  */
 
 import { isInkTool, type InkToolId } from '../ink/tool-catalog.js';
+import { parseFrames, type TextFrame } from './typed-text.js';
 
 /** Bump when the saved shape changes, and add a migration in `parseNote`. */
 export const NOTE_SCHEMA_VERSION = 1;
@@ -52,13 +53,18 @@ export interface Stroke {
 export interface Page {
   id: string;
   strokes: Stroke[];
+  /**
+   * Typed text boxes (typing mode, typed-text.ts), drawn over the ink.
+   * Optional in storage: pages from before typing mode have none.
+   */
+  frames?: TextFrame[];
 }
 
 export interface Note {
   schemaVersion: typeof NOTE_SCHEMA_VERSION;
   id: string;
   title: string;
-  /** Typed text content. Rich typing arrives with keyboard mode. */
+  /** Legacy plain text (unused). Typed text now lives on each page as text frames (typed-text.ts). */
   text: string;
   /** Page background. Optional in storage: older notes read as 'blank'. */
   paper: PaperStyle;
@@ -139,7 +145,8 @@ export function parsePage(value: unknown): Page | null {
   const raw = value as Record<string, unknown>;
   if (typeof raw.id !== 'string' || !Array.isArray(raw.strokes)) return null;
   const strokes = (raw.strokes as unknown[]).filter(isStroke);
-  return { id: raw.id, strokes };
+  const frames = parseFrames(raw.frames);
+  return frames.length > 0 ? { id: raw.id, strokes, frames } : { id: raw.id, strokes };
 }
 
 function isStroke(value: unknown): value is Stroke {

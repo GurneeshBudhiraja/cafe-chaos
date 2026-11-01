@@ -22,7 +22,9 @@
     "check:tool-wheel": "node scripts/check-tool-wheel.mjs",
     "record:tool-wheel": "node scripts/record-tool-wheel.mjs",
     "check:stickies": "node scripts/check-stickies.mjs",
-    "record:demo": "node scripts/record-demo.mjs"
+    "record:demo": "node scripts/record-demo.mjs",
+    "check:text-editor": "node scripts/check-text-editor.mjs",
+    "check:typing": "node scripts/check-typing.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

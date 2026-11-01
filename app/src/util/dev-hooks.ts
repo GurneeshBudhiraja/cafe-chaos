@@ -20,6 +20,7 @@ import {
 } from '@iwsdk/core';
 import type { NoteSession } from '../notes/note-session.js';
 import type { SimulatedFailureStore } from '../notes/note-store.js';
+import { SURFACE_HEIGHT_M, SURFACE_WIDTH_M, WRITING_SURFACE_NAME } from '../scene-assets/tablet.scene-asset.js';
 import { getHomeMode } from '../ui/home-mode.js';
 import { elementWorldPosition } from '../ui/panel-helpers.js';
 import { getTweens } from '../ui/tweens.js';
@@ -51,6 +52,8 @@ interface DemoHooks {
   recenterHome(): void;
   /** Tests and recordings: world centre of a named object or UI element. */
   objectCenter(name: string): { x: number; y: number; z: number } | null;
+  /** Tests and recordings: the world point at page coordinates (u, v) on the tablet's page. */
+  pagePoint(u: number, v: number): { x: number; y: number; z: number } | null;
 }
 
 export function installDevHooks(hooks: DevHooks): void {
@@ -116,6 +119,13 @@ export function installDevHooks(hooks: DevHooks): void {
       const object = hooks.world.scene.getObjectByName(name);
       if (!object) return null;
       const { x, y, z } = elementWorldPosition(object, new Vector3());
+      return { x, y, z };
+    },
+    pagePoint(u, v) {
+      const surface = hooks.world.getSceneObject('tablet')?.getObjectByName(WRITING_SURFACE_NAME);
+      if (!surface) return null;
+      surface.updateWorldMatrix(true, false);
+      const { x, y, z } = surface.localToWorld(new Vector3((u - 0.5) * SURFACE_WIDTH_M, (0.5 - v) * SURFACE_HEIGHT_M, 0));
       return { x, y, z };
     },
   };

@@ -28,6 +28,7 @@ import { TabletEdgeSystem } from './systems/tablet-edge-system.js';
 import { ToastSystem } from './systems/toast-system.js';
 import { ToolWheelSystem } from './systems/tool-wheel-system.js';
 import { TweenSystem } from './systems/tween-system.js';
+import { TypingSystem } from './systems/typing-system.js';
 import { XrScrollFixSystem } from './systems/xr-scroll-fix-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
 
@@ -56,6 +57,8 @@ World.create(
     // After the pen (its taps and nib), before the ink (which pauses while the wheel is open).
     .registerSystem(ToolWheelSystem)
     .registerSystem(InkSystem)
+    // After the ink: in Type mode the page's touches are the caret's.
+    .registerSystem(TypingSystem)
     .registerSystem(StickySystem)
     .registerSystem(HomeWindowSystem)
     .registerSystem(CompactDockSystem)
