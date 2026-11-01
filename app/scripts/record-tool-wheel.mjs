@@ -23,18 +23,24 @@ import { toolWheelDriver } from './lib/tool-wheel-driver.mjs';
 /** Seated at the emulated room's desk-height table, facing it (see record-desk.mjs). */
 const TABLE_HEIGHT_M = 0.79;
 const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
+/** Leaning in over the desk to write, the head about 45 cm from the page. */
+const LEANING_IN = { x: -1.1, y: 1.17, z: 0.3 };
+/** Looking this far below the tablet's centre puts the page and the wheel mid-view (metres). */
+const GAZE_BELOW_M = 0.1;
 const FACING_DEG = 90;
 const HAND_REST = { x: SEAT.x - 0.15, y: 0.98, z: SEAT.z + 0.15 };
 const CLASSROOM_ORIGIN = { x: -1.045, z: 0.28 };
 /** Holds on each wheel pick before tapping, so the aim reads on video (ms of video). */
 const DWELL_MS = 500;
 
-/** The tablet's centre (world). */
-const tabletCentre = (page) =>
-  page.evaluate(() => {
+/** The tablet's centre (world), once it has landed on the desk. */
+async function tabletCentre(page) {
+  await page.waitForFunction(() => window.__metaNotes.world.getSceneObject('tablet').position.y < 1.2, null, { timeout: 60000 });
+  return page.evaluate(() => {
     const p = window.__metaNotes.world.getSceneObject('tablet').position;
     return { x: p.x, y: p.y, z: p.z };
   });
+}
 
 /** Off camera: seat, open a new note on the desk, pick up the pen, write the date. */
 async function prepare(r) {
@@ -50,7 +56,8 @@ async function prepare(r) {
   await r.tap('dock-new');
   await r.pause(1200);
   const tablet = await tabletCentre(r.page);
-  await r.lookAt({ ...tablet, x: tablet.x - 0.02 }, 300);
+  await r.moveHead(LEANING_IN);
+  await r.lookAt({ ...tablet, y: tablet.y - GAZE_BELOW_M }, 300);
   await r.pickUpPen(800);
   await r.penWrite(layoutLine('Biology', { u: 0.07, v: 0.14, size: 0.003, seed: 2 }).strokes, 0.2);
   await toolWheelDriver(r).liftPen(200);
@@ -61,7 +68,7 @@ const { page, pause, fps, speedUp } = rec;
 const wheel = toolWheelDriver(rec);
 const { aimPoint, aimSwatch, aimSize, aimDelete, overPage, liftPen, pickOnWheel } = wheel;
 const tablet = await tabletCentre(page);
-const atTablet = { ...tablet, x: tablet.x - 0.02 };
+const atTablet = { ...tablet, y: tablet.y - GAZE_BELOW_M };
 const picks = { aimMs: 500, dwellMs: DWELL_MS };
 
 /** Glance between the page and the open wheel, as one does when choosing. */
@@ -87,7 +94,8 @@ await liftPen();
 await pause(500);
 
 // --- 2. The free hand: pinch to open, aim at the Highlighter, let go; highlight the heading.
-const freeHand = await page.evaluate((t) => ({ x: t.x + 0.06, y: t.y + 0.2, z: t.z - 0.22 }), tablet);
+// The left hand comes up on the left (facing -X, left is +Z), nearer than the tablet.
+const freeHand = { x: tablet.x + 0.12, y: tablet.y + 0.15, z: tablet.z + 0.2 };
 await rec.moveLeftHand(freeHand);
 await pause(400);
 await rec.leftPinch(1);
