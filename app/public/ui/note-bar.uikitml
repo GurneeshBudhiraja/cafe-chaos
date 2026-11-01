@@ -1,6 +1,8 @@
 <!--
   Note bar: one slim glass line just above the open note's page. It names
-  the note and its paper; the Write / Type toggle switches between the pen
+  the note and its paper; the zoom readout shows how close the page's
+  canvas view is (a tap goes back to the first page's area,
+  CanvasGestureSystem); the Write / Type toggle switches between the pen
   and the keyboard (TypingSystem); its close button puts the page away and
   brings the dock back. NoteViewSystem (src/systems/note-view-system.ts)
   fills it in, puts a glass slab behind #note-bar-root and keeps it on the
@@ -40,6 +42,24 @@
     font-family: ui;
     font-size: 14px;
     font-weight: 400;
+    color: #b3aba1;
+  }
+
+  .zoom {
+    height: 32px;
+    padding-left: 10px;
+    padding-right: 10px;
+    margin-left: 8px;
+    border-radius: 16px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .zoom-label {
+    font-family: ui;
+    font-size: 14px;
+    font-weight: 500;
     color: #b3aba1;
   }
 
@@ -85,6 +105,9 @@
 <div id="note-bar-root" class="bar">
   <div id="note-bar-title" class="bar-title">Note</div>
   <div id="note-bar-paper" class="bar-paper">Blank page</div>
+  <div id="note-bar-zoom" class="zoom">
+    <div id="note-bar-zoom-label" class="zoom-label">100%</div>
+  </div>
   <div id="note-bar-mode" class="mode-toggle">
     <div id="note-bar-mode-write" class="mode-segment">
       <PenLine width="16" height="16"></PenLine>

@@ -68,6 +68,7 @@ import { getNoteSession } from '../notes/note-services.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
 import { getTools, type ToolState } from '../ui/tool-state.js';
 import { getTyping, type TypingState } from '../ui/typing-state.js';
+import { getCanvasGesture, type CanvasGestureState } from '../ui/canvas-gesture-state.js';
 import type { InkDocument, NoteSessionChange } from '../notes/note-session.js';
 import { TabletHandle, WritingSurface } from '../note-components.js';
 import { playUiSound } from '../ui/ui-sounds.js';
@@ -161,6 +162,8 @@ export class InkSystem extends createSystem({
   private tools!: ToolState;
   /** In Type mode touches on the page place the caret (TypingSystem), not ink. */
   private typing!: TypingState;
+  /** While the canvas is being panned or zoomed by hand, the page's touches are the gesture's. */
+  private gesture!: CanvasGestureState;
   /** The surface written on last: undo and redo act on it. */
   private focused: TabletInk | null = null;
 
@@ -172,6 +175,7 @@ export class InkSystem extends createSystem({
     this.pen = getPen(this.world);
     this.tools = getTools(this.world);
     this.typing = getTyping(this.world);
+    this.gesture = getCanvasGesture(this.world);
 
     // 'qualify' only reports entities that match later, so attach the tablets
     // that already exist (the level loads before app systems register).
@@ -179,6 +183,10 @@ export class InkSystem extends createSystem({
 
     this.cleanupFuncs.push(
       this.tools.onAction((action) => this.runAction(action)),
+      // A pinch that takes hold of the canvas may also have started a ray touch: that touch was the gesture's.
+      this.gesture.subscribe((active) => {
+        if (active) for (const tablet of this.tablets.values()) this.abandonContact(tablet);
+      }),
       // The selection belongs to the lasso: picking another tool drops it.
       this.tools.subscribe((change) => {
         if (change !== 'tool' || this.tools.tool === 'lasso') return;
@@ -237,6 +245,7 @@ export class InkSystem extends createSystem({
       this.pen.held &&
       !this.pen.loosened &&
       !this.typing.typing &&
+      !this.gesture.active &&
       !this.tools.wheelOpen &&
       this.queries.movingHandles.entities.size === 0
     );
@@ -440,6 +449,7 @@ export class InkSystem extends createSystem({
     if (tablet.active || !tablet.page) return; // One contact; a note is open.
     if (this.pen.held) return; // The pen writes; the ray does not.
     if (this.typing.typing) return; // Touches place the caret while typing.
+    if (this.gesture.active) return; // The canvas is being panned or zoomed.
     if (this.queries.movingHandles.entities.size > 0) return; // Tablet moving.
     if (event.object !== tablet.surface) return; // Bezel, not page.
     if (!this.toPageCoords(tablet, event.point)) return;
@@ -580,6 +590,28 @@ export class InkSystem extends createSystem({
       'ink',
       `stroke committed: ${stroke.points.length / 2} points, page has ${tablet.page?.strokes.length ?? 0} strokes`,
     );
+  }
+
+  /**
+   * Drop the touch in progress without keeping it (a ray touch that was
+   * really a pinch on the canvas): its stroke goes, rubbed-out strokes come
+   * back, a lasso loop clears. The pen's own stroke is kept (ended).
+   */
+  private abandonContact(tablet: TabletInk): void {
+    const active = tablet.active;
+    if (!active) return;
+    if (active.pointerId === PEN_POINTER_ID) {
+      this.endContact(tablet);
+      return;
+    }
+    tablet.active = null;
+    if (active.kind === 'ink') this.removeStrokeMesh(tablet, active.mesh.stroke.id);
+    else if (active.kind === 'erase') {
+      for (const id of active.erased) {
+        const mesh = tablet.meshes.get(id);
+        if (mesh) mesh.mesh.visible = true;
+      }
+    } else tablet.lasso.clear(tablet.meshes);
   }
 
   /** Hide every stroke the eraser touches at the page point in `this.localPoint`, adding it to `erased`. */

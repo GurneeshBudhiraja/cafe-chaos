@@ -124,6 +124,118 @@ const saved = await page.evaluate(async () => {
 });
 expect(saved && saved.zoom === 0.6, 'the view is saved with the note', saved);
 await shot('5-everything');
+
+// --- Phase 2: by hand. Pen down; back to the first page's area.
+await rec.putDownPen();
+await rec.moveHand(HAND_REST);
+await setView({ x: 0.5, y: 0.5, zoom: 1 });
+const pagePoint = (u, v) => page.evaluate(([a, b]) => window.__metaNotes.demo.pagePoint(a, b), [u, v]);
+const view = () => page.evaluate(() => window.__metaNotes.session.getView());
+await page.evaluate(() => {
+  const device = window.IWER_DEVICE;
+  const { world } = window.__metaNotes;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const frame = () => world.renderer.info.render.frame;
+  const nextFrame = async () => {
+    const f = frame();
+    while (frame() === f) await sleep(8);
+  };
+  const call = (method, params) => device.remote.dispatch(method, params);
+  const offsets = {};
+  /** Pinch (or let go with) `hand` with its pinch closing at a world point; or move it there, pinched. */
+  window.__grab = {
+    async measure(hand) {
+      const id = `hand-${hand}`;
+      await call('set_select_value', { device: id, value: 1 });
+      for (let i = 0; i < 3; i++) await nextFrame();
+      const at = (await call('get_transform', { device: id })).position;
+      const p = await window.__rec.pinchPoint(hand);
+      offsets[hand] = { x: p.x - at.x, y: p.y - at.y, z: p.z - at.z };
+      await call('set_select_value', { device: id, value: 0 });
+      for (let i = 0; i < 3; i++) await nextFrame();
+    },
+    async move(hand, to, ms, speedUp) {
+      const id = `hand-${hand}`;
+      const from = (await call('get_transform', { device: id })).position;
+      const o = offsets[hand];
+      const target = { x: to.x - o.x, y: to.y - o.y, z: to.z - o.z };
+      const t0 = performance.now();
+      for (;;) {
+        const t = Math.min(1, (performance.now() - t0) / (ms * speedUp));
+        const e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+        await call('set_transform', {
+          device: id,
+          position: { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, z: from.z + (target.z - from.z) * e },
+        });
+        if (t >= 1) break;
+        await nextFrame();
+      }
+      await nextFrame();
+    },
+    async pinch(hand, value) {
+      await call('set_select_value', { device: `hand-${hand}`, value });
+      for (let i = 0; i < 3; i++) await nextFrame();
+    },
+  };
+});
+const grab = {
+  measure: (hand) => page.evaluate((h) => window.__grab.measure(h), hand),
+  move: (hand, to, ms = 600) => page.evaluate(([h, t, m, s]) => window.__grab.move(h, t, m, s), [hand, to, ms, rec.speedUp]),
+  pinch: (hand, value) => page.evaluate(([h, v]) => window.__grab.pinch(h, v), [hand, value]),
+};
+// Each hand's pinch point, measured away from the page (a pinch there takes nothing).
+await grab.measure('left');
+await grab.measure('right');
+const inkBefore = (await strokes()).length;
+
+// One hand: pinch the page and slide it left; the canvas follows.
+await grab.move('left', await pagePoint(0.65, 0.5));
+await grab.pinch('left', 1);
+await grab.move('left', await pagePoint(0.35, 0.5), 900);
+let v = await view();
+await shot('6-one-hand-pan');
+await grab.pinch('left', 0);
+expect(Math.abs(v.x - 0.8) < 0.04 && Math.abs(v.zoom - 1) < 0.01, 'one hand pinching the page pans the canvas with it', v);
+await grab.move('left', LEFT_REST);
+
+// Two hands: pinch the page with both and pull them apart: it zooms in around the point between them.
+await grab.move('left', await pagePoint(0.38, 0.5));
+await grab.move('right', await pagePoint(0.62, 0.5));
+await grab.pinch('left', 1);
+await grab.pinch('right', 1);
+const leftTo = await pagePoint(0.26, 0.5);
+const rightTo = await pagePoint(0.74, 0.5);
+await Promise.all([grab.move('left', leftTo, 900), grab.move('right', rightTo, 900)]);
+v = await view();
+await shot('7-two-hand-zoom');
+await grab.pinch('left', 0);
+await grab.pinch('right', 0);
+expect(Math.abs(v.zoom - 2) < 0.2, 'two hands pulled apart zoom in (twice as far apart: twice as close)', v);
+expect((await strokes()).length === inkBefore, 'pinching the page draws no ink', { before: inkBefore, after: (await strokes()).length });
+await pause(800);
+const saved2 = await page.evaluate(async () => (await window.__metaNotes.store.get(window.__metaNotes.session.active.id)).pages[0].view);
+expect(saved2 && Math.abs(saved2.zoom - v.zoom) < 0.01, 'letting go keeps the view and saves it', { saved2, v });
+await grab.move('left', LEFT_REST);
+await rec.moveHand(HAND_REST);
+
+// The zoom readout: a tap goes back to the first page's area.
+await rec.tap('note-bar-zoom');
+await pause(900);
+v = await view();
+expect(Math.abs(v.zoom - 1) < 0.01 && Math.abs(v.x - 0.5) < 0.01, "a tap on the zoom readout goes back home", v);
+await rec.moveHand(HAND_REST);
+
+// With the pen in hand, the free hand pans (and does not open the tool wheel).
+await rec.pickUpPen(1000);
+await grab.move('left', await pagePoint(0.5, 0.6));
+await grab.pinch('left', 1);
+await grab.move('left', await pagePoint(0.5, 0.35), 900);
+await grab.pinch('left', 0);
+v = await view();
+const wheel = await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.tools'].wheelOpen);
+expect(Math.abs(v.y - 0.75) < 0.04 && !wheel, 'with the pen in hand, the free hand pans; the tool wheel stays shut', { v, wheel });
+await grab.move('left', LEFT_REST);
+await shot('8-pan-with-pen');
 await rec.putDownPen();
 
 const errors = await rec.finish('canvas-check');

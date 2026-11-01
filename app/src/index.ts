@@ -15,6 +15,7 @@ import { provideNoteSession } from './notes/note-services.js';
 import { NoteSession } from './notes/note-session.js';
 import { IndexedDbNoteStore, SimulatedFailureStore } from './notes/note-store.js';
 import { CompactDockSystem } from './systems/compact-dock-system.js';
+import { CanvasGestureSystem } from './systems/canvas-gesture-system.js';
 import { DesktopBackdropSystem } from './systems/desktop-backdrop-system.js';
 import { FollowModeSystem } from './systems/follow-mode-system.js';
 import { InkSystem } from './systems/ink-system.js';
@@ -58,6 +59,8 @@ World.create(
     .registerSystem(TabletEdgeSystem)
     // After the pen (its taps and nib), before the ink (which pauses while the wheel is open).
     .registerSystem(ToolWheelSystem)
+    // Before the ink: a pinch on the page that holds the canvas is not a touch.
+    .registerSystem(CanvasGestureSystem)
     .registerSystem(InkSystem)
     // After the ink: in Type mode the page's touches are the caret's.
     .registerSystem(TypingSystem)
