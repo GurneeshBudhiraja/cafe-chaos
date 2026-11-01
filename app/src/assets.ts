@@ -120,6 +120,11 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'Note Bar',
   },
+  'type-toolbar': {
+    url: publicAssetUrl('ui/type-toolbar.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Type Toolbar',
+  },
   'tools-panel': {
     url: publicAssetUrl('ui/tools-panel.uikitml'),
     type: AssetType.UIKitML,

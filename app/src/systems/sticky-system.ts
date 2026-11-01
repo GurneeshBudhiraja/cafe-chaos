@@ -27,6 +27,7 @@
  * The board (sticky-board.ts) keeps and saves them; this system shows them.
  */
 
+import { getTyping } from '../ui/typing-state.js';
 import {
   createSystem,
   Matrix4,
@@ -183,13 +184,13 @@ export class StickySystem extends createSystem({
       const stack = this.pad.getObjectByName(`StickyPad-${kind}`);
       // A ray tap on a stack (pointer events bubble up from its meshes).
       const target = stack as unknown as { addEventListener(type: string, listener: () => void): void };
-      target?.addEventListener('click', () => this.peelOff(kind));
+      target?.addEventListener('click', () => this.padShown() && this.peelOff(kind));
     }
 
     this.cleanupFuncs.push(
       // A pinch on a stack or a sticky note picks it up: not an air gesture (the tool wheel's).
       getPinchTargets(this.world).register(
-        (point) => (this.tablet.visible && this.stackNear(point) !== null) || this.stickyNear(point) !== null,
+        (point) => (this.padShown() && this.stackNear(point) !== null) || this.stickyNear(point) !== null,
       ),
       this.board.subscribe((event) => {
         if (event.kind === 'added') this.show(event.sticky);
@@ -218,7 +219,7 @@ export class StickySystem extends createSystem({
       this.wasClosed[hand] = closed;
       // The hand holding the pen is writing, not picking things up.
       if (!justPinched || this.pen.holder === hand) continue;
-      const kind = this.tablet.visible ? this.stackNear(reading.point) : null;
+      const kind = this.padShown() ? this.stackNear(reading.point) : null;
       if (kind) {
         this.peelOff(kind);
         return;
@@ -280,6 +281,11 @@ export class StickySystem extends createSystem({
   }
 
   /** A new sticky note of `kind` peels off its stack and floats up, facing you. */
+  /** The pad is out (with the tablet), not put away while typing. */
+  private padShown(): boolean {
+    return this.tablet.visible && !getTyping(this.world).typing;
+  }
+
   private peelOff(kind: StickyKind): void {
     playUiSound('press');
     const sticky = this.board.create(kind);

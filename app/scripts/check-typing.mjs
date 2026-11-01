@@ -111,7 +111,44 @@ let state = await typingState();
 let text = await typed();
 expect(state.mode === 'type', 'the Type toggle switches to typing', state);
 expect(text.length === 1 && text[0].y > 0.12 && text[0].y < 0.3, 'typing starts just below the handwriting', text);
-await shot('2-type-mode-caret');
+// --- Staging: the page floats ahead, larger; the tablet's body goes; the keyboard is on the desk.
+await pause(900);
+const staged = () =>
+  page.evaluate(() => {
+    const scene = window.__metaNotes.world.scene;
+    const tablet = window.__metaNotes.world.getSceneObject('tablet');
+    const V = tablet.position.constructor;
+    const face = new V(0, 0, 1).transformDirection(tablet.matrixWorld);
+    const keyboard = scene.getObjectByName('DeskKeyboard');
+    // Any mesh shown that is not the page (or on it) is the tablet's body.
+    let bodyShown = false;
+    tablet.traverse((o) => {
+      if (o.isMesh && o.visible && o.parent && o.parent.name !== 'WritingSurface' && o.name !== 'WritingSurface') {
+        let p = o;
+        let underPage = false;
+        while (p) { if (p.name === 'WritingSurface') underPage = true; p = p.parent; }
+        if (!underPage) bodyShown = true;
+      }
+    });
+    return {
+      scale: +tablet.scale.x.toFixed(2),
+      faceUp: +face.y.toFixed(2),
+      y: +tablet.position.y.toFixed(2),
+      bodyShown,
+      keyboard: keyboard ? { shown: keyboard.visible, y: +keyboard.position.y.toFixed(3) } : null,
+    };
+  });
+let stage = await staged();
+expect(stage.scale > 1.2 && stage.faceUp < 0.5 && stage.y > 1.0, 'Type mode: the page floats ahead of the eyes, larger, upright', stage);
+expect(!stage.bodyShown, "the tablet's body (bezel, pen, pad) is put away", stage);
+expect(stage.keyboard?.shown && Math.abs(stage.keyboard.y - 0.79) < 0.03, 'the keyboard lies on the desk where the tablet was', stage);
+const pageCentre = () => page.evaluate(() => window.__metaNotes.demo.pagePoint(0.5, 0.5));
+await rec.moveHead(SEAT);
+await rec.lookAt(await pageCentre(), 500);
+await shot('2-type-mode-floating');
+await rec.lookAt({ ...(await worldOf('DeskKeyboard')), y: 0.95 }, 500);
+await shot('2b-keyboard-on-desk');
+await rec.lookAt(await pageCentre(), 500);
 
 // --- A study note, with Markdown shortcuts.
 await keys('# Cell cycle\n');
@@ -125,7 +162,6 @@ const blocks = text[0].blocks;
 expect(blocks.map((b) => b.kind).join() === 'title,bullet,bullet,numbered,numbered,checklist',
   'Markdown makes a heading, bullets, numbers and a checklist', blocks.map((b) => b.kind));
 expect(blocks[1].bold.join() === 'Interphase', '**bold** is bold', blocks[1]);
-await rec.lookAt({ ...tablet, y: tablet.y - 0.05 }, 400);
 await shot('3-typed-study-note');
 
 // --- Undo the last word and redo it.
@@ -152,9 +188,29 @@ text = await typed();
 expect(text.length === 2 && Math.abs(text[1].x - 0.6) < 0.02 && text[1].blocks[0].text === 'Quiz on Friday', 'a tap on the page starts a text box there', text);
 await shot('4-second-text-box');
 
+// --- Resize from a corner; move by the grab bar.
+const right = await worldOf('TypeResizeRight');
+const centre = await pageCentre();
+const outward = { x: right.x + (right.x - centre.x) * 0.25, y: right.y + (right.y - centre.y) * 0.25, z: right.z + (right.z - centre.z) * 0.25 };
+await rec.rayDrag(right, outward, 900);
+stage = await staged();
+expect(stage.scale > 1.4, 'pulling a corner out makes the page larger', stage);
+const before = await pageCentre();
+const grab = await page.evaluate(() => window.__metaNotes.demo.objectCenter('type-toolbar-grab'));
+await rec.rayDrag(grab, { x: grab.x, y: grab.y + 0.08, z: grab.z + 0.12 }, 900);
+const after = await pageCentre();
+expect(Math.hypot(after.x - before.x, after.y - before.y, after.z - before.z) > 0.05, 'dragging the grab bar moves the page', { before, after });
+await rec.lookAt(after, 500);
+await shot('4b-resized-moved');
+
 // --- Back to Write: the caret goes, the text stays.
 await rec.tap('note-bar-mode-write');
+await pause(900);
 state = await typingState();
+stage = await staged();
+expect(stage.scale === 1 && stage.faceUp > 0.9 && stage.bodyShown && !stage.keyboard.shown, 'Write mode: the page is back on the tablet, the keyboard put away', stage);
+await rec.moveHead(LEANING_IN);
+await rec.lookAt({ ...tablet, y: tablet.y - 0.1 }, 400);
 text = await typed();
 expect(state.mode === 'write' && state.frame === null && text.length === 2, 'Write mode: no caret; the text stays on the page', { state, n: text.length });
 await shot('5-back-to-write');

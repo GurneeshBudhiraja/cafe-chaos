@@ -85,6 +85,7 @@ export class Tweens {
 
 export const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3;
 export const easeInCubic = (t: number): number => t * t * t;
+export const easeInOutCubic = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 /** Overshoots a little past 1 before settling: the "blip". */
 export const easeOutBack = (t: number): number => {
   const c = 1.9;

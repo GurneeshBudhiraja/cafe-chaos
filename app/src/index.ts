@@ -29,6 +29,7 @@ import { ToastSystem } from './systems/toast-system.js';
 import { ToolWheelSystem } from './systems/tool-wheel-system.js';
 import { TweenSystem } from './systems/tween-system.js';
 import { TypingSystem } from './systems/typing-system.js';
+import { TypeModeSystem } from './systems/type-mode-system.js';
 import { XrScrollFixSystem } from './systems/xr-scroll-fix-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
 
@@ -63,6 +64,8 @@ World.create(
     .registerSystem(HomeWindowSystem)
     .registerSystem(CompactDockSystem)
     .registerSystem(NoteViewSystem)
+    // After the note view: Type mode moves the page and bar it placed.
+    .registerSystem(TypeModeSystem)
     // After both panels, so followers re-anchor once they have placed themselves.
     .registerSystem(FollowModeSystem)
     .registerSystem(ToastSystem)

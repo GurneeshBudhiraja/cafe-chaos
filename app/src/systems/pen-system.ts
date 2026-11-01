@@ -47,6 +47,7 @@ import {
 import { getNoteView } from '../ui/note-view.js';
 import { OneEuroVector3, type OneEuroSettings } from '../ui/one-euro.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
+import { getTyping, type TypingState } from '../ui/typing-state.js';
 import { devLog } from '../util/dev-log.js';
 import { easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 
@@ -70,6 +71,7 @@ const X_AXIS = new Vector3(1, 0, 0);
 
 export class PenSystem extends createSystem({}) {
   private pen!: PenState;
+  private typing!: TypingState;
   private tweens!: Tweens;
   private tablet!: Object3D;
   private surface!: Mesh;
@@ -117,6 +119,7 @@ export class PenSystem extends createSystem({}) {
       return;
     }
     this.pen = getPen(this.world);
+    this.typing = getTyping(this.world);
     this.tweens = getTweens(this.world);
     this.tablet = tabletEntity.object3D;
     this.surface = surface;
@@ -143,6 +146,10 @@ export class PenSystem extends createSystem({}) {
       getNoteView(this.world).subscribe((open) => {
         if (!open && this.holder) this.putDown(false);
       }),
+      // Typing puts the pen down (it goes away with the tablet until Write mode).
+      this.typing.subscribe((mode) => {
+        if (mode === 'type' && this.holder) this.putDown(false);
+      }),
       () => this.tweens.cancel('pen-return'),
     );
   }
@@ -150,7 +157,7 @@ export class PenSystem extends createSystem({}) {
   update(delta: number): void {
     if (!this.stylus) return;
     this.clockMs += delta * 1000 * this.tweens.timeScale;
-    if (!this.tablet.visible) return;
+    if (!this.tablet.visible || this.typing.typing) return;
     if (!this.readHands()) return;
 
     if (this.holder) {

@@ -37,6 +37,7 @@ import {
 import { createPinchReading, HANDS, readPinch, type HandFrame } from '../input/hand-pinch.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
 import { getTabletEdge, type TabletEdgeState } from '../ui/tablet-edge-state.js';
+import { getTyping } from '../ui/typing-state.js';
 
 const TABLET_NODE = 'tablet';
 /** Asset ID of the Blender model, and the name of its mesh. */
@@ -196,7 +197,7 @@ export class TabletEdgeSystem extends createSystem({}) {
   update(delta: number): void {
     const { tablet, ring, material } = this;
     if (!tablet || !ring || !material) return;
-    if (!tablet.visible) {
+    if (!tablet.visible || getTyping(this.world).typing) {
       this.near = 0;
       this.grab = 0;
       ring.visible = false;
