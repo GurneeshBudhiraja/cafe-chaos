@@ -65,22 +65,3 @@ export const SETTINGS_TOAST: Toast = {
   kind: 'info',
   title: 'Settings are coming soon',
 };
-
-/** After a new note is started (the home window and the dock). */
-export function newNoteToast(paper: string): Toast {
-  return {
-    kind: 'done',
-    title: paper === 'blank' ? 'New blank page' : `New ${paper} page`,
-    body: 'Saved to Recent',
-  };
-}
-
-/** After a note is opened, until the writing view exists. */
-export function openedNoteToast(title: string): Toast {
-  return {
-    kind: 'info',
-    // Plain text only: the UI font has no curly quotes (they render as boxes).
-    title: `Opened ${title}`,
-    body: 'Writing comes next',
-  };
-}

@@ -8,20 +8,25 @@
  * the lenses (a top-right corner is easy to miss in a headset). Quest's own
  * system messages appear in this region, so the eye already looks there.
  * It turns with the head but does not tilt with it, so looking down at a
- * panel never brings a toast onto it. It drifts lazily after the head, so
- * a turn brings it along without it swimming with every small movement. It slides down into place while fading
- * in, holds, then fades away (sticky toasts stay until dismissed).
+ * panel never brings a toast onto it. When the dock is in front, the toast
+ * rises as needed to keep a clear gap above it, so the two never touch.
+ * It drifts lazily after the head, so a turn brings it along without it
+ * swimming with every small movement. It slides down into place while
+ * fading in, holds, then fades away (sticky toasts stay until dismissed).
  */
 
 import { createSystem, Euler, Quaternion, Vector3, type Object3D, type UIKit, type UIKitMLAsset } from '@iwsdk/core';
 import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
 import {
   addStateColors,
+  elementWorldPosition,
   PanelBinding,
+  panelSize,
   setText,
   setVisible,
   type PanelElement,
   type StateColors,
+  UIKIT_PIXEL_M,
 } from '../ui/panel-helpers.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import { THEME } from '../ui/theme.js';
@@ -35,6 +40,12 @@ const RADIUS_PX = 24;
 /** Metres out, and degrees above eye level (the horizon, not the gaze). */
 const DISTANCE_M = 1.0;
 const ABOVE_EYE_LEVEL_DEG = 10;
+/** The dock's scene node, and the clear gap kept above its buttons (degrees). */
+const DOCK_NODE = 'compact-dock';
+const DOCK_GAP_DEG = 3;
+/** Only a dock within this many degrees of straight ahead pushes the toast up. */
+const DOCK_IN_FRONT_DEG = 45;
+const DEG = Math.PI / 180;
 /** Slides down this far (metres) while fading in. */
 const DROP_M = 0.03;
 /** How quickly it catches up with the head (per second, on the UI clock). */
@@ -77,6 +88,11 @@ export class ToastSystem extends createSystem({}) {
   private readonly euler = new Euler(0, 0, 0, 'YXZ');
   /** The toast's orientation: the head's yaw, tipped to face the eyes. */
   private readonly facing = new Quaternion();
+  /** The dock's root and button row, to keep clear of; null without a dock. */
+  private dockRoot: PanelElement | null = null;
+  private dockRow: PanelElement | null = null;
+  private dockPanel: Object3D | null = null;
+  private readonly dockTop = new Vector3();
 
   init(): void {
     const panel = this.world.getSceneObject<UIKitMLAsset>(TOAST_NODE);
@@ -110,6 +126,13 @@ export class ToastSystem extends createSystem({}) {
     });
     addStateColors(this.action, ACTION_STATES, this.cleanupFuncs);
     addPressMotion(this.action, this.tweens, this.cleanupFuncs);
+
+    const dock = this.world.getSceneObject<UIKitMLAsset>(DOCK_NODE);
+    if (dock) {
+      this.dockPanel = dock;
+      this.dockRoot = dock.getElementById('dock-root') ?? null;
+      this.dockRow = dock.getElementById('dock-row') ?? null;
+    }
 
     setVisible(this.root, false);
     this.cleanupFuncs.push(
@@ -192,7 +215,7 @@ export class ToastSystem extends createSystem({}) {
     head.getWorldQuaternion(this.headQuaternion);
     // Yaw only: straight ahead of where the head faces, level with the eyes.
     const yaw = this.euler.setFromQuaternion(this.headQuaternion, 'YXZ').y;
-    const pitch = (ABOVE_EYE_LEVEL_DEG * Math.PI) / 180;
+    const pitch = Math.max(ABOVE_EYE_LEVEL_DEG * DEG, this.pitchClearOfDock(yaw));
     this.facing.setFromEuler(this.euler.set(pitch, yaw, 0, 'YXZ'));
     this.target
       .copy(FORWARD)
@@ -210,5 +233,29 @@ export class ToastSystem extends createSystem({}) {
     const k = 1 - Math.exp(-delta * rate);
     this.panel.position.lerp(this.target, k);
     this.panel.quaternion.slerp(this.facing, k);
+  }
+
+  /**
+   * The lowest pitch (radians above the horizon) at which the toast's bottom
+   * edge clears the dock's buttons by DOCK_GAP_DEG, or -Infinity when the
+   * dock is hidden or not in front.
+   */
+  private pitchClearOfDock(yaw: number): number {
+    const row = this.dockRow;
+    const dock = this.dockPanel;
+    if (!row || !dock || !this.dockRoot?.isVisible.peek()) return -Infinity;
+    // The top of the button row, in world space.
+    elementWorldPosition(row, this.dockTop);
+    const rowHeightPx = panelSize(row).peek()?.[1] ?? 0;
+    this.dockTop.y += (rowHeightPx / 2) * UIKIT_PIXEL_M * dock.scale.y;
+    const dx = this.dockTop.x - this.headPosition.x;
+    const dz = this.dockTop.z - this.headPosition.z;
+    // Yaw as Three measures it: 0 faces -Z, positive turns left.
+    const off = Math.atan2(-dx, -dz) - yaw;
+    if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > DOCK_IN_FRONT_DEG * DEG) return -Infinity;
+    const dockTop = Math.atan2(this.dockTop.y - this.headPosition.y, Math.hypot(dx, dz));
+    const toastHeightPx = panelSize(this.root).peek()?.[1] ?? 0;
+    const halfToast = Math.atan((toastHeightPx / 2) * UIKIT_PIXEL_M * this.baseScale / DISTANCE_M);
+    return dockTop + DOCK_GAP_DEG * DEG + halfToast;
   }
 }

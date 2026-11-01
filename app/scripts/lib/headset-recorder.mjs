@@ -74,6 +74,17 @@ export async function startHeadsetRecording({ size = SIZE, fovDeg, captions = tr
     /** Aim the hand ray at a named UI element without pinching (hover). */
     point: (name) => page.evaluate((n) => window.__rec.point(n), name),
     rayDrag: (from, to, ms) => page.evaluate(([f, t, d]) => window.__rec.rayDrag(f, t, d), [from, to, ms * speedUp]),
+    /** Reach for the pen beside the tablet and pinch it up (a held writing grip). */
+    pickUpPen: (ms) => page.evaluate((d) => window.__rec.pickUpPen(d), ms * speedUp),
+    /**
+     * Write strokes (page [u, v] points) with the held pen's nib, the way a
+     * hand writes: the nib moves at `speed` (metres a second, on screen)
+     * along each stroke, hops a centimetre between strokes, and the
+     * hand never jumps, however slowly the page renders.
+     */
+    penWrite: (strokes, speed = 0.09) => page.evaluate(([s, v]) => window.__rec.penWrite(s, v), [strokes, speed / speedUp]),
+    /** Carry the pen back to its place beside the tablet and let go of it there. */
+    putDownPen: (ms = 900) => page.evaluate((d) => window.__rec.putDownPen(d), ms * speedUp),
     writeStroke,
     /** Handwrite `text` on the tablet (see handwriting.mjs for options). */
     async writeLine(text, options) {
@@ -273,6 +284,126 @@ function installHelpers(page) {
         await nextFrame();
         await call('set_select_value', { device: 'hand-right', value: 0 });
         await nextFrame();
+      },
+      /** World position of the right hand's pinch (thumb and index tips' midpoint). */
+      pinchPoint() {
+        return new Promise((resolve) => {
+          const session = world.renderer.xr.getSession();
+          session.requestAnimationFrame((t, xrFrame) => {
+            const space = world.renderer.xr.getReferenceSpace();
+            const hand = [...session.inputSources].find((s) => s.handedness === 'right' && s.hand)?.hand;
+            const at = (name) => xrFrame.getJointPose(hand.get(name), space).transform.position;
+            const a = at('thumb-tip');
+            const b = at('index-finger-tip');
+            resolve(new V((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2).applyMatrix4(world.player.matrixWorld));
+          });
+        });
+      },
+      handPosition: () => call('get_transform', { device: 'hand-right' }).then((t) => new V(t.position.x, t.position.y, t.position.z)),
+      /** Move the right hand to `to` over `ms`, keeping its orientation. */
+      async moveHandTo(to, ms, orientation) {
+        const from = await this.handPosition();
+        const t0 = performance.now();
+        for (;;) {
+          const t = Math.min(1, (performance.now() - t0) / ms);
+          const e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+          const p = from.clone().lerp(to, e);
+          await call('set_transform', { device: 'hand-right', position: { x: p.x, y: p.y, z: p.z }, orientation });
+          if (t >= 1) return;
+          await nextFrame();
+        }
+      },
+      async pickUpPen(ms) {
+        const pen = world.scene.getObjectByName('Stylus').getWorldPosition(new V());
+        // A right-handed writing grip: the hand comes from above and to the
+        // right, so the pen leans left across the view, as one is held.
+        const forward = world.camera.getWorldDirection(new V()).setY(0).normalize();
+        const right = forward.clone().cross(new V(0, 1, 0));
+        const hover = pen.clone().addScaledVector(right, 0.09).add(new V(0, 0.13, 0)).addScaledVector(forward, -0.03);
+        await this.moveHandTo(hover, ms * 0.5);
+        await call('look_at', { device: 'hand-right', target: { x: pen.x, y: pen.y, z: pen.z } });
+        this.grip = (await call('get_transform', { device: 'hand-right' })).orientation;
+        // Where the pinch closes, relative to the hand, in this grip.
+        // Each pinch change is held for a few rendered frames, so the app
+        // sees the hand open before it closes again (slow recordings).
+        const settle = async (ms) => {
+          await sleep(ms);
+          for (let i = 0; i < 3; i++) await nextFrame();
+        };
+        await call('set_select_value', { device: 'hand-right', value: 1 });
+        await settle(400);
+        const offset = (await this.pinchPoint()).sub(await this.handPosition());
+        await call('set_select_value', { device: 'hand-right', value: 0 });
+        await settle(300);
+        await this.moveHandTo(pen.clone().sub(offset), ms * 0.5, this.grip);
+        await settle(150);
+        await call('set_select_value', { device: 'hand-right', value: 1 });
+        await settle(400);
+        if (!world.globals['metaNotes.pen']?.held) {
+          const p = await this.pinchPoint();
+          const at = world.scene.getObjectByName('Stylus').getWorldPosition(new V());
+          throw new Error(`pickUpPen: the pinch closed ${p.distanceTo(at).toFixed(3)} m from the pen, which stayed put.`);
+        }
+      },
+      async penWrite(strokes, speed) {
+        const held = world.globals['metaNotes.pen'];
+        if (!held?.held) throw new Error('penWrite: the pen is not in hand.');
+        const s = surface();
+        const up = new V(0, 0, 1).transformDirection(s.matrixWorld);
+        // The nib's offset from the hand (fixed while the grip holds).
+        const nibOffset = held.nib.clone().sub(await this.handPosition());
+        const nibAt = (u, v, lift) => {
+          const p = toWorld(u, v);
+          return new V(p.x, p.y, p.z).addScaledVector(up, lift);
+        };
+        // The nib's whole path: from where it is, hop to each stroke, trace
+        // it pressed a hair into the page (it rests on it), lift, and so on.
+        // Lifted clear of the page between strokes (the app lifts the pen off above 6 mm).
+        const HOP_M = 0.01;
+        // First up and clear of the page: picked up from beside the tablet,
+        // the nib starts a few centimetres below the page's surface.
+        const path = [held.nib.clone(), held.nib.clone().addScaledVector(up, 0.06)];
+        for (const points of strokes) {
+          path.push(nibAt(points[0][0], points[0][1], HOP_M));
+          for (const [u, v] of points) path.push(nibAt(u, v, -0.001));
+          const last = points[points.length - 1];
+          path.push(nibAt(last[0], last[1], HOP_M));
+        }
+        const along = [0];
+        for (let i = 1; i < path.length; i++) along.push(along[i - 1] + path[i].distanceTo(path[i - 1]));
+        const total = along[along.length - 1];
+        const t0 = performance.now();
+        const hand = new V();
+        let i = 1;
+        for (;;) {
+          const travelled = Math.min(total, ((performance.now() - t0) / 1000) * speed);
+          while (i < path.length - 1 && along[i] < travelled) i++;
+          const span = along[i] - along[i - 1];
+          const t = span > 0 ? (travelled - along[i - 1]) / span : 1;
+          hand.lerpVectors(path[i - 1], path[i], t).sub(nibOffset);
+          await call('set_transform', { device: 'hand-right', position: { x: hand.x, y: hand.y, z: hand.z }, orientation: this.grip });
+          if (travelled >= total) return;
+          await nextFrame();
+        }
+      },
+      async putDownPen(ms) {
+        // Back to its place beside the tablet (PenSystem's resting pose), then let go.
+        const pens = world.getSystems().find((system) => system.constructor.name === 'PenSystem');
+        const tablet = world.scene.getObjectByName('Tablet');
+        const stylus = world.scene.getObjectByName('Stylus');
+        if (pens && tablet && stylus) {
+          const rest = tablet.localToWorld(pens.restPosition.clone());
+          const pinchToCentre = stylus.getWorldPosition(new V()).sub(await this.pinchPoint());
+          const pinchOffset = (await this.pinchPoint()).sub(await this.handPosition());
+          // Lift off the page first, so the nib never drags across it, then
+          // let go just above its place: it settles there, lying flat.
+          await this.moveHandTo((await this.handPosition()).add(new V(0, 0.05, 0)), ms * 0.3, this.grip);
+          const above = rest.add(new V(0, 0.02, 0));
+          await this.moveHandTo(above.sub(pinchToCentre).sub(pinchOffset), ms * 0.7, this.grip);
+        }
+        await call('set_select_value', { device: 'hand-right', value: 0 });
+        await sleep(300);
+        for (let i = 0; i < 3; i++) await nextFrame();
       },
       /** Pinch the tablet handle and drag it by moving the hand. */
       async dragHandle(dx, dy, dz, ms) {

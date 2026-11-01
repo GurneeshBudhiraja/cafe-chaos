@@ -21,7 +21,7 @@ import {
   type PaperStyle,
   type Stroke,
 } from './note-model.js';
-import type { NoteStore, NoteSummary } from './note-store.js';
+import { summarize, type NoteStore, type NoteSummary } from './note-store.js';
 import { devLog } from '../util/dev-log.js';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'failed';
@@ -267,8 +267,7 @@ export class NoteSession implements InkDocument {
   }
 
   private upsertSummary(note: Note): void {
-    const summary = { id: note.id, title: note.title, updatedAt: note.updatedAt };
-    this.summaries = [summary, ...this.summaries.filter((s) => s.id !== note.id)];
+    this.summaries = [summarize(note), ...this.summaries.filter((s) => s.id !== note.id)];
     this.emit('library');
   }
 

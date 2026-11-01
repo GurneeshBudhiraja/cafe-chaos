@@ -18,6 +18,11 @@ export interface NoteSummary {
   updatedAt: number;
 }
 
+/** The list entry for a note. */
+export function summarize(note: Note): NoteSummary {
+  return { id: note.id, title: note.title, updatedAt: note.updatedAt };
+}
+
 export interface NoteStore {
   /** All notes, most recently edited first. */
   list(): Promise<NoteSummary[]>;
@@ -41,7 +46,7 @@ export class IndexedDbNoteStore implements NoteStore {
     for (const record of records) {
       const note = parseNote(record);
       if (note) {
-        summaries.push({ id: note.id, title: note.title, updatedAt: note.updatedAt });
+        summaries.push(summarize(note));
       } else {
         console.warn('[NoteStore] Skipping an unreadable note record.');
       }

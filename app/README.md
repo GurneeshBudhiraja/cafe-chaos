@@ -27,15 +27,30 @@ note write fail (for checking error handling by hand).
 
 - **Home:** the dock, a row of floating glass buttons (Settings, Templates,
   Recent, then New note at the right end). It is the only screen at launch:
-  entering XR places it about 85 cm out and 20 degrees below the gaze, and a
-  headset recenter brings it back there. Stick mode (it follows your view) is
+  entering XR places it about 85 cm out, straight ahead at eye level, and a
+  headset recenter brings it back there. Open panels shrink if needed to fit
+  50 degrees of the view's height, so nothing needs a look up or down. Stick mode (it follows your view) is
   on by default.
 - **Panels:** Settings, Templates and Recent each open a glass panel. While
   one is open the dock's buttons fade away and the panel takes their place,
   where you are already looking; its close button (or picking an item)
   brings the buttons back.
-- **Recent:** a grid of up to eight notes, each with its ink, title and when
-  it was edited; the header counts your notes.
+- **Recent:** the latest six notes, each with its ink, title and when it
+  was edited. Its Recents / Show all toggle switches to a scrolling grid of
+  every note, filtered by when it was edited and sorted by date or title.
+- **Note page:** New note, a template, or a note picked from Recent opens
+  it on a tablet lying flat on the desk in front of you, like an iPad on a
+  table: the nearest table or desk that Quest knows from Space Setup,
+  within reach and below your eyes. With no desk it floats straight ahead,
+  a little below eye level and facing you. It shows the note's paper and
+  ink, with its title and a close button in a bar just beyond it. The dock fades away while it is open; closing it brings the
+  dock back.
+- **The pen:** it lies beside the tablet's right edge. Pinch next to it with
+  a tracked hand to pick it up: it sits in the pinch like a real pen, from
+  the web of the thumb to just past the fingertips, and ink flows while its
+  nib touches the page (the nib rests on the page, never through it). Open
+  the pinch and it goes back beside the tablet. Without the pen in hand, a
+  ray (pointer) can still draw on the page.
 - **Templates:** six papers (Blank, Lined, Grid, Dotted, Cornell, Checklist),
   each with a line on what it is for; picking one starts a note on it.
 - **Settings:** the stick mode switch (remembered on this device) and Google
@@ -49,9 +64,9 @@ note write fail (for checking error handling by hand).
 
 ## Not wired up yet
 
-- **Writing.** Opening a note shows a toast; the tablet (`src/scene-assets/`)
-  and `InkSystem` exist but no tablet is placed in the scene, so
-  `npm run record:writing` does not run.
+- **The pen with controllers.** Only tracked hands pick up the pen so far;
+  `npm run record:writing` has not been updated for the note page
+  (`npm run record:desk` films the pen on a classroom desk).
 - **Camera capture and XR status.** `camera-capture-system.ts` and
   `xr-status-system.ts` are kept but not registered in `src/index.ts`, so
   `smoke-camera.mjs` cannot pass until capture returns.
@@ -87,8 +102,8 @@ src/scene-assets/              procedural 3D assets: tablet, stylus, tool wheel,
                                paper grain); classroom backdrop for the desktop view
 src/notes/                     note model, IndexedDB store, editing session (autosave)
 src/ink/                       stroke sampling rules and stroke rendering
-src/systems/                   ECS systems: dock, toasts, stick mode (follow), tweens,
-                               home window (parked), ink, tablet handle, XR scroll fix
+src/systems/                   ECS systems: dock, note page, pen, toasts, stick mode (follow),
+                               tweens, home window (parked), ink, tablet handle, XR scroll fix
 src/ui/                        UI services and helpers: theme, liquid glass, toasts,
                                home mode, preferences, press motion, sounds, drag
 src/util/                      dev-only logging and test hooks

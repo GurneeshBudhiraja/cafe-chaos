@@ -158,3 +158,14 @@ export function elementWorldPosition(object: Object3D, out: Vector3): Vector3 {
   if (local && host) return out.set(0, 0, 0).applyMatrix4(local).applyMatrix4(host.matrixWorld);
   return object.getWorldPosition(out);
 }
+
+/** Metres per UIKit pixel in a panel's own space, before the panel's scale. */
+export const UIKIT_PIXEL_M = 0.01;
+
+/** A UIKit element's laid-out size signal (UIKit pixels), missing from its public type. */
+export function panelSize(element: PanelElement): {
+  peek(): [number, number] | undefined;
+  subscribe(listener: () => void): () => void;
+} {
+  return (element as unknown as { size: ReturnType<typeof panelSize> }).size;
+}

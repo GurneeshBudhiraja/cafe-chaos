@@ -18,6 +18,8 @@ import { CompactDockSystem } from './systems/compact-dock-system.js';
 import { DesktopBackdropSystem } from './systems/desktop-backdrop-system.js';
 import { FollowModeSystem } from './systems/follow-mode-system.js';
 import { InkSystem } from './systems/ink-system.js';
+import { NoteViewSystem } from './systems/note-view-system.js';
+import { PenSystem } from './systems/pen-system.js';
 import { HomeWindowSystem } from './systems/home-window-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
 import { ToastSystem } from './systems/toast-system.js';
@@ -36,14 +38,17 @@ World.create(
   projectOptions,
 ).then((world) => {
   provideNoteSession(world, session);
-  // The launch view is the home window only. The tools panel (camera trial,
-  // device status) is out of the scene for now, so its systems are not
-  // registered; the tablet systems stay and idle until a tablet is placed.
+  // The launch view is the dock only. The tools panel (camera trial, device
+  // status) is out of the scene for now, so its systems are not registered.
+  // The tablet waits hidden until a note is opened (NoteViewSystem).
   world
     .registerSystem(TabletHandleSystem)
+    // The pen moves before the ink system reads where its nib is.
+    .registerSystem(PenSystem)
     .registerSystem(InkSystem)
     .registerSystem(HomeWindowSystem)
     .registerSystem(CompactDockSystem)
+    .registerSystem(NoteViewSystem)
     // After both panels, so followers re-anchor once they have placed themselves.
     .registerSystem(FollowModeSystem)
     .registerSystem(ToastSystem)

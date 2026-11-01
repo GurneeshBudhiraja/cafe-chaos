@@ -63,6 +63,11 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'Toast',
   },
+  'note-bar': {
+    url: publicAssetUrl('ui/note-bar.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Note Bar',
+  },
   'tools-panel': {
     url: publicAssetUrl('ui/tools-panel.uikitml'),
     type: AssetType.UIKitML,

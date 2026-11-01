@@ -4,7 +4,7 @@
  *
  * Settings, Templates, Recent in one line, then New note at the right end,
  * with nothing between them but passthrough. Entering XR (or a headset
- * recenter) places it in the bottom half of the view, centred. A grab bar
+ * recenter) places it straight ahead at eye level, centred. A grab bar
  * under the row moves the dock (pinch and drag); on release it turns to
  * face the viewer.
  *
@@ -45,46 +45,63 @@ import {
   addStateColors,
   NEUTRAL_STATES,
   PanelBinding,
+  panelSize,
   PRIMARY_STATES,
   setText,
   setVisible,
+  UIKIT_PIXEL_M,
   type PanelElement,
 } from '../ui/panel-helpers.js';
+import { AllNotesGrid } from '../ui/all-notes-grid.js';
+import {
+  applyNoteFilters,
+  DEFAULT_FILTERS,
+  isFiltering,
+  type NoteFilters,
+  type NoteSort,
+  type WhenFilter,
+} from '../ui/note-filters.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import { THEME } from '../ui/theme.js';
 import { openNoteFromHome, startNote } from '../ui/note-actions.js';
+import { getNoteView, type NoteViewState } from '../ui/note-view.js';
 import { getToasts, type ToastService } from '../ui/toasts.js';
 import { easeInCubic, easeOutBack, easeOutCubic, getTweens, pulse, type Tweens } from '../ui/tweens.js';
 
 const DOCK_NODE = 'compact-dock';
 const WINDOW_NODE = 'home-window';
 /** Must match the number of `dock-recent-card-N` elements. */
-const RECENT_SLOTS = 8;
+const RECENT_SLOTS = 6;
 /** Cards per row of the Recent grid; must match the markup. */
-const RECENT_PER_ROW = 4;
+const RECENT_PER_ROW = 3;
 /** The first-launch hint's capsule radius (UIKit pixels); matches .hint. */
 const HINT_RADIUS_PX = 22;
 /** New note's first-launch pulse: two gentle beats after the dock appears. */
 const PULSE_MS = 1400;
 const PULSE_DELAY_MS = 900;
 /**
- * Launch placement: the button row about 85 cm out and 20 degrees below the
- * gaze, in the bottom half of the view, centred. The dock's origin is its
- * bottom edge, about 0.15 m below the row's centre (at the scene's scale).
+ * Launch placement: the button row about 85 cm out, straight ahead at eye
+ * level, so the eye lands on it without looking up or down. The dock's
+ * origin is its bottom edge, about 0.15 m below the row's centre (at the
+ * scene's scale).
  */
 const HOME_DISTANCE_M = 0.85;
-const HOME_BELOW_GAZE_DEG = 20;
 const ROW_ABOVE_ORIGIN_M = 0.15;
+/**
+ * An open panel shrinks, if needed, to fit this much of the view's height
+ * (degrees, centred on the row), so it reads without looking up or down.
+ */
+const PANEL_FIT_DEG = 50;
 /** Frames to wait after XR starts (or a recenter) for a settled head pose. */
 const SETTLE_FRAMES = 12;
-const TITLE_MAX_CHARS = 14;
+const TITLE_MAX_CHARS = 18;
 const PREVIEW_PX = 224;
 /** Half the round buttons' size: their corner radius in UIKit pixels. */
 const BUTTON_RADIUS_PX = 28;
 const GLASS_FROST_ALPHA = 0.8;
 /** Must match .popover border-radius in compact-dock.uikitml. */
-const POPOVER_RADIUS_PX = 28;
+const POPOVER_RADIUS_PX = 32;
 /**
  * Where the full window sits relative to the dock, in the dock's own frame
  * (metres): a little higher and further away, so the dock appears about
@@ -98,9 +115,11 @@ const SHOW_DELAY_MS = 160;
 const SHINE_MS = 900;
 
 type Popover = 'recent' | 'templates' | 'settings' | null;
+/** Recent's two views: the latest few, or every note in a scrolling grid. */
+type RecentView = 'recent' | 'all';
 
 const POPOVER_TITLES: Record<Exclude<Popover, null>, string> = {
-  recent: 'Recent notes',
+  recent: 'Notes',
   templates: 'Start a new note',
   settings: 'Settings',
 };
@@ -136,6 +155,7 @@ const SWITCH_MS = 220;
  * than a pop-up over the panel you are looking at).
  */
 const CONNECT_SOON_MS = 2200;
+const CLEAR = 'rgba(255, 250, 242, 0)';
 
 interface RecentCard {
   root: PanelElement;
@@ -149,16 +169,20 @@ export class CompactDockSystem extends createSystem({}) {
   private session!: NoteSession;
   private toasts!: ToastService;
   private homeMode!: HomeModeState;
+  /** While a note is open on the page in front of the viewer, the dock steps aside. */
+  private noteView!: NoteViewState;
   private tweens!: Tweens;
   private dock!: Object3D;
   private baseScale = 1;
   private glassSlabs: LiquidGlass[] = [];
+  /** Glass behind the open panel (faded with the panel). */
+  private popoverSlab!: LiquidGlass;
   /** Pop-up thumbnails and paper previews (faded with the dock). */
   private readonly images: PanelElement[] = [];
   /**
    * The same images by pop-up. Each is hidden with its own pop-up section:
    * a hidden section's images otherwise keep drawing at stale positions
-   * once a panel glides (white sheets across the view).
+   * once the panel moves (white sheets across the view).
    */
   private readonly recentImages: PanelElement[] = [];
   private readonly templateImages: PanelElement[] = [];
@@ -170,6 +194,15 @@ export class CompactDockSystem extends createSystem({}) {
   private popoverPanel!: PanelElement;
   private popoverTitle!: UIKit.Text;
   private popoverCount!: UIKit.Text;
+  private recentView: RecentView = 'recent';
+  private recentToggle!: PanelElement;
+  private readonly recentTabs = {} as Record<RecentView, { tab: PanelElement; label: UIKit.Text }>;
+  private allView!: PanelElement;
+  private allNoMatch!: PanelElement;
+  private allNotes!: AllNotesGrid;
+  private filters: NoteFilters = { ...DEFAULT_FILTERS };
+  /** Each filter option's chip, painted clay while it is chosen. */
+  private readonly filterChips: Array<{ chip: PanelElement; label: UIKit.Text; chosen: () => boolean }> = [];
   private popoverRecent!: PanelElement;
   private popoverTemplates!: PanelElement;
   private recentEmpty!: PanelElement;
@@ -206,6 +239,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.session = getNoteSession(this.world);
     this.toasts = getToasts(this.world);
     this.homeMode = getHomeMode(this.world);
+    this.noteView = getNoteView(this.world);
     const panel = this.world.getSceneObject<UIKitMLAsset>(DOCK_NODE);
     if (!panel) {
       console.warn('[CompactDockSystem] Compact dock missing from the scene.');
@@ -248,18 +282,25 @@ export class CompactDockSystem extends createSystem({}) {
     addPressMotion(newNote, this.tweens, this.cleanupFuncs);
 
     this.popoverPanel = ui.element('dock-popover');
+    // Re-centre an open panel when its size changes (switching Recent's views).
+    this.cleanupFuncs.push(
+      panelSize(this.popoverPanel).subscribe(() => {
+        if (this.focus > 0) this.paintFocus();
+      }),
+    );
     this.row = ui.element('dock-row');
     this.grabArea = ui.element('dock-grab');
     const closeButton = ui.onClick('dock-popover-close', () => this.closePanel());
     addStateColors(closeButton, CLOSE_STATES, this.cleanupFuncs);
     addPressMotion(closeButton, this.tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.92 });
-    glass(this.popoverPanel, POPOVER_RADIUS_PX);
+    this.popoverSlab = glass(this.popoverPanel, POPOVER_RADIUS_PX);
     this.popoverTitle = ui.text('dock-popover-title');
     this.popoverCount = ui.text('dock-popover-count');
     this.popoverRecent = ui.element('dock-popover-recent');
     this.popoverTemplates = ui.element('dock-popover-templates');
     this.recentEmpty = ui.element('dock-recent-empty');
     this.recentRows.push(ui.element('dock-recent-row-0'), ui.element('dock-recent-row-1'));
+    this.bindRecentToggle(ui);
     this.popoverSettings = ui.element('dock-popover-settings');
     this.bindSettings(ui);
     this.hint = ui.element('dock-hint');
@@ -274,7 +315,7 @@ export class CompactDockSystem extends createSystem({}) {
       const card: RecentCard = {
         root: ui.onClick(`dock-recent-card-${i}`, () => {
           if (!card.noteId) return;
-          void openNoteFromHome(this.session, this.toasts, card.noteId);
+          void openNoteFromHome(this.session, this.noteView, card.noteId);
           this.closePanel();
         }),
         title: ui.text(`dock-recent-title-${i}`),
@@ -310,6 +351,13 @@ export class CompactDockSystem extends createSystem({}) {
     this.cleanupFuncs.push(
       this.session.subscribe(() => this.renderRecent()),
       this.homeMode.subscribe((mode) => this.applyMode(mode)),
+      // A note open in front of the viewer takes the dock's place; closing
+      // it brings the dock back.
+      this.noteView.subscribe((open) => {
+        if (!this.shown) return;
+        if (open) this.hideDock();
+        else this.showDock();
+      }),
     );
     this.cleanupFuncs.push(this.homeMode.subscribeRecenter(() => (this.placeInFrames = SETTLE_FRAMES)));
     this.cleanupFuncs.push(() => this.recenterSpace?.removeEventListener('reset', this.onRecenter));
@@ -332,7 +380,7 @@ export class CompactDockSystem extends createSystem({}) {
     if (this.placeInFrames > 0 && --this.placeInFrames === 0) {
       this.placeInFrontOfHead();
       // Appear (again) in the new place, with the fade and shine.
-      if (this.homeMode.mode === 'compact') this.showDock();
+      if (this.homeMode.mode === 'compact' && !this.noteView.isOpen) this.showDock();
     }
   }
 
@@ -350,10 +398,9 @@ export class CompactDockSystem extends createSystem({}) {
     head.getWorldPosition(this.headPosition);
     head.getWorldQuaternion(this.headQuaternion);
     const yaw = this.euler.setFromQuaternion(this.headQuaternion, 'YXZ').y;
-    const drop = HOME_DISTANCE_M * Math.tan((HOME_BELOW_GAZE_DEG * Math.PI) / 180);
     this.dock.position.set(
       this.headPosition.x - Math.sin(yaw) * HOME_DISTANCE_M,
-      this.headPosition.y - drop - ROW_ABOVE_ORIGIN_M,
+      this.headPosition.y - ROW_ABOVE_ORIGIN_M,
       this.headPosition.z - Math.cos(yaw) * HOME_DISTANCE_M,
     );
     faceViewer(this.dock, this.world);
@@ -363,7 +410,7 @@ export class CompactDockSystem extends createSystem({}) {
   // -------------------------------------------------------------- commands
 
   private newNote(paper: PaperStyle): void {
-    startNote(this.session, this.toasts, paper);
+    void startNote(this.session, this.noteView, paper);
     this.closePanel();
   }
 
@@ -433,15 +480,20 @@ export class CompactDockSystem extends createSystem({}) {
   }
 
   /**
-   * A panel takes the stage: the buttons fade away and the panel glides
-   * down into their place, centred where the eye already is.
+   * A panel takes the stage: the buttons fade away as the panel fades in
+   * over them, already in place, centred where the eye already is.
    */
   private openPanel(which: Exclude<Popover, null>): void {
     this.popover = which;
     // One thing at a time: an open panel replaces any toast.
     this.toasts.dismiss();
     // Edit times ("5 min ago") move on while the dock waits.
-    if (which === 'recent') this.renderRecent();
+    // Recent opens on the latest notes, the quick glance.
+    if (which === 'recent') {
+      this.recentView = 'recent';
+      this.filters = { ...DEFAULT_FILTERS };
+      this.renderRecent();
+    }
     this.renderPopover();
     this.animateFocus(true);
   }
@@ -480,7 +532,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.paintFocus();
   }
 
-  /** The buttons' fade and the panel's glide for the current focus. */
+  /** The buttons fade out as the panel fades in (and back), for the current focus. */
   private paintFocus(): void {
     const f = this.focus;
     const buttons = this.dockOpacity * (1 - f);
@@ -489,10 +541,35 @@ export class CompactDockSystem extends createSystem({}) {
       el.setProperties({ opacity: buttons, pointerEvents: hidden ? 'none' : 'auto' } as Record<string, unknown>);
     }
     for (const slab of this.rowSlabs) slab.setOpacity(buttons);
-    // Glide the panel down so its centre lands on the row's centre.
-    const height = (this.popoverPanel as unknown as { size: { peek(): [number, number] | undefined } }).size.peek()?.[1] ?? 0;
-    const glide = Math.max(0, height / 2 - ROW_CENTRE_PX) * f;
-    this.popoverPanel.setProperties({ transformTranslateY: glide } as Record<string, unknown>);
+    // The panel fades in place: it never moves or grows. UIKit images do
+    // not inherit opacity, so they fade with it directly.
+    const panel = this.dockOpacity * f;
+    const fade = { opacity: panel } as Record<string, unknown>;
+    for (const image of this.images) image.setProperties(fade);
+    this.allNotes.setOpacity(panel);
+    this.popoverSlab.setOpacity(panel);
+    // Its centre sits on the row's centre, shrunk if needed to fit the
+    // view's height (the centre stays put).
+    const height = panelSize(this.popoverPanel).peek()?.[1] ?? 0;
+    const lift = Math.max(0, height / 2 - ROW_CENTRE_PX);
+    const scale = this.fitScale(height);
+    this.popoverPanel.setProperties({
+      opacity: f,
+      // UIKit applies the translate in the panel's scaled space.
+      transformTranslateY: lift / scale,
+      transformScaleX: scale,
+      transformScaleY: scale,
+    } as Record<string, unknown>);
+  }
+
+  /** The scale (at most 1) that fits a panel this tall into PANEL_FIT_DEG at its distance. */
+  private fitScale(heightPx: number): number {
+    if (heightPx <= 0) return 1;
+    this.player.head.getWorldPosition(this.headPosition);
+    const distance = this.headPosition.distanceTo(this.dock.position);
+    const fitHeightM = 2 * distance * Math.tan((PANEL_FIT_DEG * Math.PI) / 360);
+    const heightM = heightPx * UIKIT_PIXEL_M * this.baseScale;
+    return Math.min(1, fitHeightM / heightM);
   }
 
   // ------------------------------------------------------------- rendering
@@ -503,7 +580,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.shown = compact;
     if (compact) {
       this.placeRelativeToWindow();
-      this.showDock();
+      if (!this.noteView.isOpen) this.showDock();
     } else {
       this.placeWindowAtDock();
       this.popover = null;
@@ -562,6 +639,7 @@ export class CompactDockSystem extends createSystem({}) {
     this.root.setProperties(fade);
     // UIKit images do not inherit opacity; fade them directly.
     for (const image of this.images) image.setProperties(fade);
+    this.allNotes.setOpacity(opacity);
     for (const slab of this.glassSlabs) slab.setOpacity(opacity);
     this.dock.scale.setScalar(this.baseScale * scale);
     if (this.focus > 0) this.paintFocus();
@@ -569,25 +647,16 @@ export class CompactDockSystem extends createSystem({}) {
 
   private renderPopover(): void {
     setVisible(this.popoverPanel, this.popover !== null);
-    // With no notes only the empty state shows (an empty grid adds its gap).
-    setVisible(this.popoverRecent, this.popover === 'recent' && this.session.summaries.length > 0);
     setVisible(this.popoverTemplates, this.popover === 'templates');
     setVisible(this.popoverSettings, this.popover === 'settings');
-    this.renderRecentImages();
     for (const image of this.templateImages) setVisible(image, this.popover === 'templates');
     setText(this.popoverTitle, POPOVER_TITLES[this.popover ?? 'recent']);
-    // Only Recent counts its items.
-    const count = this.session.summaries.length;
-    setVisible(this.popoverCount, this.popover === 'recent' && count > 0);
-    if (count > 0) setText(this.popoverCount, noteCountLabel(count));
+    this.renderRecentSections();
     this.renderHint();
   }
 
   private renderRecent(): void {
     const summaries = this.session.summaries;
-    setVisible(this.recentEmpty, summaries.length === 0);
-    setVisible(this.popoverRecent, this.popover === 'recent' && summaries.length > 0);
-    this.recentRows.forEach((row, r) => setVisible(row, summaries.length > r * RECENT_PER_ROW));
     this.renderHint();
     this.recentCards.forEach((card, i) => {
       const summary = summaries[i];
@@ -598,18 +667,85 @@ export class CompactDockSystem extends createSystem({}) {
       setText(card.meta, `Edited ${formatRelativeTime(summary.updatedAt)}`);
       void card.thumbnail.show(summary, (id) => this.session.getNote(id));
     });
-    this.renderRecentImages();
+    this.renderRecentSections();
   }
 
   /**
-   * Each thumbnail shows only with its own card: an image whose card is
-   * hidden (an empty slot) otherwise draws at a stale place once the panel
-   * glides.
+   * Which of Recent's parts show: the empty state, or the toggle and one of
+   * its two views. With no notes only the empty state shows (an empty grid
+   * adds its gap). Images follow their own card and view: an image whose
+   * card or section is hidden otherwise draws at a stale place once the
+   * panel moves.
    */
-  private renderRecentImages(): void {
-    this.recentCards.forEach((card, i) => {
-      setVisible(this.recentImages[i], this.popover === 'recent' && card.noteId !== null);
+  private renderRecentSections(): void {
+    const summaries = this.session.summaries;
+    const total = summaries.length;
+    const open = this.popover === 'recent';
+    const showLatest = open && total > 0 && this.recentView === 'recent';
+    const showAll = open && total > 0 && this.recentView === 'all';
+    setVisible(this.recentEmpty, total === 0);
+    setVisible(this.recentToggle, open && total > 0);
+    setVisible(this.popoverRecent, showLatest);
+    setVisible(this.allView, showAll);
+    this.recentRows.forEach((row, r) => setVisible(row, total > r * RECENT_PER_ROW));
+    this.recentCards.forEach((card, i) => setVisible(this.recentImages[i], showLatest && card.noteId !== null));
+    const matches = applyNoteFilters(summaries, this.filters);
+    this.allNotes.render(matches, showAll);
+    setVisible(this.allNoMatch, showAll && matches.length === 0);
+    // Only Recent counts its items.
+    setVisible(this.popoverCount, open && total > 0);
+    if (total > 0) setText(this.popoverCount, this.countLabel(total, matches.length));
+    for (const view of ['recent', 'all'] as const) {
+      paintChoice(this.recentTabs[view].tab, this.recentTabs[view].label, view === this.recentView);
+    }
+    for (const { chip, label, chosen } of this.filterChips) paintChoice(chip, label, chosen());
+  }
+
+  private countLabel(total: number, matching: number): string {
+    if (this.recentView === 'recent') return noteCountLabel(total);
+    return isFiltering(this.filters) ? `${matching} of ${total}` : notesLabel(total);
+  }
+
+  /** Recents / Show all: switch Recent between the latest notes and every note. */
+  private bindRecentToggle(ui: PanelBinding): void {
+    this.recentToggle = ui.element('recent-toggle');
+    this.allView = ui.element('dock-all-view');
+    this.allNoMatch = ui.element('all-no-match');
+    for (const view of ['recent', 'all'] as const) {
+      const tab = ui.onClick(`recent-tab-${view}`, () => {
+        this.recentView = view;
+        this.renderRecentSections();
+      });
+      addPressMotion(tab, this.tweens, this.cleanupFuncs, { hover: 1.05, pressed: 0.95 });
+      this.recentTabs[view] = { tab, label: ui.text(`recent-tab-${view}-label`) };
+    }
+    this.bindFilters(ui);
+    this.allNotes = new AllNotesGrid(ui.element('dock-popover-all'), {
+      perRow: RECENT_PER_ROW,
+      titleMaxChars: TITLE_MAX_CHARS,
+      thumbnailPx: PREVIEW_PX,
+      tweens: this.tweens,
+      cleanupFuncs: this.cleanupFuncs,
+      loadNote: (id) => this.session.getNote(id),
+      onOpen: (id) => {
+        void openNoteFromHome(this.session, this.noteView, id);
+        this.closePanel();
+      },
     });
+  }
+
+  /** Show all's filters: when a note was edited, and the order. */
+  private bindFilters(ui: PanelBinding): void {
+    const option = <K extends keyof NoteFilters>(key: K, value: NoteFilters[K], id: string) => {
+      const chip = ui.onClick(id, () => {
+        this.filters = { ...this.filters, [key]: value };
+        this.renderRecentSections();
+      });
+      addPressMotion(chip, this.tweens, this.cleanupFuncs, { hover: 1.05, pressed: 0.95 });
+      this.filterChips.push({ chip, label: ui.text(`${id}-label`), chosen: () => this.filters[key] === value });
+    };
+    for (const when of ['all', 'today', 'week', 'older'] as WhenFilter[]) option('when', when, `when-${when}`);
+    for (const sort of ['recent', 'title'] as NoteSort[]) option('sort', sort, `sort-${sort}`);
   }
 
   // ------------------------------------------------------------- placement
@@ -634,5 +770,16 @@ export class CompactDockSystem extends createSystem({}) {
 /** Recent's header count: "3 notes", or "8 of 12" once there are more than fit. */
 function noteCountLabel(total: number): string {
   if (total > RECENT_SLOTS) return `${RECENT_SLOTS} of ${total}`;
+  return notesLabel(total);
+}
+
+/** "1 note", "12 notes". */
+function notesLabel(total: number): string {
   return total === 1 ? '1 note' : `${total} notes`;
+}
+
+/** A chosen option (a tab or filter chip) wears the theme's clay. */
+function paintChoice(chip: PanelElement, label: UIKit.Text, chosen: boolean): void {
+  chip.setProperties({ backgroundColor: chosen ? THEME.clay : CLEAR });
+  label.setProperties({ color: chosen ? '#ffffff' : THEME.inkSoft });
 }

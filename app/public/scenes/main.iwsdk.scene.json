@@ -64,7 +64,7 @@
         "RayInteractable": {}
       }
     },
-{
+    {
       "id": "toast",
       "name": "Toast",
       "content": {
@@ -81,6 +81,53 @@
       },
       "components": {
         "RayInteractable": {}
+      }
+    },
+    {
+      "id": "tablet",
+      "name": "Tablet",
+      "metadata": {
+        "iwsdk.validation": {
+          "allowFloating": true
+        }
+      },
+      "content": {
+        "type": "asset",
+        "asset": "tablet"
+      },
+      "transform": {
+        "position": [
+          0,
+          1.45,
+          -0.55
+        ]
+      },
+      "components": {
+        "WritingSurface": {
+          "inkColor": "#1f1c19",
+          "inkWidth": 0.0035
+        }
+      }
+    },
+    {
+      "id": "note-bar",
+      "name": "Note Bar",
+      "metadata": {
+        "iwsdk.validation": {
+          "allowFloating": true
+        }
+      },
+      "content": {
+        "type": "asset",
+        "asset": "note-bar"
+      },
+      "transform": {
+        "position": [
+          0,
+          1.64,
+          -0.55
+        ],
+        "scale": 0.175
       }
     }
   ],

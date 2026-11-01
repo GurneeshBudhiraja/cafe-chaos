@@ -44,6 +44,7 @@ import {
   type PanelElement,
 } from '../ui/panel-helpers.js';
 import { openNoteFromHome, startNote } from '../ui/note-actions.js';
+import { getNoteView, type NoteViewState } from '../ui/note-view.js';
 import { NoteThumbnail, PaperPreview } from '../ui/paper-preview.js';
 import { addPressMotion } from '../ui/press-motion.js';
 import {
@@ -135,6 +136,7 @@ interface ScrollContainer {
 export class HomeWindowSystem extends createSystem({}) {
   private session!: NoteSession;
   private toasts!: ToastService;
+  private noteView!: NoteViewState;
   /** The sticky save-failure toast while it is up. */
   private failureToast: Toast | null = null;
   private cards: NoteCard[] = [];
@@ -177,6 +179,7 @@ export class HomeWindowSystem extends createSystem({}) {
   init(): void {
     this.session = getNoteSession(this.world);
     this.toasts = getToasts(this.world);
+    this.noteView = getNoteView(this.world);
     const panel = this.world.getSceneObject<UIKitMLAsset>(HOME_WINDOW_NODE);
     if (!panel) {
       console.warn('[HomeWindowSystem] Home window missing from the scene.');
@@ -328,12 +331,12 @@ export class HomeWindowSystem extends createSystem({}) {
   // -------------------------------------------------------------- commands
 
   private newNote(paper: PaperStyle): void {
-    startNote(this.session, this.toasts, paper);
+    void startNote(this.session, this.noteView, paper);
     this.setPickerOpen(false);
   }
 
   private openCard(card: NoteCard): void {
-    if (card.noteId) void openNoteFromHome(this.session, this.toasts, card.noteId);
+    if (card.noteId) void openNoteFromHome(this.session, this.noteView, card.noteId);
   }
 
   /**
