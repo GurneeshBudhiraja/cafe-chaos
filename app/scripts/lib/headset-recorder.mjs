@@ -84,7 +84,8 @@ export async function startHeadsetRecording({ size = SIZE, fovDeg, captions = tr
      * along each stroke, hops a centimetre between strokes, and the
      * hand never jumps, however slowly the page renders.
      */
-    penWrite: (strokes, speed = 0.09) => page.evaluate(([s, v]) => window.__rec.penWrite(s, v), [strokes, speed / speedUp]),
+    penWrite: (strokes, speed = 0.09, within) =>
+      page.evaluate(([s, v, w]) => window.__rec.penWrite(s, v, w), [strokes, speed / speedUp, within ?? null]),
     /** Carry the pen back to its place beside the tablet and let go of it there. */
     putDownPen: (ms = 900) => page.evaluate((d) => window.__rec.putDownPen(d), ms * speedUp),
     /** Tap the held pen `count` times: a quick open-and-close of the holding fingers (2 = double-tap). */
@@ -95,6 +96,10 @@ export async function startHeadsetRecording({ size = SIZE, fovDeg, captions = tr
     leftPinch: (value) => page.evaluate((v) => window.__rec.leftPinch(v), value),
     /** Move the free left hand to a world position (it then rests in view). */
     moveLeftHand: (position) => page.evaluate((p) => window.__rec.moveLeftHand(p), position),
+    /** Bring the left hand so its pinch closes on a world point, and pinch (it stays pinched). */
+    leftPinchAt: (point, ms = 600) => page.evaluate(([p, d]) => window.__rec.leftPinchAt(p, d), [point, ms * speedUp]),
+    /** Move the (pinched) left hand so its pinch point travels to a world point over `ms`. */
+    moveLeftPinchTo: (point, ms = 600) => page.evaluate(([p, d]) => window.__rec.moveLeftPinchTo(p, d), [point, ms * speedUp]),
     writeStroke,
     /** Handwrite `text` on the tablet (see handwriting.mjs for options). */
     async writeLine(text, options) {
@@ -141,9 +146,11 @@ function installHelpers(page) {
       while (frame() === f) await sleep(8);
     };
     const call = (method, params) => device.remote.dispatch(method, params);
-    const surface = () => world.scene.getObjectByName('WritingSurface');
-    const toWorld = (u, v) => {
-      const s = surface();
+    /** The writing surface: the tablet's page, or the one inside the object named `within` (a sticky note). */
+    const surface = (within) =>
+      (within ? world.scene.getObjectByName(within) : world.scene).getObjectByName('WritingSurface');
+    const toWorld = (u, v, within) => {
+      const s = surface(within);
       const { width, height } = s.geometry.parameters;
       const w = s.localToWorld(new V((u - 0.5) * width, (0.5 - v) * height, 0));
       return { x: w.x, y: w.y, z: w.z };
@@ -295,13 +302,13 @@ function installHelpers(page) {
         await call('set_select_value', { device: 'hand-right', value: 0 });
         await nextFrame();
       },
-      /** World position of the right hand's pinch (thumb and index tips' midpoint). */
-      pinchPoint() {
+      /** World position of a hand's pinch (thumb and index tips' midpoint); the right hand by default. */
+      pinchPoint(handedness = 'right') {
         return new Promise((resolve) => {
           const session = world.renderer.xr.getSession();
           session.requestAnimationFrame((t, xrFrame) => {
             const space = world.renderer.xr.getReferenceSpace();
-            const hand = [...session.inputSources].find((s) => s.handedness === 'right' && s.hand)?.hand;
+            const hand = [...session.inputSources].find((s) => s.handedness === handedness && s.hand)?.hand;
             const at = (name) => xrFrame.getJointPose(hand.get(name), space).transform.position;
             const a = at('thumb-tip');
             const b = at('index-finger-tip');
@@ -355,15 +362,15 @@ function installHelpers(page) {
           throw new Error(`pickUpPen: the pinch closed ${p.distanceTo(at).toFixed(3)} m from the pen, which stayed put.`);
         }
       },
-      async penWrite(strokes, speed) {
+      async penWrite(strokes, speed, within) {
         const held = world.globals['metaNotes.pen'];
         if (!held?.held) throw new Error('penWrite: the pen is not in hand.');
-        const s = surface();
+        const s = surface(within);
         const up = new V(0, 0, 1).transformDirection(s.matrixWorld);
         // The nib's offset from the hand (fixed while the grip holds).
         const nibOffset = held.nib.clone().sub(await this.handPosition());
         const nibAt = (u, v, lift) => {
-          const p = toWorld(u, v);
+          const p = toWorld(u, v, within);
           return new V(p.x, p.y, p.z).addScaledVector(up, lift);
         };
         // The nib's whole path: from where it is, hop to each stroke, trace
@@ -443,6 +450,33 @@ function installHelpers(page) {
       async moveLeftHand(position) {
         await call('set_transform', { device: 'hand-left', position });
         await nextFrame();
+      },
+      async leftPinchAt(point, ms) {
+        // Where the left pinch closes relative to the hand, measured pinched.
+        await call('set_select_value', { device: 'hand-left', value: 1 });
+        for (let i = 0; i < 3; i++) await nextFrame();
+        const hand = await call('get_transform', { device: 'hand-left' });
+        const at = new V(hand.position.x, hand.position.y, hand.position.z);
+        this.leftOffset = (await this.pinchPoint('left')).sub(at);
+        await call('set_select_value', { device: 'hand-left', value: 0 });
+        for (let i = 0; i < 3; i++) await nextFrame();
+        await this.moveLeftPinchTo(point, ms);
+        await call('set_select_value', { device: 'hand-left', value: 1 });
+        for (let i = 0; i < 3; i++) await nextFrame();
+      },
+      async moveLeftPinchTo(point, ms) {
+        const hand = await call('get_transform', { device: 'hand-left' });
+        const from = new V(hand.position.x, hand.position.y, hand.position.z);
+        const to = new V(point.x, point.y, point.z).sub(this.leftOffset ?? new V());
+        const t0 = performance.now();
+        for (;;) {
+          const t = Math.min(1, (performance.now() - t0) / ms);
+          const e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+          const p = from.clone().lerp(to, e);
+          await call('set_transform', { device: 'hand-left', position: { x: p.x, y: p.y, z: p.z }, orientation: hand.orientation });
+          if (t >= 1) return;
+          await nextFrame();
+        }
       },
       /** Pinch the tablet handle and drag it by moving the hand. */
       async dragHandle(dx, dy, dz, ms) {

@@ -24,6 +24,8 @@ export class EraserCursor {
       new MeshBasicMaterial({ color: THEME.inkOnLight, transparent: true, opacity: OPACITY, depthWrite: false }),
     );
     this.mesh.name = 'EraserCursor';
+    // Drawn on the page, it must not catch pointer rays meant for the page.
+    this.mesh.raycast = () => {};
     this.mesh.renderOrder = 3; // Over the ink.
     this.mesh.visible = false;
     parent.add(this.mesh);

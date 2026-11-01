@@ -20,10 +20,9 @@ import { StrokeMesh, type SurfaceSize } from './stroke-mesh.js';
 import { strokeInsideLoop, strokesBounds, type Bounds } from './stroke-hit.js';
 import { classifySample } from './stroke-sampling.js';
 
-/** The loop's line width (page widths). */
-const LOOP_WIDTH = 0.0022;
-/** Space between the selected ink and its box (page widths). */
-const BOX_PADDING = 0.012;
+/** The loop's line width, and the space between the selected ink and its box (metres, the same on any surface). */
+const LOOP_WIDTH_M = 0.0008;
+const BOX_PADDING_M = 0.0043;
 /** The box's outline width (metres) and fill opacity. */
 const BOX_LINE_M = 0.0012;
 const BOX_FILL_OPACITY = 0.07;
@@ -55,7 +54,7 @@ export class LassoSelection {
   /** Start a new loop at (x, y), dropping any selection. */
   startLoop(x: number, y: number, meshes: Map<string, StrokeMesh>): void {
     this.clear(meshes);
-    const stroke = createStroke(THEME.clay, LOOP_WIDTH);
+    const stroke = createStroke(THEME.clay, LOOP_WIDTH_M / this.surface.widthM);
     stroke.points.push(x, y);
     this.loop = new StrokeMesh(stroke, this.surface);
     this.loop.mesh.renderOrder = 3; // Over the ink.
@@ -91,8 +90,9 @@ export class LassoSelection {
   contains(x: number, y: number): boolean {
     const b = this.bounds;
     if (!b) return false;
-    const padY = BOX_PADDING * (this.surface.widthM / this.surface.heightM);
-    return x >= b.minX - BOX_PADDING && x <= b.maxX + BOX_PADDING && y >= b.minY - padY && y <= b.maxY + padY;
+    const padX = BOX_PADDING_M / this.surface.widthM;
+    const padY = BOX_PADDING_M / this.surface.heightM;
+    return x >= b.minX - padX && x <= b.maxX + padX && y >= b.minY - padY && y <= b.maxY + padY;
   }
 
   startMove(x: number, y: number): void {
@@ -132,7 +132,8 @@ export class LassoSelection {
   refresh(page: Page): void {
     const onPage = new Set(page.strokes.map((stroke) => stroke.id));
     for (const id of [...this.ids]) if (!onPage.has(id)) this.ids.delete(id);
-    this.bounds = strokesBounds(page.strokes.filter((stroke) => this.ids.has(stroke.id)));
+    const aspect = this.surface.widthM / this.surface.heightM;
+    this.bounds = strokesBounds(page.strokes.filter((stroke) => this.ids.has(stroke.id)), aspect);
     if (this.bounds) this.box.place(this.bounds, this.surface, 0, 0);
     else this.box.hide();
   }
@@ -181,11 +182,14 @@ class SelectionBox {
     this.group.name = 'SelectionBox';
     this.group.visible = false;
     this.fill = new Mesh(this.unitPlane, this.fillMaterial);
+    // Drawn on the page, the box must not catch pointer rays meant for the page.
+    this.fill.raycast = () => {};
     this.fill.renderOrder = 0; // Under the ink.
     this.group.add(this.fill);
     this.edges = [0, 1, 2, 3].map(() => {
       const edge = new Mesh(this.unitPlane, this.lineMaterial);
       edge.renderOrder = 3;
+      edge.raycast = () => {};
       this.group.add(edge);
       return edge;
     });
@@ -194,11 +198,10 @@ class SelectionBox {
 
   /** Around page-unit `bounds` (padded), shifted by (offsetX, offsetY) metres. */
   place(bounds: Bounds, surface: SurfaceSize, offsetX: number, offsetY: number): void {
-    const padY = BOX_PADDING * (surface.widthM / surface.heightM);
-    const left = (bounds.minX - BOX_PADDING - 0.5) * surface.widthM;
-    const right = (bounds.maxX + BOX_PADDING - 0.5) * surface.widthM;
-    const top = (0.5 - (bounds.minY - padY)) * surface.heightM;
-    const bottom = (0.5 - (bounds.maxY + padY)) * surface.heightM;
+    const left = (bounds.minX - 0.5) * surface.widthM - BOX_PADDING_M;
+    const right = (bounds.maxX - 0.5) * surface.widthM + BOX_PADDING_M;
+    const top = (0.5 - bounds.minY) * surface.heightM + BOX_PADDING_M;
+    const bottom = (0.5 - bounds.maxY) * surface.heightM - BOX_PADDING_M;
     const width = right - left;
     const height = top - bottom;
     this.group.position.set(offsetX + (left + right) / 2, offsetY + (top + bottom) / 2, 0);

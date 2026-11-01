@@ -22,6 +22,7 @@ import { NoteViewSystem } from './systems/note-view-system.js';
 import { PenSystem } from './systems/pen-system.js';
 import { HomeWindowSystem } from './systems/home-window-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
+import { StickySystem } from './systems/sticky-system.js';
 import { ToastSystem } from './systems/toast-system.js';
 import { ToolWheelSystem } from './systems/tool-wheel-system.js';
 import { TweenSystem } from './systems/tween-system.js';
@@ -49,6 +50,7 @@ World.create(
     // After the pen (its taps and nib), before the ink (which pauses while the wheel is open).
     .registerSystem(ToolWheelSystem)
     .registerSystem(InkSystem)
+    .registerSystem(StickySystem)
     .registerSystem(HomeWindowSystem)
     .registerSystem(CompactDockSystem)
     .registerSystem(NoteViewSystem)

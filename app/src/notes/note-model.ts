@@ -128,7 +128,8 @@ export function parseNote(value: unknown): Note | null {
   };
 }
 
-function parsePage(value: unknown): Page | null {
+/** Validate one stored page (also used for sticky notes); null when it cannot be trusted. */
+export function parsePage(value: unknown): Page | null {
   if (typeof value !== 'object' || value === null) return null;
   const raw = value as Record<string, unknown>;
   if (typeof raw.id !== 'string' || !Array.isArray(raw.strokes)) return null;

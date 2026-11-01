@@ -27,8 +27,14 @@
  * - A large jump between samples splits the stroke instead of drawing a long
  *   accidental line (tracking loss and recovery).
  *
- * The system renders the active page of the NoteSession and hands edits to
- * it; it never writes note data itself.
+ * Every surface with a WritingSurface takes ink: the tablet shows the open
+ * note (NoteSession); others, such as sticky notes, show their own page
+ * (ink-surfaces.ts). Tool sizes are the same on every surface (set against
+ * the tablet's page), so a pen line is as thick on a sticky note as on the
+ * tablet. Undo and redo act on the surface written on last.
+ *
+ * The system renders each surface's page and hands edits to its document;
+ * it never writes note data itself.
  */
 
 import {
@@ -39,7 +45,9 @@ import {
   Object3D,
   Vector3,
   type Entity,
+  type PlaneGeometry,
 } from '@iwsdk/core';
+import { getInkSurfaces, type InkSurfaces } from '../ink/ink-surfaces.js';
 import { EraserCursor } from '../ink/eraser-cursor.js';
 import { LassoSelection } from '../ink/lasso.js';
 import { strokeTouchesCircle } from '../ink/stroke-hit.js';
@@ -50,11 +58,10 @@ import { createStroke, type Page, type Stroke } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
 import { getTools, type ToolState } from '../ui/tool-state.js';
-import type { InkDocument } from '../notes/note-session.js';
+import type { InkDocument, NoteSessionChange } from '../notes/note-session.js';
 import { TabletHandle, WritingSurface } from '../note-components.js';
 import { devLog } from '../util/dev-log.js';
 import {
-  SURFACE_HEIGHT_M,
   SURFACE_WIDTH_M,
   WRITING_SURFACE_NAME,
 } from '../scene-assets/tablet.scene-asset.js';
@@ -81,13 +88,12 @@ const PEN_TOUCH_M = 0.003;
 const PEN_LIFT_M = 0.006;
 /** The eraser's ring shows while the nib hovers this close to the page (metres). */
 const ERASER_RING_HOVER_M = 0.03;
+/** A nib further than this behind a surface is not touching it (it went past: metres). */
+const PEN_BEHIND_M = 0.015;
 /** Stands in for a pointer id for the pen's contacts (pointer ids are not negative). */
 const PEN_POINTER_ID = -1;
-
-const SURFACE_SIZE: SurfaceSize = {
-  widthM: SURFACE_WIDTH_M,
-  heightM: SURFACE_HEIGHT_M,
-};
+/** Tool widths and eraser radii are fractions of the tablet's page width (tool-catalog.ts). */
+const TOOL_SCALE_WIDTH_M = SURFACE_WIDTH_M;
 
 /** A touch on the page, from touch-down to lift, and what the tool is doing with it. */
 type Contact =
@@ -99,10 +105,15 @@ type Contact =
   /** Dragging the lasso's selection. */
   | { kind: 'move'; pointerId: number };
 
-/** Per-tablet runtime state. */
+/** Per-surface runtime state (the tablet, or a sticky note). */
 interface TabletInk {
   entity: Entity;
   surface: Mesh;
+  /** The page this surface shows and edits. */
+  document: InkDocument;
+  /** The writing area's size in metres, and its width / height. */
+  size: SurfaceSize;
+  aspect: number;
   inkLayer: Group;
   eraserCursor: EraserCursor;
   lasso: LassoSelection;
@@ -120,12 +131,17 @@ export class InkSystem extends createSystem({
   private readonly tablets = new Map<Entity, TabletInk>();
   /** Scratch: a point in the surface's space, then (after toPageCoords) page coordinates. */
   private readonly localPoint = new Vector3();
-  private document!: InkDocument;
+  /** The open note: what the tablet shows (and any surface without its own page). */
+  private session!: InkDocument;
+  private surfaces!: InkSurfaces;
   private pen!: PenState;
   private tools!: ToolState;
+  /** The surface written on last: undo and redo act on it. */
+  private focused: TabletInk | null = null;
 
   init(): void {
-    this.document = getNoteSession(this.world);
+    this.session = getNoteSession(this.world);
+    this.surfaces = getInkSurfaces(this.world);
     this.pen = getPen(this.world);
     this.tools = getTools(this.world);
 
@@ -134,17 +150,6 @@ export class InkSystem extends createSystem({
     for (const entity of this.queries.tablets.entities) this.attachTablet(entity);
 
     this.cleanupFuncs.push(
-      this.document.subscribe((change) => {
-        // Another note opened (or the first one loaded): show its page.
-        if (change === 'active') this.showPage(this.document.getActivePage());
-        // The page's ink changed by an edit (erase, move, undo, redo): match it.
-        if (change === 'strokes') {
-          for (const tablet of this.tablets.values()) {
-            this.syncMeshes(tablet);
-            if (tablet.page) tablet.lasso.refresh(tablet.page);
-          }
-        }
-      }),
       this.tools.onAction((action) => this.runAction(action)),
       // The selection belongs to the lasso: picking another tool drops it.
       this.tools.subscribe((change) => {
@@ -176,10 +181,11 @@ export class InkSystem extends createSystem({
         if (penContact) this.endContact(tablet);
         continue;
       }
+      if (!tablet.surface.visible) continue;
       tablet.surface.updateWorldMatrix(true, false);
       const local = tablet.surface.worldToLocal(this.localPoint.copy(this.pen.nib));
       this.showEraserCursor(tablet, local);
-      const touching = local.z < (penContact ? PEN_LIFT_M : PEN_TOUCH_M);
+      const touching = local.z < (penContact ? PEN_LIFT_M : PEN_TOUCH_M) && local.z > -PEN_BEHIND_M;
       if (!touching || !this.toPageCoords(tablet, this.pen.nib)) {
         if (penContact) this.endContact(tablet);
         continue;
@@ -205,12 +211,13 @@ export class InkSystem extends createSystem({
   /** The eraser's ring under a hovering nib (`local`: the nib in the surface's space). */
   private showEraserCursor(tablet: TabletInk, local: Vector3): void {
     const radius = this.tools.tool === 'eraser' ? this.tools.width() : null;
-    const overPage = Math.abs(local.x) <= SURFACE_WIDTH_M / 2 && Math.abs(local.y) <= SURFACE_HEIGHT_M / 2;
-    if (radius === null || !overPage || local.z > ERASER_RING_HOVER_M) {
+    const { widthM, heightM } = tablet.size;
+    const overPage = Math.abs(local.x) <= widthM / 2 && Math.abs(local.y) <= heightM / 2;
+    if (radius === null || !overPage || local.z > ERASER_RING_HOVER_M || local.z < -PEN_BEHIND_M) {
       tablet.eraserCursor.hide();
       return;
     }
-    tablet.eraserCursor.show(local.x, local.y, radius * SURFACE_WIDTH_M);
+    tablet.eraserCursor.show(local.x, local.y, radius * TOOL_SCALE_WIDTH_M);
   }
 
   /** Undo, redo or delete the selection, picked on the tool wheel. */
@@ -221,19 +228,26 @@ export class InkSystem extends createSystem({
       for (const tablet of this.tablets.values()) {
         const ids = new Set(tablet.lasso.ids);
         tablet.lasso.clear(tablet.meshes);
-        this.document.eraseStrokes(ids);
+        tablet.document.eraseStrokes(ids);
       }
       return;
     }
-    const done = action === 'undo' ? this.document.undo() : this.document.redo();
+    const document = this.focused?.document ?? this.session;
+    const done = action === 'undo' ? document.undo() : document.redo();
     devLog('ink', `${action}: ${done ? 'done' : 'nothing to ' + action}`);
   }
 
   // ------------------------------------------------------------ rendering
 
-  /** Replace the page shown on every tablet (used when opening a note). */
-  private showPage(page: Page | null): void {
-    for (const tablet of this.tablets.values()) this.renderPage(tablet, page);
+  /** The surface's document changed: another page opened, or its ink was edited. */
+  private onDocumentChange(tablet: TabletInk, change: NoteSessionChange): void {
+    // Another note opened (or the first one loaded): show its page.
+    if (change === 'active') this.renderPage(tablet, tablet.document.getActivePage());
+    // The page's ink changed by an edit (erase, move, undo, redo): match it.
+    if (change === 'strokes') {
+      this.syncMeshes(tablet);
+      if (tablet.page) tablet.lasso.refresh(tablet.page);
+    }
   }
 
   private renderPage(tablet: TabletInk, page: Page | null): void {
@@ -271,7 +285,7 @@ export class InkSystem extends createSystem({
   }
 
   private addStrokeMesh(tablet: TabletInk, stroke: Stroke): StrokeMesh {
-    const mesh = new StrokeMesh(stroke, SURFACE_SIZE);
+    const mesh = new StrokeMesh(stroke, tablet.size);
     tablet.meshes.set(stroke.id, mesh);
     tablet.inkLayer.add(mesh.mesh);
     return mesh;
@@ -300,17 +314,23 @@ export class InkSystem extends createSystem({
       return;
     }
 
+    // Ink lies on the writing area itself, so it follows wherever that sits.
     const inkLayer = new Group();
     inkLayer.name = 'InkLayer';
     inkLayer.position.z = INK_OFFSET_M;
-    root.add(inkLayer);
+    surface.add(inkLayer);
 
+    const { width, height } = (surface.geometry as PlaneGeometry).parameters;
+    const size: SurfaceSize = { widthM: width, heightM: height };
     const tablet: TabletInk = {
       entity,
       surface,
+      document: this.surfaces.documentFor(entity) ?? this.session,
+      size,
+      aspect: width / height,
       inkLayer,
       eraserCursor: new EraserCursor(inkLayer),
-      lasso: new LassoSelection(inkLayer, SURFACE_SIZE),
+      lasso: new LassoSelection(inkLayer, size),
       page: null,
       meshes: new Map(),
       active: null,
@@ -330,7 +350,9 @@ export class InkSystem extends createSystem({
     target.addEventListener('pointerup', onEnd);
     target.addEventListener('pointerleave', onEnd);
     target.addEventListener('pointercancel', onEnd);
+    const unsubscribe = tablet.document.subscribe((change) => this.onDocumentChange(tablet, change));
     tablet.detach = () => {
+      unsubscribe();
       target.removeEventListener('pointerdown', onDown);
       target.removeEventListener('pointermove', onMove);
       target.removeEventListener('pointerup', onEnd);
@@ -339,7 +361,7 @@ export class InkSystem extends createSystem({
     };
 
     this.tablets.set(entity, tablet);
-    this.renderPage(tablet, this.document.getActivePage());
+    this.renderPage(tablet, tablet.document.getActivePage());
   }
 
   private detachTablet(entity: Entity): void {
@@ -351,6 +373,7 @@ export class InkSystem extends createSystem({
     tablet.eraserCursor.dispose();
     tablet.inkLayer.removeFromParent();
     this.tablets.delete(entity);
+    if (this.focused === tablet) this.focused = null;
   }
 
   // ------------------------------------------------------- pointer input
@@ -380,6 +403,7 @@ export class InkSystem extends createSystem({
 
   /** Touch down at the page point in `this.localPoint`: begin what the current tool does. */
   private startContact(tablet: TabletInk, pointerId: number): void {
+    this.focused = tablet;
     const tool = this.tools.tool;
     const { x, y } = this.localPoint;
     if (tool === 'lasso') {
@@ -401,7 +425,7 @@ export class InkSystem extends createSystem({
     const color = this.tools.colour();
     const width = this.tools.width();
     if (!isInkTool(tool) || color === null || width === null) return;
-    const stroke = createStroke(color, width, tool);
+    const stroke = createStroke(color, this.onSurface(width, tablet), tool);
     stroke.points.push(this.localPoint.x, this.localPoint.y);
     const mesh = this.addStrokeMesh(tablet, stroke);
     tablet.active = { kind: 'ink', pointerId, mesh };
@@ -454,17 +478,17 @@ export class InkSystem extends createSystem({
     }
     if (active.kind === 'move') {
       const moved = tablet.page ? tablet.lasso.finishMove(tablet.page) : null;
-      if (moved) this.document.replaceStrokes(moved);
+      if (moved) tablet.document.replaceStrokes(moved);
       return;
     }
     if (active.kind === 'erase') {
-      this.document.eraseStrokes(active.erased);
+      tablet.document.eraseStrokes(active.erased);
       if (active.erased.size > 0) devLog('ink', `erased ${active.erased.size} strokes`);
       return;
     }
     const stroke = active.mesh.stroke;
-    // The session appends the stroke to the active page and autosaves.
-    this.document.commitStroke(stroke);
+    // The document appends the stroke to its page and autosaves.
+    tablet.document.commitStroke(stroke);
     devLog(
       'ink',
       `stroke committed: ${stroke.points.length / 2} points, page has ${tablet.page?.strokes.length ?? 0} strokes`,
@@ -473,11 +497,12 @@ export class InkSystem extends createSystem({
 
   /** Hide every stroke the eraser touches at the page point in `this.localPoint`, adding it to `erased`. */
   private rubOut(tablet: TabletInk, erased: Set<string>): void {
-    const radius = this.tools.width();
-    if (!tablet.page || radius === null) return;
+    const toolRadius = this.tools.width();
+    if (!tablet.page || toolRadius === null) return;
+    const radius = this.onSurface(toolRadius, tablet);
     for (const stroke of tablet.page.strokes) {
       if (erased.has(stroke.id)) continue;
-      if (!strokeTouchesCircle(stroke, this.localPoint.x, this.localPoint.y, radius)) continue;
+      if (!strokeTouchesCircle(stroke, this.localPoint.x, this.localPoint.y, radius, tablet.aspect)) continue;
       erased.add(stroke.id);
       const mesh = tablet.meshes.get(stroke.id);
       if (mesh) mesh.mesh.visible = false;
@@ -490,9 +515,14 @@ export class InkSystem extends createSystem({
    */
   private toPageCoords(tablet: TabletInk, worldPoint: Vector3): boolean {
     const local = tablet.surface.worldToLocal(this.localPoint.copy(worldPoint));
-    const u = local.x / SURFACE_WIDTH_M + 0.5;
-    const v = 0.5 - local.y / SURFACE_HEIGHT_M;
+    const u = local.x / tablet.size.widthM + 0.5;
+    const v = 0.5 - local.y / tablet.size.heightM;
     local.set(u, v, 0);
     return isOnPage(u, v);
+  }
+
+  /** A tool size (a fraction of the tablet's page width) as a fraction of this surface's width. */
+  private onSurface(toolFraction: number, tablet: TabletInk): number {
+    return (toolFraction * TOOL_SCALE_WIDTH_M) / tablet.size.widthM;
   }
 }
