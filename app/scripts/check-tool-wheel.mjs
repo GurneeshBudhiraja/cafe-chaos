@@ -19,15 +19,9 @@
 import { mkdirSync } from 'node:fs';
 import { layoutLine } from './lib/handwriting.mjs';
 import { startHeadsetRecording } from './lib/headset-recorder.mjs';
+import { OPTIONS_REACH_M, toolWheelDriver, WHEEL_ITEMS } from './lib/tool-wheel-driver.mjs';
 
 const SHOTS = 'artifacts/tool-wheel';
-const WHEEL_ITEMS = ['pen', 'marker', 'highlighter', 'eraser', 'lasso', 'undo', 'redo'];
-const WHEEL_SCALE = 0.85;
-/** The options ring (tool-options-ring.ts): its radius (wheel asset metres) and spacing. */
-const OPTIONS_RADIUS = 0.118;
-const OPTIONS_SPACING_DEG = 22;
-/** How far to slide the nib over the page to aim at a segment (metres; the hub is the first 3.9 cm). */
-const AIM_REACH = 0.06;
 /** Seated at the emulated room's desk-height table, facing it (see record-desk.mjs). */
 const TABLE_HEIGHT_M = 0.79;
 const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
@@ -51,47 +45,8 @@ async function prepare(r) {
 
 const rec = await startHeadsetRecording({ size: { width: 1032, height: 800 }, fovDeg: 96, captions: false, prepare });
 const { page, pause } = rec;
+const { state, aimToward, aimPoint, aimSwatch, aimSize, overPage, liftPen, pickOnWheel } = toolWheelDriver(rec);
 
-/** The app's state this check reads. */
-const state = () =>
-  page.evaluate(() => {
-    const { world } = window.__metaNotes;
-    const tools = world.globals['metaNotes.tools'];
-    const pen = world.globals['metaNotes.pen'];
-    const wheel = world.getSystems().find((s) => s.constructor.name === 'ToolWheelSystem');
-    return {
-      tool: tools?.tool,
-      wheelOpen: tools?.wheelOpen,
-      penHeld: pen?.held,
-      hovered: wheel?.hovered ?? null,
-      wheelVisible: wheel?.wheel?.visible,
-      strokes: window.__metaNotes.session.active?.pages[0].strokes.length ?? 0,
-    };
-  });
-
-/** World point for the nib to aim in direction `angleDeg` (null: the hub), sliding `reach` metres over the page. */
-const aimToward = (angleDeg, reach) =>
-  page.evaluate(
-    ([deg, distance]) => {
-      const { world } = window.__metaNotes;
-      const system = world.getSystems().find((s) => s.constructor.name === 'ToolWheelSystem');
-      const local = system.aimOrigin.clone();
-      if (deg !== null) {
-        local.x += Math.cos((deg * Math.PI) / 180) * distance;
-        local.y += Math.sin((deg * Math.PI) / 180) * distance;
-      }
-      const p = system.surface.localToWorld(local);
-      return { x: p.x, y: p.y, z: p.z };
-    },
-    [angleDeg, reach],
-  );
-/** Aim at wheel item `name` (null: the hub). */
-const aimPoint = (name) => aimToward(name ? 90 - (WHEEL_ITEMS.indexOf(name) * 360) / WHEEL_ITEMS.length : null, AIM_REACH);
-const OPTIONS_REACH = OPTIONS_RADIUS * WHEEL_SCALE;
-/** Aim at colour `index` of `count` on the options ring (above the wheel). */
-const aimSwatch = (index, count) => aimToward(90 + ((count - 1) / 2 - index) * OPTIONS_SPACING_DEG, OPTIONS_REACH);
-/** Aim at a size on the options ring (below the wheel). */
-const aimSize = (size) => aimToward(270 - (1 - ['fine', 'medium', 'bold'].indexOf(size)) * OPTIONS_SPACING_DEG, OPTIONS_REACH);
 /** The newest stroke on the page. */
 const lastStroke = () =>
   page.evaluate(() => {
@@ -99,24 +54,6 @@ const lastStroke = () =>
     const s = strokes[strokes.length - 1];
     return { tool: s.tool, color: s.color, width: s.width };
   });
-/** Lift the nib off the page (as when pausing to change tools). */
-const liftPen = async () =>
-  rec.moveNibTo(
-    await page.evaluate(() => {
-      const n = window.__metaNotes.world.globals['metaNotes.pen'].nib;
-      return { x: n.x, y: n.y + 0.04, z: n.z };
-    }),
-    400,
-  );
-/** Open the wheel with a double-tap (unless it is open), aim at each target in turn and tap to pick it. */
-const pickOnWheel = async (...targets) => {
-  if (!(await state()).wheelOpen) await rec.penTap(2);
-  for (const target of targets) {
-    await rec.moveNibTo(await target(), 450);
-    await rec.penTap(1);
-  }
-};
-
 /** A full headset view, and a close-up of its middle (where the wheel is looked at). */
 const shot = async (name) => {
   await pause(250);
@@ -237,12 +174,12 @@ expect(stroke.tool === 'marker' && stroke.color === '#d4704f' && stroke.width ==
 
 // --- Highlighter in Pink over the marker writing, then back to the pen.
 await liftPen();
-await pickOnWheel(() => aimPoint('highlighter'), () => aimSwatch(1, 4));
+await pickOnWheel([() => aimPoint('highlighter'), () => aimSwatch(1, 4)]);
 await rec.penWrite([[[0.08, 0.425], [0.3, 0.425]]]);
 stroke = await lastStroke();
 expect(stroke.tool === 'highlighter' && stroke.color === '#f0a3b8', 'the highlighter draws in pink', stroke);
 await liftPen();
-await pickOnWheel(() => aimPoint('pen'));
+await pickOnWheel([() => aimPoint('pen')]);
 await rec.penWrite(layoutLine('divide', { u: 0.1, v: 0.55, size: 0.003, seed: 8 }).strokes);
 stroke = await lastStroke();
 expect(stroke.tool === 'pen' && stroke.color === '#1f1c19', 'the pen keeps its own ink colour', stroke);
@@ -263,17 +200,6 @@ await rec.moveHead(SEAT);
 await rec.lookAt(tablet, 400);
 
 // --- Phase 3: the eraser, undo and redo.
-/** World point over page point (u, v), `lift` metres above the page. */
-const overPage = (u, v, lift) =>
-  page.evaluate(
-    ([pu, pv, l]) => {
-      const s = window.__metaNotes.world.scene.getObjectByName('WritingSurface');
-      const { width, height } = s.geometry.parameters;
-      const p = s.localToWorld(new s.position.constructor((pu - 0.5) * width, (0.5 - pv) * height, l));
-      return { x: p.x, y: p.y, z: p.z };
-    },
-    [u, v, lift],
-  );
 /** Lean in over page point (u, v) for a close look, then sit back. */
 const closeLook = async (name, u = 0.2, v = 0.48) => {
   const at = await overPage(u, v, 0);
@@ -284,7 +210,7 @@ const closeLook = async (name, u = 0.2, v = 0.48) => {
   await rec.lookAt(tablet, 400);
 };
 await liftPen();
-await pickOnWheel(() => aimPoint('eraser'), () => aimSize('bold'), () => aimPoint(null));
+await pickOnWheel([() => aimPoint('eraser'), () => aimSize('bold'), () => aimPoint(null)]);
 s = await state();
 expect(s.tool === 'eraser' && !s.wheelOpen, 'the eraser is picked, bold; the hub closes the wheel', s);
 await rec.moveNibTo(await overPage(0.18, 0.42, 0.012), 500);
@@ -299,15 +225,15 @@ await liftPen();
 await closeLook('13-cells-erased');
 
 // Undo brings it back; redo erases it again; undo once more.
-await pickOnWheel(() => aimPoint('undo'), () => aimPoint(null));
+await pickOnWheel([() => aimPoint('undo'), () => aimPoint(null)]);
 s = await state();
 expect(s.strokes === beforeErase && !s.wheelOpen, 'undo brings the erased strokes back', s);
 await closeLook('14-undo-brings-back');
 await liftPen();
-await pickOnWheel(() => aimPoint('redo'));
+await pickOnWheel([() => aimPoint('redo')]);
 s = await state();
 expect(s.strokes < beforeErase, 'redo erases them again', s);
-await pickOnWheel(() => aimPoint('undo'), () => aimPoint('pen'), () => aimPoint(null));
+await pickOnWheel([() => aimPoint('undo'), () => aimPoint('pen'), () => aimPoint(null)]);
 s = await state();
 expect(s.strokes === beforeErase && s.tool === 'pen' && !s.wheelOpen, 'undo restores them; back to the pen', s);
 
@@ -315,7 +241,7 @@ expect(s.strokes === beforeErase && s.tool === 'pen' && !s.wheelOpen, 'undo rest
 const beforeWrite = s.strokes;
 await rec.penWrite([[[0.6, 0.7], [0.7, 0.75]]]);
 await liftPen();
-await pickOnWheel(() => aimPoint('undo'), () => aimPoint(null));
+await pickOnWheel([() => aimPoint('undo'), () => aimPoint(null)]);
 s = await state();
 expect(s.strokes === beforeWrite && !s.wheelOpen, 'undo takes back a stroke just written', { ...s, beforeWrite });
 
@@ -335,7 +261,7 @@ const strokeStart = (id) =>
     return st ? [st.points[0], st.points[1]] : null;
   }, id);
 await liftPen();
-await pickOnWheel(() => aimPoint('lasso'), () => aimPoint(null));
+await pickOnWheel([() => aimPoint('lasso'), () => aimPoint(null)]);
 s = await state();
 expect(s.tool === 'lasso' && !s.wheelOpen, 'the lasso is picked', s);
 // A loose loop around "Cells" (and its highlight), clear of the writing below it.
@@ -359,7 +285,7 @@ sel = await selection();
 expect(sel.count > 0, 'the moved strokes stay selected', sel);
 await liftPen();
 await closeLook('16-lasso-moved', 0.4, 0.62);
-await pickOnWheel(() => aimPoint('undo'), () => aimPoint(null));
+await pickOnWheel([() => aimPoint('undo'), () => aimPoint(null)]);
 const startUndone = await strokeStart(firstId);
 expect(Math.abs(startUndone[0] - startBefore[0]) < 1e-9 && Math.abs(startUndone[1] - startBefore[1]) < 1e-9, 'undo puts the moved strokes back', { startUndone, startBefore });
 // Delete, from the lasso's options ring (below the wheel).
@@ -368,7 +294,7 @@ sel = await selection();
 await liftPen();
 await rec.penTap(2);
 await lookAtWheel();
-await rec.moveNibTo(await aimToward(270, OPTIONS_REACH), 450);
+await rec.moveNibTo(await aimToward(270, OPTIONS_REACH_M), 450);
 await shot('17-lasso-delete-option');
 await rec.penTap(1);
 await rec.moveNibTo(await aimPoint(null), 300);
@@ -376,7 +302,7 @@ await rec.penTap(1);
 s = await state();
 expect(s.strokes === beforeDelete - sel.count && !s.wheelOpen, `Delete removes the selection (${beforeDelete} -> ${s.strokes})`, s);
 await closeLook('18-lasso-deleted', 0.2, 0.45);
-await pickOnWheel(() => aimPoint('undo'), () => aimPoint('pen'), () => aimPoint(null));
+await pickOnWheel([() => aimPoint('undo'), () => aimPoint('pen'), () => aimPoint(null)]);
 s = await state();
 expect(s.strokes === beforeDelete && s.tool === 'pen', 'undo brings the deleted strokes back; back to the pen', s);
 

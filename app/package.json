@@ -19,7 +19,8 @@
     "record:tour": "node scripts/record-tour.mjs",
     "record:desk": "node scripts/record-desk.mjs",
     "record:flow": "node scripts/record-flow.mjs",
-    "check:tool-wheel": "node scripts/check-tool-wheel.mjs"
+    "check:tool-wheel": "node scripts/check-tool-wheel.mjs",
+    "record:tool-wheel": "node scripts/record-tool-wheel.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",
