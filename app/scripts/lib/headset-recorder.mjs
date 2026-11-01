@@ -459,16 +459,23 @@ function installHelpers(page) {
         await nextFrame();
       },
       async leftPinchAt(point, ms) {
-        // Where the left pinch closes relative to the hand, measured pinched.
+        if (!this.leftOffset) await this.measureLeftPinch();
+        await this.moveLeftPinchTo(point, ms);
+        await call('set_select_value', { device: 'hand-left', value: 1 });
+        for (let i = 0; i < 3; i++) await nextFrame();
+      },
+      /**
+       * Where the left pinch closes relative to the hand (its orientation is
+       * kept), measured once with a pinch where the hand is: so call it with
+       * the hand somewhere a pinch picks nothing up.
+       */
+      async measureLeftPinch() {
         await call('set_select_value', { device: 'hand-left', value: 1 });
         for (let i = 0; i < 3; i++) await nextFrame();
         const hand = await call('get_transform', { device: 'hand-left' });
         const at = new V(hand.position.x, hand.position.y, hand.position.z);
         this.leftOffset = (await this.pinchPoint('left')).sub(at);
         await call('set_select_value', { device: 'hand-left', value: 0 });
-        for (let i = 0; i < 3; i++) await nextFrame();
-        await this.moveLeftPinchTo(point, ms);
-        await call('set_select_value', { device: 'hand-left', value: 1 });
         for (let i = 0; i < 3; i++) await nextFrame();
       },
       async moveLeftPinchTo(point, ms) {

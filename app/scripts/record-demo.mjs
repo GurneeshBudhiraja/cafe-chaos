@@ -171,6 +171,7 @@ await rec.lookAt(atTablet, 700);
 await rec.leftPinchAt(await worldOf('StickyPad-blush', 0.01), 800);
 await pause(500);
 await rec.leftPinch(0);
+await rec.moveLeftHand(LEFT_REST);
 const pinkId = (await stickyIds()).find((id) => id !== yellowId);
 await rec.leftPinchAt(await worldOf(`Sticky:${pinkId}`), 600);
 await pause(500);
