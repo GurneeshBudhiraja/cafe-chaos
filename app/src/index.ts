@@ -30,6 +30,7 @@ import { ToolWheelSystem } from './systems/tool-wheel-system.js';
 import { TweenSystem } from './systems/tween-system.js';
 import { TypingSystem } from './systems/typing-system.js';
 import { TypeModeSystem } from './systems/type-mode-system.js';
+import { TypeToolbarSystem } from './systems/type-toolbar-system.js';
 import { DeskKeyboardSystem } from './systems/desk-keyboard-system.js';
 import { XrScrollFixSystem } from './systems/xr-scroll-fix-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
@@ -69,6 +70,8 @@ World.create(
     .registerSystem(NoteViewSystem)
     // After the note view: Type mode moves the page and bar it placed.
     .registerSystem(TypeModeSystem)
+    // After TypingSystem, whose editor its buttons drive.
+    .registerSystem(TypeToolbarSystem)
     // After both panels, so followers re-anchor once they have placed themselves.
     .registerSystem(FollowModeSystem)
     .registerSystem(ToastSystem)

@@ -133,18 +133,18 @@ const kinds = (editor) => editor.frame.blocks.map((b) => b.kind);
 }
 
 {
-  // Wrapping: a frame 0.3 page wide = 300 units, body text 11 units a character: 27 characters a line.
+  // Wrapping: a frame 0.3 page wide = 300 units, body text 12 units a character: 25 characters a line.
   const page = createPage();
   const editor = new TextEditor(layout, () => clock);
   editor.setPage(page);
   editor.newFrame(0.1, 0.1, 0.3);
   typeAll(editor, 'the quick brown fox jumps over the lazy dog again and again');
   const lines = layout.layoutFrame(editor.frame).blocks[0].lines;
-  check('long text wraps at spaces', lines.length > 1 && lines.every((l) => l.carets[l.carets.length - 1] - l.carets[0] <= 300 + 11));
+  check('long text wraps at spaces', lines.length > 1 && lines.every((l) => l.carets[l.carets.length - 1] - l.carets[0] <= 300 + 12));
   editor.move('start');
   editor.move('down');
   check('Down goes to the next line', editor.caret.offset === lines[1].start, `${editor.caret.offset} vs ${lines[1].start}`);
-  const at = layout.positionAt(editor.frame, 0.1 + (11 * 4) / PAGE_UNITS, 0.1 + 0.005);
+  const at = layout.positionAt(editor.frame, 0.1 + (12 * 4) / PAGE_UNITS, 0.1 + 0.005);
   check('a tap finds the character under it', at.block === 0 && at.offset === 4, JSON.stringify(at));
   const hit = layout.frameAt(page.frames, 0.15, 0.11);
   const miss = layout.frameAt(page.frames, 0.8, 0.8);

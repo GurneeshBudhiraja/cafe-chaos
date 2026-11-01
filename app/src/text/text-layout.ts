@@ -54,16 +54,16 @@ export const FONT_FAMILIES: Record<BlockStyle['family'], string> = {
 export const INK_COLOR = '#22201d';
 const MUTED_COLOR = '#6f685f';
 
-/** Font sizes in page units (1000 across): body text is about 2.2% of the page's width. */
+/** Font sizes in page units (1000 across): body text is about 2.4% of the page's width. */
 export const BLOCK_STYLES: Record<BlockKind, BlockStyle> = {
-  paragraph: { size: 22, weight: 400, family: 'body', italic: false, leading: 1.42, before: 0, after: 7, color: INK_COLOR },
-  title: { size: 44, weight: 700, family: 'heading', italic: false, leading: 1.18, before: 6, after: 10, color: INK_COLOR },
-  heading: { size: 33, weight: 700, family: 'heading', italic: false, leading: 1.22, before: 6, after: 8, color: INK_COLOR },
-  subheading: { size: 26, weight: 700, family: 'heading', italic: false, leading: 1.28, before: 4, after: 6, color: '#3b3732' },
-  bullet: { size: 22, weight: 400, family: 'body', italic: false, leading: 1.42, before: 0, after: 3, color: INK_COLOR },
-  numbered: { size: 22, weight: 400, family: 'body', italic: false, leading: 1.42, before: 0, after: 3, color: INK_COLOR },
-  checklist: { size: 22, weight: 400, family: 'body', italic: false, leading: 1.42, before: 0, after: 3, color: INK_COLOR },
-  quote: { size: 23, weight: 400, family: 'serif', italic: true, leading: 1.45, before: 2, after: 8, color: '#4a453f' },
+  paragraph: { size: 24, weight: 400, family: 'body', italic: false, leading: 1.42, before: 0, after: 7, color: INK_COLOR },
+  title: { size: 48, weight: 700, family: 'heading', italic: false, leading: 1.18, before: 6, after: 10, color: INK_COLOR },
+  heading: { size: 36, weight: 700, family: 'heading', italic: false, leading: 1.22, before: 6, after: 8, color: INK_COLOR },
+  subheading: { size: 29, weight: 700, family: 'heading', italic: false, leading: 1.28, before: 4, after: 6, color: '#3b3732' },
+  bullet: { size: 24, weight: 400, family: 'body', italic: false, leading: 1.42, before: 0, after: 3, color: INK_COLOR },
+  numbered: { size: 24, weight: 400, family: 'body', italic: false, leading: 1.42, before: 0, after: 3, color: INK_COLOR },
+  checklist: { size: 24, weight: 400, family: 'body', italic: false, leading: 1.42, before: 0, after: 3, color: INK_COLOR },
+  quote: { size: 25, weight: 400, family: 'serif', italic: true, leading: 1.45, before: 2, after: 8, color: '#4a453f' },
 };
 
 /** Each nesting level steps in this far, and a list's text starts this far after its marker (units). */

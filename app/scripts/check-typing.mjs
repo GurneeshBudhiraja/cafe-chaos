@@ -185,6 +185,56 @@ await page.keyboard.press('Control+y');
 const back = (await typed())[0].blocks.at(-1).text;
 expect(last !== back && back === 'review chapter 5', 'Ctrl+Z undoes, Ctrl+Y redoes', { last, back });
 
+// --- The toolbar: lists, marks, a ray-drag selection, the checkbox, undo.
+const lastBlock = async () => (await typed())[0].blocks.at(-1);
+await page.keyboard.press('Enter');
+await rec.tap('tool-bullet');
+await keys('Spindle fibres');
+expect((await lastBlock()).kind === 'bullet', 'the bullet-list button makes a list item', await lastBlock());
+await rec.tap('tool-bold');
+await keys(' pull apart');
+expect((await lastBlock()).bold.join() === ' pull apart', 'Bold on the toolbar: what is typed next is bold', await lastBlock());
+/** A page point at a block's character offset (on its line, mid-height). */
+const textPoint = (block, offset) =>
+  page.evaluate(([b, o]) => {
+    const typing = window.__metaNotes.world.globals['metaNotes.typing'];
+    const frame = typing.editor.frames[0];
+    const at = typing.layout.caretAt(frame, { block: b, offset: o });
+    const u = frame.x + at.x / 1000;
+    const v = frame.y + (at.line.top + at.line.height / 2) / (1000 / (4 / 3));
+    return window.__metaNotes.demo.pagePoint(u, v);
+  }, [block, offset]);
+const spindle = (await typed())[0].blocks.length - 1;
+await rec.rayDrag(await textPoint(spindle, 0), await textPoint(spindle, 7), 900);
+const selection = await page.evaluate(() => {
+  const editor = window.__metaNotes.world.globals['metaNotes.typing'].editor;
+  return { anchor: editor.anchor, caret: editor.caret };
+});
+expect(selection.anchor?.offset === 0 && selection.caret.offset === 7, 'a ray drag over the text selects it', selection);
+await shot('5a-selection');
+await rec.tap('tool-underline');
+let underlined = await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.typing'].editor.format().marks.underline);
+expect(underlined, 'Underline applies to the selection, and the toolbar shows it on', { underlined });
+await shot('5b-toolbar-state');
+await rec.tap('tool-undo');
+underlined = await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.typing'].editor.format().marks.underline);
+expect(!underlined, 'the undo button takes it back', { underlined });
+const checklist = (await typed())[0].blocks.findIndex((b) => b.kind === 'checklist');
+const box = await page.evaluate((b) => {
+  const typing = window.__metaNotes.world.globals['metaNotes.typing'];
+  const frame = typing.editor.frames[0];
+  const marker = typing.layout.layoutFrame(frame).blocks[b].marker.box;
+  return window.__metaNotes.demo.pagePoint(frame.x + (marker.x + marker.size / 2) / 1000, frame.y + (marker.y + marker.size / 2) / 750);
+}, checklist);
+await page.evaluate((p) => window.IWER_DEVICE.remote.dispatch('look_at', { device: 'hand-right', target: p }), box);
+await pause(350);
+await page.evaluate(() => window.IWER_DEVICE.remote.dispatch('set_select_value', { device: 'hand-right', value: 1 }));
+await pause(200);
+await page.evaluate(() => window.IWER_DEVICE.remote.dispatch('set_select_value', { device: 'hand-right', value: 0 }));
+await pause(250);
+expect((await typed())[0].blocks[checklist].checked === true, "a tap on a checklist item's box ticks it", (await typed())[0].blocks[checklist]);
+await shot('5c-ticked');
+
 // --- Tap elsewhere: a new text box there.
 const tapAt = async (u, v) => {
   const point = await page.evaluate(([pu, pv]) => window.__metaNotes.demo.pagePoint(pu, pv), [u, v]);
