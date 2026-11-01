@@ -9,10 +9,12 @@
  *   mode puts the caret just below the handwriting (or at the end of the
  *   text typed last), so the user can type straight away; a tap anywhere
  *   on the page types there instead, as in Excalidraw.
- * - In Type mode, a tap or poke on the page places the caret (a quick
- *   second tap selects the word; a drag selects text; a tap on a
- *   checklist's box ticks it), and a real keyboard types (key-commands.ts).
- *   The desk keyboard types through the same commands (DeskKeyboardSystem).
+ * - In Type mode the headset's own keyboard (Meta Quest's system keyboard,
+ *   system-keyboard.ts) comes up and types at the caret. A tap or poke on
+ *   the page places the caret and brings the keyboard back if it was
+ *   closed (a quick second tap selects the word; a drag selects text; a tap
+ *   on a checklist's box ticks it). A real keyboard types too, with Docs'
+ *   shortcuts (key-commands.ts).
  *
  * Staging the floating page and the desk keyboard is TypeModeSystem's job.
  */
@@ -24,6 +26,7 @@ import type { NoteSession } from '../notes/note-session.js';
 import type { Page } from '../notes/note-model.js';
 import { SURFACE_HEIGHT_M, SURFACE_WIDTH_M, WRITING_SURFACE_NAME } from '../scene-assets/tablet.scene-asset.js';
 import { applyKey, type KeyStroke } from '../text/key-commands.js';
+import { SystemKeyboard } from '../text/system-keyboard.js';
 import { FRAME_MARGIN, TextEditor } from '../text/text-editor.js';
 import { TextLayout, PAGE_UNITS_HEIGHT } from '../text/text-layout.js';
 import { createCanvasMeasure, loadTextFonts, PageTextView } from '../text/text-renderer.js';
@@ -55,6 +58,7 @@ export class TypingSystem extends createSystem({}) {
   private editor!: TextEditor;
   private layout!: TextLayout;
   private view!: PageTextView;
+  private keyboard!: SystemKeyboard;
   private tablet!: Object3D;
   private surface!: Mesh;
   private refreshToggle: Array<() => void> = [];
@@ -81,6 +85,8 @@ export class TypingSystem extends createSystem({}) {
     this.typing.editor = this.editor;
     this.typing.layout = this.layout;
     this.typing.setKeyHandler((stroke) => this.typeKey(stroke));
+    this.keyboard = new SystemKeyboard(this.editor);
+    this.typing.setKeyboardOpener(() => this.showKeyboard());
     // Text draws over the ink.
     this.view = new PageTextView(surface, SURFACE_WIDTH_M, SURFACE_HEIGHT_M, this.layout, INK_RENDER_ORDER + 1);
 
@@ -115,6 +121,8 @@ export class TypingSystem extends createSystem({}) {
       }),
       () => {
         this.typing.setKeyHandler(null);
+        this.typing.setKeyboardOpener(null);
+        this.keyboard.dispose();
         this.view.dispose();
       },
     );
@@ -128,8 +136,14 @@ export class TypingSystem extends createSystem({}) {
 
   private onModeChange(typing: boolean): void {
     for (const refresh of this.refreshToggle) refresh();
-    if (typing) this.placeStartingCaret();
-    else this.editor.blur();
+    if (typing) {
+      this.placeStartingCaret();
+      // Called from the toggle's tap, so the browser lets the keyboard come up.
+      this.keyboard.show();
+    } else {
+      this.keyboard.hide();
+      this.editor.blur();
+    }
     this.view.setCaretVisible(typing);
     this.render();
   }
@@ -197,6 +211,7 @@ export class TypingSystem extends createSystem({}) {
       const again = now - this.lastTap.at < DOUBLE_TAP_MS && Math.hypot(x - this.lastTap.x, y - this.lastTap.y) < DOUBLE_TAP_REACH;
       this.lastTap = { at: again ? -Infinity : now, x, y };
       this.editor.typeAt(x, y);
+      if (!this.keyboard.open) this.keyboard.show();
       if (again) {
         this.editor.selectWord(this.editor.caret);
         return;
@@ -252,7 +267,14 @@ export class TypingSystem extends createSystem({}) {
     this.cleanupFuncs.push(() => window.removeEventListener('keydown', onKey));
   }
 
-  /** Type one key (from any keyboard). Returns whether it did anything. */
+  /** Bring the headset's keyboard up, typing at the caret (or where Type mode starts). */
+  private showKeyboard(): void {
+    if (!this.typing.typing) return;
+    if (!this.editor.frame) this.placeStartingCaret();
+    this.keyboard.show();
+  }
+
+  /** Type one key (from a real keyboard). Returns whether it did anything. */
   private typeKey(stroke: KeyStroke): boolean {
     if (!this.typing.typing) return false;
     // Typing with no caret starts where Type mode would.

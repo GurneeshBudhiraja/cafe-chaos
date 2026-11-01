@@ -17,7 +17,7 @@ npm run record:tour -- <360-photo.jpg>  # headset-view video of the home into ar
 npm run check:tool-wheel   # tool wheel check, screenshots in artifacts/tool-wheel/ (~12 min)
 npm run check:stickies     # sticky notes check, screenshots in artifacts/stickies/ (~9 min)
 npm run check:text-editor  # the typing editor's rules and layout, no browser (seconds)
-npm run check:typing       # typing mode check, screenshots in artifacts/typing/ (~12 min)
+npm run check:typing       # typing mode check, screenshots in artifacts/typing/ (~9 min)
 npm run record:typing      # headset-view video of typing mode into artifacts/typing.mp4
 ```
 
@@ -89,15 +89,13 @@ note write fail (for checking error handling by hand).
     relative to the room's anchor), saved on the headset.
 - **Typing mode:** the Write / Type toggle on the note bar.
   - **Type:** the tablet goes away; the page (with its handwriting) floats
-    ahead of you, larger, with a formatting toolbar under it, and a
-    keyboard appears on the desk where the tablet lay (with no desk, it
-    floats low ahead, tilted up). The caret waits just below the
-    handwriting; tap anywhere on the page to type there instead (a new text
-    box, as in Excalidraw).
-  - **Keys:** type with your index fingertips on the desk keyboard (a key
-    strikes when the fingertip comes down onto it; the cap goes down and
-    clicks). Shift is one-shot (double tap locks it), 123 locks the number
-    row's symbols, delete repeats when held, hide goes back to Write. A
+    ahead of you, larger, with a formatting toolbar under it, and the
+    headset's own keyboard (Meta Quest's system keyboard; Quest Browser
+    26.1 or later) comes up. The caret waits just below the handwriting;
+    tap anywhere on the page to type there instead (a new text box, as in
+    Excalidraw), which also brings the keyboard back if it was closed, as
+    does the keyboard button at the toolbar's left end.
+  - **Keys:** Meta's keyboard types at the caret (suggestions included). A
     real (Bluetooth) keyboard types too, with Google Docs' shortcuts.
   - **Formatting:** the toolbar has Docs' main tools: undo and redo,
     Normal text and three headings, bold, italic, underline,
@@ -162,10 +160,11 @@ src/scene-assets/              procedural 3D assets: tablet, stylus, tool wheel,
 src/notes/                     note model, IndexedDB store, editing session (autosave)
 src/ink/                       stroke sampling rules and stroke rendering
 src/systems/                   ECS systems: dock, note page, pen, tool wheel, typing (text, Type
-                               mode staging, desk keyboard, toolbar), toasts, stick mode
+                               mode staging, toolbar), toasts, stick mode
                                (follow), tweens, home window (parked), ink, tablet handle, XR scroll fix
-src/input/                     hand pinch and fingertip reading, pen taps, pinch targets
-src/text/                      typing: rich-text editor, layout, canvas rendering, key commands
+src/input/                     hand pinch reading, pen taps, pinch targets
+src/text/                      typing: rich-text editor, layout, canvas rendering, key commands,
+                               the headset's system keyboard
 src/stickies/                  sticky notes: model, store, board, 3D object, surfaces, bin
 src/ui/                        UI services and helpers: theme, liquid glass, toasts,
                                home mode, preferences, press motion, sounds, drag

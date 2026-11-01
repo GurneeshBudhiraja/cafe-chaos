@@ -4,7 +4,10 @@
  *
  * Seated at the classroom desk with a new note:
  * - handwrite a heading with the pen, then switch to Type on the note bar:
- *   the caret waits just below the handwriting;
+ *   the page floats ahead, the headset's keyboard comes up (its hidden text
+ *   field takes focus), and the caret waits just below the handwriting;
+ * - type through that field as Meta's keyboard does (input events: text,
+ *   line breaks, backspace); close it and bring it back with the toolbar;
  * - type a short study note with a real keyboard (Markdown shortcuts make a
  *   heading, bullets, bold, a numbered list and a checklist);
  * - tap elsewhere on the page: a new text box starts there;
@@ -17,7 +20,6 @@
 import { mkdirSync } from 'node:fs';
 import { layoutLine } from './lib/handwriting.mjs';
 import { startHeadsetRecording } from './lib/headset-recorder.mjs';
-import { keyboardDriver } from './lib/keyboard-driver.mjs';
 
 const SHOTS = 'artifacts/typing';
 const TABLE_HEIGHT_M = 0.79;
@@ -112,7 +114,7 @@ let state = await typingState();
 let text = await typed();
 expect(state.mode === 'type', 'the Type toggle switches to typing', state);
 expect(text.length === 1 && text[0].y > 0.12 && text[0].y < 0.3, 'typing starts just below the handwriting', text);
-// --- Staging: the page floats ahead, larger; the tablet's body goes; the keyboard is on the desk.
+// --- Staging: the page floats ahead, larger; the tablet's body goes; the headset's keyboard is asked for.
 await pause(900);
 const staged = () =>
   page.evaluate(() => {
@@ -120,7 +122,6 @@ const staged = () =>
     const tablet = window.__metaNotes.world.getSceneObject('tablet');
     const V = tablet.position.constructor;
     const face = new V(0, 0, 1).transformDirection(tablet.matrixWorld);
-    const keyboard = scene.getObjectByName('DeskKeyboard');
     // Any mesh shown that is not the page (or on it) is the tablet's body.
     let bodyShown = false;
     tablet.traverse((o) => {
@@ -136,31 +137,46 @@ const staged = () =>
       faceUp: +face.y.toFixed(2),
       y: +tablet.position.y.toFixed(2),
       bodyShown,
-      keyboard: keyboard ? { shown: keyboard.visible, y: +keyboard.position.y.toFixed(3) } : null,
+      keyboardUp: document.activeElement?.tagName === 'TEXTAREA',
     };
   });
 let stage = await staged();
 expect(stage.scale > 1.2 && stage.faceUp < 0.5 && stage.y > 1.0, 'Type mode: the page floats ahead of the eyes, larger, upright', stage);
 expect(!stage.bodyShown, "the tablet's body (bezel, pen, pad) is put away", stage);
-expect(stage.keyboard?.shown && Math.abs(stage.keyboard.y - 0.79) < 0.03, 'the keyboard lies on the desk where the tablet was', stage);
+expect(stage.keyboardUp, "the headset's keyboard is asked for (its text field has focus)", stage);
 const pageCentre = () => page.evaluate(() => window.__metaNotes.demo.pagePoint(0.5, 0.5));
 await rec.moveHead(SEAT);
 await rec.lookAt(await pageCentre(), 500);
 await shot('2-type-mode-floating');
-await rec.lookAt({ ...(await worldOf('DeskKeyboard')), y: 0.95 }, 500);
-await shot('2b-keyboard-on-desk');
 
-// --- The desk keyboard: fingertips strike the keys (shift for a capital).
-const desk = keyboardDriver(rec);
-await desk.ready();
-await desk.type('Hi there\n');
-await shot('2c-typed-on-desk-keyboard');
+// --- Meta's keyboard: what it types arrives as input events on the focused field (no key events).
+/** One input event on the keyboard's field, as the system keyboard sends it. */
+const systemInput = (inputType, data = null) =>
+  page.evaluate(([type, d]) => {
+    const field = document.activeElement;
+    field.dispatchEvent(new InputEvent('input', { inputType: type, data: d, bubbles: true }));
+  }, [inputType, data]);
+for (const char of 'Hi therr') await systemInput('insertText', char);
+await systemInput('deleteContentBackward');
+await systemInput('insertText', 'e');
+await systemInput('insertLineBreak');
+await pause(200);
 text = await typed();
-expect(text[0].blocks[0].text === 'Hi there' && text[0].blocks.length === 2, 'fingertips on the desk keyboard type (shift, space, return)', text[0].blocks);
-const pressed = await page.evaluate(() => window.__metaNotes.world.getSystems().find((s) => s.constructor.name === 'DeskKeyboardSystem').fingers.right.down);
-expect(pressed === null, 'keys come back up after a strike', { pressed });
-await rec.moveHand(HAND_REST);
-await rec.moveLeftHand(LEFT_REST);
+expect(text[0].blocks[0].text === 'Hi there' && text[0].blocks.length === 2, "the headset keyboard types: letters, backspace, return", text[0].blocks);
+// A suggestion being composed shows as it changes, and settles on the final word.
+await systemInput('insertCompositionText', 'cel');
+await systemInput('insertCompositionText', 'cells');
+await page.evaluate(() => document.activeElement.dispatchEvent(new CompositionEvent('compositionend', { data: 'cells' })));
+await systemInput('insertText', ' ');
+text = await typed();
+expect(text[0].blocks[1].text === 'cells ', 'composed text (suggestions) lands once, in its final form', text[0].blocks);
+for (let i = 0; i < 6; i++) await systemInput('deleteContentBackward');
+await shot('2b-typed-with-system-keyboard');
+// Closing the keyboard (Done, or a tap outside) blurs the field; the toolbar's keyboard button brings it back.
+await page.evaluate(() => document.activeElement.blur());
+expect(!(await staged()).keyboardUp, 'closing the keyboard', {});
+await rec.tap('tool-keyboard');
+expect((await staged()).keyboardUp, "the toolbar's keyboard button brings it back", await staged());
 await rec.lookAt(await pageCentre(), 500);
 
 // --- A study note, with Markdown shortcuts.
@@ -271,7 +287,7 @@ await rec.tap('note-bar-mode-write');
 await pause(900);
 state = await typingState();
 stage = await staged();
-expect(stage.scale === 1 && stage.faceUp > 0.9 && stage.bodyShown && !stage.keyboard.shown, 'Write mode: the page is back on the tablet, the keyboard put away', stage);
+expect(stage.scale === 1 && stage.faceUp > 0.9 && stage.bodyShown && !stage.keyboardUp, 'Write mode: the page is back on the tablet, the keyboard put away', stage);
 await rec.moveHead(LEANING_IN);
 await rec.lookAt({ ...tablet, y: tablet.y - 0.1 }, 400);
 text = await typed();

@@ -61,12 +61,6 @@ export function readPinch(source: XRInputSource | undefined, at: HandFrame, out:
   return true;
 }
 
-/** The tip of `hand`'s index finger (world) into `out`; false when the hand is not tracked. */
-export function readFingertip(source: XRInputSource | undefined, at: HandFrame, out: Vector3): boolean {
-  const hand = source?.hand;
-  return hand ? jointAt(at, hand, 'index-finger-tip', out) : false;
-}
-
 /** A joint's world position into `out`, or false when it is not tracked. */
 function jointAt(at: HandFrame, hand: XRHand, name: XRHandJoint, out: Vector3): boolean {
   const space = hand.get(name);

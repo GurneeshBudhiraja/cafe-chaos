@@ -1,6 +1,6 @@
 <!--
   Type toolbar: the formatting bar under the floating page in Type mode,
-  laid out like Google Docs' toolbar (undo and redo; text styles; bold,
+  laid out like Google Docs' toolbar (the headset keyboard; undo and redo; text styles; bold,
   italic, underline, strikethrough; lists; indent; alignment; clear
   formatting), and below it the grab bar that moves the page.
   TypeModeSystem (src/systems/type-mode-system.ts) places it under the page
@@ -58,6 +58,8 @@
 </style>
 <div id="type-toolbar-root" class="root">
   <div id="type-toolbar-row" class="toolbar">
+    <div id="tool-keyboard" class="tool"><Keyboard width="21" height="21"></Keyboard></div>
+    <div class="divider"></div>
     <div id="tool-undo" class="tool"><Undo2 width="20" height="20"></Undo2></div>
     <div id="tool-redo" class="tool"><Redo2 width="20" height="20"></Redo2></div>
     <div class="divider"></div>

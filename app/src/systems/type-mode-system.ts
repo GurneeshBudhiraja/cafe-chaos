@@ -6,19 +6,17 @@
  *   the page is left, on a thin paper card, with its handwriting and text;
  * - the page rises and floats in front of the viewer, a little larger and a
  *   little below eye level, facing the eyes; the note bar rides on its top
- *   edge and the formatting toolbar under its bottom edge;
- * - the keyboard appears where the tablet lay on the desk (or, with no
- *   desk, floating low in front, tilted up toward the viewer).
+ *   edge and the formatting toolbar under its bottom edge. The headset's
+ *   own keyboard (TypingSystem brings it up) types into it.
  *
  * The page can be moved by the grab bar under the toolbar (pinch it and
  * move the hand, as with a window in visionOS) and resized from its bottom
  * corners (pinch a corner's arc and pull it out or in). Switching back to
- * Write returns the page to the tablet, where it was, and puts the keyboard
- * away. Closing the note leaves Type mode at once.
+ * Write returns the page to the tablet, where it was. Closing the note
+ * leaves Type mode at once.
  */
 
 import {
-  AssetManager,
   createSystem,
   DoubleSide,
   Euler,
@@ -37,19 +35,16 @@ import {
   type UIKitMLAsset,
 } from '@iwsdk/core';
 import { SURFACE_HEIGHT_M, SURFACE_WIDTH_M, WRITING_SURFACE_NAME } from '../scene-assets/tablet.scene-asset.js';
-import { DeskKeyboard } from '../ui/desk-keyboard.js';
 import { faceViewer, makeDraggable } from '../ui/drag.js';
 import { attachLiquidGlass, type LiquidGlass } from '../ui/liquid-glass.js';
-import { MeshFade } from '../ui/mesh-fade.js';
 import { getNoteView, type NoteViewState } from '../ui/note-view.js';
 import { PanelBinding, panelSize, setVisible, UIKIT_PIXEL_M, type PanelElement } from '../ui/panel-helpers.js';
-import { easeInOutCubic, easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
+import { easeInOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 import { getTyping, type TypingState } from '../ui/typing-state.js';
 
 const TABLET_NODE = 'tablet';
 const BAR_NODE = 'note-bar';
 const TOOLBAR_NODE = 'type-toolbar';
-const KEYBOARD_ASSET = 'desk-keyboard';
 
 /** The floating page: this far from the eyes, this far below eye level, this much larger than on the tablet. */
 const FLOAT_DISTANCE_M = 0.55;
@@ -81,17 +76,9 @@ const CORNER_TUBE_M = 0.0026;
 const CORNER_OUTSET_M = 0.016;
 const CORNER_REST_OPACITY = 0.5;
 const CORNER_HOVER_OPACITY = 0.95;
-/** With no desk, the keyboard floats this far ahead and below the eyes, tilted up by this much. */
-const KEYBOARD_AHEAD_M = 0.4;
-const KEYBOARD_BELOW_EYE_M = 0.45;
-const KEYBOARD_TILT_DEG = 22;
-/** The keyboard sits this far in front of where the tablet's centre was (toward the viewer), on the desk. */
-const KEYBOARD_TOWARD_VIEWER_M = 0.04;
 /** Transitions (ms). */
 const RISE_MS = 520;
 const RETURN_MS = 420;
-const KEYBOARD_IN_MS = 360;
-const KEYBOARD_OUT_MS = 200;
 
 /** A pose to come back to. */
 interface Pose {
@@ -127,18 +114,12 @@ export class TypeModeSystem extends createSystem({}) {
   /** Where the tablet and bar were before typing. */
   private tabletPose: Pose | null = null;
   private barPose: Pose | null = null;
-  /** Whether the tablet lay on a desk when typing began (the keyboard goes there). */
-  private onDesk = false;
-  private keyboard: DeskKeyboard | null = null;
-  private keyboardFade: MeshFade | null = null;
-  private keyboardLoading: Promise<void> | null = null;
   /** The page is in Type mode's place (or going there): the bar and toolbar follow it. */
   private staged = false;
   /** The page's own glow on the tablet, to restore. */
   private pageGlow = 0;
   private readonly head = new Vector3();
   private readonly euler = new Euler(0, 0, 0, 'YXZ');
-  private readonly scratch = new Vector3();
   private readonly fromPose: Pose = { position: new Vector3(), quaternion: new Quaternion(), scale: new Vector3() };
   private readonly toPose: Pose = { position: new Vector3(), quaternion: new Quaternion(), scale: new Vector3() };
 
@@ -179,10 +160,7 @@ export class TypeModeSystem extends createSystem({}) {
 
     this.cleanupFuncs.push(
       this.typing.subscribe((mode) => (mode === 'type' ? this.enter() : this.leave())),
-      () => {
-        this.tweens.cancel('type-mode');
-        this.tweens.cancel('type-keyboard');
-      },
+      () => this.tweens.cancel('type-mode'),
     );
   }
 
@@ -204,8 +182,6 @@ export class TypeModeSystem extends createSystem({}) {
     this.tweens.cancel('type-mode');
     this.tabletPose = savePose(this.tablet);
     this.barPose = savePose(this.bar);
-    // The page faces up when the tablet lies on a desk.
-    this.onDesk = this.scratch.set(0, 0, 1).transformDirection(this.tablet.matrixWorld).y > 0.7;
     this.hidePending = true;
     this.staged = true;
     for (const object of this.typeOnly) object.visible = true;
@@ -215,7 +191,6 @@ export class TypeModeSystem extends createSystem({}) {
     this.floatingPose(this.toPose);
     copyPose(this.fromPose, this.tabletPose);
     this.tweens.play(RISE_MS, (t) => this.blendPose(easeInOutCubic(t)), { key: 'type-mode' });
-    this.showKeyboard();
   }
 
   private leave(): void {
@@ -223,7 +198,6 @@ export class TypeModeSystem extends createSystem({}) {
     const back = this.tabletPose;
     this.tabletPose = null;
     this.tweens.cancel('type-mode');
-    this.hideKeyboard(this.noteView.isOpen);
     this.showToolbar(false);
     for (const object of this.typeOnly) object.visible = false;
     if (!this.noteView.isOpen) {
@@ -460,85 +434,6 @@ export class TypeModeSystem extends createSystem({}) {
       object.raycast = raycast;
     }
     this.hidden.length = 0;
-  }
-
-  // --------------------------------------------------------- the keyboard
-
-  /** Bring the keyboard out: where the tablet lay on the desk, or floating low ahead without one. */
-  private showKeyboard(): void {
-    this.keyboardLoading ??= AssetManager.loadGLTFById(KEYBOARD_ASSET)
-      .then(() => {
-        const model = AssetManager.getGLTF(KEYBOARD_ASSET)?.scene;
-        if (!model) throw new Error('the model did not load');
-        model.name = 'DeskKeyboard';
-        this.world.createTransformEntity(model);
-        this.keyboard = new DeskKeyboard(model, this.tweens);
-        this.keyboardFade = new MeshFade(model);
-        model.visible = false;
-      })
-      .catch((error: unknown) => console.warn('[TypeModeSystem] The desk keyboard could not load.', error));
-    void this.keyboardLoading.then(() => {
-      const keyboard = this.keyboard;
-      if (!keyboard || !this.typing.typing) return;
-      this.placeKeyboard(keyboard.root);
-      keyboard.root.visible = true;
-      this.typing.keyboard = keyboard;
-      this.keyboardFade?.set(0);
-      const rest = keyboard.root.position.y;
-      this.tweens.play(
-        KEYBOARD_IN_MS,
-        (t) => {
-          const e = easeOutCubic(t);
-          this.keyboardFade?.set(e);
-          keyboard.root.position.y = rest + (1 - e) * 0.02;
-        },
-        { key: 'type-keyboard', done: () => this.keyboardFade?.restore() },
-      );
-    });
-  }
-
-  private hideKeyboard(animate: boolean): void {
-    const keyboard = this.keyboard;
-    if (!keyboard?.root.visible) return;
-    this.typing.keyboard = null;
-    this.tweens.cancel('type-keyboard');
-    if (!animate) {
-      keyboard.root.visible = false;
-      return;
-    }
-    this.tweens.play(KEYBOARD_OUT_MS, (t) => this.keyboardFade?.set(1 - t), {
-      key: 'type-keyboard',
-      done: () => {
-        keyboard.root.visible = false;
-        this.keyboardFade?.restore();
-      },
-    });
-  }
-
-  private placeKeyboard(root: Object3D): void {
-    this.player.head.getWorldPosition(this.head);
-    const pose = this.tabletPose;
-    if (this.onDesk && pose) {
-      // On the desk where the tablet lay, a little nearer, its front edge toward the viewer.
-      const toViewer = Math.atan2(this.head.x - pose.position.x, this.head.z - pose.position.z);
-      root.position.set(
-        pose.position.x + Math.sin(toViewer) * KEYBOARD_TOWARD_VIEWER_M,
-        // The tablet's page sat its body's height above the desk.
-        pose.position.y - 0.01,
-        pose.position.z + Math.cos(toViewer) * KEYBOARD_TOWARD_VIEWER_M,
-      );
-      root.quaternion.setFromEuler(this.euler.set(0, toViewer, 0, 'YXZ'));
-      return;
-    }
-    // Floating: low ahead, tilted up toward the eyes.
-    this.player.head.getWorldQuaternion(root.quaternion);
-    const yaw = this.euler.setFromQuaternion(root.quaternion, 'YXZ').y;
-    root.position.set(
-      this.head.x - Math.sin(yaw) * KEYBOARD_AHEAD_M,
-      this.head.y - KEYBOARD_BELOW_EYE_M,
-      this.head.z - Math.cos(yaw) * KEYBOARD_AHEAD_M,
-    );
-    root.quaternion.setFromEuler(this.euler.set((KEYBOARD_TILT_DEG * Math.PI) / 180, yaw, 0, 'YXZ'));
   }
 }
 

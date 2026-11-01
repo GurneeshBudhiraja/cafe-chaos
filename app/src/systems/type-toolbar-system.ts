@@ -1,7 +1,8 @@
 /**
  * TypeToolbarSystem: the formatting toolbar under the floating page.
  *
- * Laid out like Google Docs' toolbar: undo and redo; Normal text and three
+ * Laid out like Google Docs' toolbar, after a keyboard button that brings
+ * the headset's keyboard back once it was closed: undo and redo; Normal text and three
  * heading sizes; bold, italic, underline and strikethrough; bulleted,
  * numbered and checklists and a quote; indent; alignment; clear formatting.
  * Each button runs its TextEditor command at the caret or over the
@@ -28,7 +29,9 @@ const ICON_DIM = 'rgba(247, 242, 234, 0.32)';
 /** One toolbar button: its element id, what it does, and when it shows as on. */
 interface ToolButton {
   id: string;
-  run(editor: TextEditor): void;
+  run(editor: TextEditor, typing: TypingState): void;
+  /** Works with no caret too (the keyboard button). */
+  always?: boolean;
   isOn?(format: TextFormat): boolean;
   /** Whether it can do anything now (default: while there is a caret). */
   enabled?(format: TextFormat): boolean;
@@ -52,6 +55,7 @@ const align = (name: TextAlign): ToolButton => ({
 
 /** Every button, in toolbar order (ids match type-toolbar.uikitml). */
 const BUTTONS: readonly ToolButton[] = [
+  { id: 'tool-keyboard', run: (_editor, typing) => typing.showKeyboard(), always: true },
   { id: 'tool-undo', run: (editor) => editor.undo(), enabled: (format) => format.canUndo },
   { id: 'tool-redo', run: (editor) => editor.redo(), enabled: (format) => format.canRedo },
   kind('paragraph'),
@@ -90,9 +94,9 @@ export class TypeToolbarSystem extends createSystem({}) {
     const tweens = getTweens(this.world);
     for (const button of BUTTONS) {
       const element = ui.onClick(button.id, () => {
-        if (!editor.frame) return;
+        if (!editor.frame && !button.always) return;
         playUiSound('press');
-        button.run(editor);
+        button.run(editor, this.typing);
       });
       addPressMotion(element, tweens, this.cleanupFuncs, { hover: 1.08, pressed: 0.9 });
       const paint = addToggleStateColors(element, () => this.isOn(button), this.cleanupFuncs);
@@ -120,6 +124,7 @@ export class TypeToolbarSystem extends createSystem({}) {
 
   private isEnabled(button: ToolButton): boolean {
     const editor = this.typing.editor;
+    if (button.always) return true;
     if (!editor?.frame) return false;
     return button.enabled ? button.enabled(editor.format()) : true;
   }

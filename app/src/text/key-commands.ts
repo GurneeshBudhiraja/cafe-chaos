@@ -1,7 +1,7 @@
 /**
- * Keys to editor commands, shared by every keyboard: the desk keyboard
- * (typed with the fingertips) and a real one (a Bluetooth keyboard paired
- * with the headset, or the computer's while testing).
+ * Keys to editor commands for a real keyboard (a Bluetooth keyboard paired
+ * with the headset, or the computer's while testing). The headset's own
+ * keyboard sends no key events; system-keyboard.ts handles its input.
  *
  * The shortcuts are Google Docs' where it has them: Ctrl+B, I, U; Ctrl+Z
  * and Ctrl+Y (or Ctrl+Shift+Z); Ctrl+Shift+7, 8, 9 for numbered, bulleted

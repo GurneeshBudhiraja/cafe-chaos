@@ -5,10 +5,12 @@
  * 1. New note: the tablet lands on the desk. Pick up the pen and handwrite
  *    a heading; put the pen down.
  * 2. Type on the note bar: the tablet goes away, the page rises and floats
- *    ahead with the toolbar under it, and the keyboard appears on the desk.
- *    The caret waits just below the handwriting.
- * 3. Type on the desk keyboard with the fingertips: a heading (the H2
- *    button), a sentence, a numbered list (its button), a checklist.
+ *    ahead with the toolbar under it, and the headset's keyboard is asked
+ *    for. The caret waits just below the handwriting.
+ * 3. Type: a heading (the H2 button), a sentence, a numbered list (its
+ *    button), a checklist. IWER has no system keyboard to show, so the text
+ *    arrives the way Meta's keyboard sends it (input events on the focused
+ *    field), a key at a time; on a Quest its keyboard floats below the page.
  * 4. Select words with a ray drag and make them bold; tick the checklist's box.
  * 5. Resize the page from a corner, move it by the grab bar.
  * 6. Tap the top right of the page: a second text box; type in it.
@@ -20,7 +22,6 @@
 
 import { layoutLine } from './lib/handwriting.mjs';
 import { startHeadsetRecording } from './lib/headset-recorder.mjs';
-import { keyboardDriver } from './lib/keyboard-driver.mjs';
 
 const TABLE_HEIGHT_M = 0.79;
 const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
@@ -45,8 +46,21 @@ async function prepare(r) {
 
 const rec = await startHeadsetRecording({ size: { width: 1032, height: 800 }, fovDeg: 96, captions: false, prepare });
 const { page, pause, fps, speedUp } = rec;
-const desk = keyboardDriver(rec);
-
+/** Type as Meta's keyboard does: one input event per key, at a typing pace. */
+const desk = {
+  async ready() {},
+  async type(text) {
+    for (const char of text) {
+      await page.evaluate((c) => {
+        const field = document.activeElement;
+        if (field?.tagName !== 'TEXTAREA') return;
+        const event = c === '\n' ? { inputType: 'insertLineBreak', data: null } : { inputType: 'insertText', data: c };
+        field.dispatchEvent(new InputEvent('input', { ...event, bubbles: true }));
+      }, char);
+      await pause(110);
+    }
+  },
+};
 const worldOf = (name) =>
   page.evaluate((n) => {
     const object = window.__metaNotes.world.scene.getObjectByName(n);
@@ -73,19 +87,16 @@ async function rayTap(point) {
   await page.evaluate(() => window.IWER_DEVICE.remote.dispatch('set_select_value', { device: 'hand-right', value: 0 }));
   await pause(300);
 }
-/** Tap a toolbar button with the ray, then bring the hands back over the keys. */
+/** Tap a toolbar button with the ray. */
 async function toolbar(id) {
   await rec.point(id);
   await pause(350);
   await rec.tap(id);
   await pause(250);
-  await desk.ready();
 }
-/** Look between the floating page and the keyboard, so both are in view while typing. */
+/** Look at the floating page while typing. */
 async function lookWhileTyping(ms = 700) {
-  const centre = await pagePoint(0.5, 0.62);
-  const keyboard = await worldOf('DeskKeyboard');
-  await rec.lookAt({ x: (centre.x * 2 + keyboard.x) / 3, y: (centre.y * 2 + keyboard.y) / 3, z: (centre.z * 2 + keyboard.z) / 3 }, ms);
+  await rec.lookAt(await pagePoint(0.5, 0.55), ms);
 }
 
 // --- 1. A new note; handwrite a heading.
@@ -104,7 +115,7 @@ await rec.putDownPen();
 await rec.moveHand(HAND_REST);
 await pause(600);
 
-// --- 2. Type mode: the page floats ahead; the keyboard comes out on the desk.
+// --- 2. Type mode: the page floats ahead; the headset's keyboard is asked for.
 await rec.lookAt(await rec.objectCenter('note-bar-mode-type'), 700);
 await rec.point('note-bar-mode-type');
 await pause(500);
@@ -116,7 +127,7 @@ await pause(1200);
 await lookWhileTyping(900);
 await pause(500);
 
-// --- 3. Type with the fingertips: a heading, a sentence, a numbered list, a checklist.
+// --- 3. Type: a heading, a sentence, a numbered list, a checklist.
 await desk.ready();
 await desk.type('Mitosis');
 await toolbar('tool-heading');
