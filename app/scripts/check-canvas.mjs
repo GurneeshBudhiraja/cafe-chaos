@@ -15,6 +15,7 @@
 
 import { mkdirSync } from 'node:fs';
 import { layoutLine } from './lib/handwriting.mjs';
+import { handGrab } from './lib/hand-grab.mjs';
 import { startHeadsetRecording } from './lib/headset-recorder.mjs';
 
 const SHOTS = 'artifacts/canvas';
@@ -131,58 +132,7 @@ await rec.moveHand(HAND_REST);
 await setView({ x: 0.5, y: 0.5, zoom: 1 });
 const pagePoint = (u, v) => page.evaluate(([a, b]) => window.__metaNotes.demo.pagePoint(a, b), [u, v]);
 const view = () => page.evaluate(() => window.__metaNotes.session.getView());
-await page.evaluate(() => {
-  const device = window.IWER_DEVICE;
-  const { world } = window.__metaNotes;
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const frame = () => world.renderer.info.render.frame;
-  const nextFrame = async () => {
-    const f = frame();
-    while (frame() === f) await sleep(8);
-  };
-  const call = (method, params) => device.remote.dispatch(method, params);
-  const offsets = {};
-  /** Pinch (or let go with) `hand` with its pinch closing at a world point; or move it there, pinched. */
-  window.__grab = {
-    async measure(hand) {
-      const id = `hand-${hand}`;
-      await call('set_select_value', { device: id, value: 1 });
-      for (let i = 0; i < 3; i++) await nextFrame();
-      const at = (await call('get_transform', { device: id })).position;
-      const p = await window.__rec.pinchPoint(hand);
-      offsets[hand] = { x: p.x - at.x, y: p.y - at.y, z: p.z - at.z };
-      await call('set_select_value', { device: id, value: 0 });
-      for (let i = 0; i < 3; i++) await nextFrame();
-    },
-    async move(hand, to, ms, speedUp) {
-      const id = `hand-${hand}`;
-      const from = (await call('get_transform', { device: id })).position;
-      const o = offsets[hand];
-      const target = { x: to.x - o.x, y: to.y - o.y, z: to.z - o.z };
-      const t0 = performance.now();
-      for (;;) {
-        const t = Math.min(1, (performance.now() - t0) / (ms * speedUp));
-        const e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-        await call('set_transform', {
-          device: id,
-          position: { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, z: from.z + (target.z - from.z) * e },
-        });
-        if (t >= 1) break;
-        await nextFrame();
-      }
-      await nextFrame();
-    },
-    async pinch(hand, value) {
-      await call('set_select_value', { device: `hand-${hand}`, value });
-      for (let i = 0; i < 3; i++) await nextFrame();
-    },
-  };
-});
-const grab = {
-  measure: (hand) => page.evaluate((h) => window.__grab.measure(h), hand),
-  move: (hand, to, ms = 600) => page.evaluate(([h, t, m, s]) => window.__grab.move(h, t, m, s), [hand, to, ms, rec.speedUp]),
-  pinch: (hand, value) => page.evaluate(([h, v]) => window.__grab.pinch(h, v), [hand, value]),
-};
+const grab = handGrab(rec);
 // Each hand's pinch point, measured away from the page (a pinch there takes nothing).
 await grab.measure('left');
 await grab.measure('right');
