@@ -24,6 +24,8 @@ export class PaperPreview {
   readonly texture: CanvasTexture;
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
+  /** A photo-like paper picture to draw under the lines instead of a flat colour (the tablet's page). */
+  private paperImage: CanvasImageSource | null = null;
 
   /** `width` in canvas pixels; the height follows the page aspect ratio. */
   constructor(width: number) {
@@ -37,11 +39,16 @@ export class PaperPreview {
     this.texture.colorSpace = SRGBColorSpace;
   }
 
+  /** Use a paper picture (fibres, tone, a soft edge shadow) as the background; null goes back to flat colour. */
+  setPaperImage(image: CanvasImageSource | null): void {
+    this.paperImage = image;
+  }
+
   /** Redraw the paper, then the note's first page of ink if given. */
   draw(paper: PaperStyle, note?: Note): void {
     const { ctx } = this;
     const { width: w, height: h } = this.canvas;
-    drawPaper(ctx, paper, w, h);
+    drawPaper(ctx, paper, w, h, this.paperImage);
     const page = note?.pages[0];
     if (page) {
       ctx.lineCap = 'round';
@@ -106,9 +113,19 @@ export class NoteThumbnail {
   }
 }
 
-function drawPaper(ctx: CanvasRenderingContext2D, paper: PaperStyle, w: number, h: number): void {
-  ctx.fillStyle = PAPER_COLOR;
-  ctx.fillRect(0, 0, w, h);
+function drawPaper(
+  ctx: CanvasRenderingContext2D,
+  paper: PaperStyle,
+  w: number,
+  h: number,
+  image: CanvasImageSource | null = null,
+): void {
+  if (image) {
+    ctx.drawImage(image, 0, 0, w, h);
+  } else {
+    ctx.fillStyle = PAPER_COLOR;
+    ctx.fillRect(0, 0, w, h);
+  }
   const line = Math.max(1, Math.round(w / 300));
   switch (paper) {
     case 'lined':

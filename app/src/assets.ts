@@ -23,16 +23,20 @@ import {
   stickySkyPrototype,
 } from './scene-assets/sticky-notes.scene-asset.js';
 import { pushPinPrototype, washiTapePrototype } from './scene-assets/pins-and-tape.scene-asset.js';
-import {
-  tabletHandlePrototype,
-  tabletPrototype,
-} from './scene-assets/tablet.scene-asset.js';
+import { tabletHandlePrototype } from './scene-assets/tablet.scene-asset.js';
 
 const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
 
 export default defineAssets({
-  tablet: tabletPrototype,
+  // The iPad-style tablet (made in Blender). Same contract as the code-built
+  // one in tablet.scene-asset.ts, whose size constants the systems still use.
+  tablet: {
+    url: publicAssetUrl('models/tablet.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Tablet',
+  },
   // Classroom backdrop (desktop view and recordings only; hidden in XR).
   'classroom-room': classroomRoomPrototype,
   'student-desk': studentDeskPrototype,
@@ -48,6 +52,13 @@ export default defineAssets({
   'sticky-sky': stickySkyPrototype,
   'push-pin': pushPinPrototype,
   'washi-tape': washiTapePrototype,
+  // The page's paper picture: warm off-white with fibres and a soft edge shadow (drawn under the template lines).
+  'paper-image': {
+    url: publicAssetUrl('textures/paper.jpg'),
+    type: AssetType.Texture,
+    priority: 'critical',
+    name: 'Paper Image',
+  },
   'home-window': {
     url: publicAssetUrl('ui/home-window.uikitml'),
     type: AssetType.UIKitML,

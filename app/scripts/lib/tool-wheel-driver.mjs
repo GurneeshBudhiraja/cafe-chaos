@@ -63,7 +63,10 @@ export function toolWheelDriver(rec) {
     page.evaluate(
       ([pu, pv, l]) => {
         const s = window.__metaNotes.world.scene.getObjectByName('WritingSurface');
-        const { width, height } = s.geometry.parameters;
+        // A code-built plane knows its size; a loaded model's is measured.
+        if (!s.geometry.parameters) s.geometry.computeBoundingBox();
+        const box = s.geometry.boundingBox;
+        const { width, height } = s.geometry.parameters ?? { width: box.max.x - box.min.x, height: box.max.y - box.min.y };
         const p = s.localToWorld(new s.position.constructor((pu - 0.5) * width, (0.5 - pv) * height, l));
         return { x: p.x, y: p.y, z: p.z };
       },

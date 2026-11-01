@@ -320,7 +320,7 @@ export class InkSystem extends createSystem({
     inkLayer.position.z = INK_OFFSET_M;
     surface.add(inkLayer);
 
-    const { width, height } = (surface.geometry as PlaneGeometry).parameters;
+    const { width, height } = writingAreaSize(surface);
     const size: SurfaceSize = { widthM: width, heightM: height };
     const tablet: TabletInk = {
       entity,
@@ -525,4 +525,16 @@ export class InkSystem extends createSystem({
   private onSurface(toolFraction: number, tablet: TabletInk): number {
     return (toolFraction * TOOL_SCALE_WIDTH_M) / tablet.size.widthM;
   }
+}
+
+/**
+ * A writing area's size (metres): a code-built plane knows it; a loaded
+ * model's (the Blender tablet) is measured from its bounds.
+ */
+function writingAreaSize(surface: Mesh): { width: number; height: number } {
+  const parameters = (surface.geometry as Partial<PlaneGeometry>).parameters;
+  if (parameters) return parameters;
+  surface.geometry.computeBoundingBox();
+  const box = surface.geometry.boundingBox!;
+  return { width: box.max.x - box.min.x, height: box.max.y - box.min.y };
 }

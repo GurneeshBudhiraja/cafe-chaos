@@ -93,8 +93,11 @@ export function installDevHooks(hooks: DevHooks): void {
           add(furniture.studentChairPrototype, x, z + 0.5);
         }
       }
-      const fill = new HemisphereLight(0xfffaf0, 0x9e856b, 1.8);
-      const sun = new DirectionalLight(0xfff5e0, 1.4);
+      // Soft room light. The studio environment (IBLTexture) lights the models
+      // too; stronger lamps here clip the tablet's page to flat white, which a
+      // headset (lit by the environment only) never shows.
+      const fill = new HemisphereLight(0xfffaf0, 0x9e856b, 1.0);
+      const sun = new DirectionalLight(0xfff5e0, 0.8);
       sun.position.set(-3, 2.6, 0);
       room.add(fill, sun);
       room.position.set(origin.x, 0, origin.z);

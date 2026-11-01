@@ -149,9 +149,16 @@ function installHelpers(page) {
     /** The writing surface: the tablet's page, or the one inside the object named `within` (a sticky note). */
     const surface = (within) =>
       (within ? world.scene.getObjectByName(within) : world.scene).getObjectByName('WritingSurface');
+    // The page's size: from the code-built plane's parameters, or measured on a loaded model.
+    const pageSize = (s) => {
+      if (s.geometry.parameters) return s.geometry.parameters;
+      s.geometry.computeBoundingBox();
+      const b = s.geometry.boundingBox;
+      return { width: b.max.x - b.min.x, height: b.max.y - b.min.y };
+    };
     const toWorld = (u, v, within) => {
       const s = surface(within);
-      const { width, height } = s.geometry.parameters;
+      const { width, height } = pageSize(s);
       const w = s.localToWorld(new V((u - 0.5) * width, (0.5 - v) * height, 0));
       return { x: w.x, y: w.y, z: w.z };
     };

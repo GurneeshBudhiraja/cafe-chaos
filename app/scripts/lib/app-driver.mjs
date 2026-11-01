@@ -83,7 +83,10 @@ export async function tabletPoint(page, u, v) {
     ([pu, pv]) => {
       const { world } = window.__metaNotes;
       const surface = world.scene.getObjectByName('WritingSurface');
-      const params = surface.geometry.parameters;
+      // From the code-built plane's parameters, or measured on a loaded model.
+      if (!surface.geometry.parameters) surface.geometry.computeBoundingBox();
+      const box = surface.geometry.boundingBox;
+      const params = surface.geometry.parameters ?? { width: box.max.x - box.min.x, height: box.max.y - box.min.y };
       const p = surface.position.clone().set(
         (pu - 0.5) * params.width,
         (0.5 - pv) * params.height,

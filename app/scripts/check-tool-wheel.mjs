@@ -189,7 +189,10 @@ await shot('10-page-marker-highlighter-pen');
 // Lean in over the page, as one does to read it, for a close look at the ink.
 const page40 = await page.evaluate(() => {
   const s = window.__metaNotes.world.scene.getObjectByName('WritingSurface');
-  const { width, height } = s.geometry.parameters;
+  // A code-built plane knows its size; a loaded model's is measured.
+  if (!s.geometry.parameters) s.geometry.computeBoundingBox();
+  const box = s.geometry.boundingBox;
+  const { width, height } = s.geometry.parameters ?? { width: box.max.x - box.min.x, height: box.max.y - box.min.y };
   const p = s.localToWorld(new s.position.constructor((0.2 - 0.5) * width, (0.5 - 0.48) * height, 0));
   return { x: p.x, y: p.y, z: p.z };
 });
