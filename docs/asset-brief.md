@@ -461,3 +461,44 @@ These aren't separate projects. Each is built as part of its feature, but it mus
 | Note bar | 52 px tall, 26 px corner radius, scene scale 0.175 |
 | Panel text minimum | about 1.3° of view height (readable on Quest 3S) |
 | Fade timings | appear 320 ms (ease-out, short delay), disappear 220 ms (ease-in) |
+
+---
+
+## 10. Blender models (if the hero objects are modelled in Blender)
+
+The owner may model the realistic assets in **Blender** instead of code. Each one is exported as a `.glb` (glTF 2.0 binary) into `app/public/models/` and registered in `app/src/assets.ts` as a GLTF entry (`{ url, type: AssetType.GLTF }`). It then replaces the procedural prototype **with the same contract**, so the systems keep working.
+
+### Export rules (all models)
+
+- **Units:** metres, scale 1.0. Apply all transforms (Ctrl+A → All Transforms) before export.
+- **Axes:** export with "+Y Up" (Blender's default glTF setting). In Blender's own Z-up axes:
+  - glTF **+Z** (what our contracts call "faces +Z") is Blender's **−Y** (towards the front view).
+  - glTF **+Y** is Blender's **+Z**.
+- **Names matter:** the app finds parts by object name. Use the exact names below, including the empties (Blender "Empty" objects export as glTF nodes).
+- **Materials:** Principled BSDF only, with baked image textures: Base Colour, Roughness/Metallic (one packed texture), and Normal.
+  - Use clear coat for glass (it exports as `KHR_materials_clearcoat`).
+  - No procedural Blender nodes; they don't export.
+  - Texture sizes: 1024 px for the tablet body, 512 px for the rest.
+- **Budget:** tablet ≤ 15k triangles, pen ≤ 4k, wheel ≤ 12k, keyboard ≤ 10k.
+- **Check:** open each `.glb` in https://gltf-viewer.donmccurdy.com before handing it over: scale, axes, names, textures.
+
+### The models
+
+| File | What | Size | Origin and facing (glTF axes) | Required names |
+|---|---|---|---|---|
+| `tablet.glb` | The iPad-style tablet (Asset A): aluminium body, glass front, bezel, camera dot, speakers, pen strip, back with camera bump. | Page area exactly **0.36 × 0.27 m**; bezel 16 mm; 7–9 mm thick | Origin at the page's centre; the page faces **+Z**; the top edge (pen strip) at +Y | **`WritingSurface`**: a separate flat plane mesh, exactly 0.36 × 0.27 m, UVs filling 0–1, at z = 0 (the app swaps its material for the paper and draws ink on it).<br>**`StylusDock`**: an empty where a docked pen's axis sits. |
+| `stylus.glb` | The pen (Asset B): soft-touch white body, flat docking side, satin ferrule, translucent nib, clay band, seams. | **155 mm** long, **11.6 mm** across | Origin at the middle of its length, on the axis; long axis **+X** with the nib at **+X**; the flat side faces **−Y** | **`NibTip`**: an empty exactly at the writing point.<br>Body parts: `Barrel`, `Grip`, `Band`, `Ferrule`, `Cone`, `Nib`, `TailCap`, `DockFacet`. |
+| `tool-wheel.glb` | The tool wheel (Asset C): seven frosted-glass segments around a hub, with a small 3D icon on each. | **0.2 m** across; segments 9 mm deep | Origin at the centre; faces **+Z** | **`Segment-pen`, `Segment-marker`, `Segment-highlighter`, `Segment-eraser`, `Segment-lasso`, `Segment-undo`, `Segment-redo`**: clockwise from the top, each 51.4° wide. Inner radius 46 mm.<br>Each segment holds `Wedge`, `EdgeRim`, `ActiveRim` (glowing clay; the app shows or hides it) and `Glyph-<item>`.<br>Hub: `Hub`, `LabelPlaque`, **`LabelAnchor`** (an empty on the plaque's face, where the app puts the label text), **`CurrentInk`** (a small disc whose colour the app sets). |
+| `desk-keyboard.glb` | The desk keyboard (Asset 3), matching the tablet's aluminium. | About **0.29 × 0.11 m**, 5–8 mm thick (wedge) | Origin at the centre of the **bottom** face; key tops face **+Y**; the space bar side toward **+Z** | `Base`, and **one mesh per key**, named `Key_<code>` (`Key_KeyQ`, `Key_Space`, `Key_Enter`, `Key_Backspace`, ...). Legends go in a texture atlas. |
+
+### What stays in code (don't model these)
+
+These are tiny, change at runtime, or are effects, not objects:
+- The nib shadow.
+- The edge glow.
+- The eraser ring.
+- The lasso line.
+- The colour and size ring swatches.
+- The hub label text.
+- All 2D panels (dock, note bar, tip cards).
+- The app icon (an SVG).
