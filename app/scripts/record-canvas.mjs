@@ -107,6 +107,7 @@ await pause(400);
 await slide('left', [0.75, 0.55], [0.2, 0.55], 1400);
 await grab.move('left', LEFT_REST, 600);
 await pause(400);
+const strokesBefore = await page.evaluate(() => window.__metaNotes.session.active.pages[0].strokes.length);
 await rec.penWrite(layoutLine('Meiosis', { u: 0.2, v: 0.2, size: 0.0036, seed: 9 }).strokes);
 await rec.penWrite(layoutLine('four cells', { u: 0.22, v: 0.4, size: 0.0026, seed: 11 }).strokes);
 await pause(400);
@@ -125,7 +126,19 @@ await pause(900);
 await rec.lookAt(await rec.objectCenter('note-bar-zoom'), 700);
 await pause(700);
 await rec.lookAt({ ...tablet, y: tablet.y - 0.1 }, 700);
-await twoHands([0.6, 0.45], [0.72, 0.45], [0.42, 0.45], [0.9, 0.45], 1500);
+// Where "Meiosis" and its line are on the page now (they were written after the pan).
+const meiosis = await page.evaluate((from) => {
+  const { session } = window.__metaNotes;
+  const strokes = session.active.pages[0].strokes.slice(from);
+  const xs = strokes.flatMap((s) => s.points.filter((_, i) => i % 2 === 0));
+  const ys = strokes.flatMap((s) => s.points.filter((_, i) => i % 2 === 1));
+  const view = session.getView();
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  return { u: (cx - view.x) * view.zoom + 0.5, v: (cy - view.y) * view.zoom + 0.5 };
+}, strokesBefore);
+const near = (du) => [Math.min(0.95, Math.max(0.05, meiosis.u + du)), Math.min(0.9, Math.max(0.1, meiosis.v))];
+await twoHands(near(-0.06), near(0.06), near(-0.2), near(0.2), 1500);
 await grab.move('left', LEFT_REST, 500);
 await rec.moveHand(HAND_REST);
 await pause(1200);
