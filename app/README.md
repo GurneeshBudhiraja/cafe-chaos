@@ -15,6 +15,7 @@ npm run build        # production build into dist/
 npm run smoke:notes  # notes, reloads, save failure, the dock and its panels (dev server running)
 npm run record:tour -- <360-photo.jpg>  # headset-view video of the home into artifacts/tour.mp4
 npm run check:tool-wheel   # tool wheel check, screenshots in artifacts/tool-wheel/ (~12 min)
+npm run check:stickies     # sticky notes check, screenshots in artifacts/stickies/ (~9 min)
 ```
 
 The smoke and recording scripts launch their own Chromium. Set `CHROMIUM_PATH` if Playwright
@@ -68,6 +69,21 @@ note write fail (for checking error handling by hand).
     - The **lasso** selects the strokes inside a loop; drag inside its box
       to move them, or pick Delete on its ring.
   - **Undo and redo** cover writing, erasing, moving and deleting.
+- **Sticky notes:**
+  - **New:** five small stacks (yellow, mint, pink, blue, an index card)
+    lie on the desk along the tablet's left edge. Pinch one with your free
+    hand (or tap it with a ray) and a sticky note peels off and floats up.
+  - **Writing:** write on it with the pen, as on the tablet. The tool
+    wheel, eraser, lasso and undo work on it too.
+  - **Sticking:** pinch it to carry it. Near a wall, desk or any surface
+    Quest knows from Space Setup, it lies flat on it; let go to stick it
+    there, or let go in mid-air to leave it floating.
+  - **Throwing away:** while you carry one, a bin shows low in your view.
+    Over it, the bin grows and opens; let go to drop the note in (the
+    toast's Undo brings it back).
+  - **Keeping:** sticky notes belong to the room: they show with or without
+    a note open, and come back to the same spot next session (kept
+    relative to the room's anchor), saved on the headset.
 - **Templates:** six papers (Blank, Lined, Grid, Dotted, Cornell, Checklist),
   each with a line on what it is for; picking one starts a note on it.
 - **Settings:** the stick mode switch (remembered on this device) and Google
@@ -90,8 +106,8 @@ note write fail (for checking error handling by hand).
 - **The full home window** (`home-window.uikitml`, `HomeWindowSystem`) is
   hidden and kept for a future "all notes" view; it still raises the
   save-failure toast.
-- **3D assets** (stylus, tool wheel, sticky notes, push pin, washi tape) are
-  registered in `src/assets.ts` but not placed in the scene.
+- **3D assets** (push pin, washi tape) are registered in `src/assets.ts`
+  but not placed in the scene.
 - **Account connections, a light theme and handedness** are planned for
   Settings.
 
@@ -121,7 +137,8 @@ src/notes/                     note model, IndexedDB store, editing session (aut
 src/ink/                       stroke sampling rules and stroke rendering
 src/systems/                   ECS systems: dock, note page, pen, tool wheel, toasts, stick mode
                                (follow), tweens, home window (parked), ink, tablet handle, XR scroll fix
-src/input/                     hand pinch reading and pen taps
+src/input/                     hand pinch reading, pen taps, pinch targets
+src/stickies/                  sticky notes: model, store, board, 3D object, surfaces, bin
 src/ui/                        UI services and helpers: theme, liquid glass, toasts,
                                home mode, preferences, press motion, sounds, drag
 src/util/                      dev-only logging and test hooks

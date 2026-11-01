@@ -190,6 +190,51 @@ await pause(400);
 list = await stickies();
 expect(list.length === 1 && list[0].strokes > 4, 'Undo on the toast brings it back, writing and all', list);
 
+// --- Phase 4: it stays. Put it on the desk, reload the app (a new session): back on the same spot,
+// shown with no note open.
+const back = await worldOf(stickyName);
+await rec.leftPinchAt(back, 600);
+await rec.moveLeftPinchTo(onDesk, 900);
+await rec.leftPinch(0);
+await rec.moveLeftHand(LEFT_REST);
+await pause(1200); // Saved a moment after it is put down.
+const before = await pose(stickyName);
+const frame = await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.stickies'].all()[0].placement.frame);
+console.log(`placement kept relative to: ${frame}`);
+await page.reload();
+await page.waitForFunction(() => window.__metaNotes?.world && window.IWER_DEVICE, null, { timeout: 60000 });
+await page.evaluate(async ([seat, origin, yaw, height]) => {
+  const { world, demo } = window.__metaNotes;
+  const call = (method, params) => window.IWER_DEVICE.remote.dispatch(method, params);
+  if (!world.renderer.xr.isPresenting) await call('accept_session', {});
+  await new Promise((r) => setTimeout(r, 1500));
+  for (const el of document.querySelectorAll('*')) if (el.shadowRoot) el.style.display = 'none';
+  demo.showClassroom(origin, yaw, height);
+  await call('set_input_mode', { mode: 'hand' });
+  await call('set_transform', { device: 'headset', position: seat });
+  await call('set_transform', { device: 'hand-left', position: { x: -0.3, y: 0.6, z: 0.6 } });
+  await call('set_transform', { device: 'hand-right', position: { x: -0.6, y: 0.6, z: 0.6 } });
+}, [LEANING_IN, CLASSROOM_ORIGIN, FACING_DEG, TABLE_HEIGHT_M]);
+await page.waitForFunction(
+  (n) => {
+    const object = window.__metaNotes.world.scene.getObjectByName(n);
+    return object?.visible && window.__metaNotes.world.globals['metaNotes.stickies'].loaded;
+  },
+  stickyName,
+  { timeout: 60000 },
+);
+await pause(800);
+const after = await pose(stickyName);
+const moved = Math.hypot(...after.position.map((v, i) => v - before.position[i]));
+const noteOpen = await page.evaluate(() => window.__metaNotes.world.globals['metaNotes.noteView']?.isOpen ?? false);
+expect(moved < 0.01 && after.face[1] > 0.95 && !noteOpen, `after a reload it is back on the desk (${(moved * 100).toFixed(1)} cm away), with no note open`, { before, after, noteOpen });
+await page.evaluate((t) => window.IWER_DEVICE.remote.dispatch('look_at', { device: 'headset', target: t }), {
+  ...onDesk,
+  y: onDesk.y - 0.12,
+});
+await pause(600);
+await shot('11-after-reload-no-note-open');
+
 const errors = await rec.finish('stickies');
 console.log(`errors ${errors.length}`);
 if (errors.length) console.log(errors.slice(0, 5).join('\n'));

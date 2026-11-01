@@ -18,7 +18,11 @@
  *   the view (sticky-bin.ts). Over it, the bin grows and opens; let go and
  *   the note drops in, with an Undo on the toast in case of a slip.
  * - Sticky notes belong to the room, not to a note: they stay where they
- *   are, whether or not a note is open.
+ *   are, whether or not a note is open, and from one session to the next.
+ *   Their places are kept relative to the room's anchor (a fixed point Quest
+ *   keeps in your real room, restored each session: IWSDK's XRAnchor), so
+ *   a note on the wall is on the same spot of the wall tomorrow. Without an
+ *   anchor (no support for it), places are kept in the scene's own space.
  *
  * The board (sticky-board.ts) keeps and saves them; this system shows them.
  */
@@ -28,10 +32,11 @@ import {
   Matrix4,
   Quaternion,
   Vector3,
+  Object3D,
+  XRAnchor,
   XRPlane as DetectedPlane,
   type Entity,
   type Group,
-  type Object3D,
 } from '@iwsdk/core';
 import { getInkSurfaces, type InkSurfaces } from '../ink/ink-surfaces.js';
 import { getPinchTargets } from '../input/pinch-targets.js';
@@ -75,11 +80,17 @@ const DROP_MS = 260;
 /** A pinch this close to a sticky note (metres: off its face, or past its edges) picks it up. */
 const GRAB_OFF_FACE_M = 0.04;
 const GRAB_PAST_EDGE_M = 0.02;
+/** Notes kept relative to the anchor wait this long for it (ms) before showing where the scene puts them. */
+const ANCHOR_WAIT_MS = 4000;
 
 interface StickyView {
   sticky: StickyNote;
   entity: Entity;
   object: Group;
+  /** Its pose relative to the room's anchor, while it is kept there (null: kept in the scene's space). */
+  inRoom: Matrix4 | null;
+  /** Being carried or animated: its pose is set by that, not by the anchor. */
+  moving: boolean;
 }
 
 /** A sticky note being carried: by which hand, and where on it the pinch holds it (its own space). */
@@ -102,6 +113,13 @@ export class StickySystem extends createSystem({
   private pad!: Object3D;
   private readonly views = new Map<string, StickyView>();
   private carry: Carry | null = null;
+  /** The room's anchor: an empty at the anchor's pose once Quest has placed (or restored) it. */
+  private room!: Object3D;
+  private roomEntity!: Entity;
+  private roomReady = false;
+  private readonly startedAt = performance.now();
+  private readonly roomInverse = new Matrix4();
+  private readonly world4 = new Matrix4();
   // Bound once; reads the detected planes for surface-snap.ts.
   private readonly surfaceList: Iterable<DetectedSurface> = {
     [Symbol.iterator]: () => this.detectedSurfaces(),
@@ -134,6 +152,14 @@ export class StickySystem extends createSystem({
     this.bin = new StickyBin(this.world, this.tweens);
     this.tablet = tabletEntity.object3D;
 
+    // The room's anchor: an empty that IWSDK's scene understanding hangs on
+    // the persistent anchor (XRAnchor); once there, it is reset to sit
+    // exactly at the anchor, so its world pose is the anchor's.
+    this.room = new Object3D();
+    this.room.name = 'StickyRoomAnchor';
+    this.roomEntity = this.world.createTransformEntity(this.room);
+    this.roomEntity.addComponent(XRAnchor);
+
     // The pad is part of the tablet (a child entity, like the pen): it lies
     // on the desk off its left edge and comes and goes with the note page.
     this.pad = stickyPadPrototype.clone();
@@ -164,7 +190,9 @@ export class StickySystem extends createSystem({
   }
 
   update(delta: number): void {
-    if (!this.pad || !this.readHands()) return;
+    if (!this.pad) return;
+    this.followRoom();
+    if (!this.readHands()) return;
     if (this.carry) {
       this.updateCarry(this.carry, delta);
       return;
@@ -203,6 +231,28 @@ export class StickySystem extends createSystem({
     return true;
   }
 
+  // ----------------------------------------------------- the room anchor
+
+  /** Once the anchor is in place, keep every note kept there at its spot in the room. */
+  private followRoom(): void {
+    if (!this.roomReady && this.roomEntity.getValue(XRAnchor, 'attached')) {
+      this.room.position.set(0, 0, 0);
+      this.room.quaternion.identity();
+      this.roomReady = true;
+      devLog('stickies', 'room anchor ready');
+    }
+    const waitedEnough = performance.now() - this.startedAt > ANCHOR_WAIT_MS;
+    if (!this.roomReady && !waitedEnough) return;
+    this.room.updateWorldMatrix(true, false);
+    for (const view of this.views.values()) {
+      if (!view.inRoom || view.moving) continue;
+      // World pose = the anchor's pose, then the note's pose relative to it.
+      this.world4.multiplyMatrices(this.room.matrixWorld, view.inRoom);
+      this.world4.decompose(view.object.position, view.object.quaternion, this.free.set(1, 1, 1));
+      view.object.visible = true;
+    }
+  }
+
   // ------------------------------------------------------------ the pad
 
 
@@ -222,6 +272,8 @@ export class StickySystem extends createSystem({
     const view = this.views.get(sticky.id);
     if (!view) return;
     const object = view.object;
+    view.moving = true;
+    view.object.visible = true;
     // From the stack's top sheet...
     const top = this.pad.getObjectByName(`StickyPad-${kind}`)?.getObjectByName('TopSheet');
     top?.getWorldPosition(this.fromPosition);
@@ -246,7 +298,13 @@ export class StickySystem extends createSystem({
         object.position.lerpVectors(this.fromPosition, to, e);
         object.quaternion.slerpQuaternions(this.fromQuaternion, this.toQuaternion, e);
       },
-      { key: `sticky-peel-${sticky.id}`, done: () => this.recordPlace(view) },
+      {
+        key: `sticky-peel-${sticky.id}`,
+        done: () => {
+          view.moving = false;
+          this.recordPlace(view);
+        },
+      },
     );
     devLog('stickies', `new ${kind} sticky note`);
   }
@@ -276,6 +334,7 @@ export class StickySystem extends createSystem({
     const grip = view.object.worldToLocal(this.point.copy(this.readings[hand].point)).clone();
     grip.z = 0;
     this.carry = { view, hand, grip };
+    view.moving = true;
     this.bin.show();
     playUiSound('press');
   }
@@ -306,6 +365,7 @@ export class StickySystem extends createSystem({
 
   private letGo(carry: Carry): void {
     this.carry = null;
+    carry.view.moving = false;
     this.wasClosed[carry.hand] = false;
     const intoBin = this.bin.over(carry.view.object.position);
     this.bin.hide();
@@ -321,6 +381,7 @@ export class StickySystem extends createSystem({
   private throwAway(view: StickyView): void {
     const object = view.object;
     const id = view.sticky.id;
+    view.moving = true;
     this.fromPosition.copy(object.position);
     const into = this.bin.mouthPosition(new Vector3());
     playUiSound('press');
@@ -363,7 +424,16 @@ export class StickySystem extends createSystem({
     if (!ink) return;
     const object = createStickyObject(sticky.kind, sticky.id);
     const placement = sticky.placement;
-    if (placement) {
+    let inRoom: Matrix4 | null = null;
+    if (placement?.frame === 'anchor') {
+      // Placed once the anchor is ready (followRoom); hidden until then, so it never jumps.
+      inRoom = new Matrix4().compose(
+        new Vector3().fromArray(placement.position),
+        new Quaternion().fromArray(placement.quaternion),
+        new Vector3(1, 1, 1),
+      );
+      object.visible = false;
+    } else if (placement) {
       object.position.fromArray(placement.position);
       object.quaternion.fromArray(placement.quaternion);
     }
@@ -371,7 +441,7 @@ export class StickySystem extends createSystem({
     // Its own page first: InkSystem picks it up when the WritingSurface arrives.
     this.surfaces.register(entity, ink);
     entity.addComponent(WritingSurface);
-    this.views.set(sticky.id, { sticky, entity, object });
+    this.views.set(sticky.id, { sticky, entity, object, inRoom, moving: false });
   }
 
   private hide(id: string): void {
@@ -386,13 +456,29 @@ export class StickySystem extends createSystem({
     disposeStickyObject(view.object);
   }
 
-  /** Remember where a sticky note is now. */
+  /** Remember where a sticky note is now: relative to the room's anchor when there is one. */
   private recordPlace(view: StickyView): void {
-    const { position, quaternion } = view.object;
+    const object = view.object;
+    if (!this.roomReady) {
+      view.inRoom = null;
+      this.board.place(view.sticky.id, {
+        frame: 'world',
+        position: object.position.toArray() as [number, number, number],
+        quaternion: object.quaternion.toArray() as [number, number, number, number],
+      });
+      return;
+    }
+    this.room.updateWorldMatrix(true, false);
+    object.updateMatrixWorld();
+    view.inRoom ??= new Matrix4();
+    view.inRoom.multiplyMatrices(this.roomInverse.copy(this.room.matrixWorld).invert(), object.matrixWorld);
+    const position = new Vector3();
+    const quaternion = new Quaternion();
+    view.inRoom.decompose(position, quaternion, new Vector3());
     this.board.place(view.sticky.id, {
-      frame: 'world',
-      position: [position.x, position.y, position.z],
-      quaternion: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
+      frame: 'anchor',
+      position: position.toArray() as [number, number, number],
+      quaternion: quaternion.toArray() as [number, number, number, number],
     });
   }
 }
