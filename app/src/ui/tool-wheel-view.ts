@@ -66,7 +66,9 @@ export class ToolWheelView {
     this.segments = WHEEL_ITEMS.map((item) => {
       const group = root.getObjectByName(`Segment-${item}`);
       if (!group) throw new Error(`[ToolWheelView] The wheel has no segment for ${item}.`);
-      return { group, activeRim: group.getObjectByName('ActiveRim') };
+      // A loaded model names each segment's rim after its tool (repeated names
+      // are renamed on load); the code-built wheel calls them all ActiveRim.
+      return { group, activeRim: group.getObjectByName(`ActiveRim-${item}`) ?? group.getObjectByName('ActiveRim') };
     });
     // The current ink dot gets its own material, so its colour can change.
     const ink = root.getObjectByName('CurrentInk');

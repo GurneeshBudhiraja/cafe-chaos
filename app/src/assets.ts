@@ -13,7 +13,6 @@ import {
   teacherDeskPrototype,
 } from './scene-assets/classroom-furniture.scene-asset.js';
 import { classroomRoomPrototype } from './scene-assets/classroom-room.scene-asset.js';
-import { toolWheelPrototype } from './scene-assets/tool-wheel.scene-asset.js';
 import {
   stickyBlushPrototype,
   stickyClassicPrototype,
@@ -50,7 +49,14 @@ export default defineAssets({
     priority: 'critical',
     name: 'Stylus',
   },
-  'tool-wheel': toolWheelPrototype,
+  // The tool wheel (made in Blender): frosted glass segments with a 3D icon each. Same
+  // contract as the code-built one in tool-wheel.scene-asset.ts, whose sizes the system uses.
+  'tool-wheel': {
+    url: publicAssetUrl('models/tool-wheel.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Tool Wheel',
+  },
   'sticky-classic': stickyClassicPrototype,
   'sticky-formal': stickyFormalPrototype,
   'sticky-mint': stickyMintPrototype,
@@ -58,6 +64,28 @@ export default defineAssets({
   'sticky-sky': stickySkyPrototype,
   'push-pin': pushPinPrototype,
   'washi-tape': washiTapePrototype,
+  // Glow along the tablet's rim where a hand comes near (made in Blender).
+  'edge-glow': {
+    url: publicAssetUrl('models/edge-glow.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Edge Glow',
+  },
+  // The realistic sticky note (made in Blender): the paper of the sticky notes
+  // in the room. Critical, since saved ones show as soon as the app starts.
+  'sticky-note': {
+    url: publicAssetUrl('models/sticky-note.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Sticky Note',
+  },
+  // Keyboard that lies on the desk for typing mode (made in Blender). Loaded when first shown.
+  'desk-keyboard': {
+    url: publicAssetUrl('models/desk-keyboard.glb'),
+    type: AssetType.GLTF,
+    priority: 'lazy',
+    name: 'Desk Keyboard',
+  },
   // Soft spot under the held pen's nib, and its body's streak (made in Blender).
   'nib-shadow': {
     url: publicAssetUrl('models/nib-shadow.glb'),

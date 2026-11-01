@@ -29,7 +29,7 @@
  * The pen never inks while the wheel is open (ToolState).
  */
 
-import { createSystem, Matrix4, Mesh, Vector3, type Entity, type Object3D } from '@iwsdk/core';
+import { AssetManager, createSystem, Matrix4, Mesh, Vector3, type Entity, type Object3D } from '@iwsdk/core';
 import { isAction, WHEEL_ITEMS, type WheelItemId } from '../ink/tool-catalog.js';
 import { getPinchTargets, type PinchTargets } from '../input/pinch-targets.js';
 import {
@@ -107,7 +107,9 @@ export class ToolWheelSystem extends createSystem({}) {
     this.tweens = getTweens(this.world);
     this.pinchTargets = getPinchTargets(this.world);
 
-    this.wheel = toolWheelPrototype.clone();
+    // The Blender wheel (`tool-wheel`, loaded with the app's critical assets);
+    // the code-built one stands in if the model is missing.
+    this.wheel = AssetManager.getGLTF('tool-wheel')?.scene ?? toolWheelPrototype.clone();
     this.wheel.scale.setScalar(WHEEL_SCALE);
     this.wheel.visible = false;
     this.world.createTransformEntity(this.wheel);

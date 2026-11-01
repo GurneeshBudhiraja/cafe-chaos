@@ -54,7 +54,7 @@ import { stickyPadPrototype } from '../scene-assets/sticky-pad.scene-asset.js';
 import { TABLET_BACK_M, TABLET_HALF_WIDTH_M } from '../scene-assets/tablet.scene-asset.js';
 import { getStickyBoard, type StickyBoard } from '../stickies/sticky-board.js';
 import { STICKY_KINDS, type StickyKind, type StickyNote } from '../stickies/sticky-model.js';
-import { createStickyObject, disposeStickyObject, stickySize } from '../stickies/sticky-object.js';
+import { createStickyObject, createStickyPaper, disposeStickyObject, stickySize } from '../stickies/sticky-object.js';
 import { StickyBin } from '../stickies/sticky-bin.js';
 import { snapToSurface } from '../stickies/surface-snap.js';
 import type { DetectedSurface } from '../ui/desk-placement.js';
@@ -163,6 +163,20 @@ export class StickySystem extends createSystem({
     // The pad is part of the tablet (a child entity, like the pen): it lies
     // on the desk off its left edge and comes and goes with the note page.
     this.pad = stickyPadPrototype.clone();
+    // The pad's top sheets match the notes that peel off it.
+    for (const kind of STICKY_KINDS) {
+      const stack = this.pad.getObjectByName(`StickyPad-${kind}`);
+      const top = stack?.getObjectByName('TopSheet');
+      if (!stack || !top) continue;
+      const paper = createStickyPaper(kind);
+      paper.name = 'TopSheet';
+      paper.position.copy(top.position);
+      paper.scale.x *= top.scale.x;
+      paper.scale.y *= top.scale.y;
+      paper.scale.z *= top.scale.z;
+      stack.remove(top);
+      stack.add(paper);
+    }
     this.pad.position.set(-(TABLET_HALF_WIDTH_M + PAD_GAP_M), 0, -TABLET_BACK_M);
     this.world.createTransformEntity(this.pad, { parent: tabletEntity });
     for (const kind of STICKY_KINDS) {

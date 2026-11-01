@@ -24,6 +24,7 @@ import { PenSystem } from './systems/pen-system.js';
 import { HomeWindowSystem } from './systems/home-window-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
 import { StickySystem } from './systems/sticky-system.js';
+import { TabletEdgeSystem } from './systems/tablet-edge-system.js';
 import { ToastSystem } from './systems/toast-system.js';
 import { ToolWheelSystem } from './systems/tool-wheel-system.js';
 import { TweenSystem } from './systems/tween-system.js';
@@ -50,6 +51,8 @@ World.create(
     .registerSystem(PenSystem)
     // After the pen, so the shadow follows where its nib is this frame.
     .registerSystem(NibShadowSystem)
+    // After the pen, so a pen picked up this frame already turns the rim's glow off.
+    .registerSystem(TabletEdgeSystem)
     // After the pen (its taps and nib), before the ink (which pauses while the wheel is open).
     .registerSystem(ToolWheelSystem)
     .registerSystem(InkSystem)

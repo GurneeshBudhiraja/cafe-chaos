@@ -170,7 +170,7 @@ s = await state();
 expect(s.tool === 'marker' && s.wheelOpen, 'marker, then Clay and Bold from the ring; the wheel stays open', s);
 await rec.penWrite(layoutLine('Cells', { u: 0.1, v: 0.42, size: 0.004, seed: 6 }).strokes);
 let stroke = await lastStroke();
-expect(stroke.tool === 'marker' && stroke.color === '#d4704f' && stroke.width === 0.015, 'the marker writes in clay, bold', stroke);
+expect(stroke.tool === 'marker' && stroke.color === '#d4704f' && Math.abs(stroke.width - 0.015) < 1e-6, 'the marker writes in clay, bold', stroke);
 
 // --- Highlighter in Pink over the marker writing, then back to the pen.
 await liftPen();
