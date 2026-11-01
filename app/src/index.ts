@@ -30,6 +30,7 @@ import { ToolWheelSystem } from './systems/tool-wheel-system.js';
 import { TweenSystem } from './systems/tween-system.js';
 import { TypingSystem } from './systems/typing-system.js';
 import { TypeModeSystem } from './systems/type-mode-system.js';
+import { DeskKeyboardSystem } from './systems/desk-keyboard-system.js';
 import { XrScrollFixSystem } from './systems/xr-scroll-fix-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
 
@@ -60,6 +61,8 @@ World.create(
     .registerSystem(InkSystem)
     // After the ink: in Type mode the page's touches are the caret's.
     .registerSystem(TypingSystem)
+    // Fingertips on the desk keyboard type through TypingSystem's editor.
+    .registerSystem(DeskKeyboardSystem)
     .registerSystem(StickySystem)
     .registerSystem(HomeWindowSystem)
     .registerSystem(CompactDockSystem)

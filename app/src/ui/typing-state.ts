@@ -9,7 +9,9 @@
  */
 
 import type { World } from '@iwsdk/core';
+import type { KeyStroke } from '../text/key-commands.js';
 import type { TextEditor } from '../text/text-editor.js';
+import type { DeskKeyboard } from './desk-keyboard.js';
 import type { TextLayout } from '../text/text-layout.js';
 
 export type InputMode = 'write' | 'type';
@@ -20,6 +22,10 @@ export class TypingState {
   /** The editor for the open page's text, once TypingSystem has made it. */
   editor: TextEditor | null = null;
   layout: TextLayout | null = null;
+  /** The keyboard on the desk while it is out (TypeModeSystem), or null. */
+  keyboard: DeskKeyboard | null = null;
+  /** Types one key into the page (set by TypingSystem). */
+  private keyHandler: ((stroke: KeyStroke) => boolean) | null = null;
 
   get mode(): InputMode {
     return this.modeValue;
@@ -37,6 +43,15 @@ export class TypingState {
 
   toggle(): void {
     this.setMode(this.typing ? 'write' : 'type');
+  }
+
+  /** Type one key from any keyboard; returns whether it did anything. */
+  typeKey(stroke: KeyStroke): boolean {
+    return this.keyHandler?.(stroke) ?? false;
+  }
+
+  setKeyHandler(handler: ((stroke: KeyStroke) => boolean) | null): void {
+    this.keyHandler = handler;
   }
 
   subscribe(listener: (mode: InputMode) => void): () => void {

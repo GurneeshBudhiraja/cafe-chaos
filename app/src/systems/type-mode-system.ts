@@ -482,6 +482,7 @@ export class TypeModeSystem extends createSystem({}) {
       if (!keyboard || !this.typing.typing) return;
       this.placeKeyboard(keyboard.root);
       keyboard.root.visible = true;
+      this.typing.keyboard = keyboard;
       this.keyboardFade?.set(0);
       const rest = keyboard.root.position.y;
       this.tweens.play(
@@ -499,6 +500,7 @@ export class TypeModeSystem extends createSystem({}) {
   private hideKeyboard(animate: boolean): void {
     const keyboard = this.keyboard;
     if (!keyboard?.root.visible) return;
+    this.typing.keyboard = null;
     this.tweens.cancel('type-keyboard');
     if (!animate) {
       keyboard.root.visible = false;

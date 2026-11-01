@@ -80,6 +80,7 @@ export class TypingSystem extends createSystem({}) {
     this.editor = new TextEditor(this.layout);
     this.typing.editor = this.editor;
     this.typing.layout = this.layout;
+    this.typing.setKeyHandler((stroke) => this.typeKey(stroke));
     // Text draws over the ink.
     this.view = new PageTextView(surface, SURFACE_WIDTH_M, SURFACE_HEIGHT_M, this.layout, INK_RENDER_ORDER + 1);
 
@@ -112,7 +113,10 @@ export class TypingSystem extends createSystem({}) {
       this.noteView.subscribe((open) => {
         if (!open) this.typing.setMode('write');
       }),
-      () => this.view.dispose(),
+      () => {
+        this.typing.setKeyHandler(null);
+        this.view.dispose();
+      },
     );
   }
 
@@ -249,7 +253,7 @@ export class TypingSystem extends createSystem({}) {
   }
 
   /** Type one key (from any keyboard). Returns whether it did anything. */
-  typeKey(stroke: KeyStroke): boolean {
+  private typeKey(stroke: KeyStroke): boolean {
     if (!this.typing.typing) return false;
     // Typing with no caret starts where Type mode would.
     if (!this.editor.frame) this.placeStartingCaret();

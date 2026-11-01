@@ -17,6 +17,7 @@
 import { mkdirSync } from 'node:fs';
 import { layoutLine } from './lib/handwriting.mjs';
 import { startHeadsetRecording } from './lib/headset-recorder.mjs';
+import { keyboardDriver } from './lib/keyboard-driver.mjs';
 
 const SHOTS = 'artifacts/typing';
 const TABLE_HEIGHT_M = 0.79;
@@ -148,6 +149,18 @@ await rec.lookAt(await pageCentre(), 500);
 await shot('2-type-mode-floating');
 await rec.lookAt({ ...(await worldOf('DeskKeyboard')), y: 0.95 }, 500);
 await shot('2b-keyboard-on-desk');
+
+// --- The desk keyboard: fingertips strike the keys (shift for a capital).
+const desk = keyboardDriver(rec);
+await desk.ready();
+await desk.type('Hi there\n');
+await shot('2c-typed-on-desk-keyboard');
+text = await typed();
+expect(text[0].blocks[0].text === 'Hi there' && text[0].blocks.length === 2, 'fingertips on the desk keyboard type (shift, space, return)', text[0].blocks);
+const pressed = await page.evaluate(() => window.__metaNotes.world.getSystems().find((s) => s.constructor.name === 'DeskKeyboardSystem').fingers.right.down);
+expect(pressed === null, 'keys come back up after a strike', { pressed });
+await rec.moveHand(HAND_REST);
+await rec.moveLeftHand(LEFT_REST);
 await rec.lookAt(await pageCentre(), 500);
 
 // --- A study note, with Markdown shortcuts.
@@ -159,9 +172,9 @@ await keys('[] review *chapter 5*');
 text = await typed();
 const blocks = text[0].blocks;
 // Enter after the heading gives body text, which "- " makes a bullet; two Enters leave a list.
-expect(blocks.map((b) => b.kind).join() === 'title,bullet,bullet,numbered,numbered,checklist',
+expect(blocks.map((b) => b.kind).join() === 'paragraph,title,bullet,bullet,numbered,numbered,checklist',
   'Markdown makes a heading, bullets, numbers and a checklist', blocks.map((b) => b.kind));
-expect(blocks[1].bold.join() === 'Interphase', '**bold** is bold', blocks[1]);
+expect(blocks[2].bold.join() === 'Interphase', '**bold** is bold', blocks[2]);
 await shot('3-typed-study-note');
 
 // --- Undo the last word and redo it.
