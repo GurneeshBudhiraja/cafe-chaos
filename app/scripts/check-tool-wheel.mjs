@@ -108,9 +108,9 @@ const liftPen = async () =>
     }),
     400,
   );
-/** Open the wheel with a double-tap, aim at each target in turn and tap to pick it. */
+/** Open the wheel with a double-tap (unless it is open), aim at each target in turn and tap to pick it. */
 const pickOnWheel = async (...targets) => {
-  await rec.penTap(2);
+  if (!(await state()).wheelOpen) await rec.penTap(2);
   for (const target of targets) {
     await rec.moveNibTo(await target(), 450);
     await rec.penTap(1);
@@ -261,6 +261,63 @@ await rec.lookAt(page40, 400);
 await shot('11-ink-close');
 await rec.moveHead(SEAT);
 await rec.lookAt(tablet, 400);
+
+// --- Phase 3: the eraser, undo and redo.
+/** World point over page point (u, v), `lift` metres above the page. */
+const overPage = (u, v, lift) =>
+  page.evaluate(
+    ([pu, pv, l]) => {
+      const s = window.__metaNotes.world.scene.getObjectByName('WritingSurface');
+      const { width, height } = s.geometry.parameters;
+      const p = s.localToWorld(new s.position.constructor((pu - 0.5) * width, (0.5 - pv) * height, l));
+      return { x: p.x, y: p.y, z: p.z };
+    },
+    [u, v, lift],
+  );
+/** Lean in over page point (u, v) for a close look, then sit back. */
+const closeLook = async (name, u = 0.2, v = 0.48) => {
+  const at = await overPage(u, v, 0);
+  await rec.moveHead({ x: at.x + 0.12, y: at.y + 0.3, z: at.z });
+  await rec.lookAt(at, 400);
+  await shot(name);
+  await rec.moveHead(SEAT);
+  await rec.lookAt(tablet, 400);
+};
+await liftPen();
+await pickOnWheel(() => aimPoint('eraser'), () => aimSize('bold'), () => aimPoint(null));
+s = await state();
+expect(s.tool === 'eraser' && !s.wheelOpen, 'the eraser is picked, bold; the hub closes the wheel', s);
+await rec.moveNibTo(await overPage(0.18, 0.42, 0.012), 500);
+const ring = await page.evaluate(() => window.__metaNotes.world.scene.getObjectByName('EraserCursor')?.visible);
+expect(ring === true, 'the eraser ring shows under the hovering nib', { ring });
+await closeLook('12-eraser-ring', 0.18, 0.42);
+const beforeErase = (await state()).strokes;
+await rec.penWrite([[[0.08, 0.41], [0.32, 0.41]]], 0.06);
+s = await state();
+expect(s.strokes < beforeErase, `rubbing across "Cells" erases it (${beforeErase} -> ${s.strokes} strokes)`, s);
+await liftPen();
+await closeLook('13-cells-erased');
+
+// Undo brings it back; redo erases it again; undo once more.
+await pickOnWheel(() => aimPoint('undo'), () => aimPoint(null));
+s = await state();
+expect(s.strokes === beforeErase && !s.wheelOpen, 'undo brings the erased strokes back', s);
+await closeLook('14-undo-brings-back');
+await liftPen();
+await pickOnWheel(() => aimPoint('redo'));
+s = await state();
+expect(s.strokes < beforeErase, 'redo erases them again', s);
+await pickOnWheel(() => aimPoint('undo'), () => aimPoint('pen'), () => aimPoint(null));
+s = await state();
+expect(s.strokes === beforeErase && s.tool === 'pen' && !s.wheelOpen, 'undo restores them; back to the pen', s);
+
+// Undo also takes back the last thing written.
+const beforeWrite = s.strokes;
+await rec.penWrite([[[0.6, 0.7], [0.7, 0.75]]]);
+await liftPen();
+await pickOnWheel(() => aimPoint('undo'), () => aimPoint(null));
+s = await state();
+expect(s.strokes === beforeWrite && !s.wheelOpen, 'undo takes back a stroke just written', { ...s, beforeWrite });
 
 // --- Writing again works, and putting the pen down still lets go.
 await rec.putDownPen();
