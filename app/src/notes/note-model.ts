@@ -42,6 +42,11 @@ export interface Stroke {
   width: number;
   /** Flat list of sampled points: [x0, y0, x1, y1, ...] in page coordinates. */
   points: number[];
+  /**
+   * Optional width multiplier per point (around 1), for pen strokes whose
+   * ink varies with speed. Missing means an even line (older notes, rays).
+   */
+  widths?: number[];
 }
 
 export interface Page {
@@ -148,6 +153,10 @@ function isStroke(value: unknown): value is Stroke {
     typeof s.width === 'number' &&
     Array.isArray(s.points) &&
     s.points.length % 2 === 0 &&
-    s.points.every((n) => typeof n === 'number' && Number.isFinite(n))
+    s.points.every((n) => typeof n === 'number' && Number.isFinite(n)) &&
+    (s.widths === undefined ||
+      (Array.isArray(s.widths) &&
+        s.widths.length === s.points.length / 2 &&
+        s.widths.every((n) => typeof n === 'number' && Number.isFinite(n) && n > 0)))
   );
 }

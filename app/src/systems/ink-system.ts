@@ -49,10 +49,11 @@ import {
 } from '@iwsdk/core';
 import { getInkSurfaces, type InkSurfaces } from '../ink/ink-surfaces.js';
 import { EraserCursor } from '../ink/eraser-cursor.js';
+import { InkWeight } from '../ink/ink-weight.js';
 import { LassoSelection } from '../ink/lasso.js';
 import { strokeTouchesCircle } from '../ink/stroke-hit.js';
 import { classifySample, isOnPage } from '../ink/stroke-sampling.js';
-import { StrokeMesh, type SurfaceSize } from '../ink/stroke-mesh.js';
+import { INK_RENDER_ORDER, StrokeMesh, type SurfaceSize } from '../ink/stroke-mesh.js';
 import { isInkTool, type PageAction } from '../ink/tool-catalog.js';
 import { createStroke, type Page, type Stroke } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
@@ -60,6 +61,7 @@ import { getPen, type PenState } from '../ui/pen-state.js';
 import { getTools, type ToolState } from '../ui/tool-state.js';
 import type { InkDocument, NoteSessionChange } from '../notes/note-session.js';
 import { TabletHandle, WritingSurface } from '../note-components.js';
+import { playUiSound } from '../ui/ui-sounds.js';
 import { devLog } from '../util/dev-log.js';
 import {
   SURFACE_WIDTH_M,
@@ -84,14 +86,18 @@ interface PointerEventTarget {
 /** Ink floats this far in front of the page (meters) to avoid z-fighting. */
 const INK_OFFSET_M = 0.0012;
 /** The pen's nib touches the page within this height of it, and lifts off above LIFT (metres). */
-const PEN_TOUCH_M = 0.003;
-const PEN_LIFT_M = 0.006;
+export const PEN_TOUCH_M = 0.003;
+export const PEN_LIFT_M = 0.006;
+/** Ink draws after the page and anything laid on it (such as the nib shadow). */
+export { INK_RENDER_ORDER };
 /** The eraser's ring shows while the nib hovers this close to the page (metres). */
 const ERASER_RING_HOVER_M = 0.03;
 /** A nib further than this behind a surface is not touching it (it went past: metres). */
 const PEN_BEHIND_M = 0.015;
 /** Stands in for a pointer id for the pen's contacts (pointer ids are not negative). */
 const PEN_POINTER_ID = -1;
+/** The touch-down tick plays at most this often, so fast handwriting does not chatter (ms). */
+const TICK_GAP_MS = 120;
 /** Tool widths and eraser radii are fractions of the tablet's page width (tool-catalog.ts). */
 const TOOL_SCALE_WIDTH_M = SURFACE_WIDTH_M;
 
@@ -129,6 +135,10 @@ export class InkSystem extends createSystem({
   movingHandles: { required: [TabletHandle, Grabbed] },
 }) {
   private readonly tablets = new Map<Entity, TabletInk>();
+  /** The pen's ink weight: a little heavier slow, lighter fast (ink-weight.ts). */
+  private readonly inkWeight = new InkWeight();
+  private lastPenSampleMs = 0;
+  private lastTickMs = -Infinity;
   /** Scratch: a point in the surface's space, then (after toPageCoords) page coordinates. */
   private readonly localPoint = new Vector3();
   /** The open note: what the tablet shows (and any surface without its own page). */
@@ -191,7 +201,11 @@ export class InkSystem extends createSystem({
         continue;
       }
       if (penContact) this.continueContact(tablet, PEN_POINTER_ID);
-      else if (!tablet.active) this.startContact(tablet, PEN_POINTER_ID);
+      else if (!tablet.active) {
+        this.startContact(tablet, PEN_POINTER_ID);
+        // Here, not in startContact: a stroke split by tracking recovery does not tick.
+        this.touchDownTick();
+      }
     }
   }
 
@@ -318,6 +332,9 @@ export class InkSystem extends createSystem({
     const inkLayer = new Group();
     inkLayer.name = 'InkLayer';
     inkLayer.position.z = INK_OFFSET_M;
+    // On a Group, three.js applies the order to everything inside it: the
+    // ink then draws after the page and the nib shadow (INK_RENDER_ORDER - 1).
+    inkLayer.renderOrder = INK_RENDER_ORDER;
     surface.add(inkLayer);
 
     const { width, height } = writingAreaSize(surface);
@@ -427,6 +444,11 @@ export class InkSystem extends createSystem({
     if (!isInkTool(tool) || color === null || width === null) return;
     const stroke = createStroke(color, this.onSurface(width, tablet), tool);
     stroke.points.push(this.localPoint.x, this.localPoint.y);
+    // The pen's ink varies in weight with its speed; rays draw an even line.
+    if (pointerId === PEN_POINTER_ID) {
+      stroke.widths = [this.inkWeight.start()];
+      this.lastPenSampleMs = performance.now();
+    }
     const mesh = this.addStrokeMesh(tablet, stroke);
     tablet.active = { kind: 'ink', pointerId, mesh };
   }
@@ -463,8 +485,30 @@ export class InkSystem extends createSystem({
       this.startContact(tablet, pointerId);
       return;
     }
+    if (pointerId === PEN_POINTER_ID) this.weighPenPoint(tablet, active.mesh.stroke, x, y);
     points.push(x, y);
     active.mesh.appendLatestPoint();
+  }
+
+  /** Add the pen's ink weight for the point about to be added at page (x, y). */
+  private weighPenPoint(tablet: TabletInk, stroke: Stroke, x: number, y: number): void {
+    if (!stroke.widths) return;
+    const p = stroke.points;
+    const distanceM = Math.hypot(
+      (x - p[p.length - 2]) * tablet.size.widthM,
+      (y - p[p.length - 1]) * tablet.size.heightM,
+    );
+    const now = performance.now();
+    stroke.widths.push(this.inkWeight.next(distanceM, (now - this.lastPenSampleMs) / 1000));
+    this.lastPenSampleMs = now;
+  }
+
+  /** A soft tick as the nib meets the page: the touch you cannot feel, heard instead. */
+  private touchDownTick(): void {
+    const now = performance.now();
+    if (now - this.lastTickMs < TICK_GAP_MS) return;
+    this.lastTickMs = now;
+    playUiSound('pen-touch');
   }
 
   /** Lift: hand the finished stroke, the rubbed-out strokes or the moved ones to the note; or close a loop. */

@@ -17,6 +17,7 @@
  */
 
 import {
+  AssetManager,
   createSystem,
   Matrix4,
   Mesh,
@@ -44,6 +45,7 @@ import {
   WRITING_SURFACE_NAME,
 } from '../scene-assets/tablet.scene-asset.js';
 import { getNoteView } from '../ui/note-view.js';
+import { OneEuroVector3, type OneEuroSettings } from '../ui/one-euro.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
 import { devLog } from '../util/dev-log.js';
 import { easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
@@ -56,6 +58,13 @@ const NIB_BEYOND_PINCH_M = 0.03;
 /** Where the pen rests: off the tablet's right edge, on the desk (tablet-local metres). */
 const REST_GAP_M = 0.03;
 const RETURN_MS = 260;
+/**
+ * Steadying the held pen against hand-tracking shake (see one-euro.ts):
+ * strong smoothing when the hand is still, little when it moves, so writing
+ * stays quick. Shared by the pinch point (which places the nib) and the web
+ * of the thumb (which sets the pen's angle).
+ */
+const STEADY: OneEuroSettings = { minCutoffHz: 1.2, beta: 40, derivativeCutoffHz: 1 };
 
 const X_AXIS = new Vector3(1, 0, 0);
 
@@ -65,6 +74,8 @@ export class PenSystem extends createSystem({}) {
   private tablet!: Object3D;
   private surface!: Mesh;
   private stylus!: Object3D;
+  /** The soft shadow the resting pen casts on the desk (part of the tablet model), or null. */
+  private restShadow: Object3D | null = null;
   /** The nib's offset from the pen's origin along its axis (+X). */
   private nibOffset = 0;
   private holder: Hand | null = null;
@@ -76,6 +87,10 @@ export class PenSystem extends createSystem({}) {
   private readonly wasClosed: Record<Hand, boolean> = { left: false, right: false };
   /** Taps and letting go, read from the holding hand. */
   private readonly taps = new PinchTapDetector();
+  private readonly steadyPoint = new OneEuroVector3(STEADY);
+  private readonly steadyWeb = new OneEuroVector3(STEADY);
+  /** The held hand's reading after steadying (what the pen follows). */
+  private readonly steady: PinchReading = createPinchReading();
   /**
    * The gesture clock (ms): frame time scaled like the UI animations
    * (Tweens.timeScale), so tap timing stays true in slowed-down recordings.
@@ -107,10 +122,13 @@ export class PenSystem extends createSystem({}) {
     this.surface = surface;
 
     // The pen is part of the tablet: a child entity, so it shows, hides,
-    // fades and moves with it.
-    this.stylus = stylusPrototype.clone();
+    // fades and moves with it. It is the Blender model (`stylus`, loaded
+    // with the app's critical assets); the code-built one stands in if the
+    // model is missing.
+    this.stylus = AssetManager.getGLTF('stylus')?.scene ?? stylusPrototype.clone();
     this.world.createTransformEntity(this.stylus, { parent: tabletEntity });
     this.nibOffset = this.stylus.getObjectByName('NibTip')?.position.x ?? STYLUS_LENGTH_M / 2;
+    this.restShadow = this.tablet.getObjectByName('PenRestShadow') ?? null;
 
     // At rest: lying on the desk off the right edge, nib away from the
     // viewer (tablet +Y), its flat docking facet down (tablet -Z).
@@ -136,7 +154,7 @@ export class PenSystem extends createSystem({}) {
     if (!this.readHands()) return;
 
     if (this.holder) {
-      this.updateHeld(this.readings[this.holder]);
+      this.updateHeld(this.readings[this.holder], delta);
       return;
     }
     for (const hand of HANDS) {
@@ -185,11 +203,16 @@ export class PenSystem extends createSystem({}) {
     this.pen.holder = hand;
     this.pen.held = true;
     this.taps.reset();
+    // Steadying starts fresh from where the hand is now, so the pen never slides in.
+    this.steadyPoint.reset(this.readings[hand].point);
+    this.steadyWeb.reset(this.readings[hand].web);
+    // Lifted off the desk: its resting shadow goes.
+    if (this.restShadow) this.restShadow.visible = false;
     this.followHand(this.readings[hand]);
   }
 
-  /** The pen in hand: a tap, letting go, or following the hand. */
-  private updateHeld(reading: PinchReading): void {
+  /** The pen in hand: a tap, letting go, or following the (steadied) hand. Taps read the raw fingers. */
+  private updateHeld(reading: PinchReading, delta: number): void {
     const event = this.taps.update(reading.gap, this.clockMs);
     this.pen.loosened = this.taps.loosened;
     if (event === 'release') {
@@ -201,7 +224,16 @@ export class PenSystem extends createSystem({}) {
       this.pen.emitTap(event);
     }
     // Mid-tap the fingers part and their midpoint jumps: the pen stays where it was.
-    if (!this.taps.loosened) this.followHand(reading);
+    if (!this.taps.loosened) this.followHand(this.steadied(reading, delta));
+  }
+
+  /** The held hand's reading with the shake taken out (into `this.steady`). */
+  private steadied(reading: PinchReading, seconds: number): PinchReading {
+    this.steady.tracked = reading.tracked;
+    this.steady.point.copy(this.steadyPoint.next(reading.point, seconds));
+    this.steady.web.copy(this.steadyWeb.next(reading.web, seconds));
+    this.steady.gap = reading.gap;
+    return this.steady;
   }
 
   /** Put the pen in the pinch, lying from the web of the thumb past the fingertips. */
@@ -243,6 +275,7 @@ export class PenSystem extends createSystem({}) {
       this.tweens.cancel('pen-return');
       this.stylus.position.copy(this.restPosition);
       this.stylus.quaternion.copy(this.restQuaternion);
+      if (this.restShadow) this.restShadow.visible = true;
       return;
     }
     this.fromPosition.copy(this.stylus.position);
@@ -254,7 +287,8 @@ export class PenSystem extends createSystem({}) {
         this.stylus.position.lerpVectors(this.fromPosition, this.restPosition, e);
         this.stylus.quaternion.slerpQuaternions(this.fromQuaternion, this.restQuaternion, e);
       },
-      { key: 'pen-return' },
+      // Back on the desk: its resting shadow returns.
+      { key: 'pen-return', done: () => this.restShadow && (this.restShadow.visible = true) },
     );
   }
 }

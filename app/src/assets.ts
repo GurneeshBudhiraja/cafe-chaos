@@ -13,7 +13,6 @@ import {
   teacherDeskPrototype,
 } from './scene-assets/classroom-furniture.scene-asset.js';
 import { classroomRoomPrototype } from './scene-assets/classroom-room.scene-asset.js';
-import { stylusPrototype } from './scene-assets/stylus.scene-asset.js';
 import { toolWheelPrototype } from './scene-assets/tool-wheel.scene-asset.js';
 import {
   stickyBlushPrototype,
@@ -43,7 +42,14 @@ export default defineAssets({
   'student-chair': studentChairPrototype,
   'teacher-desk': teacherDeskPrototype,
   'tablet-handle': tabletHandlePrototype,
-  stylus: stylusPrototype,
+  // The Apple Pencil-style pen (made in Blender). Same contract as the
+  // code-built one in stylus.scene-asset.ts, whose size constants PenSystem uses.
+  stylus: {
+    url: publicAssetUrl('models/stylus.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Stylus',
+  },
   'tool-wheel': toolWheelPrototype,
   'sticky-classic': stickyClassicPrototype,
   'sticky-formal': stickyFormalPrototype,
@@ -52,6 +58,13 @@ export default defineAssets({
   'sticky-sky': stickySkyPrototype,
   'push-pin': pushPinPrototype,
   'washi-tape': washiTapePrototype,
+  // Soft spot under the held pen's nib, and its body's streak (made in Blender).
+  'nib-shadow': {
+    url: publicAssetUrl('models/nib-shadow.glb'),
+    type: AssetType.GLTF,
+    priority: 'critical',
+    name: 'Nib Shadow',
+  },
   // The page's paper picture: warm off-white with fibres and a soft edge shadow (drawn under the template lines).
   'paper-image': {
     url: publicAssetUrl('textures/paper.jpg'),

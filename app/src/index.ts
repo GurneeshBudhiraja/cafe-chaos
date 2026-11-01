@@ -18,6 +18,7 @@ import { CompactDockSystem } from './systems/compact-dock-system.js';
 import { DesktopBackdropSystem } from './systems/desktop-backdrop-system.js';
 import { FollowModeSystem } from './systems/follow-mode-system.js';
 import { InkSystem } from './systems/ink-system.js';
+import { NibShadowSystem } from './systems/nib-shadow-system.js';
 import { NoteViewSystem } from './systems/note-view-system.js';
 import { PenSystem } from './systems/pen-system.js';
 import { HomeWindowSystem } from './systems/home-window-system.js';
@@ -47,6 +48,8 @@ World.create(
     .registerSystem(TabletHandleSystem)
     // The pen moves before the ink system reads where its nib is.
     .registerSystem(PenSystem)
+    // After the pen, so the shadow follows where its nib is this frame.
+    .registerSystem(NibShadowSystem)
     // After the pen (its taps and nib), before the ink (which pauses while the wheel is open).
     .registerSystem(ToolWheelSystem)
     .registerSystem(InkSystem)

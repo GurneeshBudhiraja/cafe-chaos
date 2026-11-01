@@ -49,9 +49,13 @@ function materialFor(color: string, opacity: number): MeshBasicMaterial {
   return material;
 }
 
-/** Highlighter strokes draw first, under the ink, like a highlighter under a pen's writing. */
+/**
+ * Draw order: highlighter strokes first, under the ink, like a highlighter
+ * under a pen's writing; ink after them, and after anything laid on the page
+ * below it (the nib shadow draws at INK_RENDER_ORDER - 1).
+ */
 const HIGHLIGHT_RENDER_ORDER = 1;
-const INK_RENDER_ORDER = 2;
+export const INK_RENDER_ORDER = 2;
 
 /** Ignore pointer rays on ink so drawing over existing strokes still works. */
 function noRaycast(): void {}
@@ -143,7 +147,7 @@ export class StrokeMesh {
       dy = 0;
     }
 
-    const half = (this.stroke.width * this.surface.widthM) / 2;
+    const half = (this.stroke.width * (this.stroke.widths?.[i] ?? 1) * this.surface.widthM) / 2;
     const x = (p[i * 2] - 0.5) * this.surface.widthM;
     const y = (0.5 - p[i * 2 + 1]) * this.surface.heightM;
     // Perpendicular to the direction, in the surface plane.
