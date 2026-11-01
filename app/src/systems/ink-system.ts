@@ -34,6 +34,7 @@ import { StrokeMesh, type SurfaceSize } from '../ink/stroke-mesh.js';
 import { createStroke, type Page, type Stroke } from '../notes/note-model.js';
 import { getNoteSession } from '../notes/note-services.js';
 import { getPen, type PenState } from '../ui/pen-state.js';
+import { getTools, type ToolState } from '../ui/tool-state.js';
 import type { InkDocument } from '../notes/note-session.js';
 import { TabletHandle, WritingSurface } from '../note-components.js';
 import { devLog } from '../util/dev-log.js';
@@ -91,10 +92,12 @@ export class InkSystem extends createSystem({
   private readonly localPoint = new Vector3();
   private document!: InkDocument;
   private pen!: PenState;
+  private tools!: ToolState;
 
   init(): void {
     this.document = getNoteSession(this.world);
     this.pen = getPen(this.world);
+    this.tools = getTools(this.world);
 
     // 'qualify' only reports entities that match later, so attach the tablets
     // that already exist (the level loads before app systems register).
@@ -125,7 +128,7 @@ export class InkSystem extends createSystem({
   update(): void {
     for (const tablet of this.tablets.values()) {
       const penStroke = tablet.active?.pointerId === PEN_POINTER_ID;
-      if (!this.pen.held || !tablet.page || this.queries.movingHandles.entities.size > 0) {
+      if (!this.penCanWrite() || !tablet.page) {
         if (penStroke) this.endStroke(tablet);
         continue;
       }
@@ -139,6 +142,19 @@ export class InkSystem extends createSystem({
       if (penStroke) this.extendStroke(tablet, PEN_POINTER_ID);
       else if (!tablet.active) this.startStroke(tablet, PEN_POINTER_ID);
     }
+  }
+
+  /**
+   * Whether the pen in hand may ink: not while the tablet moves, the
+   * fingers are mid-tap (loosened), or the pen is aiming at the tool wheel.
+   */
+  private penCanWrite(): boolean {
+    return (
+      this.pen.held &&
+      !this.pen.loosened &&
+      !this.tools.wheelOpen &&
+      this.queries.movingHandles.entities.size === 0
+    );
   }
 
   /** Replace the page shown on every tablet (used when opening a note). */

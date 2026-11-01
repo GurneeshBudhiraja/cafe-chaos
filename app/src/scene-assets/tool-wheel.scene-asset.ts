@@ -1,11 +1,11 @@
 /**
  * Tool wheel: the radial picker for writing tools, after the weapon wheels
- * of games like Red Dead Redemption: six raised glass segments around a
- * hub, each carrying a small 3D glyph of its tool (pen, marker,
- * highlighter, eraser, lasso, colour). The active tool's segment stands a
- * little proud with a glowing clay rim; the others carry a thin light rim
- * so their shapes stay readable in the dark. Big, forgiving wedge targets
- * suit a pinch or a flick of the stylus.
+ * of games like Red Dead Redemption: seven raised glass segments around a
+ * hub, each carrying a small 3D glyph (pen, marker, highlighter, eraser,
+ * lasso, undo, redo; see WHEEL_ITEMS). Each segment has a thin light rim,
+ * so its shape stays readable in the dark, and a glowing clay rim that the
+ * wheel's system shows on the current tool. Big, forgiving wedge targets
+ * suit a flick of the stylus.
  *
  * The hub is the label: a raised glass plaque where the pointed-at tool's
  * name appears (one word), so there is only ever one label, always where
@@ -16,8 +16,9 @@
  * Contract: metres; faces +Z, origin at the centre, 0.2 m across, segments
  * 9 mm deep (z 0 to 0.009). Named parts: Hub, Groove, HubRing,
  * LabelPlaque, LabelAnchor (an empty on the plaque's face), CurrentInk,
- * and `Segment-<tool>` groups (each with Wedge, ActiveRim or EdgeRim, and
- * `Glyph-<tool>`), in TOOL_IDS order clockwise from the top.
+ * and `Segment-<item>` groups (each with Wedge, EdgeRim, ActiveRim (hidden)
+ * and `Glyph-<item>`), in WHEEL_ITEMS order clockwise from the top
+ * (segment i's centre is at wheelSegmentAngle(i)).
  */
 
 import {
@@ -37,13 +38,28 @@ import {
   trimMaterial,
 } from './notes-materials.js';
 import { roundedRect, roundedRim } from './notes-shapes.js';
-import { createToolGlyph, TOOL_IDS, type ToolId } from './tool-glyphs.js';
+import { isAction, WHEEL_ITEMS } from '../ink/tool-catalog.js';
+import { createToolGlyph } from './tool-glyphs.js';
 
 export const TOOL_WHEEL_RADIUS_M = 0.1;
-const INNER_R = 0.046;
+/** The hub's edge: inside it, nothing on the ring is aimed at. */
+export const TOOL_WHEEL_INNER_RADIUS_M = 0.046;
+const INNER_R = TOOL_WHEEL_INNER_RADIUS_M;
 const DEPTH = 0.007;
 const GAP_RAD = (3.2 * Math.PI) / 180;
-const ACTIVE_TOOL: ToolId = 'pen';
+const SEGMENT_RAD = (Math.PI * 2) / WHEEL_ITEMS.length;
+
+/** The angle (radians, anticlockwise from +X) of segment `index`'s centre: clockwise from the top. */
+export function wheelSegmentAngle(index: number): number {
+  return Math.PI / 2 - index * SEGMENT_RAD;
+}
+
+/** The segment (index into WHEEL_ITEMS) at an angle on the wheel's face (radians, anticlockwise from +X). */
+export function wheelSegmentAt(angle: number): number {
+  const fromTop = Math.PI / 2 - angle + SEGMENT_RAD / 2;
+  const turns = fromTop / (Math.PI * 2);
+  return Math.floor((turns - Math.floor(turns)) * WHEEL_ITEMS.length) % WHEEL_ITEMS.length;
+}
 
 /** Dark smoked glass for the segments (a touch see-through). */
 const segmentMaterial = new MeshStandardMaterial({
@@ -80,43 +96,44 @@ function wedgeGeometry(a0: number, a1: number, inner: number, outer: number, dep
 function createToolWheel(): Group {
   const root = new Group();
   root.name = 'ToolWheel';
-  const step = (Math.PI * 2) / TOOL_IDS.length;
-
-  TOOL_IDS.forEach((tool, i) => {
-    // Clockwise from the top: centre angle of this segment.
-    const mid = Math.PI / 2 - i * step;
-    const a0 = mid - step / 2 + GAP_RAD / 2;
-    const a1 = mid + step / 2 - GAP_RAD / 2;
-    const active = tool === ACTIVE_TOOL;
+  WHEEL_ITEMS.forEach((item, i) => {
+    const mid = wheelSegmentAngle(i);
+    const a0 = mid - SEGMENT_RAD / 2 + GAP_RAD / 2;
+    const a1 = mid + SEGMENT_RAD / 2 - GAP_RAD / 2;
     const segment = new Group();
-    segment.name = `Segment-${tool}`;
-    // The active tool stands proud of the others.
-    segment.position.z = active ? 0.004 : 0;
+    segment.name = `Segment-${item}`;
 
     const wedge = new Mesh(wedgeGeometry(a0, a1, INNER_R, TOOL_WHEEL_RADIUS_M - 0.004, DEPTH), segmentMaterial);
     wedge.name = 'Wedge';
     segment.add(wedge);
 
-    // Outer-edge rim: glowing clay on the active tool, thin light metal on
-    // the rest (their outline stays readable in the dark).
-    const rim = new Mesh(
-      active
-        ? wedgeGeometry(a0 + 0.02, a1 - 0.02, TOOL_WHEEL_RADIUS_M - 0.0075, TOOL_WHEEL_RADIUS_M - 0.0035, 0.002)
-        : wedgeGeometry(a0 + 0.03, a1 - 0.03, TOOL_WHEEL_RADIUS_M - 0.0052, TOOL_WHEEL_RADIUS_M - 0.0038, 0.0012),
-      active ? glowingClayMaterial : satinLightMaterial,
+    // Outer-edge rims: a thin light metal one (outline readable in the
+    // dark), and a glowing clay one for the current tool (hidden here).
+    const edgeRim = new Mesh(
+      wedgeGeometry(a0 + 0.03, a1 - 0.03, TOOL_WHEEL_RADIUS_M - 0.0052, TOOL_WHEEL_RADIUS_M - 0.0038, 0.0012),
+      satinLightMaterial,
     );
-    rim.name = active ? 'ActiveRim' : 'EdgeRim';
-    rim.position.z = DEPTH;
-    segment.add(rim);
+    edgeRim.name = 'EdgeRim';
+    edgeRim.position.z = DEPTH;
+    segment.add(edgeRim);
+    const activeRim = new Mesh(
+      wedgeGeometry(a0 + 0.02, a1 - 0.02, TOOL_WHEEL_RADIUS_M - 0.0075, TOOL_WHEEL_RADIUS_M - 0.0035, 0.002),
+      glowingClayMaterial,
+    );
+    activeRim.name = 'ActiveRim';
+    activeRim.position.z = DEPTH;
+    activeRim.visible = false;
+    segment.add(activeRim);
 
-    // The glyph sits on the wedge face, at its middle radius, tilted to 45°.
+    // The glyph sits on the wedge face, at its middle radius.
     const holder = new Group();
     holder.name = 'GlyphHolder';
     const r = (INNER_R + TOOL_WHEEL_RADIUS_M) / 2 - 0.002;
     holder.position.set(Math.cos(mid) * r, Math.sin(mid) * r, DEPTH + 0.0045);
-    const glyph = createToolGlyph(tool);
-    glyph.rotation.z = Math.PI / 4;
-    glyph.scale.setScalar(1.45);
+    const glyph = createToolGlyph(item);
+    // Tools lie at 45° like objects on a desk; the arrows stay upright.
+    glyph.rotation.z = isAction(item) ? 0 : Math.PI / 4;
+    glyph.scale.setScalar(1.3);
     holder.add(glyph);
     segment.add(holder);
 

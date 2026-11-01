@@ -85,6 +85,14 @@ export async function startHeadsetRecording({ size = SIZE, fovDeg, captions = tr
     penWrite: (strokes, speed = 0.09) => page.evaluate(([s, v]) => window.__rec.penWrite(s, v), [strokes, speed / speedUp]),
     /** Carry the pen back to its place beside the tablet and let go of it there. */
     putDownPen: (ms = 900) => page.evaluate((d) => window.__rec.putDownPen(d), ms * speedUp),
+    /** Tap the held pen `count` times: a quick open-and-close of the holding fingers (2 = double-tap). */
+    penTap: (count = 1) => page.evaluate((n) => window.__rec.penTap(n), count),
+    /** Move the held pen so its nib travels to a world point over `ms`. */
+    moveNibTo: (point, ms) => page.evaluate(([p, d]) => window.__rec.moveNibTo(p, d), [point, ms * speedUp]),
+    /** Close (1) or open (0) the free left hand's pinch. */
+    leftPinch: (value) => page.evaluate((v) => window.__rec.leftPinch(v), value),
+    /** Move the free left hand to a world position (it then rests in view). */
+    moveLeftHand: (position) => page.evaluate((p) => window.__rec.moveLeftHand(p), position),
     writeStroke,
     /** Handwrite `text` on the tablet (see handwriting.mjs for options). */
     async writeLine(text, options) {
@@ -402,8 +410,33 @@ function installHelpers(page) {
           await this.moveHandTo(above.sub(pinchToCentre).sub(pinchOffset), ms * 0.7, this.grip);
         }
         await call('set_select_value', { device: 'hand-right', value: 0 });
-        await sleep(300);
+        // Fingers must stay open a moment for the pen to be let go (a quick open is a tap).
+        await sleep(650);
         for (let i = 0; i < 3; i++) await nextFrame();
+      },
+      async penTap(count) {
+        // One rendered frame open, one closed: quick enough to be a tap even when frames are slow.
+        for (let i = 0; i < count; i++) {
+          await call('set_select_value', { device: 'hand-right', value: 0 });
+          await nextFrame();
+          await call('set_select_value', { device: 'hand-right', value: 1 });
+          await nextFrame();
+        }
+      },
+      async moveNibTo(point, ms) {
+        const held = world.globals['metaNotes.pen'];
+        const hand = await this.handPosition();
+        const target = new V(point.x, point.y, point.z).sub(held.nib.clone().sub(hand));
+        await this.moveHandTo(target, ms, this.grip);
+      },
+      async leftPinch(value) {
+        await call('set_select_value', { device: 'hand-left', value });
+        await nextFrame();
+        await nextFrame();
+      },
+      async moveLeftHand(position) {
+        await call('set_transform', { device: 'hand-left', position });
+        await nextFrame();
       },
       /** Pinch the tablet handle and drag it by moving the hand. */
       async dragHandle(dx, dy, dz, ms) {

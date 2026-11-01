@@ -7,11 +7,13 @@
  * index finger, lying along the hand from the web of the thumb to just past
  * the fingertips, the way a pen is held. It follows the hand while the
  * pinch holds and never sinks into the page (the nib rests on it, like on
- * paper). Open the pinch and it goes back to its place.
+ * paper). Keep the fingers open for a moment and it goes back to its place;
+ * a quick open-and-close while holding it is a tap on the pen (two make a
+ * double-tap, which opens the tool wheel), not a release (pinch-taps.ts).
  *
- * The pinch is read from the hand's joints (thumb and index tips closing),
- * not from select events, so it does not depend on the pointer ray.
- * InkSystem inks where the nib touches the page (PenState).
+ * The pinch is read from the hand's joints (hand-pinch.ts), not from select
+ * events, so it does not depend on the pointer ray. InkSystem inks where the
+ * nib touches the page (PenState).
  */
 
 import {
@@ -23,6 +25,16 @@ import {
   type Entity,
   type Object3D,
 } from '@iwsdk/core';
+import {
+  createPinchReading,
+  HANDS,
+  PINCH_CLOSED_M,
+  readPinch,
+  type Hand,
+  type HandFrame,
+  type PinchReading,
+} from '../input/hand-pinch.js';
+import { PinchTapDetector } from '../input/pinch-taps.js';
 import { STYLUS_LENGTH_M, STYLUS_RADIUS_M, stylusPrototype } from '../scene-assets/stylus.scene-asset.js';
 import {
   SURFACE_HEIGHT_M,
@@ -36,9 +48,6 @@ import { getPen, type PenState } from '../ui/pen-state.js';
 import { easeOutCubic, getTweens, type Tweens } from '../ui/tweens.js';
 
 const TABLET_NODE = 'tablet';
-/** Thumb and index tips closer than this (metres) pinch; further than RELEASE lets go. */
-const PINCH_M = 0.015;
-const RELEASE_M = 0.03;
 /** A pinch this close to the pen (metres from its axis) picks it up. */
 const GRAB_RADIUS_M = 0.05;
 /** The nib reaches this far past the pinch, as with a pen held near its tip. */
@@ -47,19 +56,7 @@ const NIB_BEYOND_PINCH_M = 0.03;
 const REST_GAP_M = 0.03;
 const RETURN_MS = 260;
 
-type Hand = 'left' | 'right';
-const HANDS: Hand[] = ['right', 'left'];
 const X_AXIS = new Vector3(1, 0, 0);
-
-/** One hand's pinch, from its joints this frame. */
-interface PinchReading {
-  /** Midpoint of the thumb and index tips (world). */
-  point: Vector3;
-  /** The web between thumb and index (world), where a held pen's tail rests. */
-  web: Vector3;
-  gap: number;
-  pinched: boolean;
-}
 
 export class PenSystem extends createSystem({}) {
   private pen!: PenState;
@@ -71,9 +68,14 @@ export class PenSystem extends createSystem({}) {
   private nibOffset = 0;
   private holder: Hand | null = null;
   private readonly readings: Record<Hand, PinchReading> = {
-    left: { point: new Vector3(), web: new Vector3(), gap: Infinity, pinched: false },
-    right: { point: new Vector3(), web: new Vector3(), gap: Infinity, pinched: false },
+    left: createPinchReading(),
+    right: createPinchReading(),
   };
+  /** Whether each hand was pinched last frame: a pickup needs a pinch that closes near the pen. */
+  private readonly wasClosed: Record<Hand, boolean> = { left: false, right: false };
+  /** Taps and letting go, read from the holding hand. */
+  private readonly taps = new PinchTapDetector();
+  private readonly handFrame: HandFrame = { frame: null!, space: null!, origin: new Matrix4() };
   private readonly restPosition = new Vector3();
   private readonly restQuaternion = new Quaternion();
   private readonly fromPosition = new Vector3();
@@ -85,8 +87,6 @@ export class PenSystem extends createSystem({}) {
   private readonly b = new Vector3();
   private readonly q = new Quaternion();
   private readonly tabletQuaternion = new Quaternion();
-  private readonly origin = new Matrix4();
-  private readonly joint = new Vector3();
 
   init(): void {
     const tabletEntity: Entity | undefined = this.world.getSceneEntity(TABLET_NODE);
@@ -125,21 +125,19 @@ export class PenSystem extends createSystem({}) {
 
   update(): void {
     if (!this.stylus || !this.tablet.visible) return;
-    for (const hand of HANDS) this.readPinch(hand);
+    if (!this.readHands()) return;
 
     if (this.holder) {
-      const held = this.readings[this.holder];
-      if (held.gap > RELEASE_M) this.putDown(true);
-      else this.followHand(held);
+      this.updateHeld(this.readings[this.holder]);
       return;
     }
     for (const hand of HANDS) {
       const reading = this.readings[hand];
-      if (reading.pinched && this.nearPen(reading.point)) {
-        this.tweens.cancel('pen-return');
-        this.holder = hand;
-        this.pen.held = true;
-        this.followHand(reading);
+      const closed = reading.gap < PINCH_CLOSED_M;
+      const justPinched = closed && !this.wasClosed[hand];
+      this.wasClosed[hand] = closed;
+      if (justPinched && this.nearPen(reading.point)) {
+        this.pickUp(hand);
         return;
       }
     }
@@ -147,37 +145,17 @@ export class PenSystem extends createSystem({}) {
 
   // ----------------------------------------------------------- the hands
 
-  /** Read one hand's thumb and index joints; a pinch counts once, as it closes. */
-  private readPinch(hand: Hand): void {
-    const reading = this.readings[hand];
-    const wasClosed = reading.gap < PINCH_M;
-    reading.gap = Infinity;
-    reading.pinched = false;
-    const source = this.world.input.xr.getPrimaryInputSource(hand);
+  /** Read both hands' pinches for this frame; false outside an XR frame. */
+  private readHands(): boolean {
     const frame = this.xrFrame;
     const space = this.xrManager.getReferenceSpace();
-    if (!source?.hand || !frame || !space) return;
-    this.origin.copy(this.player.matrixWorld);
-    const thumb = this.jointAt(frame, source.hand, 'thumb-tip', space, reading.point);
-    const index = thumb && this.jointAt(frame, source.hand, 'index-finger-tip', space, this.joint);
-    if (!index) return;
-    reading.gap = reading.point.distanceTo(this.joint);
-    reading.point.add(this.joint).multiplyScalar(0.5);
-    // The web of the thumb: between the index knuckle and the thumb's base.
-    const knuckle = this.jointAt(frame, source.hand, 'index-finger-metacarpal', space, reading.web);
-    const thumbBase = knuckle && this.jointAt(frame, source.hand, 'thumb-phalanx-proximal', space, this.joint);
-    if (!thumbBase) return;
-    reading.web.add(this.joint).multiplyScalar(0.5);
-    reading.pinched = !wasClosed && reading.gap < PINCH_M;
-  }
-
-  /** A joint's world position into `out`, or false when it is not tracked. */
-  private jointAt(frame: XRFrame, hand: XRHand, name: XRHandJoint, space: XRReferenceSpace, out: Vector3): boolean {
-    const joint = hand.get(name);
-    const pose = joint && frame.getJointPose?.(joint, space);
-    if (!pose) return false;
-    const p = pose.transform.position;
-    out.set(p.x, p.y, p.z).applyMatrix4(this.origin);
+    if (!frame || !space) return false;
+    this.handFrame.frame = frame;
+    this.handFrame.space = space;
+    this.handFrame.origin.copy(this.player.matrixWorld);
+    for (const hand of HANDS) {
+      readPinch(this.world.input.xr.getPrimaryInputSource(hand), this.handFrame, this.readings[hand]);
+    }
     return true;
   }
 
@@ -193,8 +171,31 @@ export class PenSystem extends createSystem({}) {
 
   // --------------------------------------------------------------- holding
 
+  private pickUp(hand: Hand): void {
+    this.tweens.cancel('pen-return');
+    this.holder = hand;
+    this.pen.holder = hand;
+    this.pen.held = true;
+    this.taps.reset();
+    this.followHand(this.readings[hand]);
+  }
+
+  /** The pen in hand: a tap, letting go, or following the hand. */
+  private updateHeld(reading: PinchReading): void {
+    const event = this.taps.update(reading.gap, performance.now());
+    this.pen.loosened = this.taps.loosened;
+    if (event === 'release') {
+      this.putDown(true);
+      return;
+    }
+    if (event) this.pen.emitTap(event);
+    // Mid-tap the fingers part and their midpoint jumps: the pen stays where it was.
+    if (!this.taps.loosened) this.followHand(reading);
+  }
+
   /** Put the pen in the pinch, lying from the web of the thumb past the fingertips. */
   private followHand(reading: PinchReading): void {
+    if (!reading.tracked) return;
     this.direction.copy(reading.point).sub(reading.web).normalize();
     this.nib.copy(reading.point).addScaledVector(this.direction, NIB_BEYOND_PINCH_M);
     this.keepAbovePage(this.nib);
@@ -221,8 +222,12 @@ export class PenSystem extends createSystem({}) {
 
   /** Let go: the pen glides back to its place beside the tablet (or jumps there). */
   private putDown(animate: boolean): void {
+    // The hand that let go must pinch afresh to pick the pen up again.
+    if (this.holder) this.wasClosed[this.holder] = true;
     this.holder = null;
+    this.pen.holder = null;
     this.pen.held = false;
+    this.pen.loosened = false;
     if (!animate) {
       this.tweens.cancel('pen-return');
       this.stylus.position.copy(this.restPosition);

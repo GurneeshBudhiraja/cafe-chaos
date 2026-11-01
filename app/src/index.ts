@@ -23,6 +23,7 @@ import { PenSystem } from './systems/pen-system.js';
 import { HomeWindowSystem } from './systems/home-window-system.js';
 import { TabletHandleSystem } from './systems/tablet-handle-system.js';
 import { ToastSystem } from './systems/toast-system.js';
+import { ToolWheelSystem } from './systems/tool-wheel-system.js';
 import { TweenSystem } from './systems/tween-system.js';
 import { XrScrollFixSystem } from './systems/xr-scroll-fix-system.js';
 import { installDevHooks } from './util/dev-hooks.js';
@@ -45,6 +46,8 @@ World.create(
     .registerSystem(TabletHandleSystem)
     // The pen moves before the ink system reads where its nib is.
     .registerSystem(PenSystem)
+    // After the pen (its taps and nib), before the ink (which pauses while the wheel is open).
+    .registerSystem(ToolWheelSystem)
     .registerSystem(InkSystem)
     .registerSystem(HomeWindowSystem)
     .registerSystem(CompactDockSystem)
