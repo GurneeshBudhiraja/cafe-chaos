@@ -1,0 +1,127 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.IBLTexture": {
+      "src": "room",
+      "intensity": 0.45,
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "resources": {},
+  "nodes": [
+    {
+      "id": "room",
+      "name": "Kitchen Room",
+      "content": {
+        "type": "asset",
+        "asset": "kitchen-room"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -0.4
+        ]
+      }
+    },
+    {
+      "id": "side-table",
+      "name": "Side Table",
+      "content": {
+        "type": "asset",
+        "asset": "side-table"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -0.55
+        ]
+      }
+    },
+    {
+      "id": "apple",
+      "name": "Apple",
+      "content": {
+        "type": "asset",
+        "asset": "apple"
+      },
+      "metadata": {
+        "iwsdk.validation": {
+          "allowFloating": true
+        }
+      },
+      "transform": {
+        "position": [
+          0.0,
+          0.7985,
+          -0.55
+        ],
+        "rotationDeg": [
+          0,
+          30,
+          0
+        ]
+      },
+      "components": {
+        "Sliceable": {
+          "radius": 0.042
+        }
+      }
+    },
+    {
+      "id": "knife",
+      "name": "Knife",
+      "content": {
+        "type": "asset",
+        "asset": "knife"
+      },
+      "metadata": {
+        "iwsdk.validation": {
+          "allowFloating": true
+        }
+      },
+      "transform": {
+        "position": [
+          0.3,
+          0.0095,
+          -0.18
+        ],
+        "rotationDeg": [
+          -90,
+          0,
+          105
+        ]
+      },
+      "components": {
+        "Knife": {},
+        "OneHandGrabbable": {}
+      }
+    }
+  ],
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [
+          0,
+          1.6,
+          0.6
+        ],
+        "target": [
+          0,
+          0.6,
+          -0.5
+        ],
+        "fov": 60
+      }
+    ]
+  }
+}
