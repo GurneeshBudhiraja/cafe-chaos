@@ -18,6 +18,8 @@ import { BUS_FLOOR_Y, createBus, type Bus } from './bus.js';
 import { Scoreboard, WristHud, type FaceState } from './hud.js';
 import { createPads, PadSystem, type PadKind } from './pads.js';
 
+/** How long the bus bounces after everyone is aboard (seconds). */
+const CELEBRATE_SECONDS = 2.2;
 /** How long a Yapper yaps for each thing it says (seconds). */
 const YAP = { happy: 0.5, grumble: 0.9, pickup: 0.25, bump: 0.6 };
 
@@ -36,6 +38,9 @@ export class Game {
   private fixtures: Entity[] = [];
   private readonly seats: SeatSystem;
   private readonly rest: RestSystem;
+  /** Seconds since the crowd was last all aboard and content (the bus bounces for a moment). */
+  private celebrateAge = 10;
+  private lastTick = performance.now() / 1000;
 
   constructor(private readonly world: World) {
     this.seats = world.getSystem(SeatSystem)!;
@@ -50,7 +55,10 @@ export class Game {
       const wasComplete = this.score.complete;
       this.score = score;
       this.showStatus();
-      if (score.complete && !wasComplete) this.sound.play('complete', score.stars);
+      if (score.complete && !wasComplete) {
+        this.sound.play('complete', score.stars);
+        this.celebrateAge = 0;
+      }
       if (this.level) this.onScore?.(score, this.level);
     };
     this.seats.onSeated = () => this.sound.play('seat');
@@ -96,9 +104,20 @@ export class Game {
     document.addEventListener('pointerdown', () => this.sound.start(), { once: true });
   }
 
-  /** Call every frame: the wrist panel follows the hand. */
+  /** Call every frame: the wrist panel follows the hand; the bus bounces on its springs after a win. */
   update(): void {
     this.wristHud.follow();
+    const now = performance.now() / 1000;
+    const delta = Math.min(0.1, now - this.lastTick);
+    this.lastTick = now;
+    this.celebrateAge += delta;
+    const bus = this.bus;
+    if (!bus) return;
+    const t = this.celebrateAge;
+    const fade = Math.max(0, 1 - t / CELEBRATE_SECONDS);
+    bus.parts.body.position.y = 0.008 * Math.abs(Math.sin((Math.PI * t) / 0.38)) * fade;
+    bus.parts.body.rotation.x = 0.03 * Math.sin((Math.PI * t) / 0.38) * fade;
+    for (const wheel of bus.parts.wheels) wheel.rotation.z += 6 * delta * fade;
   }
 
   private faces(): FaceState[] {

@@ -183,11 +183,11 @@ function scheduleMusic(ctx: BaseAudioContext, music: MusicNodes, base: number, f
     const strum = STRUM[slot % STRUM.length];
     if (strum) {
       const notes = strum === 1 ? chord : [...chord].reverse();
-      notes.forEach((freq, i) => pluck(ctx, music.input, freq, base + t + i * 0.012, strum === 1 ? 0.03 : 0.02));
+      notes.forEach((freq, i) => pluck(ctx, music.input, freq, base + t + i * 0.012, strum === 1 ? 0.05 : 0.034));
     }
     // Bass on beats 1 and 3 of each bar, a soft round note.
     if (slot % 2 === 0 && beat % 2 === 0) {
-      tone(ctx, music.input, bass, base + t, { type: 'sine', gain: 0.07, attack: 0.01, hold: 0.1, release: 0.5 });
+      tone(ctx, music.input, bass, base + t, { type: 'sine', gain: 0.1, attack: 0.01, hold: 0.1, release: 0.5 });
       tone(ctx, music.input, bass * 2, base + t, { type: 'triangle', gain: 0.012, attack: 0.01, release: 0.2, lowpass: 900 });
     }
     // The glockenspiel: a short phrase every other bar, on the pentatonic, stepwise.
@@ -195,7 +195,7 @@ function scheduleMusic(ctx: BaseAudioContext, music: MusicNodes, base: number, f
     if (bar % 2 === 1 && slot % 2 === 0 && hash(slot, 5) < 0.75) {
       const step = Math.floor(hash(bar, 6) * 3) + Math.floor(((slot % 8) / 8) * 3);
       const freq = PENTATONIC[(step + Math.floor(hash(slot, 7) * 2)) % PENTATONIC.length];
-      tone(ctx, music.input, freq, base + t, { type: 'sine', gain: 0.03, attack: 0.003, release: 1.2 });
+      tone(ctx, music.input, freq, base + t, { type: 'sine', gain: 0.045, attack: 0.003, release: 1.2 });
       tone(ctx, music.input, freq * 2.76, base + t, { type: 'sine', gain: 0.006, attack: 0.003, release: 0.3 });
     }
   }
