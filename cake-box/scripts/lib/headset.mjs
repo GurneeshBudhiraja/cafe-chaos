@@ -12,7 +12,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, renameSync } from 'node:fs';
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 export const APP_URL = process.env.APP_URL ?? 'https://localhost:8082/';
@@ -74,15 +74,44 @@ export async function startHeadset({ size = { width: 1032, height: 800 }, fovDeg
     /** World position of a named scene object. */
     objectPosition: (name) => call('objectPosition', name),
     screenshot: (path) => page.screenshot({ path }),
+    /**
+     * Stop, and when recording, make the mp4: the video trimmed to the
+     * content and sped up by the measured factor, with the game's own
+     * soundtrack (its music, and every effect it logged, at the moment it
+     * happened on the video's clock) rendered offline and mixed in.
+     */
     async finish() {
+      let wav = null;
+      if (record) {
+        const seconds = (Date.now() - contentBegins) / 1000 / speedUp + 0.5;
+        // The video's clock starts 0.2 s (real time) before the content.
+        const origin = pageOrigin - 0.2;
+        wav = await page.evaluate(
+          async ([seconds, origin, speedUp]) => {
+            const { Soundscape, game } = window.__cake;
+            if (!Soundscape || !game) return null;
+            const buffer = await Soundscape.renderOffline(game.sound.log, seconds, origin, speedUp);
+            const bytes = new Uint8Array(Soundscape.toWav(buffer));
+            let binary = '';
+            for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+            return btoa(binary);
+          },
+          [seconds, origin, speedUp],
+        );
+      }
       await context.close();
       await browser.close();
       if (!record) return errors;
       const webm = `${OUT_DIR}/${record}.webm`;
       renameSync(await video.path(), webm);
       const trim = Math.max(0, (contentBegins - startedAt) / 1000 - 0.2);
+      const audio = [];
+      if (wav) {
+        writeFileSync(`${OUT_DIR}/${record}.wav`, Buffer.from(wav, 'base64'));
+        audio.push('-i', `${OUT_DIR}/${record}.wav`, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '160k', '-shortest');
+      }
       execFileSync('ffmpeg', [
-        '-y', '-loglevel', 'error', '-ss', trim.toFixed(2), '-i', webm,
+        '-y', '-loglevel', 'error', '-ss', trim.toFixed(2), '-i', webm, ...audio,
         '-vf', `setpts=PTS/${speedUp.toFixed(3)},fps=30`,
         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-movflags', '+faststart',
         `${OUT_DIR}/${record}.mp4`,
@@ -93,6 +122,9 @@ export async function startHeadset({ size = { width: 1032, height: 800 }, fovDeg
   const video = record ? page.video() : null;
   await prepare?.(h);
   const contentBegins = Date.now();
+  // The page's clock at the same moment (the sound log is on that clock).
+  const pageOrigin = await page.evaluate(() => performance.now() / 1000);
+  h.pageOrigin = pageOrigin;
   return h;
 }
 

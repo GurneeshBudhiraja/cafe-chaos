@@ -30,8 +30,8 @@ const LABELS: Record<PadKind, string> = { easy: 'Easy', medium: 'Medium', hard: 
 const COLORS: Record<PadKind, number> = { easy: 0xb7e0b4, medium: 0xf6d99a, hard: 0xf3aeb8, new: 0xcdc4ee };
 const SIZE = { width: 0.07, depth: 0.04, height: 0.012 };
 const GAP = 0.018;
-/** Where the row of pads sits, in the counter's frame: right of the knife, near the front edge. */
-const ROW = { x: 0.1, z: 0.24 };
+/** Where the row of pads sits, in the counter's frame: well right of the knife, in front of the box. */
+const ROW = { x: 0.3, z: 0.24 };
 const PRESS_DEPTH = 0.005;
 
 function label(text: string): CanvasTexture {
@@ -74,6 +74,9 @@ export function createPads(world: World): Entity[] {
   });
 }
 
+/** A pad fires once per touch, and not again within this long (the poke can flicker as the finger leaves). */
+const PRESS_COOLDOWN_MS = 1200;
+
 /** Pressing a pad: sinks it while touched, fires once per touch. */
 export class PadSystem extends createSystem({
   pads: { required: [Pad] },
@@ -81,14 +84,24 @@ export class PadSystem extends createSystem({
 }) {
   onPress: ((kind: PadKind) => void) | null = null;
   private readonly lastPress = new Map<Entity, number>();
+  /** Pads whose finger has left since they last fired. */
+  private readonly armed = new Set<Entity>();
 
   init(): void {
     this.cleanupFuncs.push(
       this.queries.pressed.subscribe('qualify', (entity) => {
         const now = performance.now();
-        if (now - (this.lastPress.get(entity) ?? -Infinity) < 600) return;
+        const fresh = this.armed.has(entity) || !this.lastPress.has(entity);
+        if (!fresh || now - (this.lastPress.get(entity) ?? -Infinity) < PRESS_COOLDOWN_MS) return;
         this.lastPress.set(entity, now);
+        this.armed.delete(entity);
         this.onPress?.(KINDS[entity.getValue(Pad, 'kind') ?? 0]);
+      }),
+      this.queries.pressed.subscribe('disqualify', (entity) => {
+        // Re-arm only once the finger has been off the pad for the cooldown.
+        setTimeout(() => {
+          if (!entity.hasComponent(Pressed)) this.armed.add(entity);
+        }, PRESS_COOLDOWN_MS);
       }),
     );
   }
