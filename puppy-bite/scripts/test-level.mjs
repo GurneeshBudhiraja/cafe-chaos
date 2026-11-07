@@ -134,7 +134,7 @@ await h.screenshot(`artifacts/level-${difficulty}-2-nip.png`);
 score = await page.evaluate(() => JSON.parse(JSON.stringify(window.__pup.game.score)));
 const firstNow = await h.objectPosition(first.name);
 check('a puppy dropped on another nips and hops off', score.nips === 1 && score.placed === level.puppies.length - 1, `${score.nips} nips, ${score.placed}/${score.total} on the bed`);
-check('the nipped puppy lands back on the table', firstNow.y < 0.9 && firstNow.z > secondAt.z + 0.08, `at y ${firstNow.y.toFixed(3)}, z ${firstNow.z.toFixed(2)} (bed z ${secondAt.z.toFixed(2)})`);
+check('the nipped puppy lands back on the table', firstNow.y < 0.9 && firstNow.x < secondAt.x - 0.12, `at y ${firstNow.y.toFixed(3)}, x ${firstNow.x.toFixed(2)} (bed x ${secondAt.x.toFixed(2)})`);
 
 const errors = await h.finish();
 console.log(`${h.fps.toFixed(1)} fps; errors ${errors.length}; ${results.filter((r) => r.ok).length}/${results.length} checks passed`);

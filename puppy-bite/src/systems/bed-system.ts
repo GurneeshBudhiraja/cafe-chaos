@@ -18,9 +18,11 @@ const EDGE_SLACK = CELL * 0.6;
 /** ...and let go no higher than this over the mattress. */
 const DROP_HEIGHT = 0.25;
 const SETTLE_SECONDS = 0.2;
-/** The hop after a nip: how long, and how far in front of the bed it lands. */
+/** The hop after a nip: how long, and how far beyond the bed's rim it lands. */
 const HOP_SECONDS = 0.5;
-const HOP_CLEARANCE = 0.05;
+const HOP_CLEARANCE = 0.04;
+/** The bed's rim reaches this far beyond the mattress (metres). */
+const RIM_REACH = 0.05;
 
 export interface LevelScore {
   placed: number;
@@ -143,9 +145,9 @@ export class BedSystem extends createSystem({
     const fits = cells.every((cell) => this.free(cell, entity));
 
     if (!fits) {
-      // A nip: it hops off the front of the bed onto the table.
+      // A nip: it hops off the bed, back toward the blanket (the bed's left), onto the table.
       this.nips++;
-      const landLocal = new Vector3(Math.max(-bed.half.x, Math.min(bed.half.x, this.local.x)), 0, bed.half.z + HOP_CLEARANCE + data.radius);
+      const landLocal = new Vector3(-(bed.half.x + RIM_REACH + HOP_CLEARANCE + data.radius), 0, Math.max(-bed.half.z, Math.min(bed.half.z, this.local.z)));
       const land = bed.group.localToWorld(landLocal);
       land.y = this.landingY;
       const from = object.getWorldPosition(new Vector3());
