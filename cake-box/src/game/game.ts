@@ -5,17 +5,20 @@
  */
 
 import { Vector3, type Entity, type World } from '@iwsdk/core';
+import { Soundscape } from '../audio/soundscape.js';
 import { createCakeBoard, decorateCake } from '../cake/cake-mesh.js';
 import { spawnPiece } from '../cake/piece.js';
 import { boundingRadius } from '../cake/polygon.js';
 import { CakePiece } from '../game-components.js';
 import { castShadows } from '../lighting.js';
-import { BOARD_CENTRE, BOARD_THICKNESS, BOX_SPOT, COUNTER_TOP_Y } from '../scene-assets/kitchen.scene-asset.js';
+import { BOARD_CENTRE, BOARD_THICKNESS, BOX_SPOT, COUNTER_SIZE, COUNTER_TOP_Y } from '../scene-assets/kitchen.scene-asset.js';
 import { BoxSystem, type LevelScore } from '../systems/box-system.js';
 import { CutSystem } from '../systems/cut-system.js';
 import { RestSystem } from '../systems/rest-system.js';
 import { createCakeBox, type CakeBox } from './box.js';
+import { Scoreboard, WristHud } from './hud.js';
 import { makeLevel, type Difficulty, type Level } from './level.js';
+import { createPads, PadSystem, type PadKind } from './pads.js';
 
 /** The cake board is this thick: the cake stands this much above the cutting board (metres). */
 const CAKE_BOARD_THICKNESS = 0.004;
@@ -25,11 +28,16 @@ export class Game {
   box: CakeBox | null = null;
   score: LevelScore = { fits: [], complete: false, stars: 0 };
   onScore: ((score: LevelScore, level: Level) => void) | null = null;
+  readonly sound = new Soundscape();
+  readonly scoreboard = new Scoreboard();
+  readonly wristHud: WristHud;
   private fixtures: Entity[] = [];
-  private readonly pieces;
+  /** Every cake piece in the world. */
+  readonly pieces;
   private readonly cut: CutSystem;
   private readonly boxSystem: BoxSystem;
   private readonly rest: RestSystem;
+  private lastCuts = 0;
 
   constructor(private readonly world: World) {
     this.cut = world.getSystem(CutSystem)!;
@@ -39,8 +47,47 @@ export class Game {
     this.boxSystem.cutsMade = () => this.cut.cuts;
     this.boxSystem.onScore = (score) => {
       this.score = score;
+      this.showStatus();
+      if (score.complete) this.sound.play('complete', score.stars);
       if (this.level) this.onScore?.(score, this.level);
     };
+    this.boxSystem.onSnap = (_cell, fit) => this.sound.play('snap', fit);
+    this.cut.onCut = () => {
+      this.sound.play('cut');
+      this.showStatus();
+    };
+    this.cut.onCutting = (speed) => this.sound.cutting(speed);
+
+    // The scoreboard stands behind the box; the wrist panel rides the left hand.
+    const counter = world.getSceneObject('counter')!;
+    this.scoreboard.group.position.copy(counter.localToWorld(new Vector3(BOX_SPOT.x, COUNTER_TOP_Y, -COUNTER_SIZE.depth / 2 + 0.05)));
+    world.createTransformEntity(this.scoreboard.group);
+    this.wristHud = new WristHud(world);
+
+    // The pads start levels.
+    createPads(world);
+    const pads = world.getSystem(PadSystem)!;
+    pads.onPress = (kind: PadKind) => {
+      this.sound.play('tap');
+      this.start(kind === 'new' ? (this.level?.difficulty ?? 'easy') : kind);
+    };
+
+    // Sound starts with the XR session (a user gesture lies behind it).
+    world.renderer.xr.addEventListener('sessionstart', () => this.sound.start());
+    document.addEventListener('pointerdown', () => this.sound.start(), { once: true });
+  }
+
+  /** Call every frame: the wrist panel follows the hand; the cut count on the boards stays fresh. */
+  update(): void {
+    this.wristHud.follow();
+    if (this.cut.cuts !== this.lastCuts) this.showStatus();
+  }
+
+  private showStatus(): void {
+    this.lastCuts = this.cut.cuts;
+    const status = { level: this.level, score: this.score, cuts: this.cut.cuts };
+    this.scoreboard.show(status);
+    this.wristHud.show(status);
   }
 
   /** Where the cutting board's top is, in the world. */
@@ -76,6 +123,7 @@ export class Game {
     this.boxSystem.reset(box, level);
     this.cut.cuts = 0;
     this.score = this.boxSystem.score();
+    this.showStatus();
     this.onScore?.(this.score, level);
     return level;
   }

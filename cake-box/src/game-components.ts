@@ -20,3 +20,8 @@ export const CakePiece = createComponent('CakePiece', {
   /** Seconds since it was cut off (for the little parting nudge). */
   age: { type: Types.Float32, default: 10 },
 });
+
+/** A pad on the counter (Easy, Medium, Hard, New cake), in pads.ts's order. */
+export const Pad = createComponent('Pad', {
+  kind: { type: Types.Int8, default: 0 },
+});

@@ -54,6 +54,9 @@ interface Stroke {
   spent: boolean;
   /** How deep the blade was when crumbs last fell. */
   crumbY: number;
+  /** Last frame's depth and sweep length (for the cutting sound). */
+  lastY: number;
+  lastLength: number;
 }
 
 export class CutSystem extends createSystem({
@@ -67,6 +70,9 @@ export class CutSystem extends createSystem({
   private readonly cutD = new Vector3();
   /** Called after each cut with the two new pieces (for sounds and the like). */
   onCut: ((pieces: Entity[]) => void) | null = null;
+  /** Called every frame with how fast the blade is moving through cake (m/s; 0 when it is not). */
+  onCutting: ((speed: number) => void) | null = null;
+  private cuttingSpeed = 0;
 
   private readonly strokes = new Map<Entity, Map<Entity, Stroke>>();
   private crumbs: CrumbSystem | undefined;
@@ -82,6 +88,8 @@ export class CutSystem extends createSystem({
   }
 
   update(delta: number): void {
+    this.cuttingSpeed = 0;
+    this.delta = delta;
     for (const knife of this.queries.knives.entities) {
       if (!knife.object3D) continue;
       knife.object3D.updateWorldMatrix(true, false);
@@ -91,7 +99,9 @@ export class CutSystem extends createSystem({
       for (const piece of [...this.queries.pieces.entities]) this.track(knife, piece, strokes);
     }
     for (const piece of this.queries.pieces.entities) this.part(piece, delta);
+    this.onCutting?.(this.cuttingSpeed);
   }
+  private delta = 1 / 60;
 
   /** Follow the edge through one piece this frame. */
   private track(knife: Entity, piece: Entity, strokes: Map<Entity, Stroke>): void {
@@ -172,13 +182,18 @@ export class CutSystem extends createSystem({
     const sweptA: Vec2 = [ax + d[0] * tMin, az + d[1] * tMin];
     const sweptB: Vec2 = [ax + d[0] * tMax, az + d[1] * tMax];
     if (!stroke) {
-      strokes.set(piece, { sweptA, sweptB, lowestY, spent: false, crumbY: CAKE_HEIGHT });
+      strokes.set(piece, { sweptA, sweptB, lowestY, spent: false, crumbY: CAKE_HEIGHT, lastY: lowestY, lastLength: tMax - tMin });
       return;
     }
     // Grow the sweep: the old ends, re-projected onto this frame's line.
     const project = ([x, z]: Vec2) => (x - ax) * d[0] + (z - az) * d[1];
     const lo = Math.min(tMin, project(stroke.sweptA), project(stroke.sweptB));
     const hi = Math.max(tMax, project(stroke.sweptA), project(stroke.sweptB));
+    // How much the blade moved in the cake this frame (down, or along the cut).
+    const moved = Math.abs(lowestY - stroke.lastY) + Math.abs(hi - lo - stroke.lastLength) * 0.5;
+    stroke.lastY = lowestY;
+    stroke.lastLength = hi - lo;
+    if (lowestY < CAKE_HEIGHT - 0.003) this.cuttingSpeed = Math.max(this.cuttingSpeed, moved / Math.max(this.delta, 1e-3));
     stroke.sweptA = [ax + d[0] * lo, az + d[1] * lo];
     stroke.sweptB = [ax + d[0] * hi, az + d[1] * hi];
     stroke.lowestY = Math.min(stroke.lowestY, lowestY);
@@ -215,7 +230,7 @@ export class CutSystem extends createSystem({
       if (!sameStroke) this.cuts++;
       this.lastCut = { at: now, p: this.cutP.clone(), d: this.cutD.clone() };
       // The new pieces are in the blade's path: no new stroke on them until the edge leaves.
-      for (const p of pieces) strokes.set(p, { sweptA, sweptB, lowestY, spent: true, crumbY: 0 });
+      for (const p of pieces) strokes.set(p, { sweptA, sweptB, lowestY, spent: true, crumbY: 0, lastY: lowestY, lastLength: 0 });
       this.shedCrumbs(object, stroke, d, 18, true);
       this.onCut?.(pieces);
     }
