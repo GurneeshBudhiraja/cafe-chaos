@@ -30,6 +30,8 @@ export class RestSystem extends createSystem({
   heldKnives: { required: [Knife, Grabbed] },
   heldPieces: { required: [CakePiece, Grabbed] },
 }) {
+  /** Round things standing on the counter that pieces can land on (the cake board): world centre, radius and top height. */
+  extraSurfaces: { centre: Vector3; radius: number; y: number }[] = [];
   private readonly drops = new Map<Entity, Drop>();
   /** Released this frame: dropped next frame, unless something (the box) claims them first. */
   private readonly released: Entity[] = [];
@@ -97,6 +99,9 @@ export class RestSystem extends createSystem({
 
   /** The height of what is under a world point: the board, the counter top or the floor. */
   surfaceUnder(point: Vector3): number {
+    for (const surface of this.extraSurfaces) {
+      if (point.y >= surface.y - 0.01 && Math.hypot(point.x - surface.centre.x, point.z - surface.centre.z) < surface.radius) return surface.y;
+    }
     const counter = this.world.getSceneObject(COUNTER_NODE);
     if (!counter) return 0;
     counter.worldToLocal(this.local.copy(point));

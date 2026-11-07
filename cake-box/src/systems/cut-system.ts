@@ -34,12 +34,14 @@ const CLEAR_MARGIN = 0.03;
 /** Grooves within this distance and angle of the blade's line count as the same cut. */
 const SAME_LINE_DISTANCE = 0.005;
 const SAME_LINE_ANGLE = (8 * Math.PI) / 180;
+/** Splits on the same line within this long count as one cut (a stroke through several pieces). */
+const SAME_CUT_MS = 2500;
 /** Scores shorter than this are not worth a groove (metres). */
 const MIN_GROOVE = 0.012;
 /** Crumbs fall each time the blade goes this much deeper (metres). */
 const CRUMB_STEP = 0.012;
 /** How far and how long the two new pieces slide apart after a cut. */
-const PART_DISTANCE = 0.007;
+const PART_DISTANCE = 0.002;
 const PART_SECONDS = 0.3;
 
 /** A stroke in progress, in the piece's frame. */
@@ -58,8 +60,11 @@ export class CutSystem extends createSystem({
   knives: { required: [Knife, Grabbed] },
   pieces: { required: [CakePiece] },
 }) {
-  /** Cuts made so far (for the score). */
+  /** Cuts made so far (for the score): one stroke of the knife is one cut, however many pieces it goes through. */
   cuts = 0;
+  private lastCut: { at: number; p: Vector3; d: Vector3 } | null = null;
+  private readonly cutP = new Vector3();
+  private readonly cutD = new Vector3();
   /** Called after each cut with the two new pieces (for sounds and the like). */
   onCut: ((pieces: Entity[]) => void) | null = null;
 
@@ -195,9 +200,20 @@ export class CutSystem extends createSystem({
     if (coveredLo > range[0] + EDGE_SLACK || coveredHi < range[1] - EDGE_SLACK) return;
     stroke.spent = true;
     strokes.delete(piece);
+    // The blade's line in the world, to tell one stroke's cuts from a new one's.
+    this.cutP.set(ax, 0, az).applyMatrix4(object.matrixWorld);
+    this.cutD.set(d[0], 0, d[1]).transformDirection(object.matrixWorld);
     const pieces = splitPiece(this.world, piece, [ax, az], d);
     if (pieces.length) {
-      this.cuts++;
+      const now = performance.now();
+      const last = this.lastCut;
+      const sameStroke =
+        !!last &&
+        now - last.at < SAME_CUT_MS &&
+        Math.abs(last.d.dot(this.cutD)) > Math.cos(SAME_LINE_ANGLE) &&
+        Math.abs(this.cutP.clone().sub(last.p).cross(this.cutD).y) < SAME_LINE_DISTANCE;
+      if (!sameStroke) this.cuts++;
+      this.lastCut = { at: now, p: this.cutP.clone(), d: this.cutD.clone() };
       // The new pieces are in the blade's path: no new stroke on them until the edge leaves.
       for (const p of pieces) strokes.set(p, { sweptA, sweptB, lowestY, spent: true, crumbY: 0 });
       this.shedCrumbs(object, stroke, d, 18, true);

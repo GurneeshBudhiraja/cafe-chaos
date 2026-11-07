@@ -9,33 +9,33 @@
  * into a grab. Hands render as IWSDK's tracked hands.
  */
 
-import { Vector3, World } from '@iwsdk/core';
+import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
-import { createCakeBoard, decorateCake } from './cake/cake-mesh.js';
-import { spawnPiece } from './cake/piece.js';
-import { boundingRadius, regularPolygon } from './cake/polygon.js';
+import { iou } from './cake/polygon.js';
+import { Game } from './game/game.js';
+import { fitAtCardTurn } from './game/level.js';
 import { setUpLighting } from './lighting.js';
-import { BOARD_CENTRE, BOARD_THICKNESS, COUNTER_TOP_Y } from './scene-assets/kitchen.scene-asset.js';
+import { BoxSystem } from './systems/box-system.js';
 import { CrumbSystem } from './systems/crumb-system.js';
 import { CutSystem } from './systems/cut-system.js';
+import { HandGripSystem } from './systems/hand-grip-system.js';
 import { RestSystem } from './systems/rest-system.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
   setUpLighting(world);
-  // Crumbs register first: the cut system looks them up.
-  world.registerSystem(CrumbSystem).registerSystem(CutSystem).registerSystem(RestSystem);
+  // Crumbs register first: the cut system looks them up. The box claims
+  // released pieces before the rest system drops them.
+  world
+    .registerSystem(CrumbSystem)
+    .registerSystem(CutSystem)
+    .registerSystem(BoxSystem)
+    .registerSystem(RestSystem)
+    .registerSystem(HandGripSystem); // After IWSDK's input system: it overrides the holding hand's bones.
+  const game = new Game(world);
+  game.onScore = (score, level) => console.log(`[cake] ${level.difficulty}: fits ${score.fits.map((f) => (f === null ? '-' : Math.round(f * 100))).join(' ')}${score.complete ? `, done: ${score.stars} stars` : ''}`);
+  game.start('easy');
 
-  // Phase 1: a square cake on a cake board (the levels come in phase 2).
-  const counter = world.getSceneObject('counter')!;
-  const onBoard = counter.localToWorld(new Vector3(BOARD_CENTRE.x, COUNTER_TOP_Y + BOARD_THICKNESS, BOARD_CENTRE.z));
-  const polygon = regularPolygon(4, 0.09 * Math.SQRT2, Math.PI / 4);
-  const strawberries = [0, 1, 2, 3].map((i) => [Math.cos((i / 4) * Math.PI * 2 + 0.4) * 0.055, Math.sin((i / 4) * Math.PI * 2 + 0.4) * 0.055] as [number, number]);
-  strawberries.push([0, 0]);
-  const cakeBoard = createCakeBoard(boundingRadius(polygon));
-  cakeBoard.position.copy(onBoard);
-  world.createTransformEntity(cakeBoard);
-  spawnPiece(world, { polygon, decorations: decorateCake(polygon, strawberries), grooves: [] }, onBoard.clone().setY(onBoard.y + 0.004), 0);
-
-  // Dev only: lets the recording and test scripts find the world.
-  if (import.meta.env.DEV) (window as unknown as { __cake: unknown }).__cake = { world, cut: world.getSystem(CutSystem) };
+  // Dev only: lets the recording and test scripts find the world and start levels.
+  if (import.meta.env.DEV)
+    (window as unknown as { __cake: unknown }).__cake = { world, game, cut: world.getSystem(CutSystem), fitAtCardTurn, iou };
 });
