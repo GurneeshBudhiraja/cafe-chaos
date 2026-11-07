@@ -128,8 +128,10 @@ function materials(coat: Coat, seed: number): Materials {
 
 // Shared geometries.
 const sphere = new SphereGeometry(1, 20, 14);
-const eyeArc = new TorusGeometry(0.0042, 0.0011, 5, 10, Math.PI);
+const eyeArc = new TorusGeometry(0.0046, 0.0016, 5, 10, Math.PI);
 const pawGeometry = new SphereGeometry(0.0085, 12, 9);
+const COLLAR_COLORS = [0xe25d5d, 0x4f9ad6, 0x62b86a, 0xf0b33c, 0xa36bd6, 0xef8fb5];
+const tagGeometry = new SphereGeometry(0.0045, 10, 8);
 
 function ball(m: MeshStandardMaterial, rx: number, ry: number, rz: number, name = ''): Mesh {
   const mesh = new Mesh(sphere, m);
@@ -146,10 +148,22 @@ function capsule(m: MeshStandardMaterial, radius: number, length: number, name =
   return mesh;
 }
 
-/** A head looking along -Z (the muzzle out front), with closed eyes and floppy ears. Returns the head and its ear pivots. */
-function createHead(m: Materials, r: number): { head: Group; ears: Object3D[] } {
+/** A head looking along -Z (the muzzle out front), with closed eyes, floppy ears and a collar. Returns the head and its ear pivots. */
+function createHead(m: Materials, r: number, seed = 0): { head: Group; ears: Object3D[] } {
   const head = new Group();
   head.name = 'Head';
+  // A collar with a little tag, round the neck below the head.
+  const collarMaterial = new MeshStandardMaterial({ color: COLLAR_COLORS[seed % COLLAR_COLORS.length], roughness: 0.5 });
+  const collar = new Mesh(new TorusGeometry(r * 0.72, r * 0.11, 8, 24), collarMaterial);
+  collar.rotation.x = Math.PI / 2;
+  collar.position.set(0, -r * 0.62, r * 0.1);
+  collar.name = 'Collar';
+  head.add(collar);
+  const tag = new Mesh(tagGeometry, new MeshStandardMaterial({ color: 0xe6c35a, metalness: 0.8, roughness: 0.3 }));
+  tag.position.set(0, -r * 0.78, -r * 0.6);
+  tag.scale.set(1, 1, 0.4);
+  tag.name = 'Tag';
+  head.add(tag);
   head.add(ball(m.fur, r, r * 0.92, r * 0.95, 'Skull'));
   const muzzle = ball(m.accent, r * 0.52, r * 0.4, r * 0.55, 'Muzzle');
   muzzle.position.set(0, -r * 0.22, -r * 0.72);
@@ -220,39 +234,41 @@ export function createPuppyLook(pose: Pose, coat: Coat, seed = 0): { group: Grou
   let body: Object3D;
   let tail: Group;
   let ears: Object3D[];
+  let tailOverride: [number, number, number][] = [];
 
   if (pose === 'tiny') {
     // A ball of a pup: round body, head tucked on top, tail round the side.
     body = ball(m.fur, 0.022, 0.017, 0.022, 'Body');
     body.position.y = 0.017;
-    const h = createHead(m, 0.017);
-    h.head.position.set(0.003, 0.026, -0.011);
-    h.head.rotation.set(0.35, 0.3, 0);
+    const h = createHead(m, 0.019, seed);
+    // Head up front (+Z), chin on its paws, ears out.
+    h.head.position.set(0.002, 0.024, 0.011);
+    h.head.rotation.set(0.3, Math.PI - 0.3, 0);
     ears = h.ears;
     tail = createTail(m, [[0, 0, 0], [0.012, 0.004, 0.008], [0.016, 0.006, 0.02]], 0.005);
     tail.position.set(-0.014, 0.012, 0.008);
     posed.add(body, h.head, tail);
   } else if (pose === 'loaf') {
-    // Sphinx: body along Z, head up at the front (-Z), front paws out ahead.
+    // Sphinx: body along Z, head up at the front (+Z, toward the player), front paws out ahead.
     body = capsule(m.fur, 0.023, 0.04, 'Body');
     body.rotation.set(0, Math.PI / 2, Math.PI / 2);
-    body.position.set(0, 0.022, 0.008);
-    const h = createHead(m, 0.026);
-    h.head.position.set(0, 0.046, -0.03);
-    h.head.rotation.x = 0.15;
+    body.position.set(0, 0.022, -0.008);
+    const h = createHead(m, 0.026, seed);
+    h.head.position.set(0, 0.046, 0.03);
+    h.head.rotation.set(0.15, Math.PI, 0);
     ears = h.ears;
     for (const side of [-1, 1]) {
       const leg = createLeg(m, 0.0085, 0.028, 'FrontLeg');
-      leg.position.set(side * 0.014, 0.009, -0.028);
-      leg.rotation.y = Math.PI / 2;
+      leg.position.set(side * 0.014, 0.009, 0.028);
+      leg.rotation.y = -Math.PI / 2;
       posed.add(leg);
       // Hind legs tucked beside the body.
       const haunch = ball(m.fur, 0.014, 0.012, 0.016, 'Haunch');
-      haunch.position.set(side * 0.022, 0.012, 0.03);
+      haunch.position.set(side * 0.022, 0.012, -0.03);
       posed.add(haunch);
     }
-    tail = createTail(m, [[0, 0, 0], [0.012, 0.004, 0.018], [0.03, 0.006, 0.026]]);
-    tail.position.set(0.004, 0.012, 0.034);
+    tail = createTail(m, [[0, 0, 0], [0.012, 0.004, -0.018], [0.03, 0.006, -0.026]]);
+    tail.position.set(0.004, 0.012, -0.034);
     posed.add(body, h.head, tail);
   } else if (pose === 'sprawl') {
     // Flat on the belly in column 0, head at the +Z end, hind legs and tail out into column 1 at the -Z end.
@@ -261,7 +277,7 @@ export function createPuppyLook(pose: Pose, coat: Coat, seed = 0): { group: Grou
     body.rotation.set(0, Math.PI / 2, Math.PI / 2);
     body.position.set(cx, 0.018, 0.0);
     body.scale.set(1, 0.85, 1);
-    const h = createHead(m, 0.026);
+    const h = createHead(m, 0.026, seed);
     h.head.position.set(cx, 0.03, 0.045);
     h.head.rotation.set(0.25, Math.PI, 0);
     ears = h.ears;
@@ -287,7 +303,7 @@ export function createPuppyLook(pose: Pose, coat: Coat, seed = 0): { group: Grou
     body = capsule(m.fur, 0.024, 0.06, 'Body');
     body.position.set(0.002, 0.02, 0);
     body.scale.set(1, 0.85, 1);
-    const h = createHead(m, 0.026);
+    const h = createHead(m, 0.026, seed);
     h.head.position.set(0.058, 0.022, 0);
     // Lying on its side: the muzzle points +X, the ears flop toward the ground.
     h.head.rotation.set(0, -Math.PI / 2, 0);
@@ -314,17 +330,19 @@ export function createPuppyLook(pose: Pose, coat: Coat, seed = 0): { group: Grou
     ring.position.y = 0.017;
     ring.name = 'Body';
     body = ring;
-    const h = createHead(m, 0.026);
-    h.head.position.set(0.014, 0.036, -0.026);
-    h.head.rotation.set(0.4, -0.5, 0.15);
+    const h = createHead(m, 0.026, seed);
+    // Resting on the ring at the front (+Z), looking up at the player a little.
+    h.head.position.set(0.012, 0.036, 0.026);
+    h.head.rotation.set(0.45, Math.PI + 0.5, -0.15);
+    tailOverride = [[0, 0, 0], [-0.012, 0.012, 0.012], [-0.03, 0.016, 0.02], [-0.04, 0.012, 0.03]];
     ears = h.ears;
     // A hind paw peeking out, and the tail curling across the top.
     const paw = new Mesh(pawGeometry, m.accent);
-    paw.position.set(-0.03, 0.012, 0.03);
+    paw.position.set(0.03, 0.012, 0.03);
     paw.scale.set(1.2, 0.8, 1.2);
     posed.add(paw);
-    tail = createTail(m, [[0, 0, 0], [0.012, 0.012, -0.012], [0.03, 0.016, -0.02], [0.04, 0.012, -0.03]]);
-    tail.position.set(-0.03, 0.02, 0.012);
+    tail = createTail(m, tailOverride);
+    tail.position.set(0.03, 0.02, -0.012);
     posed.add(body, h.head, tail);
   }
 

@@ -30,8 +30,8 @@ const LABELS: Record<PadKind, string> = { easy: 'Easy', medium: 'Medium', hard: 
 const COLORS: Record<PadKind, number> = { easy: 0xb7e0b4, medium: 0xf6d99a, hard: 0xf3aeb8, new: 0xc9d6ee };
 const SIZE = { width: 0.07, depth: 0.04, height: 0.012 };
 const GAP = 0.018;
-/** Where the row of pads sits, in the table's frame: in front of the bed, near the front edge. */
-const ROW = { x: 0.32, z: 0.29 };
+/** Where the row of pads sits, in the table's frame: the right end of the front edge, clear of the bed. */
+const ROW = { x: 0.5, z: 0.3 };
 const PRESS_DEPTH = 0.005;
 
 function label(text: string): CanvasTexture {

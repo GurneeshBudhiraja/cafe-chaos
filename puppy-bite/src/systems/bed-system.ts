@@ -20,7 +20,7 @@ const DROP_HEIGHT = 0.25;
 const SETTLE_SECONDS = 0.2;
 /** The hop after a nip: how long, and how far in front of the bed it lands. */
 const HOP_SECONDS = 0.5;
-const HOP_CLEARANCE = 0.1;
+const HOP_CLEARANCE = 0.05;
 
 export interface LevelScore {
   placed: number;
