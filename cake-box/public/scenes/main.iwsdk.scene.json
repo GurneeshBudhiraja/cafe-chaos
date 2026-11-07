@@ -1,0 +1,52 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.IBLTexture": {
+      "src": "room",
+      "intensity": 0.45,
+      "rotation": [0, 0, 0]
+    }
+  },
+  "resources": {},
+  "nodes": [
+    {
+      "id": "room",
+      "name": "Kitchen Room",
+      "content": { "type": "asset", "asset": "kitchen-room" },
+      "transform": { "position": [0, 0, -0.4] }
+    },
+    {
+      "id": "counter",
+      "name": "Counter",
+      "content": { "type": "asset", "asset": "counter" },
+      "transform": { "position": [0, 0, -0.62] }
+    },
+    {
+      "id": "knife",
+      "name": "Knife",
+      "content": { "type": "asset", "asset": "knife" },
+      "metadata": { "iwsdk.validation": { "allowFloating": true } },
+      "transform": {
+        "position": [-0.1, 0.9095, -0.42],
+        "rotationDeg": [-90, 0, 170]
+      },
+      "components": {
+        "Knife": {},
+        "OneHandGrabbable": {}
+      }
+    }
+  ],
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [0, 1.6, 0.4],
+        "target": [0, 0.8, -0.6],
+        "fov": 60
+      }
+    ]
+  }
+}
