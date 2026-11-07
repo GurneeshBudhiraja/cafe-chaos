@@ -15,6 +15,7 @@
 import { createSystem, World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { Soundscape } from './audio/soundscape.js';
+import { Yapper } from './game-components.js';
 import { Game } from './game/game.js';
 import { PadSystem } from './game/pads.js';
 import { setUpLighting } from './lighting.js';
@@ -46,5 +47,5 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   game.start('easy');
 
   // Dev only: lets the recording and test scripts find the world and start levels.
-  if (import.meta.env.DEV) (window as unknown as { __yap: unknown }).__yap = { world, game, Soundscape, makeLevel, checkYapper, countSolutions, describeRule };
+  if (import.meta.env.DEV) (window as unknown as { __yap: unknown }).__yap = { world, game, Soundscape, Yapper, makeLevel, checkYapper, countSolutions, describeRule };
 });
