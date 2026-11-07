@@ -221,6 +221,13 @@ function installHelpers() {
         this.held = { object, rel: handM.invert().multiply(object.matrixWorld.clone()) };
       });
     },
+    /**
+     * The held object does not follow the hand quite rigidly (its position
+     * wanders by up to a centimetre as the hand turns), so the carry closes
+     * the loop: each frame it measures where the object really is and
+     * corrects the hand by the error, and at the end it settles until the
+     * object is within 1.5 mm of the asked pose.
+     */
     async carry(position, turn, ms) {
       const { object, rel } = this.held;
       const M = object.matrixWorld.constructor;
@@ -233,20 +240,34 @@ function installHelpers() {
       const toP = toV(position);
       const t0 = performance.now();
       const scale = new V(1, 1, 1);
+      this.carryError ??= new V();
+      let expected = null;
+      let settling = 0;
       for (;;) {
+        if (expected) {
+          // How far the object missed last frame's target: fold it into the correction.
+          object.updateWorldMatrix(true, false);
+          const miss = expected.clone().sub(object.getWorldPosition(new V()));
+          this.carryError.addScaledVector(miss, 0.8);
+          if (settling && miss.length() < 0.0015) return;
+          if (settling > 8) return;
+        }
         const t = ms > 0 ? Math.min(1, (performance.now() - t0) / ms) : 1;
         const e = ease(t);
-        const target = new M().compose(fromP.clone().lerp(toP, e), fromQ.clone().slerp(toQuat, e), scale);
+        const targetP = fromP.clone().lerp(toP, e);
+        const target = new M().compose(targetP, fromQ.clone().slerp(toQuat, e), scale);
         const hand = target.multiply(relInv);
         const p = new V();
         const q = new Q();
         hand.decompose(p, q, new V());
+        p.add(this.carryError);
         await send('set_transform', {
           device: 'hand-right',
           position: { x: p.x, y: p.y, z: p.z },
           orientation: { x: q.x, y: q.y, z: q.z, w: q.w },
         });
-        if (t >= 1) return;
+        expected = targetP;
+        if (t >= 1) settling++;
         await nextFrame();
       }
     },
