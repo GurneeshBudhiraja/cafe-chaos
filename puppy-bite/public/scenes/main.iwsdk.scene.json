@@ -1,0 +1,38 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.IBLTexture": {
+      "src": "room",
+      "intensity": 0.45,
+      "rotation": [0, 0, 0]
+    }
+  },
+  "resources": {},
+  "nodes": [
+    {
+      "id": "room",
+      "name": "Living Room",
+      "content": { "type": "asset", "asset": "living-room" },
+      "transform": { "position": [0, 0, -0.4] }
+    },
+    {
+      "id": "table",
+      "name": "Table",
+      "content": { "type": "asset", "asset": "table" },
+      "transform": { "position": [0, 0, -0.62] }
+    }
+  ],
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [0, 1.6, 0.4],
+        "target": [0, 0.8, -0.6],
+        "fov": 60
+      }
+    ]
+  }
+}
