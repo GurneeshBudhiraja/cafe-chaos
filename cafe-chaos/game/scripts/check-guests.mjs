@@ -3,12 +3,12 @@
  *
  * With patience shortened to a few seconds and arrivals every second or
  * two, from the seat at the emulated table:
- * 1. guests appear at the gate and the first reaches the bench's first
- *    slot and waits, with a patience bubble over its head facing the viewer;
- * 2. when its patience runs out it leaves: it heads back out and fades;
- * 3. it is gone afterwards, and the guest behind has moved up to the
- *    first slot;
- * 4. new guests keep arriving, and never more than the queue holds.
+ * 1. guests appear on the path and the first reaches the gate opening and
+ *    waits there, with a patience bubble over its head facing the viewer;
+ * 2. those behind stand in a single line along the path, outside the café;
+ * 3. when the first's patience runs out it leaves: it steps out and fades;
+ * 4. it is gone afterwards, and the guest behind has stepped up to the gate;
+ * 5. new guests keep arriving, and never more than the line holds.
  *
  * Usage: dev server running, then `node scripts/check-guests.mjs`.
  * Output: artifacts/guests-*.png, and a pass/fail line.
@@ -47,9 +47,7 @@ const read = () =>
     const { world, system, guests } = window.__cafe;
     const V = world.camera.position.constructor;
     const eye = world.camera.getWorldPosition(new V());
-    const cafe = system.cafe;
-    const bench = system.pieces.find((p) => p.name === 'waiting-bench');
-    const slot1 = cafe.worldToLocal(bench.getObjectByName('Slot-1').getWorldPosition(new V()));
+    const gate = new V(0.324, 0.024, 0.055);
     return {
       arrived: guests.arrived,
       gaveUp: guests.gaveUp,
@@ -65,7 +63,9 @@ const read = () =>
           spot: g.spot,
           patience: +g.patience.toFixed(1),
           opacity: +g.opacity.toFixed(2),
-          atSlot1: g.root.position.distanceTo(slot1) < 0.004,
+          atGate: g.root.position.distanceTo(gate) < 0.004,
+          x: +g.root.position.x.toFixed(3),
+          z: +g.root.position.z.toFixed(3),
           bubbleShown: g.bubble.mesh.visible,
           bubbleAbove: +(bubbleAt.y - headAt.y).toFixed(3),
           bubbleFacing: +normal.setY(0).normalize().dot(toEye).toFixed(2),
@@ -80,13 +80,20 @@ await pause(300);
 let s = read();
 s = await s;
 const first = s.guests.find((g) => g.state === 'waiting');
-check('a guest walks in from the gate and waits on the bench', !!first && first.spot === 0 && first.atSlot1 && first.opacity === 1, `${s.arrived} arrived; ${first?.name} ${first?.kind} at spot ${first?.spot}, on slot 1 ${first?.atSlot1}`);
+check('a guest walks up the path and waits in the gate opening', !!first && first.spot === 0 && first.atGate && first.opacity === 1, `${s.arrived} arrived; ${first?.name} ${first?.kind} at place ${first?.spot}, at the gate ${first?.atGate}`);
 check('a patience bubble sits over its head, facing the viewer', !!first && first.bubbleShown && first.bubbleAbove > 0.005 && first.bubbleAbove < 0.05 && first.bubbleFacing > 0.95, `shown ${first?.bubbleShown}, ${first?.bubbleAbove} m above the head, facing ${first?.bubbleFacing}`);
-await h.head({ x: -1.0, y: 1.08, z: 0.1 }, { x: -1.32, y: 0.82, z: 0.08 }, 600);
+// --- 2. A single line along the path: everyone waiting stands behind the one before, outside the café.
+await page.waitForFunction(() => window.__cafe.guests.guests.filter((g) => g.state === 'waiting').length >= 3, null, { timeout: 60000 });
+s = await read();
+const line = s.guests.filter((g) => g.state === 'waiting').sort((a, b) => a.spot - b.spot);
+const singleFile = line.every((g, i) => i === 0 || (g.x > line[i - 1].x + 0.02 && Math.abs(g.z - line[i - 1].z) < 0.003));
+const outside = line.every((g) => g.x >= 0.32);
+check('the others queue in a single line behind, outside the door', line.length >= 3 && singleFile && outside, line.map((g) => `${g.name}@(${g.x}, ${g.z})`).join(' '));
+await h.head({ x: -1.0, y: 1.08, z: 0.05 }, { x: -1.32, y: 0.82, z: 0.0 }, 600);
 await pause(300);
 await h.screenshot('artifacts/guests-1-waiting.png');
 
-// --- 2. Its patience runs out: it heads back out and fades.
+// --- 3. Its patience runs out: it steps out of the line and fades.
 const firstName = first?.name;
 await page.waitForFunction((name) => window.__cafe.guests.guests.find((g) => g.root.name === name)?.state === 'leaving', firstName, { timeout: 30000 });
 // Read it mid-way out (the walk out takes a few seconds; the harness's pauses run slow).
@@ -96,15 +103,15 @@ const leaving = s.guests.find((g) => g.name === firstName);
 check('out of patience, it leaves and fades on the way', !!leaving && leaving.state === 'leaving' && leaving.opacity < 1 && !leaving.bubbleShown, `${firstName}: state ${leaving?.state}, opacity ${leaving?.opacity}, bubble ${leaving?.bubbleShown}`);
 await h.screenshot('artifacts/guests-2-leaving.png');
 
-// --- 3. Gone, and the next guest has moved up to the first slot.
+// --- 4. Gone, and the next guest has stepped up to the gate.
 await page.waitForFunction((name) => !window.__cafe.guests.guests.some((g) => g.root.name === name), firstName, { timeout: 30000 });
 await pause(2500);
 s = await read();
 const atFront = s.guests.find((g) => g.spot === 0);
-check('it is gone and the guest behind moved up to the first slot', !s.guests.some((g) => g.name === firstName) && !!atFront && atFront.name !== firstName && atFront.atSlot1 && s.gaveUp >= 1, `${s.gaveUp} gave up; at the front now: ${atFront?.name} (on slot 1 ${atFront?.atSlot1}); ${s.guests.length} present`);
+check('it is gone and the guest behind stepped up to the gate', !s.guests.some((g) => g.name === firstName) && !!atFront && atFront.name !== firstName && atFront.atGate && s.gaveUp >= 1, `${s.gaveUp} gave up; at the gate now: ${atFront?.name} (${atFront?.atGate}); ${s.guests.length} present`);
 await h.screenshot('artifacts/guests-3-shuffled.png');
 
-// --- 4. Arrivals keep coming, within the queue's room.
+// --- 5. Arrivals keep coming, within the line's room.
 let most = 0;
 for (let i = 0; i < 8; i++) {
   await pause(900);
@@ -112,7 +119,7 @@ for (let i = 0; i < 8; i++) {
   most = Math.max(most, now.guests.filter((g) => g.state !== 'leaving').length);
 }
 s = await read();
-check('guests keep arriving, never more than the queue holds', s.arrived >= 5 && most <= 6, `${s.arrived} arrived in all, at most ${most} waiting at once`);
+check('guests keep arriving, never more than the line holds', s.arrived >= 5 && most <= 6, `${s.arrived} arrived in all, at most ${most} waiting at once`);
 
 const errors = await h.finish();
 console.log(`${h.fps.toFixed(1)} fps; errors ${errors.length}; ${results.filter((r) => r.ok).length}/${results.length} checks passed`);

@@ -1,10 +1,11 @@
 /**
  * The guests, recorded as the headset shows it (Quest 3 field of view, no
- * captions): seated at the table, the café appears; guests come through
- * the gate one after another and wait on the bench, each with a patience
- * timer over its head. A lean in to watch them. The first timer runs
- * out: that guest turns, walks back out through the gate and fades away,
- * and the others move up. More arrive. A last look over the café.
+ * captions): seated at the table, the café appears; guests come up the
+ * path one after another and line up at the door, the first in the gate
+ * opening, each with a patience timer over its head. A lean in to watch
+ * them. The first timer runs out: that guest steps out of the line, walks
+ * away and fades, and the others step up. More arrive. A last look over
+ * the café.
  *
  * Patience is shortened for the recording (the game waits 90 seconds);
  * pass a number of seconds to change it: `npm run record -- 20`.
@@ -18,8 +19,8 @@ import { startHeadset } from './lib/headset.mjs';
 const PATIENCE = Number(process.argv[2] ?? 18);
 const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
 const TABLE = { x: -1.3, y: 0.79, z: 0.28 };
-/** The gate and bench are at the café's right, which from this seat is toward -z. */
-const GATE_LOOK = { x: -1.32, y: 0.82, z: 0.1 };
+/** The gate is at the café's right, which from this seat is toward -z; the line runs on from it. */
+const GATE_LOOK = { x: -1.32, y: 0.82, z: 0.02 };
 
 const h = await startHeadset({
   record: 'guests',
@@ -49,12 +50,12 @@ await pause(3000);
 await h.head({ x: -0.95, y: 1.12, z: 0.18 }, GATE_LOOK, 1500);
 await pause(5000);
 
-// 2. Lean in over the bench to watch them wait, timers ticking.
-await h.head({ x: -1.05, y: 1.02, z: 0.0 }, { x: -1.33, y: 0.83, z: 0.1 }, 1500);
+// 2. Lean in over the door to watch the line, timers ticking.
+await h.head({ x: -1.05, y: 1.02, z: -0.08 }, { x: -1.33, y: 0.83, z: 0.0 }, 1500);
 await pause(PATIENCE * 1000 - 6000);
 
-// 3. The first guest's timer runs out: it walks back out and fades; the rest move up.
-await h.head({ x: -1.0, y: 1.08, z: 0.08 }, { x: -1.3, y: 0.82, z: 0.0 }, 1200);
+// 3. The first guest's timer runs out: it steps out, walks away and fades; the rest step up.
+await h.head({ x: -1.0, y: 1.08, z: 0.0 }, { x: -1.3, y: 0.82, z: -0.04 }, 1200);
 await pause(9000);
 
 // 4. A last look over the whole café, more guests arriving.

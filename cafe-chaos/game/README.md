@@ -35,17 +35,20 @@ the player, and guests start arriving at the gate.
 
 **The guests** (`src/systems/guest-system.ts`, `src/guests/`):
 
-- **Arrivals**: a guest appears on the path outside the gate every 3 to 8
-  seconds (at random) while there is room, adults and the odd child, each
-  in its own colour. It fades in as it walks through the gate and takes
-  the first free spot in the queue: the four slots on the waiting bench,
-  then two standing spots inside the gate (`guests/queue.ts`).
+- **Arrivals**: a guest appears at the far end of the path outside the
+  gate every 3 to 8 seconds (at random) while there is room, adults and
+  the odd child, each in its own colour. It fades in as it walks up to the
+  back of the line.
+- **The line**: a single file at the door (`guests/queue.ts`). The first
+  guest stands in the gate opening looking into the café; each newcomer
+  stands behind the one before, along the path. Nobody comes inside until
+  they are seated. Up to six wait at once.
 - **Waiting**: a patience bubble over each head counts down from 90
   seconds, its ring draining from green through amber to red
   (`guests/patience-bubble.ts`). It turns to face the player.
-- **Giving up**: when the timer runs out the guest turns, walks back out
-  through the gate and fades away on the path; everyone behind moves up
-  a spot. Arrivals carry on, so the bench never stays empty for long.
+- **Giving up**: when the timer runs out the guest steps out of the line,
+  walks away down the path and fades out; everyone behind steps up a
+  place. Arrivals carry on, so the door never stays empty for long.
 - The models are rigid, so walking is a small bob and sway. Picking a
   guest up and seating them is the next phase.
 
@@ -71,9 +74,10 @@ room has a desk-height table), from a running dev server:
   table at table height, within reach and facing the viewer, with the whole
   opening layout (4 checks) and screenshots.
 - `node scripts/check-guests.mjs`: with patience shortened, a guest walks
-  in and waits with a bubble over its head, leaves and fades when its
-  patience runs out, the queue moves up, and arrivals keep coming within
-  the queue's room (5 checks).
+  up and waits at the gate with a bubble over its head, the others line up
+  single file behind it outside, the first leaves and fades when its
+  patience runs out, the line steps up, and arrivals keep coming within
+  the line's room (6 checks).
 - `node scripts/record-cafe.mjs`: the café's arrival and a look around it,
   as the headset shows it, to `artifacts/cafe.mp4`.
 - `npm run record [-- seconds]`: the guests arriving, waiting and giving up
@@ -88,7 +92,7 @@ src/
   cafe/layout.ts             the opening floor plan
   systems/cafe-system.ts     building the café and placing it on the table
   systems/guest-system.ts    guests arriving, queueing, waiting and giving up
-  guests/queue.ts            the gate path and the waiting spots
+  guests/queue.ts            the line at the door and the path
   guests/patience-bubble.ts  the timer over a guest's head
   lib/desk-placement.ts      finding the table among the detected surfaces
   lib/hand-pinch.ts          reading a hand's pinch from its joints (for the game to come)

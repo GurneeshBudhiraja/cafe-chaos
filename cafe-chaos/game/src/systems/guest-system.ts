@@ -1,16 +1,18 @@
 /**
  * GuestSystem: the guests who come to the café and wait.
  *
- * - Arrivals: once the café is placed, a guest appears on the path outside
- *   the gate every few seconds (at random, 3 to 8 s apart), as long as
- *   there is room in the queue. Adults and the odd child, each in their
- *   own colour. They fade in as they walk through the gate and take the
- *   first free spot: the four slots on the waiting bench, then two
- *   standing spots inside the gate.
+ * - Arrivals: once the café is placed, a guest appears at the far end of
+ *   the path outside the gate every few seconds (at random, 3 to 8 s
+ *   apart), as long as there is room in the line. Adults and the odd
+ *   child, each in their own colour. They fade in as they walk up to the
+ *   back of the line.
+ * - The line: a single file at the door. The first guest stands in the
+ *   gate opening looking into the café; each newcomer stands behind the
+ *   one before, along the path. Nobody comes inside until they are seated.
  * - Waiting: a patience bubble over each head counts down from 90 seconds.
- * - Giving up: when the timer runs out the guest turns, walks back out
- *   through the gate and fades away on the path, and everyone behind moves
- *   up a spot.
+ * - Giving up: when the timer runs out the guest steps out of the line,
+ *   walks away down the path and fades out, and everyone behind steps up
+ *   a place.
  *
  * Guests are children of the café group, so they move and scale with it.
  * The models are rigid (no walk cycle), so walking is a small bob and
@@ -20,7 +22,7 @@
 import { AssetManager, createSystem, Mesh, MeshStandardMaterial, Vector3, type Object3D } from '@iwsdk/core';
 import type { ModelName } from '../assets.js';
 import { PatienceBubble } from '../guests/patience-bubble.js';
-import { BENCH_SLOTS, MAX_WAITING, pathIn, pathOut, STANDING_SPOTS, yawDelta, yawToward, type QueueSpot } from '../guests/queue.js';
+import { MAX_WAITING, pathIn, pathOut, QUEUE_SPOTS, yawDelta, yawToward } from '../guests/queue.js';
 import { CafeSystem, copyModel } from './cafe-system.js';
 
 /** How long a guest waits before giving up (seconds). */
@@ -78,7 +80,7 @@ export class GuestSystem extends createSystem({}) {
   /** The café placement the guests belong to: a new one starts a fresh queue. */
   private placement = -1;
   private nextSpawnIn = FIRST_SPAWN_SECONDS;
-  private spots: QueueSpot[] = [];
+  private readonly spots = QUEUE_SPOTS;
   private readonly eye = new Vector3();
   private readonly at = new Vector3();
   private readonly scratch = new Vector3();
@@ -96,12 +98,11 @@ export class GuestSystem extends createSystem({}) {
       return;
     }
     if (cafe.placements !== this.placement) {
-      // The café was (re)placed: everyone out, and the bench's spots read again where it now stands.
+      // The café was (re)placed: everyone out, and the line starts again.
       this.clear();
       this.placement = cafe.placements;
       this.nextSpawnIn = FIRST_SPAWN_SECONDS;
     }
-    if (!this.spots.length) this.readSpots();
     this.spawnTick(delta);
     this.world.camera.getWorldPosition(this.eye);
     for (const guest of [...this.guests]) {
@@ -115,7 +116,6 @@ export class GuestSystem extends createSystem({}) {
   clear(): void {
     for (const guest of this.guests) this.remove(guest);
     this.guests.length = 0;
-    this.spots = [];
   }
 
   // ------------------------------------------------------------- arrivals
@@ -193,23 +193,6 @@ export class GuestSystem extends createSystem({}) {
     return MAX_WAITING - 1;
   }
 
-  /** The bench's slots (from its anchors, in the café's space) and the standing spots. */
-  private readSpots(): void {
-    const cafe = this.cafeSystem.cafe;
-    cafe.updateWorldMatrix(true, true);
-    const bench = this.cafeSystem.pieces.find((p) => p.name === 'waiting-bench');
-    const slots: QueueSpot[] = [];
-    for (let i = 1; i <= BENCH_SLOTS; i++) {
-      const anchor = bench?.getObjectByName(`Slot-${i}`);
-      if (!anchor) continue;
-      const position = cafe.worldToLocal(anchor.getWorldPosition(new Vector3()));
-      // The anchor faces the way a guest should: read its +Z in the café's space.
-      const forward = cafe.worldToLocal(anchor.localToWorld(new Vector3(0, 0, 1))).sub(position);
-      slots.push({ position, yaw: yawToward(forward.x, forward.z) });
-    }
-    this.spots = [...slots, ...STANDING_SPOTS];
-  }
-
   // --------------------------------------------------------------- walking
 
   /** Move along the path at walking speed, turning to face the way; arrive, or vanish at the end. */
@@ -253,7 +236,7 @@ export class GuestSystem extends createSystem({}) {
     this.giveUp(guest);
   }
 
-  /** Out of patience: walk back out through the gate; those behind move up. */
+  /** Out of patience: step out of the line and walk away down the path; those behind step up. */
   private giveUp(guest: Guest): void {
     guest.state = 'leaving';
     guest.patience = 0;
@@ -263,7 +246,7 @@ export class GuestSystem extends createSystem({}) {
     this.shuffleUp();
   }
 
-  /** Everyone waiting takes the lowest spots, in the order they arrived; whoever moves walks there. */
+  /** Everyone waiting takes the places nearest the door, in arrival order; whoever moves walks forward. */
   private shuffleUp(): void {
     const waiting = this.guests.filter((g) => g.state !== 'leaving');
     waiting.forEach((guest, i) => {
