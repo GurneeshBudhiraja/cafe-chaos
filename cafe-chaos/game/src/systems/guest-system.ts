@@ -87,8 +87,9 @@ export class GuestSystem extends createSystem({}) {
     this.cafeSystem = this.world.getSystem(CafeSystem)!;
   }
 
-  update(delta: number): void {
+  update(frameDelta: number): void {
     const cafe = this.cafeSystem;
+    const delta = frameDelta * cafe.timeScale;
     if (!cafe.placed) {
       if (this.guests.length) this.clear();
       this.nextSpawnIn = FIRST_SPAWN_SECONDS;

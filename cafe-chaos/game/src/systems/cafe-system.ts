@@ -50,6 +50,12 @@ export class CafeSystem extends createSystem({
   readonly seats: Object3D[] = [];
   placed = false;
   onDesk = false;
+  /**
+   * The game clock's pace: 1 is real time. The recording scripts slow it to
+   * match a video captured slowly and sped up, so arrivals and timers play
+   * back at their true pace. Everything timed in the game reads it.
+   */
+  timeScale = 1;
   /** Counts the times the café has been put down; other systems start over when it changes. */
   placements = 0;
   private arriving = -1;
@@ -84,7 +90,7 @@ export class CafeSystem extends createSystem({
     const waited = performance.now() - this.sessionStartedAt;
     if (presenting && !this.placed) this.place(waited > DESK_WAIT_MS);
     else if (presenting && !this.onDesk && waited < DESK_RETRY_MS) this.place(false);
-    this.arrive(delta);
+    this.arrive(delta * this.timeScale);
   }
 
   /** Place again, as at a session's start (for when the viewer has moved to a table). */

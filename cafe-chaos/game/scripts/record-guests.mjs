@@ -28,12 +28,18 @@ const h = await startHeadset({
     await h.head(SEAT, { x: TABLE.x, y: TABLE.y + 0.12, z: TABLE.z });
     await h.page.evaluate(() => window.IWER_DEVICE.remote.dispatch('set_transform', { device: 'hand-right', position: { x: -1.0, y: 0.98, z: 0.43 }, orientation: { x: -0.5, y: 0.3, z: 0.1, w: 0.8 } }));
     await h.page.evaluate(() => window.IWER_DEVICE.remote.dispatch('set_transform', { device: 'hand-left', position: { x: -0.7, y: 0.95, z: 0.5 }, orientation: { x: -0.5, y: -0.2, z: -0.1, w: 0.83 } }));
-    await h.page.evaluate((patience) => {
-      const { system, guests } = window.__cafe;
-      guests.patienceSeconds = patience;
-      guests.spawnRange = [3, 5];
-      system.replace();
-    }, PATIENCE);
+    // The page renders slowly and the video is sped up to match: slow the game's clock by the
+    // same factor, so arrivals and timers run at their true pace on the video.
+    await h.page.evaluate(
+      ([patience, timeScale]) => {
+        const { system, guests } = window.__cafe;
+        system.timeScale = timeScale;
+        guests.patienceSeconds = patience;
+        guests.spawnRange = [3, 5];
+        system.replace();
+      },
+      [PATIENCE, 1 / h.speedUp],
+    );
   },
 });
 const { pause } = h;
