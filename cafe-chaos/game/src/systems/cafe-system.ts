@@ -50,6 +50,8 @@ export class CafeSystem extends createSystem({
   readonly seats: Object3D[] = [];
   placed = false;
   onDesk = false;
+  /** Counts the times the café has been put down; other systems start over when it changes. */
+  placements = 0;
   private arriving = -1;
   private sessionWas = false;
   private sessionStartedAt = 0;
@@ -113,6 +115,7 @@ export class CafeSystem extends createSystem({
     this.cafe.scale.setScalar(0.001);
     this.cafe.visible = true;
     this.placed = true;
+    this.placements++;
     this.arriving = 0;
   }
 
