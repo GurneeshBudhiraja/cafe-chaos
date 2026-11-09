@@ -1,8 +1,8 @@
 /**
  * Where a tracked hand pinches: the midpoint of its thumb and index tips,
  * read from the hand's joints (not from select events, so it works without
- * the pointer ray). For systems that react to a hand's position, such as
- * the tablet's edge glow.
+ * the pointer ray); and where any one joint is, for a fingertip poking a
+ * button.
  */
 
 import type { Matrix4, Vector3 } from '@iwsdk/core';
@@ -33,6 +33,22 @@ export function readPinchPoint(
   const gap = out.distanceTo(scratch);
   out.add(scratch).multiplyScalar(0.5);
   return gap;
+}
+
+/**
+ * Write the world position of the hand's `joint` into `out`; false when the
+ * hand or the joint is not tracked this frame.
+ */
+export function readJoint(
+  source: XRInputSource | undefined,
+  frame: XRFrame | undefined,
+  space: XRReferenceSpace | null | undefined,
+  origin: Matrix4,
+  joint: XRHandJoint,
+  out: Vector3,
+): boolean {
+  if (!source?.hand || !frame || !space) return false;
+  return jointAt(frame, source.hand, joint, space, origin, out);
 }
 
 function jointAt(

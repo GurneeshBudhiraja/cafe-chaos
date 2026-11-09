@@ -10,8 +10,10 @@ were sized are in [`../START-HERE.md`](../START-HERE.md).
 As soon as the session starts, the café appears on the table in front of
 the player, below the gaze so it is looked down on, the room dims to dusk
 around it, and its lamps come up: a lo-fi night at the café, its light
-spilling out over the real table. The player can pinch the café to move
-it, and pinch it with both hands to resize and turn it, at any time.
+spilling out over the real table. A dock of big labelled buttons stands
+beside the café for moving, turning and resizing it; pinching the café
+itself works too. The player's hands are drawn in the café's own warm
+style.
 
 **The café** (`src/systems/cafe-system.ts`):
 
@@ -36,7 +38,33 @@ it, and pinch it with both hands to resize and turn it, at any time.
   (1.0: the modelled 92 × 62 cm base, a 70 × 46 cm café room) until the
   player resizes it.
 
-**Holding the café** (`src/systems/hold-system.ts`; the numbers in
+**The dock** (`src/systems/dock-system.ts`, `src/dock/`): a small walnut
+signboard with five paper tiles, standing just in front of the café's
+front-right corner, leaning back toward the player, always its own size
+(about 31 × 7 cm) whatever size the café is, and following the café
+wherever it goes. Poke a tile with a fingertip: it lights as the finger
+nears, sinks and flashes on the press, and presses once until the finger
+draws back.
+
+- **Move**: pinch this handle and drag; the café comes along (the same
+  carry as pinching the café).
+- **Turn**: turns the café 22.5° (eased).
+- **Smaller** / **Bigger**: resizes it by a fifth each press, growing from
+  its base, between 0.3× and 2.5×.
+- **Reset**: puts it back on the table at its first size and facing, with
+  the pop-up, without restarting the night.
+
+While a finger is at the board the dock holds still, so pressing Bigger
+(which moves the café's edges) never pulls the buttons out from under the
+finger; it glides to its new place once the hand withdraws.
+
+**The hands** (`src/hands/cafe-hand.ts`): the player's tracked hands use
+IWSDK's own hand mesh but the café's materials in place of the stock white
+outline: translucent warm cream with a faint inner glow that brightens as
+the fingers pinch, and a thin amber rim at the silhouette. Clear enough to
+see a button under a fingertip; bright enough to read over the dimmed room.
+
+**Holding the café directly** (`src/systems/hold-system.ts`; the numbers in
 `src/hold/hold.ts`): pinch anywhere on or just around the café (over its
 garden, roof or fence, within 6 cm) and it follows the pinch: lift it,
 slide it along the table, set it down elsewhere. Pinch with both hands
@@ -116,11 +144,19 @@ room has a desk-height table), from a running dev server:
   and spill, and the renderer is set for the look (3 checks), with
   screenshots of the seated view, the gate, the counter and a low look
   along the table.
+- `node scripts/check-dock.mjs`: the dock stands at the café's front-right
+  corner and the hands are the café's; pokes on Bigger, Smaller and Turn
+  step the café once each (the tile lighting, the dock holding still);
+  pinching Move carries it and the dock follows; Reset restores it without
+  restarting the night (15 checks), with screenshots of the board, a hand
+  over a tile and the café after.
 - `node scripts/check-hold.mjs`: one hand carries the café exactly with the
   pinch and leaves it where it is put down, a pinch away from it takes
   nothing, two hands resize it by their spread and turn it by their line
   with the point between them kept, and the hold frame glows near and
   held (12 checks), with screenshots of the café lifted and enlarged.
+- `npm run record:dock`: the dock in use (Bigger, Turn, Smaller, the Move
+  handle, Reset), as the headset shows it, to `artifacts/dock.mp4`.
 - `npm run record:hold`: one hand lifting and carrying the café, then two
   hands enlarging and turning it, as the headset shows it, to
   `artifacts/hold.mp4`.
@@ -131,15 +167,19 @@ room has a desk-height table), from a running dev server:
 
 ```
 src/
-  index.ts                   World, the café, hold and mood systems, lighting
+  index.ts                   World, the café, hold, dock and mood systems, lighting, the hands
   assets.ts                  the model manifest (the café's pieces first)
   cafe/layout.ts             the floor plan and the dressing (meals)
   cafe/materials.ts          the café's materials on the grey-box pieces
   systems/cafe-system.ts     building the café and placing it on the table
   systems/hold-system.ts     pinching the café to move, resize and turn it
+  systems/dock-system.ts     the dock: pokes, the Move handle, eased steps, Reset
   systems/mood-system.ts     the dusk, the lamps coming up, the lanterns' breath
   hold/hold.ts               the numbers behind holding the café
   hold/frame.ts              the warm frame that shows where a pinch lands
+  dock/dock.ts               the buttons and the numbers behind the dock
+  dock/board.ts              the board and its paper tiles (icons and labels drawn)
+  hands/cafe-hand.ts         the player's hands in the café's style
   lighting.ts                the renderer and the fill light
   light/mood.ts              every number that tunes the look
   light/dimmer.ts            the passthrough dimmer
@@ -147,7 +187,7 @@ src/
   light/halo.ts              the glow sprite
   light/spill.ts             the light-and-shadow catcher on the table
   lib/desk-placement.ts      finding the table among the detected surfaces
-  lib/hand-pinch.ts          reading a hand's pinch from its joints
+  lib/hand-pinch.ts          reading a hand's pinch, or a fingertip, from its joints
 public/models/               the .glb models (copies of ../models/*/)
 public/envs/warm-cafe.hdr    the environment
 scripts/                     the emulator checks and the recording

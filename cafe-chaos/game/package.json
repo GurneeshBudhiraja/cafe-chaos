@@ -12,7 +12,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "record": "node scripts/record-cafe.mjs",
-    "record:hold": "node scripts/record-hold.mjs"
+    "record:hold": "node scripts/record-hold.mjs",
+    "record:dock": "node scripts/record-dock.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

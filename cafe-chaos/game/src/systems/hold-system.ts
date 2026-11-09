@@ -40,7 +40,7 @@ export class HoldSystem extends createSystem({}) {
   };
   readonly frame = makeHoldFrame();
   /** The café's bounds in its own space at scale 1 (set once it is built). */
-  private readonly bounds = new Box3();
+  readonly bounds = new Box3();
   private cafe: CafeSystem | null = null;
   // One hand: where the café's origin sits relative to the pinch (world).
   private readonly offset = new Vector3();
@@ -77,7 +77,7 @@ export class HoldSystem extends createSystem({}) {
     }
     for (const hand of HANDS) this.read(hand);
     this.release();
-    this.take();
+    this.takeByPinch();
     if (this.holding.length === 2) this.stretch();
     else if (this.holding.length === 1) this.carry();
     const near = this.holding.length ? FRAME.held : HANDS.some((h) => this.pinch[h].gap < Infinity && this.over(h)) ? FRAME.near : 0;
@@ -114,18 +114,24 @@ export class HoldSystem extends createSystem({}) {
   }
 
   /** A pinch closing over the café takes it (the second hand joins the first). */
-  private take(): void {
+  private takeByPinch(): void {
     for (const hand of HANDS) {
       const p = this.pinch[hand];
       if (!p.closed || this.holding.includes(hand) || this.holding.length >= 2) continue;
       // Only a pinch closing this frame takes the café, not one already closed elsewhere.
       if (this.previous[hand] || !this.over(hand)) continue;
-      this.holding.push(hand);
-      this.cafe!.movedByHand = true;
-      if (this.holding.length === 1) this.beginCarry();
-      else this.beginStretch();
+      this.holdWith(hand);
     }
     for (const hand of HANDS) this.previous[hand] = this.pinch[hand].closed;
+  }
+
+  /** Have `hand` take hold of the café now (from a pinch on it, or on the dock's Move handle). */
+  holdWith(hand: Hand): void {
+    if (this.holding.includes(hand) || this.holding.length >= 2) return;
+    this.holding.push(hand);
+    this.cafe!.movedByHand = true;
+    if (this.holding.length === 1) this.beginCarry();
+    else this.beginStretch();
   }
 
   // -------------------------------------------------------------- moving
