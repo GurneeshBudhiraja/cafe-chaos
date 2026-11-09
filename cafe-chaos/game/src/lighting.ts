@@ -1,20 +1,22 @@
 /**
- * Light for the café: a warm golden-hour mood. The models carry their own
- * glow (shoji walls, lanterns) and baked contact shading, so no real-time
- * shadows are used (a WebGL shadow-sampler bug on Quest makes them
- * unsafe). The scene's HDR environment (set in the scene JSON) does most
- * of the work; the warm sky fill and low sun tint it the way the model
- * notes describe, and keep the preview lit where the emulator ignores a
- * custom environment in XR.
+ * The scene's light: a lo-fi night. The renderer gets filmic tone mapping
+ * and soft shadow maps; the HDR environment is turned well down and a
+ * dim, cool fill takes its place, so the café's own warm lamps carry the
+ * scene (see light/mood.ts for the numbers, light/cafe-lights.ts for the
+ * lamps, key light and spill that hang on the café itself).
  */
 
-import { DirectionalLight, HemisphereLight, type World } from '@iwsdk/core';
+import { ACESFilmicToneMapping, HemisphereLight, PCFSoftShadowMap, type Group, type World } from '@iwsdk/core';
+import { lightTheCafe, type CafeLights } from './light/cafe-lights.js';
+import { ENVIRONMENT_INTENSITY, EXPOSURE, FILL } from './light/mood.js';
 
-export function setUpLighting(world: World): void {
-  world.renderer.shadowMap.enabled = false;
-  world.scene.environmentIntensity = 1.0;
-  world.createTransformEntity(new HemisphereLight(0xffe9c4, 0x8a6b4f, 1.25));
-  const sun = new DirectionalLight(0xffd9a0, 1.1);
-  sun.position.set(-0.6, 1.4, 0.9);
-  world.createTransformEntity(sun);
+export function setUpLighting(world: World, cafe: Group): CafeLights {
+  const { renderer, scene } = world;
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = EXPOSURE;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFSoftShadowMap;
+  scene.environmentIntensity = ENVIRONMENT_INTENSITY;
+  world.createTransformEntity(new HemisphereLight(FILL.sky, FILL.ground, FILL.intensity));
+  return lightTheCafe(cafe);
 }

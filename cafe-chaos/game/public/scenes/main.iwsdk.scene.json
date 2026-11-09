@@ -2,7 +2,7 @@
   "version": "iwsdk.scene.v1",
   "units": "meters",
   "components": {
-    "com.iwsdk.components.IBLTexture": { "src": "./envs/warm-cafe.hdr", "intensity": 0.9, "rotation": [0, 0, 0] }
+    "com.iwsdk.components.IBLTexture": { "src": "./envs/warm-cafe.hdr", "intensity": 0.32, "rotation": [0, 0, 0] }
   },
   "resources": {},
   "nodes": [],
