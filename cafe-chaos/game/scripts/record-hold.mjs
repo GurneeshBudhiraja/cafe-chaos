@@ -23,11 +23,16 @@ const LAP = { left: [-0.7, 0.85, 0.42], right: [-0.7, 0.85, 0.14] };
 const Q = { x: 0, y: 0, z: 0, w: 1 };
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+/** Where each hand's pinch point sits relative to its pose (measured in prepare). */
+const offset = { left: [0, 0, 0], right: [0, 0, 0] };
+/** The emulator page, set as soon as the headset is up (prepare runs before startHeadset returns). */
+let page;
 
 const h = await startHeadset({
   record: 'hold',
   maxSpeedUp: 30,
   async prepare(h) {
+    page = h.page;
     await h.head(SEAT, { x: TABLE.x, y: TABLE.y + 0.12, z: TABLE.z });
     for (const hand of ['left', 'right']) await handTo(hand, LAP[hand]);
     // Where each hand's pinch point sits relative to its pose, measured pinched, before the café is down.
@@ -42,7 +47,7 @@ const h = await startHeadset({
     }, 1 / h.speedUp);
   },
 });
-const { page, pause } = h;
+const { pause } = h;
 
 function send(m, p) {
   return page.evaluate(([m, p]) => window.IWER_DEVICE.remote.dispatch(m, p), [m, p]);
@@ -63,7 +68,6 @@ function frames(n) {
     n,
   );
 }
-const offset = { left: [0, 0, 0], right: [0, 0, 0] };
 function handTo(hand, p) {
   return send('set_transform', { device: `hand-${hand}`, position: { x: p[0], y: p[1], z: p[2] }, orientation: Q });
 }
