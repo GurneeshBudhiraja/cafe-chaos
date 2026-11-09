@@ -21,6 +21,7 @@ export class MoodSystem extends createSystem({}) {
   lampsUp = 1;
   private sinceDusk = -1;
   private time = 0;
+  private placement = 0;
   private readonly head = new Vector3();
 
   init(): void {
@@ -33,6 +34,13 @@ export class MoodSystem extends createSystem({}) {
     this.time += delta;
     const presenting = this.world.renderer.xr.isPresenting;
     const night = presenting && !!cafe?.placed;
+
+    // A new placement is a new arrival: the night comes in from clear again.
+    if (cafe && cafe.placements !== this.placement) {
+      this.placement = cafe.placements;
+      this.dimmer.level = 0;
+      this.sinceDusk = -1;
+    }
 
     // The room dims once the café is down, and clears (faster) when it is gone.
     const target = night ? DIM_LEVEL : 0;
