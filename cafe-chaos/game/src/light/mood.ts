@@ -1,13 +1,13 @@
 /**
- * The look, in numbers: a lo-fi night at the café. The room around the
- * player dims to dusk, the café's own lamps take over, warm against a cool
+ * The look, in numbers: a lo-fi evening at the café, kept bright enough
+ * to play by. The room around the player dims to dusk, the café's own lamps take over, warm against a cool
  * fill, and their light spills out over the real table and fades.
  * Everything that tunes the mood lives here, so the look can be adjusted
  * from one file.
  */
 
 /** How much the passthrough dims once the café is up (0 none, 1 black). */
-export const DIM_LEVEL = 0.58;
+export const DIM_LEVEL = 0.42;
 /** The dimming's tint: a touch of night blue rather than plain black. */
 export const DIM_COLOR = 0x06040c;
 /** The dimming fades in over this many seconds once the café has arrived. */
@@ -20,18 +20,18 @@ export const LAMPS_UP_DELAY = 0.6;
 export const BREATH = { depth: 0.07, rate: 0.35 };
 
 /** Tone mapping exposure (ACES filmic). */
-export const EXPOSURE = 1.1;
+export const EXPOSURE = 1.3;
 /** The HDR environment's share (the scene JSON holds the same number). */
-export const ENVIRONMENT_INTENSITY = 0.32;
+export const ENVIRONMENT_INTENSITY = 0.55;
 
 /** The cool fill from above and the warm bounce from below, dim: the night around the café. */
-export const FILL = { sky: 0x4c5a92, ground: 0x3a2416, intensity: 0.5 };
+export const FILL = { sky: 0x6a74a8, ground: 0x4a301c, intensity: 0.85 };
 
 /**
  * The moon: a faint cool light from high front left that shapes the roof,
  * the tree and the garden. No shadows, and none of it reaches the spill.
  */
-export const MOON = { color: 0xaab4e6, intensity: 0.55, position: [-0.55, 1.1, 0.65] as const };
+export const MOON = { color: 0xb8c0ea, intensity: 0.85, position: [-0.55, 1.1, 0.65] as const };
 
 /**
  * The house light: a warm spot high over the counter, under the eave,
@@ -43,7 +43,7 @@ export const MOON = { color: 0xaab4e6, intensity: 0.55, position: [-0.55, 1.1, 0
 export const HOUSE = {
   color: 0xffb77a,
   /** Candela. */
-  intensity: 0.2,
+  intensity: 0.26,
   position: [0.02, 0.17, -0.11] as const,
   target: [0.06, 0, 0.16] as const,
   /** The cone's half angle (radians) and how soft its edge is. */
@@ -71,14 +71,14 @@ export interface Lamp {
 /** Where the shell's lamps are (from the model: `GateLamps` and `LanternPapers`). */
 export const LAMPS: Lamp[] = [
   // The two post lamps at the entrance, either side of the door frame: their pools reach out onto the table.
-  { position: [0.34, 0.078, -0.036], color: 0xffa858, intensity: 0.07, distance: 0.5, halo: 0.08, haloOpacity: 0.5 },
-  { position: [0.34, 0.078, 0.146], color: 0xffa858, intensity: 0.07, distance: 0.5, halo: 0.08, haloOpacity: 0.5 },
+  { position: [0.34, 0.078, -0.036], color: 0xffa858, intensity: 0.08, distance: 0.5, halo: 0.08, haloOpacity: 0.5 },
+  { position: [0.34, 0.078, 0.146], color: 0xffa858, intensity: 0.08, distance: 0.5, halo: 0.08, haloOpacity: 0.5 },
   // The three paper lanterns under the eave over the counter.
-  { position: [-0.22, 0.124, -0.158], color: 0xffbe74, intensity: 0.09, distance: 0.5, halo: 0.11, haloOpacity: 0.45 },
-  { position: [0, 0.124, -0.158], color: 0xffbe74, intensity: 0.09, distance: 0.5, halo: 0.11, haloOpacity: 0.45 },
-  { position: [0.22, 0.124, -0.158], color: 0xffbe74, intensity: 0.09, distance: 0.5, halo: 0.11, haloOpacity: 0.45 },
+  { position: [-0.22, 0.124, -0.158], color: 0xffbe74, intensity: 0.11, distance: 0.5, halo: 0.11, haloOpacity: 0.45 },
+  { position: [0, 0.124, -0.158], color: 0xffbe74, intensity: 0.11, distance: 0.5, halo: 0.11, haloOpacity: 0.45 },
+  { position: [0.22, 0.124, -0.158], color: 0xffbe74, intensity: 0.11, distance: 0.5, halo: 0.11, haloOpacity: 0.45 },
   // The room's own warmth: an unseen light high in the middle of the café, so the tables sit in a cosy wash.
-  { position: [0, 0.15, -0.03], color: 0xffc080, intensity: 0.06, distance: 0.55, halo: 0, haloOpacity: 0 },
+  { position: [0, 0.15, -0.03], color: 0xffc080, intensity: 0.1, distance: 0.6, halo: 0, haloOpacity: 0 },
 ];
 
 /** The glowing materials, set for the night: emissive strength, and a warmer paper colour where the day one reads white. */

@@ -32,7 +32,7 @@ const h = await startHeadset({
     await h.page.evaluate(() => window.__cafe.system.replace());
     await h.page.waitForFunction(() => window.__cafe.system.placed, null, { timeout: 15000 });
     // The dimming fades in over a few seconds of game time (real time here).
-    await h.page.waitForFunction(() => window.__cafe.mood.dimmer.level > 0.5 && window.__cafe.mood.lampsUp > 0.99, null, { timeout: 20000 });
+    await h.page.waitForFunction(() => window.__cafe.mood.dimmer.level > 0.3 && window.__cafe.mood.lampsUp > 0.99, null, { timeout: 20000 });
     await h.pause(600);
   },
 });
@@ -59,9 +59,9 @@ const state = await page.evaluate(() => {
     casters: (() => { let n = 0; system.cafe.traverse((o) => { if (o.isMesh && o.castShadow) n++; }); return n; })(),
   };
 });
-check('the passthrough has dimmed around the head and the lamps are up', state.dim >= 0.5 && state.domeVisible && state.domeOffset < 0.01 && state.lampsUp === 1 && state.lit, `level ${state.dim}, dome ${state.domeOffset} m from the head, lamps up ${state.lampsUp}, all lit ${state.lit}`);
+check('the passthrough has dimmed around the head and the lamps are up', state.dim >= 0.3 && state.domeVisible && state.domeOffset < 0.01 && state.lampsUp === 1 && state.lit, `level ${state.dim}, dome ${state.domeOffset} m from the head, lamps up ${state.lampsUp}, all lit ${state.lit}`);
 check('the café carries its lamps, house light and spill', state.lamps === 6 && state.halos === 5 && state.houseShadow && state.spill, `${state.lamps} lamps, ${state.halos} halos, house light shadows ${state.houseShadow}, spill ${state.spill}`);
-check('the renderer is set for the look', state.shadowMap && state.toneMapping === 4 && state.envIntensity < 0.5 && state.casters > 30, `shadow maps ${state.shadowMap}, tone mapping ${state.toneMapping} (4 = ACES), environment ${state.envIntensity}, ${state.casters} shadow casters`);
+check('the renderer is set for the look', state.shadowMap && state.toneMapping === 4 && state.envIntensity < 0.8 && state.casters > 30, `shadow maps ${state.shadowMap}, tone mapping ${state.toneMapping} (4 = ACES), environment ${state.envIntensity}, ${state.casters} shadow casters`);
 
 await h.head(SEAT, { x: LOOK.x, y: LOOK.y + 0.1, z: LOOK.z }, 400);
 await h.pause(300);

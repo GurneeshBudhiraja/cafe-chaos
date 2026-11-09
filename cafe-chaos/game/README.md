@@ -69,7 +69,7 @@ every number that tunes the look is in `src/light/mood.ts`):
   is behind it, so the real table's texture shows through the glow and
   the glow has no edge of its own (a wide feather is only a safety bound
   at about 85 cm). The halos blend the same way.
-- **Tone**: ACES filmic tone mapping, exposure 1.1.
+- **Tone**: ACES filmic tone mapping, exposure 1.3.
 
 No guests in this build; the seating game comes next.
 
