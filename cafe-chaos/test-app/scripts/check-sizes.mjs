@@ -81,7 +81,7 @@ const sizes = await page.evaluate(() => {
   const cafe = t.world(system.cafe);
   const far = system.cafe.localToWorld(new t.V(0, 0, -0.27)); const near = system.cafe.localToWorld(new t.V(0, 0, 0.19));
   return {
-    guestHeightDeg: deg(0.0555, gp), kidHeightDeg: deg(0.0416, t.world(system.guests[2].root)),
+    guestHeightDeg: deg(0.0555, gp), kidHeightDeg: deg(0.0416, t.world(system.guests[3].root)),
     headToCafeCentreM: +head.distanceTo(cafe).toFixed(3),
     reachToFrontEdgeM: +Math.hypot(near.x - head.x, near.z - head.z).toFixed(3), reachToBackEdgeM: +Math.hypot(far.x - head.x, far.z - head.z).toFixed(3),
     seats: system.seats.length, closestSeatsCm: +(minGap * 100).toFixed(1),
@@ -101,15 +101,19 @@ await shot('1-seated-headset-view');
 await lookAtCafe(0, 40);
 await shot('2-cafe-close');
 
-/** Pinch guest `index` at its grip, carry it so its feet land over `target` (a world point), and let go. */
-const pinchCarry = (index, target) =>
-  page.evaluate(async ([index, target]) => {
+/**
+ * Pinch guest `index` at its grip and carry it so its feet hang over `target` (a world
+ * point). With `shot`, a close screenshot is taken mid-carry, then it lets go.
+ */
+const pinchCarry = async (index, target, shot) => {
+  const carried = await page.evaluate(async ([index, target]) => {
     const t = window.__t; const s = t.system;
     const guest = s.guests[index]; const grip = t.world(guest.root.getObjectByName('Grip'));
     // Hand from above and to the right, aiming at the guest, as one reaches over a table.
     await t.moveHand(grip.clone().add(new t.V(0.06, 0.12, 0.05)), 500);
     await t.call('look_at', { device: 'hand-right', target: { x: grip.x, y: grip.y, z: grip.z } });
     const orientation = (await t.call('get_transform', { device: 'hand-right' })).orientation;
+    t.orientation = orientation;
     // Where the closed pinch sits relative to the hand, then open, line up and close on the grip.
     await t.call('set_select_value', { device: 'hand-right', value: 1 }); await t.frames(4);
     const offset = s.pinch.right.point.clone().sub(await t.hand());
@@ -121,12 +125,26 @@ const pinchCarry = (index, target) =>
     const feet = t.world(guest.root);
     const to = (await t.hand()).add(new t.V(target.x - feet.x, target.y + 0.02 - feet.y, target.z - feet.z));
     await t.moveHand((await t.hand()).add(new t.V(0, 0.04, 0)), 300, orientation);
-    await t.moveHand(to, 700, orientation); await t.frames(3);
-    const glowShown = s.glow.visible;
-    await t.call('set_select_value', { device: 'hand-right', value: 0 }); await t.frames(6);
-    await t.moveHand((await t.hand()).add(new t.V(0.05, 0.12, 0.1)), 400, orientation);
-    return { picked, glowShown, seated: !!guest.seat, seatedPose: guest.root.getObjectByName('Seated').visible, backOnBench: !guest.seat && t.world(guest.root).distanceTo(t.world(guest.slot)) < 0.002 };
+    await t.moveHand(to, 700, orientation); await t.frames(10);
+    return { picked, glowShown: s.glow.visible };
   }, [index, target]);
+  if (shot) {
+    await page.evaluate(async (i) => {
+      const t = window.__t; const p = t.world(t.system.guests[i].root);
+      await t.call('look_at', { device: 'headset', target: { x: p.x, y: p.y + 0.02, z: p.z } }); await t.frames(3);
+    }, index);
+    await setFov(22);
+    await shot();
+    await setFov(96);
+  }
+  const released = await page.evaluate(async (index) => {
+    const t = window.__t; const s = t.system; const guest = s.guests[index];
+    await t.call('set_select_value', { device: 'hand-right', value: 0 }); await t.frames(6);
+    await t.moveHand((await t.hand()).add(new t.V(0.05, 0.12, 0.1)), 400, t.orientation);
+    return { seated: !!guest.seat, seatedPose: guest.root.getObjectByName('Seated').visible, backOnBench: !guest.seat && t.world(guest.root).distanceTo(t.world(guest.slot)) < 0.002 };
+  }, index);
+  return { ...carried, ...released };
+};
 
 const seatTarget = await page.evaluate(() => {
   const t = window.__t; const tables = window.__cafe.system.cafe.children.filter((c) => c.name === 'table-2');
@@ -134,9 +152,16 @@ const seatTarget = await page.evaluate(() => {
 });
 await setFov(96);
 await lookAtCafe(0.05);
-const toSeat = await pinchCarry(0, seatTarget);
+const toSeat = await pinchCarry(0, seatTarget, () => shot('4-guest-lifted'));
 await lookAtCafe(0, 40);
 await shot('3-guest-seated');
+await page.evaluate(async () => {
+  const t = window.__t; const p = t.world(t.system.guests[0].root);
+  await t.call('look_at', { device: 'headset', target: { x: p.x, y: p.y + 0.02, z: p.z } }); await t.frames(8);
+});
+await setFov(22);
+await shot('5-guest-seated-close');
+await setFov(96);
 const emptyFloor = await page.evaluate(() => { const p = window.__cafe.system.cafe.localToWorld(new window.__t.V(0.065, 0.026, -0.055)); return { x: p.x, y: p.y, z: p.z }; });
 const toFloor = await pinchCarry(1, emptyFloor);
 

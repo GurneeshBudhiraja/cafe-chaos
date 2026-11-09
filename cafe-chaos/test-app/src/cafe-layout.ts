@@ -30,8 +30,8 @@ const FRONT_Z = 0.025;
 export const SAMPLE_LAYOUT: Placement[] = [
   { model: 'cafe-shell', x: 0, z: 0, y: 0 },
   // The waiting bench inside the front-right corner, by the gate; waiting
-  // guests face into the cafe, their backs to the player.
-  { model: 'waiting-bench', x: 0.235, z: 0.165, yawDeg: 180 },
+  // guests face the player, so their faces show.
+  { model: 'waiting-bench', x: 0.235, z: 0.165 },
   // Back row: three four-seaters, two two-seaters.
   ...[0, 1, 2].map((i) => ({ model: 'table-4', x: COLS[i], z: BACK_Z })),
   ...[3, 4].map((i) => ({ model: 'table-2', x: COLS[i], z: BACK_Z })),

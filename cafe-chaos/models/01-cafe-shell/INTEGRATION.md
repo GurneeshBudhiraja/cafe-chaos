@@ -1,6 +1,6 @@
 # cafe-shell — the Japanese garden café (final art)
 
-**File:** `cafe-shell.glb` — 32,008 triangles, 28 meshes (one draw call each), 28 materials, 17 packed textures, 3.6 MB.
+**File:** `cafe-shell.glb` — about 31,000 triangles, 30 meshes (one draw call each), 28 materials, 17 packed textures, 3.1 MB.
 **This replaces the grey-box shell.** Same root name and anchor names, so game code written
 against the grey box keeps working, but the shell is larger and the entrance moved: re-read
 the sizes below.
@@ -13,11 +13,18 @@ A diorama of a Japanese café in a small garden, sitting on the player's real ta
 - **Café room:** timber posts and beams, glowing shoji-paper walls, a plank floor,
   a counter along the back wall (coffee machine, pastry case, menu board, hanging
   paper lanterns under a tiled eave).
-- **Entrance / right side (+X):** a roofed gate with an indigo noren curtain and an
-  engawa step. The rest of the right side is an **open veranda** — timber posts and a
-  low rail instead of a solid wall — so the player sees every seat from any angle.
+- **Entrance / right side (+X):** fully **open**: no wall, posts, beams, gate roof or
+  curtain on this side, so the player sees every seat from the right with nothing in the
+  way. A free-standing timber **door frame** (`GateFrame`: two posts, a top lintel and a tie
+  beam) marks the entrance in the gate opening, flanked by two small post lamps
+  (`GateLamps`, emissive paper so they glow without a light), with a knee-high sill, the
+  veranda rail and an engawa step. The gravel on this side is clear (no stepping stones), so
+  guests walking in from the gate have a flat path. (The removed timber, gate roof, noren,
+  stones and stone lantern are kept in the Blender file as `*.bak-*` meshes/objects.)
+- **Lighting is the game's job:** the file has emissive lanterns/lamps and baked contact
+  shading only; add a soft ambient plus one key light (or the headset's lighting estimate).
 - **Garden ring:** raked gravel with stones (front), moss, a stone path from the gate,
-  a koi pond with lilies (front-left), boulders, a bamboo fence, a stone lantern, and
+  a koi pond with lilies (front-left), boulders, a bamboo fence, and
   a cherry tree (back-left) leaning over the roof, with fallen petals.
 - Baked contact shading (AO skirts) along wall bases; no real-time shadows needed.
 
@@ -43,7 +50,7 @@ kept only for grey-box compatibility.
 | Anchor | Where | Facing |
 |---|---|---|
 | `Entrance` | in the gate opening, right wall (x ≈ 0.33, z ≈ 0.055) | into the café (−X) |
-| `BenchSpot` | front-right corner by the gate (0.235, 0.024, 0.165) | yaw 180°: waiting guests face into the café |
+| `BenchSpot` | front-right corner by the gate (0.235, 0.024, 0.165) | no turn: waiting guests face the player (+Z), so their faces show |
 | `FloorTop` | (0, 0.024, 0) | — |
 
 `BenchSpot` matches the tested layout below — drop the `waiting-bench` model on it
@@ -56,8 +63,8 @@ From `test-app/src/cafe-layout.ts` (all y = 0.024, café space):
 - Columns at x = −0.26, −0.13, 0, +0.13, +0.26.
 - **Back row** z = −0.135: `table-4` ×3 (cols 1–3), `table-2` ×2 (cols 4–5).
 - **Front row** z = +0.025: `table-2` ×5.
-- **Waiting bench** at (0.235, +0.165), yaw 180° — front-right corner by the gate,
-  waiting guests face into the café.
+- **Waiting bench** at (0.235, +0.165), no turn — front-right corner by the gate,
+  waiting guests face the player.
 - Closest two seats/slots: 3.2 cm (safe for the 4 cm drop radius).
 
 ## Scaling it up

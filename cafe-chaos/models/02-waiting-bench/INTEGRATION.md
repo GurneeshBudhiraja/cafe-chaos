@@ -5,7 +5,7 @@ The bench by the gate where guests wait when the café is full, with four slots:
 ## The file
 
 - `waiting-bench.glb`: 336 triangles, 2 meshes, textured PBR.
-- Size: 13.6 cm wide (x) × 3.8 cm tall (y) × 2.7 cm deep (z).
+- Size: 18.6 cm wide (x) × 3.6 cm tall (y) × 2.6 cm deep (z).
 - Units are metres. +Y is up and the front faces **+Z** (toward the player). The origin is at the bottom centre, where it stands.
 - Materials: `GB_Seat`.
 
@@ -13,7 +13,7 @@ The bench by the gate where guests wait when the café is full, with four slots:
 
 | Name | What it is |
 |---|---|
-| `Slot-1 … Slot-4` | Where a waiting guest stands, 3.2 cm apart, at the seat's height (1.6 cm). A guest copies the slot's position and turn. |
+| `Slot-1 … Slot-4` | Where a waiting guest stands, **4.6 cm apart** (the Mochi-style guests are 4.5 cm wide with arms), at the seat's height (1.6 cm). A guest copies the slot's position and turn, and then faces the player. |
 
 ## How to use it
 

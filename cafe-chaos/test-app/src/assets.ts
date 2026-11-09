@@ -1,5 +1,5 @@
 /**
- * The grey-box models (made in Blender), registered by their file names.
+ * The models (made in Blender), registered by their file names.
  * Side-effect free: evaluated by both the runtime and the editor.
  */
 
@@ -19,7 +19,10 @@ export const CAFE_MODELS = [
   'table-big',
   'table-mess',
   'meal',
-  'guest',
+  'guest-mochi',
+  'guest-onigiri',
+  'guest-tofu',
+  'accessories',
   'guest-kid',
   'janitor',
   'demand-bubble',

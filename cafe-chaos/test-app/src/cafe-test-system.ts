@@ -9,13 +9,20 @@
  *   DROP_M lights up (`seat-glow`).
  * - Drop: opening the pinch over a lit seat sits the guest there (their
  *   `Seated` pose shows); anywhere else, they go back to the bench.
+ * - Outfits: accessories from `accessories.glb` hang on the guests' attach points.
+ * - Animation: guests with clips play `Idle` on the bench, `Lifted` while
+ *   carried and `SitHappy` once seated.
  */
 
 import {
+  AnimationAction,
+  AnimationMixer,
   AssetManager,
   createSystem,
   Euler,
   Matrix4,
+  Mesh,
+  MeshStandardMaterial,
   Object3D,
   Quaternion,
   Vector3,
@@ -34,11 +41,25 @@ const DROP_M = 0.04;
 /** With no desk: this far ahead of the eyes and this far below them. */
 const FLOAT_AHEAD_M = 0.45;
 const FLOAT_BELOW_M = 0.4;
+/** Ground speed the guests' `Walk` clip is authored at (the planted foot's speed), m/s. */
+const WALK_CLIP_SPEED = 0.0181;
+/** Guest skin tints (see models/11-guest/INTEGRATION.md, "Colours"). */
+const GUEST_PALETTE = {
+  sakura: '#faa8c2',
+  ramune: '#9eccfa',
+  matcha: '#b3e09e',
+  yuzu: '#f7e39a',
+  lavender: '#cfb8f0',
+  peach: '#fbc8a6',
+};
 
 interface Guest {
   root: Object3D;
   slot: Object3D;
   seat: Object3D | null;
+  /** Only for models that carry animation clips. */
+  mixer: AnimationMixer | null;
+  model: string;
 }
 
 export class CafeTestSystem extends createSystem({ planes: { required: [DetectedPlane] } }) {
@@ -53,6 +74,8 @@ export class CafeTestSystem extends createSystem({ planes: { required: [Detected
     right: { point: new Vector3(), gap: Infinity },
   };
   private carried: { guest: Guest; hand: Hand; offset: Vector3 } | null = null;
+  /** Guests walking somewhere (the `Walk` clip in place, the root slid by `update`). */
+  private readonly walks: { guest: Guest; from: Vector3; to: Vector3; seconds: number; t: number }[] = [];
   private glow!: Object3D;
   private target: Object3D | null = null;
   private readonly wasClosed: Record<Hand, boolean> = { left: false, right: false };
@@ -78,13 +101,22 @@ export class CafeTestSystem extends createSystem({ planes: { required: [Detected
         if (/^Seat-\d+$/.test(c.name)) this.seats.push(c);
       });
     }
-    // Three guests waiting on the bench (two adults and a kid).
+    // Four guests waiting on the bench: the three adult species, each in an outfit, and a kid.
     const bench = this.cafe.getObjectByName('waiting-bench')!;
-    ['guest', 'guest', 'guest-kid'].forEach((model, i) => {
+    const cast: [string, string[], string | null][] = [
+      ['guest-mochi', ['ChefHat', 'Apron-mochi'], GUEST_PALETTE.sakura],
+      ['guest-onigiri', ['Hachimaki-onigiri', 'Vest-onigiri'], GUEST_PALETTE.ramune],
+      ['guest-tofu', ['Glasses', 'Beret', 'Bow'], GUEST_PALETTE.matcha],
+      ['guest-kid', [], null],
+    ];
+    cast.forEach(([model, outfit, tint], i) => {
       const slot = bench.getObjectByName(`Slot-${i + 1}`)!;
       const root = this.copy(model);
       root.name = `Guest-${i + 1}`;
-      const guest: Guest = { root, slot, seat: null };
+      const clips = AssetManager.getGLTF(model)?.animations ?? [];
+      const guest: Guest = { root, slot, seat: null, mixer: clips.length ? new AnimationMixer(root) : null, model };
+      if (tint) this.tint(guest, tint);
+      for (const item of outfit) this.wear(guest, item);
       this.guests.push(guest);
       this.cafe.add(root);
       this.sitAt(guest, slot);
@@ -99,7 +131,9 @@ export class CafeTestSystem extends createSystem({ planes: { required: [Detected
     (window as unknown as { __cafe: unknown }).__cafe = { world: this.world, system: this };
   }
 
-  update(): void {
+  update(delta: number): void {
+    for (const guest of this.guests) guest.mixer?.update(delta);
+    this.stepWalks(delta);
     const presenting = this.world.renderer.xr.isPresenting;
     if (!presenting) return;
     if (!this.inXrSince) this.inXrSince = performance.now();
@@ -159,6 +193,7 @@ export class CafeTestSystem extends createSystem({ planes: { required: [Detected
         this.carried = { guest, hand, offset };
         guest.seat = null;
         this.setPose(guest, false);
+        this.playClip(guest, 'Lifted');
         return;
       }
     }
@@ -178,6 +213,10 @@ export class CafeTestSystem extends createSystem({ planes: { required: [Detected
     this.v.copy(point).add(offset);
     this.cafe.worldToLocal(this.v);
     guest.root.position.copy(this.v);
+    // Turn the carried guest to face the player, so their lifted face shows.
+    this.player.head.getWorldPosition(this.scratch);
+    this.cafe.worldToLocal(this.scratch);
+    guest.root.rotation.set(0, Math.atan2(this.scratch.x - this.v.x, this.scratch.z - this.v.z), 0);
     // The nearest free seat within reach of the drop, measured sideways in café space.
     this.target = null;
     let best = DROP_M;
@@ -213,6 +252,37 @@ export class CafeTestSystem extends createSystem({ planes: { required: [Detected
     this.glow.visible = false;
   }
 
+  // -------------------------------------------------------------- walking
+
+  /**
+   * Walk guest `index` to (x, z) in café space. The `Walk` clip's planted foot moves back at
+   * WALK_CLIP_SPEED, so the clip is retimed to match `speed` and the foot stays planted. The game
+   * would do the same from the gate to the bench and back. Console: `__cafe.system.walkTo(0, 0.12, 0.10)`.
+   */
+  walkTo(index: number, x: number, z: number, speed = WALK_CLIP_SPEED): void {
+    const guest = this.guests[index];
+    if (!guest || this.carried?.guest === guest) return;
+    this.setPose(guest, false);
+    const from = guest.root.position.clone();
+    const to = new Vector3(x, from.y, z);
+    this.walks.push({ guest, from, to, seconds: Math.max(0.1, from.distanceTo(to) / speed), t: 0 });
+    guest.root.rotation.set(0, Math.atan2(to.x - from.x, to.z - from.z), 0);
+    const action = this.playClip(guest, 'Walk');
+    if (action) action.timeScale = speed / WALK_CLIP_SPEED;
+  }
+
+  private stepWalks(delta: number): void {
+    for (let i = this.walks.length - 1; i >= 0; i--) {
+      const w = this.walks[i];
+      w.t = Math.min(1, w.t + delta / w.seconds);
+      w.guest.root.position.lerpVectors(w.from, w.to, w.t);
+      if (w.t === 1) {
+        this.walks.splice(i, 1);
+        this.playClip(w.guest, 'Idle');
+      }
+    }
+  }
+
   // --------------------------------------------------------------- models
 
   /** Put a guest on an anchor (a seat or a bench slot), facing the way it faces. */
@@ -222,6 +292,50 @@ export class CafeTestSystem extends createSystem({ planes: { required: [Detected
     this.m.copy(this.cafe.matrixWorld).invert().multiply(anchor.matrixWorld);
     this.m.decompose(guest.root.position, guest.root.quaternion, this.scratch);
     this.setPose(guest, seated);
+    this.playClip(guest, seated ? 'SitHappy' : 'Idle');
+  }
+
+  /** Switch a guest to one looping clip (no-op for models without clips). */
+  private playClip(guest: Guest, clipName: string): AnimationAction | null {
+    if (!guest.mixer) return null;
+    const clip = AssetManager.getGLTF(guest.model)!.animations.find((c) => c.name === clipName);
+    if (!clip) return null;
+    guest.mixer.stopAllAction();
+    const action = guest.mixer.clipAction(clip);
+    action.timeScale = 1;
+    return action.play();
+  }
+
+  /**
+   * Colour a guest: the skins are painted white, so multiplying the skin material's colour by
+   * a pastel gives a clean pink/blue/green guest with all the texture detail kept. The material
+   * is cloned once per guest so each one can have its own colour.
+   */
+  tint(guest: Guest, hex: string): void {
+    const own: { skin?: MeshStandardMaterial } = {};
+    guest.root.traverse((o) => {
+      const mesh = o as Mesh;
+      const mat = mesh.material as MeshStandardMaterial | undefined;
+      if (!mesh.isMesh || !mat?.name.startsWith('GuestSkin')) return;
+      own.skin ??= mat.clone();
+      mesh.material = own.skin;
+    });
+    own.skin?.color.set(hex);
+  }
+
+  /**
+   * Hang an accessory from `accessories.glb` on a guest: a copy goes on the matching attach
+   * point of each pose (`St-HeadTop` and `Se-HeadTop`, say), so it follows every clip.
+   */
+  private wear(guest: Guest, item: string): void {
+    const source = AssetManager.getGLTF('accessories')!.scene.getObjectByName(item);
+    if (!source) throw new Error(`[CafeTest] No accessory named ${item}.`);
+    const attach = source.userData.attach as string;
+    for (const prefix of ['St-', 'Se-']) {
+      const point = guest.root.getObjectByName(prefix + attach);
+      if (!point) throw new Error(`[CafeTest] ${guest.model} has no ${prefix + attach} attach point.`);
+      point.add(source.clone());
+    }
   }
 
   private setPose(guest: Guest, seated: boolean): void {
