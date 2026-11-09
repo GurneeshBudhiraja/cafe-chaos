@@ -31,9 +31,10 @@ const MAX_REACH_M = 1.0;
 const MAX_OFF_AHEAD_DEG = 60;
 /**
  * Where the café's centre lands when the desk allows: this far out from the
- * eyes (closer than a tablet would go, so the back row stays within reach).
+ * eyes, so the whole café sits below the gaze and is looked down on, while
+ * the back row stays within seated reach.
  */
-const PREFERRED_REACH_M = 0.35;
+const PREFERRED_REACH_M = 0.45;
 /** Kept between the café's centre and the desk's edge: about half the café room, plus a little. */
 const EDGE_MARGIN_M = 0.25;
 

@@ -8,8 +8,10 @@ were sized are in [`../START-HERE.md`](../START-HERE.md).
 ## What this build does
 
 As soon as the session starts, the café appears on the table in front of
-the player, the room dims to dusk around it, and its lamps come up: a
-lo-fi night at the café, its light spilling out over the real table.
+the player, below the gaze so it is looked down on, the room dims to dusk
+around it, and its lamps come up: a lo-fi night at the café, its light
+spilling out over the real table. The player can pinch the café to move
+it, and pinch it with both hands to resize and turn it, at any time.
 
 **The café** (`src/systems/cafe-system.ts`):
 
@@ -24,14 +26,29 @@ lo-fi night at the café, its light spilling out over the real table.
   models themselves are untouched.
 - **Placement**: the nearest detected desk or table in front of the player
   (WebXR plane detection, the surfaces from the headset's Space Setup),
-  with the café's centre about 35 cm out so the back row stays within
-  seated reach, or as far in as a small table allows. If no table is found
-  within two seconds the café floats at arm's reach, and still moves onto
-  a table found in the next few seconds. It turns to face the player and
-  pops up with a short ease.
+  with the café's centre about 45 cm out so the whole café sits below the
+  gaze while the back row stays within seated reach, or as far in as a
+  small table allows. If no table is found within two seconds the café
+  floats 60 cm ahead and 55 cm below the eyes, and still moves onto a
+  table found in the next few seconds (unless the player has already
+  moved it). It turns to face the player and pops up with a short ease.
 - **Size**: the whole café hangs from one parent, scaled by `CAFE_SCALE`
-  (1.0: the modelled 92 × 62 cm base, a 70 × 46 cm café room). There is
-  no in-game resizing.
+  (1.0: the modelled 92 × 62 cm base, a 70 × 46 cm café room) until the
+  player resizes it.
+
+**Holding the café** (`src/systems/hold-system.ts`; the numbers in
+`src/hold/hold.ts`): pinch anywhere on or just around the café (over its
+garden, roof or fence, within 6 cm) and it follows the pinch: lift it,
+slide it along the table, set it down elsewhere. Pinch with both hands
+and the distance between them resizes it (between 0.3× and 2.5×), the
+line between them turns it, and the point between the hands stays under
+them; it grows from its base, so it never sinks or rises while being
+stretched. It always stays upright and never goes below the floor. A
+thin warm frame around the base (`src/hold/frame.ts`) appears when a
+hand is near enough to take the café and glows more while it is held.
+Pinches are read from the hands' joints (`src/lib/hand-pinch.ts`), so no
+pointer rays are involved. Once the player has moved the café, it is not
+placed again that session.
 
 **The night** (`src/lighting.ts`, `src/light/`, `src/systems/mood-system.ts`;
 every number that tunes the look is in `src/light/mood.ts`):
@@ -99,6 +116,11 @@ room has a desk-height table), from a running dev server:
   and spill, and the renderer is set for the look (3 checks), with
   screenshots of the seated view, the gate, the counter and a low look
   along the table.
+- `node scripts/check-hold.mjs`: one hand carries the café exactly with the
+  pinch and leaves it where it is put down, a pinch away from it takes
+  nothing, two hands resize it by their spread and turn it by their line
+  with the point between them kept, and the hold frame glows near and
+  held (12 checks), with screenshots of the café lifted and enlarged.
 - `npm run record`: the café's arrival, the dusk and the lamps coming up,
   and a look around, as the headset shows it, to `artifacts/cafe.mp4`.
 
@@ -106,12 +128,15 @@ room has a desk-height table), from a running dev server:
 
 ```
 src/
-  index.ts                   World, the café system, the mood system, lighting
+  index.ts                   World, the café, hold and mood systems, lighting
   assets.ts                  the model manifest (the café's pieces first)
   cafe/layout.ts             the floor plan and the dressing (meals)
   cafe/materials.ts          the café's materials on the grey-box pieces
   systems/cafe-system.ts     building the café and placing it on the table
+  systems/hold-system.ts     pinching the café to move, resize and turn it
   systems/mood-system.ts     the dusk, the lamps coming up, the lanterns' breath
+  hold/hold.ts               the numbers behind holding the café
+  hold/frame.ts              the warm frame that shows where a pinch lands
   lighting.ts                the renderer and the fill light
   light/mood.ts              every number that tunes the look
   light/dimmer.ts            the passthrough dimmer
@@ -119,7 +144,7 @@ src/
   light/halo.ts              the glow sprite
   light/spill.ts             the light-and-shadow catcher on the table
   lib/desk-placement.ts      finding the table among the detected surfaces
-  lib/hand-pinch.ts          reading a hand's pinch from its joints (for the game to come)
+  lib/hand-pinch.ts          reading a hand's pinch from its joints
 public/models/               the .glb models (copies of ../models/*/)
 public/envs/warm-cafe.hdr    the environment
 scripts/                     the emulator checks and the recording

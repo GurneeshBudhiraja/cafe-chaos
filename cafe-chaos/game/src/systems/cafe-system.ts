@@ -11,7 +11,8 @@
  * surface within two seconds, the café floats at arm's reach instead. It
  * turns to face the player and pops up out of the table with a short
  * ease. Outside XR (the desktop preview) it simply stands in front of the
- * camera.
+ * camera. From then on the player can pinch it to move, resize and turn
+ * it (HoldSystem); once they have, it is not placed again that session.
  *
  * The whole café hangs from one parent, so scaling it up (CAFE_SCALE)
  * keeps the shell, tables and anchors in proportion.
@@ -33,9 +34,13 @@ export const CAFE_SCALE = 1.0;
 const DESK_WAIT_MS = 2000;
 /** ...and keep looking this long after floating: a table found late still gets the café. */
 const DESK_RETRY_MS = 10000;
-/** With no table: this far ahead of the eyes and this far below them. */
-const FLOAT_AHEAD_M = 0.45;
-const FLOAT_BELOW_M = 0.4;
+/**
+ * With no table: this far ahead of the eyes and this far below them, so
+ * the café sits well under the gaze and is looked down on, not met at eye
+ * level (the player can then pinch it to wherever suits; see HoldSystem).
+ */
+const FLOAT_AHEAD_M = 0.6;
+const FLOAT_BELOW_M = 0.55;
 /** The pop-up when the café is placed (seconds). */
 const ARRIVE_SECONDS = 0.7;
 /** Where the café stands for the desktop preview (world, metres). */
@@ -52,6 +57,8 @@ export class CafeSystem extends createSystem({
   readonly seats: Object3D[] = [];
   placed = false;
   onDesk = false;
+  /** Set once the player has moved the café themselves: it is theirs to place from then on. */
+  movedByHand = false;
   /**
    * The game clock's pace: 1 is real time. The recording scripts slow it to
    * match a video captured slowly and sped up, so arrivals and timers play
@@ -60,7 +67,7 @@ export class CafeSystem extends createSystem({
   timeScale = 1;
   /** Counts the times the café has been put down; other systems start over when it changes. */
   placements = 0;
-  private arriving = -1;
+  private arrival = -1;
   private sessionWas = false;
   private sessionStartedAt = 0;
   private readonly head = new Vector3();
@@ -68,6 +75,11 @@ export class CafeSystem extends createSystem({
   private readonly q = new Quaternion();
   private readonly euler = new Euler(0, 0, 0, 'YXZ');
   private readonly surfaces: Iterable<DetectedSurface> = { [Symbol.iterator]: () => this.surfaceList() };
+
+  /** True during the pop-up, while the café's scale is animated. */
+  get arriving(): boolean {
+    return this.arrival >= 0;
+  }
 
   init(): void {
     this.cafe.name = 'Cafe';
@@ -85,6 +97,7 @@ export class CafeSystem extends createSystem({
     if (presenting && !this.sessionWas) {
       // A new session: place afresh, on the table the headset sees.
       this.placed = false;
+      this.movedByHand = false;
       this.cafe.visible = false;
       this.sessionStartedAt = performance.now();
     }
@@ -92,7 +105,7 @@ export class CafeSystem extends createSystem({
     this.sessionWas = presenting;
     const waited = performance.now() - this.sessionStartedAt;
     if (presenting && !this.placed) this.place(waited > DESK_WAIT_MS);
-    else if (presenting && !this.onDesk && waited < DESK_RETRY_MS) this.place(false);
+    else if (presenting && !this.onDesk && !this.movedByHand && waited < DESK_RETRY_MS) this.place(false);
     this.arrive(delta * this.timeScale);
   }
 
@@ -100,6 +113,7 @@ export class CafeSystem extends createSystem({
   replace(): void {
     this.placed = false;
     this.onDesk = false;
+    this.movedByHand = false;
     this.cafe.visible = false;
     this.sessionStartedAt = performance.now();
   }
@@ -125,20 +139,20 @@ export class CafeSystem extends createSystem({
     this.cafe.visible = true;
     this.placed = true;
     this.placements++;
-    this.arriving = 0;
+    this.arrival = 0;
   }
 
   /** The pop-up: a quick ease up to size with a small overshoot. */
   private arrive(delta: number): void {
-    if (this.arriving < 0) return;
-    this.arriving += delta;
-    const t = Math.min(1, this.arriving / ARRIVE_SECONDS);
+    if (this.arrival < 0) return;
+    this.arrival += delta;
+    const t = Math.min(1, this.arrival / ARRIVE_SECONDS);
     const c = 1.4;
     const eased = 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2;
     this.cafe.scale.setScalar(Math.max(0.001, eased) * CAFE_SCALE);
     if (t >= 1) {
       this.cafe.scale.setScalar(CAFE_SCALE);
-      this.arriving = -1;
+      this.arrival = -1;
     }
   }
 
@@ -150,7 +164,7 @@ export class CafeSystem extends createSystem({
     this.cafe.visible = true;
     this.placed = false;
     this.onDesk = false;
-    this.arriving = -1;
+    this.arrival = -1;
   }
 
   private *surfaceList(): Generator<DetectedSurface> {
