@@ -1,7 +1,8 @@
 /**
  * Phase 2 check: the night mood. With the viewer seated at the emulated
  * table and the café placed, checks that:
- * 1. the passthrough dimmer has faded in to its level, centred on the head;
+ * 1. the passthrough dimmer has faded in to its level, centred on the head,
+ *    and the lamps have come up with it;
  * 2. the café carries its lamps (point lights with halos), the shadow-
  *    casting key light and the light spill on the table;
  * 3. the renderer is set up for the look (filmic tone mapping, soft shadow
@@ -31,7 +32,7 @@ const h = await startHeadset({
     await h.page.evaluate(() => window.__cafe.system.replace());
     await h.page.waitForFunction(() => window.__cafe.system.placed, null, { timeout: 15000 });
     // The dimming fades in over a few seconds of game time (real time here).
-    await h.page.waitForFunction(() => window.__cafe.mood.dimmer.level > 0.5, null, { timeout: 20000 });
+    await h.page.waitForFunction(() => window.__cafe.mood.dimmer.level > 0.5 && window.__cafe.mood.lampsUp > 0.99, null, { timeout: 20000 });
     await h.pause(600);
   },
 });
@@ -46,6 +47,8 @@ const state = await page.evaluate(() => {
     dim: +mood.dimmer.level.toFixed(3),
     domeVisible: mood.dimmer.mesh.visible,
     domeOffset: +dome.distanceTo(head).toFixed(3),
+    lampsUp: +mood.lampsUp.toFixed(2),
+    lit: lights.lamps.every((l) => l.intensity > 0.03),
     lamps: lights.lamps.length,
     halos: system.cafe.children.filter((c) => c.name === 'Halo').length,
     keyShadow: lights.key.castShadow,
@@ -56,7 +59,7 @@ const state = await page.evaluate(() => {
     casters: (() => { let n = 0; system.cafe.traverse((o) => { if (o.isMesh && o.castShadow) n++; }); return n; })(),
   };
 });
-check('the passthrough has dimmed around the head', state.dim >= 0.5 && state.domeVisible && state.domeOffset < 0.01, `level ${state.dim}, dome ${state.domeOffset} m from the head`);
+check('the passthrough has dimmed around the head and the lamps are up', state.dim >= 0.5 && state.domeVisible && state.domeOffset < 0.01 && state.lampsUp === 1 && state.lit, `level ${state.dim}, dome ${state.domeOffset} m from the head, lamps up ${state.lampsUp}, all lit ${state.lit}`);
 check('the café carries its lamps, key light and spill', state.lamps === 6 && state.halos === 5 && state.keyShadow && state.spill, `${state.lamps} lamps, ${state.halos} halos, key shadows ${state.keyShadow}, spill ${state.spill}`);
 check('the renderer is set for the look', state.shadowMap && state.toneMapping === 4 && state.envIntensity < 0.5 && state.casters > 30, `shadow maps ${state.shadowMap}, tone mapping ${state.toneMapping} (4 = ACES), environment ${state.envIntensity}, ${state.casters} shadow casters`);
 

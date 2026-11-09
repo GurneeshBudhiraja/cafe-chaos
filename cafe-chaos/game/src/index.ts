@@ -22,6 +22,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   const system = world.getSystem(CafeSystem)!;
   const lights = setUpLighting(world, system.cafe);
   const mood = world.getSystem(MoodSystem)!;
+  mood.lights = lights;
 
   // Dev only: lets the check and recording scripts find the world, the café, its lights and the mood.
   if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood };

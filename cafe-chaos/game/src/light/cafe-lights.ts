@@ -6,13 +6,16 @@
  * and painted with.
  */
 
-import { Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, Object3D, PointLight, type Material } from '@iwsdk/core';
+import { Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, Object3D, PointLight, type Material, type Sprite } from '@iwsdk/core';
 import { makeHalo } from './halo.js';
 import { GLOW, KEY, LAMPS } from './mood.js';
 import { makeSpill } from './spill.js';
 
 export interface CafeLights {
+  /** One per entry in LAMPS, in order. */
   lamps: PointLight[];
+  /** The halo of each lamp (undefined where a lamp has none), same order. */
+  halos: (Sprite | undefined)[];
   key: DirectionalLight;
   spill: Mesh;
 }
@@ -21,23 +24,27 @@ export interface CafeLights {
 export function lightTheCafe(cafe: Group): CafeLights {
   brightenGlow(cafe);
   setShadowFlags(cafe);
-  const lamps = LAMPS.map((lamp) => {
+  const lamps: PointLight[] = [];
+  const halos: (Sprite | undefined)[] = [];
+  for (const lamp of LAMPS) {
     const light = new PointLight(lamp.color, lamp.intensity, lamp.distance, 2);
     light.position.set(...lamp.position);
     light.name = 'Lamp';
     cafe.add(light);
+    lamps.push(light);
+    let halo: Sprite | undefined;
     if (lamp.halo > 0) {
-      const halo = makeHalo(lamp.halo, lamp.color, lamp.haloOpacity);
+      halo = makeHalo(lamp.halo, lamp.color, lamp.haloOpacity);
       halo.position.set(lamp.position[0], lamp.position[1] + 0.006, lamp.position[2]);
       cafe.add(halo);
     }
-    return light;
-  });
+    halos.push(halo);
+  }
   const key = makeKeyLight();
   cafe.add(key, key.target);
   const spill = makeSpill();
   cafe.add(spill);
-  return { lamps, key, spill };
+  return { lamps, halos, key, spill };
 }
 
 /** The one shadow-casting light, framed tightly on the café for crisp shadows. */

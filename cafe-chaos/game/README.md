@@ -8,16 +8,20 @@ were sized are in [`../START-HERE.md`](../START-HERE.md).
 ## What this build does
 
 As soon as the session starts, the café appears on the table in front of
-the player, and guests start arriving at the gate.
+the player, the room dims to dusk around it, and its lamps come up: a
+lo-fi night at the café, its light spilling out over the real table.
 
 **The café** (`src/systems/cafe-system.ts`):
 
 - **The models** (`src/assets.ts`, from `public/models/`): the Japanese
-  garden café shell, the waiting bench by the gate, and the opening
-  layout's ten tables (three four-seaters and two two-seaters in the back
-  row, five two-seaters in the front row), exactly as sized and tested with
-  simulated hands. The other models (guests, janitor, unlocks, markers)
-  load in the background for the game to come.
+  garden café shell (open right side, timber door frame, post lamps), the
+  waiting bench by the gate, the opening layout's ten tables (three
+  four-seaters and two two-seaters in the back row, five two-seaters in
+  the front row), a two-stool bar along the left wall, the quiet armchair
+  corner at the back right, and meals already out on eight tables
+  (`src/cafe/layout.ts`). The grey-box pieces are dressed in the café's
+  own walnut, indigo and ceramic at load (`src/cafe/materials.ts`); the
+  models themselves are untouched.
 - **Placement**: the nearest detected desk or table in front of the player
   (WebXR plane detection, the surfaces from the headset's Space Setup),
   with the café's centre about 35 cm out so the back row stays within
@@ -26,31 +30,40 @@ the player, and guests start arriving at the gate.
   a table found in the next few seconds. It turns to face the player and
   pops up with a short ease.
 - **Size**: the whole café hangs from one parent, scaled by `CAFE_SCALE`
-  (1.0: the modelled 92 × 62 cm base, a 70 × 46 cm café room). The models'
-  notes allow up to about 1.2× before the back row leaves comfortable
-  reach. There is no in-game resizing yet.
-- **Light** (`src/lighting.ts`): the scene's warm HDR environment plus a
-  warm sky fill and a low sun; no real-time shadows (the models carry
-  baked contact shading, and shadow maps are unsafe on Quest).
+  (1.0: the modelled 92 × 62 cm base, a 70 × 46 cm café room). There is
+  no in-game resizing.
 
-**The guests** (`src/systems/guest-system.ts`, `src/guests/`):
+**The night** (`src/lighting.ts`, `src/light/`, `src/systems/mood-system.ts`;
+every number that tunes the look is in `src/light/mood.ts`):
 
-- **Arrivals**: a guest appears at the far end of the path outside the
-  gate every 3 to 8 seconds (at random) while there is room, adults and
-  the odd child, each in its own colour. It fades in as it walks up to the
-  back of the line.
-- **The line**: a single file at the door (`guests/queue.ts`). The first
-  guest stands in the gate opening looking into the café; each newcomer
-  stands behind the one before, along the path. Nobody comes inside until
-  they are seated. Up to six wait at once.
-- **Waiting**: a patience bubble over each head counts down from 90
-  seconds, its ring draining from green through amber to red
-  (`guests/patience-bubble.ts`). It turns to face the player.
-- **Giving up**: when the timer runs out the guest steps out of the line,
-  walks away down the path and fades out; everyone behind steps up a
-  place. Arrivals carry on, so the door never stays empty for long.
-- The models are rigid, so walking is a small bob and sway. Picking a
-  guest up and seating them is the next phase.
+- **Dusk**: a headset page cannot turn the passthrough cameras down, so a
+  large dark, slightly blue, translucent shell is drawn around the head
+  first, without depth, and the scene draws over it. Once the café is
+  placed it fades in over about three seconds, tinting the room to dusk;
+  the HDR environment is turned well down and a dim cool fill takes over.
+- **The lamps**: point lights at the two post lamps by the door and the
+  three paper lanterns over the counter, plus an unseen warm room light,
+  each with a limited reach, and a soft additive halo sprite on every
+  visible lamp. The lantern and shoji papers' emissive glow is set for
+  the night. The lamps come up a moment after the dusk begins, and the
+  lanterns breathe: a slow, slight flicker.
+- **Shadows**: one warm key light from the front left casts soft shadows
+  (PCF, a 1024 map framed on the café): the roof, the tree, the fence and
+  the furniture throw them across the floor and the garden. *The model
+  notes advise against shadow maps on Quest after a sampler bug seen at a
+  workshop; this build turns them on because the look asks for them. If a
+  headset shows artefacts, set `renderer.shadowMap.enabled` false in
+  `src/lighting.ts` and the rest of the look stands.*
+- **The spill**: a wide feathered disc lies on the table under the café,
+  drawn additively so it only brightens what is behind it. Its shader
+  keeps direct light only (no ambient, fill or environment) and the key
+  light at a fraction, so the lamps' pools fall on the real table and
+  fade with distance, the key lends a faint warmth, and where the café
+  blocks it the café's shadow lies on the table. Light has a reach: the
+  disc fades to nothing at about 85 cm.
+- **Tone**: ACES filmic tone mapping, exposure 1.1.
+
+No guests in this build; the seating game comes next.
 
 ## Run it on a Quest
 
@@ -67,37 +80,39 @@ then open `https://localhost:8082`.)
 
 ## Scripts
 
-Both drive the app in IWER, IWSDK's browser headset emulator (its living
+All drive the app in IWER, IWSDK's browser headset emulator (its living
 room has a desk-height table), from a running dev server:
 
 - `node scripts/check-placement.mjs`: the café lands on the detected
   table at table height, within reach and facing the viewer, with the whole
-  opening layout (4 checks) and screenshots.
-- `node scripts/check-guests.mjs`: with patience shortened, a guest walks
-  up and waits at the gate with a bubble over its head, the others line up
-  single file behind it outside, the first leaves and fades when its
-  patience runs out, the line steps up, and arrivals keep coming within
-  the line's room (6 checks).
-- `node scripts/record-cafe.mjs`: the café's arrival and a look around it,
-  as the headset shows it, to `artifacts/cafe.mp4`.
-- `npm run record [-- seconds]`: the guests arriving, waiting and giving up
-  (patience shortened to 18 s for the video), to `artifacts/guests.mp4`.
+  layout (4 checks) and screenshots.
+- `node scripts/check-mood.mjs`: the passthrough has dimmed around the
+  head and the lamps are up, the café carries its lamps, halos, key light
+  and spill, and the renderer is set for the look (3 checks), with
+  screenshots of the seated view, the gate, the counter and a low look
+  along the table.
+- `npm run record`: the café's arrival, the dusk and the lamps coming up,
+  and a look around, as the headset shows it, to `artifacts/cafe.mp4`.
 
 ## Layout
 
 ```
 src/
-  index.ts                   World, lighting, the café system
-  assets.ts                  the model manifest (critical pieces first)
-  cafe/layout.ts             the opening floor plan
+  index.ts                   World, the café system, the mood system, lighting
+  assets.ts                  the model manifest (the café's pieces first)
+  cafe/layout.ts             the floor plan and the dressing (meals)
+  cafe/materials.ts          the café's materials on the grey-box pieces
   systems/cafe-system.ts     building the café and placing it on the table
-  systems/guest-system.ts    guests arriving, queueing, waiting and giving up
-  guests/queue.ts            the line at the door and the path
-  guests/patience-bubble.ts  the timer over a guest's head
+  systems/mood-system.ts     the dusk, the lamps coming up, the lanterns' breath
+  lighting.ts                the renderer and the fill light
+  light/mood.ts              every number that tunes the look
+  light/dimmer.ts            the passthrough dimmer
+  light/cafe-lights.ts       lamps, halos, key light, shadow flags, the spill
+  light/halo.ts              the glow sprite
+  light/spill.ts             the light-and-shadow catcher on the table
   lib/desk-placement.ts      finding the table among the detected surfaces
   lib/hand-pinch.ts          reading a hand's pinch from its joints (for the game to come)
-  lighting.ts                the warm light
 public/models/               the .glb models (copies of ../models/*/)
 public/envs/warm-cafe.hdr    the environment
-scripts/                     the emulator check and the recording
+scripts/                     the emulator checks and the recording
 ```

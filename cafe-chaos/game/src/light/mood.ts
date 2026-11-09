@@ -13,6 +13,12 @@ export const DIM_COLOR = 0x06040c;
 /** The dimming fades in over this many seconds once the café has arrived. */
 export const DIM_FADE_SECONDS = 3.2;
 
+/** The lamps come up over this long as the room dims (seconds); they start a moment after the dimming. */
+export const LAMPS_UP_SECONDS = 2.6;
+export const LAMPS_UP_DELAY = 0.6;
+/** The lanterns breathe: a slow, slight flicker of the paper lights (fraction of their strength, and the pace in cycles per second). */
+export const BREATH = { depth: 0.07, rate: 0.35 };
+
 /** Tone mapping exposure (ACES filmic). */
 export const EXPOSURE = 1.1;
 /** The HDR environment's share (the scene JSON holds the same number). */
