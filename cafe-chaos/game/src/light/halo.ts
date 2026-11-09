@@ -5,7 +5,7 @@
  * headset).
  */
 
-import { AdditiveBlending, CanvasTexture, Color, Sprite, SpriteMaterial } from '@iwsdk/core';
+import { CanvasTexture, Color, CustomBlending, OneFactor, Sprite, SpriteMaterial, SrcAlphaFactor, ZeroFactor } from '@iwsdk/core';
 
 let texture: CanvasTexture | undefined;
 
@@ -34,7 +34,12 @@ export function makeHalo(diameter: number, color: number, opacity: number): Spri
     color: new Color(color),
     transparent: true,
     opacity,
-    blending: AdditiveBlending,
+    // Colour only, no alpha (see spill.ts): over the passthrough a halo brightens, never covers.
+    blending: CustomBlending,
+    blendSrc: SrcAlphaFactor,
+    blendDst: OneFactor,
+    blendSrcAlpha: ZeroFactor,
+    blendDstAlpha: OneFactor,
     depthWrite: false,
     toneMapped: false,
   });

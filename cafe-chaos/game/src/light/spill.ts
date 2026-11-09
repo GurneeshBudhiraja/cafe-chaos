@@ -2,30 +2,30 @@
  * The light spill: how the café's light reaches the player's real table.
  * A wide disc lies on the table under the café, drawn additively, so it
  * only ever brightens what is behind it (the dimmed passthrough): the
- * lamps' pools fall on it and fade with distance, the key light washes
- * it warm, and where the café blocks that light the disc stays dark, so
- * the building's shadow lies on the real table. Its edge feathers out,
- * because light has a reach.
+ * lamps' pools and the house light pouring out of the café fall on it
+ * and fade with distance, and where the door frame, rail and fence block
+ * the house light their shadows lie on the real table. Nothing lights
+ * the disc evenly, so it has no edge of its own.
  *
  * It is a standard material with the indirect light (ambient, fill and
- * environment) removed from its shader, so only the café's own lights
- * show on it.
+ * environment) and the moon removed from its shader, so only the café's
+ * own lamps show on it.
  */
 
-import { AdditiveBlending, CanvasTexture, CircleGeometry, Color, Mesh, MeshStandardMaterial, ShaderChunk } from '@iwsdk/core';
+import { CanvasTexture, CircleGeometry, Color, CustomBlending, Mesh, MeshStandardMaterial, OneFactor, ShaderChunk, SrcAlphaFactor, ZeroFactor } from '@iwsdk/core';
 import { SPILL, SPILL_RADIUS } from './mood.js';
 
-/** The line in three's lighting chunk that reads a directional light (the key light is the only one). */
-const KEY_CALL = 'getDirectionalLightInfo( directionalLight, directLight );';
+/** The line in three's lighting chunk that reads a directional light (the moon is the only one). */
+const MOON_CALL = 'getDirectionalLightInfo( directionalLight, directLight );';
 
-/** A radial feather: solid under the café, then a smooth fade to nothing at the rim (light has a reach). */
+/** A radial feather: solid, then a smooth fade to nothing at the rim, so the disc's own edge never shows. */
 function featherTexture(): CanvasTexture {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
   const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  const solidTo = 0.3;
+  const solidTo = 0.55;
   g.addColorStop(0, '#fff');
   g.addColorStop(solidTo, '#fff');
   for (let i = 1; i <= 8; i++) {
@@ -44,16 +44,23 @@ export function makeSpill(): Mesh {
     roughness: 1,
     metalness: 0,
     transparent: true,
-    blending: AdditiveBlending,
+    // Add colour only, never alpha: the page's canvas is composited over the passthrough with
+    // premultiplied alpha, so an ordinary additive blend would also cover the real table (and
+    // darken it) wherever the disc lies. This way the disc can only brighten what is behind it.
+    blending: CustomBlending,
+    blendSrc: SrcAlphaFactor,
+    blendDst: OneFactor,
+    blendSrcAlpha: ZeroFactor,
+    blendDstAlpha: OneFactor,
     depthWrite: false,
     alphaMap: featherTexture(),
   });
-  // Direct light only, and the key light at a fraction: drop the chunk that adds the indirect
-  // (ambient, hemisphere, environment) light, and scale the directional light where it is read.
+  // Direct light from the lamps only: drop the chunk that adds the indirect (ambient, hemisphere,
+  // environment) light, and zero the directional light (the moon) where it is read.
   material.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <lights_fragment_end>', '')
-      .replace('#include <lights_fragment_begin>', ShaderChunk.lights_fragment_begin.replace(KEY_CALL, `${KEY_CALL} directLight.color *= ${SPILL.keyShare.toFixed(3)};`));
+      .replace('#include <lights_fragment_begin>', ShaderChunk.lights_fragment_begin.replace(MOON_CALL, `${MOON_CALL} directLight.color = vec3( 0.0 );`));
   };
   material.customProgramCacheKey = () => 'cafe-spill';
   const disc = new Mesh(new CircleGeometry(SPILL_RADIUS, 64), material);

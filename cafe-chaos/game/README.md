@@ -47,20 +47,28 @@ every number that tunes the look is in `src/light/mood.ts`):
   visible lamp. The lantern and shoji papers' emissive glow is set for
   the night. The lamps come up a moment after the dusk begins, and the
   lanterns breathe: a slow, slight flicker.
-- **Shadows**: one warm key light from the front left casts soft shadows
-  (PCF, a 1024 map framed on the café): the roof, the tree, the fence and
-  the furniture throw them across the floor and the garden. *The model
-  notes advise against shadow maps on Quest after a sampler bug seen at a
-  workshop; this build turns them on because the look asks for them. If a
-  headset shows artefacts, set `renderer.shadowMap.enabled` false in
-  `src/lighting.ts` and the rest of the look stands.*
-- **The spill**: a wide feathered disc lies on the table under the café,
-  drawn additively so it only brightens what is behind it. Its shader
-  keeps direct light only (no ambient, fill or environment) and the key
-  light at a fraction, so the lamps' pools fall on the real table and
-  fade with distance, the key lends a faint warmth, and where the café
-  blocks it the café's shadow lies on the table. Light has a reach: the
-  disc fades to nothing at about 85 cm.
+- **Shadows**: the house light, a warm spot high over the counter shining
+  down and out toward the front, is the one light that casts shadows
+  (PCF, a 1024 map): the furniture throws them across the floor, and the
+  door frame, rail and fence throw them out onto the table in the light
+  that pours from the café's open side and front. A faint cool moon from
+  high front left shapes the roof, the tree and the garden, without
+  shadows. *The model notes advise against shadow maps on Quest after a
+  sampler bug seen at a workshop; this build turns them on because the
+  look asks for them. If a headset shows artefacts, set
+  `renderer.shadowMap.enabled` false in `src/lighting.ts` and the rest of
+  the look stands.*
+- **The spill**: a wide disc lies on the table under the café and catches
+  the lamps' pools and the house light pouring out of the café, each
+  falling off with distance, with the frame and fence shadows in it. Its
+  shader keeps direct light only (no ambient, fill, environment or moon),
+  and it blends colour only, never alpha: the page's canvas is composited
+  over the passthrough with premultiplied alpha, so a plain additive blend
+  would also cover the real table and darken it, which is what made an
+  earlier version look like a painted disc. Now it can only brighten what
+  is behind it, so the real table's texture shows through the glow and
+  the glow has no edge of its own (a wide feather is only a safety bound
+  at about 85 cm). The halos blend the same way.
 - **Tone**: ACES filmic tone mapping, exposure 1.1.
 
 No guests in this build; the seating game comes next.

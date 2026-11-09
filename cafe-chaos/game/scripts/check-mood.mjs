@@ -4,7 +4,7 @@
  * 1. the passthrough dimmer has faded in to its level, centred on the head,
  *    and the lamps have come up with it;
  * 2. the café carries its lamps (point lights with halos), the shadow-
- *    casting key light and the light spill on the table;
+ *    casting house light and the light spill on the table;
  * 3. the renderer is set up for the look (filmic tone mapping, soft shadow
  *    maps), with no console errors.
  * Then saves headset-view screenshots: seated, the gate lamps and their
@@ -51,7 +51,7 @@ const state = await page.evaluate(() => {
     lit: lights.lamps.every((l) => l.intensity > 0.03),
     lamps: lights.lamps.length,
     halos: system.cafe.children.filter((c) => c.name === 'Halo').length,
-    keyShadow: lights.key.castShadow,
+    houseShadow: lights.house.castShadow,
     spill: !!lights.spill.parent && lights.spill.receiveShadow,
     shadowMap: world.renderer.shadowMap.enabled,
     toneMapping: world.renderer.toneMapping,
@@ -60,7 +60,7 @@ const state = await page.evaluate(() => {
   };
 });
 check('the passthrough has dimmed around the head and the lamps are up', state.dim >= 0.5 && state.domeVisible && state.domeOffset < 0.01 && state.lampsUp === 1 && state.lit, `level ${state.dim}, dome ${state.domeOffset} m from the head, lamps up ${state.lampsUp}, all lit ${state.lit}`);
-check('the café carries its lamps, key light and spill', state.lamps === 6 && state.halos === 5 && state.keyShadow && state.spill, `${state.lamps} lamps, ${state.halos} halos, key shadows ${state.keyShadow}, spill ${state.spill}`);
+check('the café carries its lamps, house light and spill', state.lamps === 6 && state.halos === 5 && state.houseShadow && state.spill, `${state.lamps} lamps, ${state.halos} halos, house light shadows ${state.houseShadow}, spill ${state.spill}`);
 check('the renderer is set for the look', state.shadowMap && state.toneMapping === 4 && state.envIntensity < 0.5 && state.casters > 30, `shadow maps ${state.shadowMap}, tone mapping ${state.toneMapping} (4 = ACES), environment ${state.envIntensity}, ${state.casters} shadow casters`);
 
 await h.head(SEAT, { x: LOOK.x, y: LOOK.y + 0.1, z: LOOK.z }, 400);

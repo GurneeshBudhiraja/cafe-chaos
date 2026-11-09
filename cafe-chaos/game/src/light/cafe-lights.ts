@@ -1,14 +1,14 @@
 /**
  * Lighting the café itself, in its own space (so it all moves and scales
  * with the café): the lamps as point lights with halos, the glowing
- * papers brightened, the key light and its shadows, and the light spill
- * onto the table. The models are not changed; this is what they are lit
+ * papers brightened, the house light and its shadows, the faint moon, and
+ * the light spill onto the table. The models are not changed; this is what they are lit
  * and painted with.
  */
 
-import { Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, Object3D, PointLight, type Material, type Sprite } from '@iwsdk/core';
+import { Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, Object3D, PointLight, SpotLight, type Material, type Sprite } from '@iwsdk/core';
 import { makeHalo } from './halo.js';
-import { GLOW, KEY, LAMPS } from './mood.js';
+import { GLOW, HOUSE, LAMPS, MOON } from './mood.js';
 import { makeSpill } from './spill.js';
 
 export interface CafeLights {
@@ -16,7 +16,10 @@ export interface CafeLights {
   lamps: PointLight[];
   /** The halo of each lamp (undefined where a lamp has none), same order. */
   halos: (Sprite | undefined)[];
-  key: DirectionalLight;
+  /** The faint cool moon (no shadows). */
+  moon: DirectionalLight;
+  /** The warm house light over the counter: the one that casts shadows. */
+  house: SpotLight;
   spill: Mesh;
 }
 
@@ -40,30 +43,32 @@ export function lightTheCafe(cafe: Group): CafeLights {
     }
     halos.push(halo);
   }
-  const key = makeKeyLight();
-  cafe.add(key, key.target);
+  const moon = new DirectionalLight(MOON.color, MOON.intensity);
+  moon.name = 'Moon';
+  moon.position.set(...MOON.position);
+  moon.target.position.set(0, 0, 0);
+  cafe.add(moon, moon.target);
+  const house = makeHouseLight();
+  cafe.add(house, house.target);
   const spill = makeSpill();
   cafe.add(spill);
-  return { lamps, halos, key, spill };
+  return { lamps, halos, moon, house, spill };
 }
 
-/** The one shadow-casting light, framed tightly on the café for crisp shadows. */
-function makeKeyLight(): DirectionalLight {
-  const key = new DirectionalLight(KEY.color, KEY.intensity);
-  key.name = 'KeyLight';
-  key.position.set(...KEY.position);
-  key.target.position.set(0, 0, -0.05);
-  key.castShadow = true;
-  key.shadow.mapSize.set(KEY.shadowMapSize, KEY.shadowMapSize);
-  const camera = key.shadow.camera;
-  camera.left = camera.bottom = -0.75;
-  camera.right = camera.top = 0.75;
-  camera.near = 0.05;
-  camera.far = 3;
-  key.shadow.bias = -0.0004;
-  key.shadow.normalBias = 0.004;
-  key.shadow.radius = KEY.shadowRadius;
-  return key;
+/** The one shadow-casting light: the warm spot over the counter, shining down and out the front. */
+function makeHouseLight(): SpotLight {
+  const house = new SpotLight(HOUSE.color, HOUSE.intensity, HOUSE.distance, HOUSE.angle, HOUSE.penumbra, 2);
+  house.name = 'HouseLight';
+  house.position.set(...HOUSE.position);
+  house.target.position.set(...HOUSE.target);
+  house.castShadow = true;
+  house.shadow.mapSize.set(HOUSE.shadowMapSize, HOUSE.shadowMapSize);
+  house.shadow.camera.near = 0.02;
+  house.shadow.camera.far = HOUSE.distance;
+  house.shadow.bias = -0.0003;
+  house.shadow.normalBias = 0.003;
+  house.shadow.radius = HOUSE.shadowRadius;
+  return house;
 }
 
 /** Opaque meshes cast and receive shadows; the blended ones (petals, glass, water, the AO skirts) do neither. */
