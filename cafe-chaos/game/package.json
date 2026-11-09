@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview",
-    "record": "node scripts/record-cafe.mjs"
+    "record": "node scripts/record-cafe.mjs",
+    "record:hold": "node scripts/record-hold.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

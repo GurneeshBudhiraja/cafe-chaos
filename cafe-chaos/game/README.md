@@ -121,6 +121,9 @@ room has a desk-height table), from a running dev server:
   nothing, two hands resize it by their spread and turn it by their line
   with the point between them kept, and the hold frame glows near and
   held (12 checks), with screenshots of the café lifted and enlarged.
+- `npm run record:hold`: one hand lifting and carrying the café, then two
+  hands enlarging and turning it, as the headset shows it, to
+  `artifacts/hold.mp4`.
 - `npm run record`: the café's arrival, the dusk and the lamps coming up,
   and a look around, as the headset shows it, to `artifacts/cafe.mp4`.
 
