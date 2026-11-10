@@ -266,7 +266,8 @@ export class GuestSystem extends createSystem({}) {
   /** Everyone in the line walks to the spot that matches their place in it. */
   private keepLine(): void {
     this.line.forEach((guest, index) => {
-      if (guest.spot === index) return;
+      // One in the air on its way back to the line lands first, then steps to its place if that has changed.
+      if (guest.spot === index || guest.state === 'hop') return;
       guest.spot = index;
       guest.walk = new Walk([guest.actor.root.position, QUEUE_SPOTS[index]]);
       guest.speed = guest.state === 'arriving' ? SPEED.arrive : SPEED.shuffle;

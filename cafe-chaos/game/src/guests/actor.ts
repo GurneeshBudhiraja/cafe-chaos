@@ -82,6 +82,8 @@ export class GuestActor {
   private readonly groups: Record<Pose, Object3D>;
   private readonly faces: Record<Pose, FaceParts> = { standing: {}, seated: {} };
   private readonly pupilHome: Record<Pose, { x: number; y: number }> = { standing: { x: 0, y: 0 }, seated: { x: 0, y: 0 } };
+  /** Each face part's scale as the model has it at rest (before any clip). */
+  private readonly restScale = new Map<Object3D, number>();
   private readonly materials: Material[] = [];
   private readonly skins: SkinnedMesh[] = [];
   /** A face set by hand, shown instead of the clip's own (null: the clip decides). */
@@ -127,6 +129,8 @@ export class GuestActor {
     }
     const clip = this.clips.get(name);
     if (!clip) return;
+    // Anything set by hand goes back first, so the mixer hands over and takes up clean values.
+    this.resetFaces();
     this.mixer.stopAllAction();
     this.clip = name;
     this.action = this.mixer.clipAction(clip).setLoop(LoopRepeat, Infinity);
@@ -142,7 +146,42 @@ export class GuestActor {
 
   /** Set the face by hand (until `setFace(null)`): the clip keeps moving the body. */
   setFace(face: Face | null): void {
+    const ending = face === null && this.face !== null;
     this.face = face;
+    if (ending) this.resync();
+  }
+
+  /**
+   * Give the face back to the clip. The mixer only writes a value when
+   * its own result changes, so it would never notice that a part it
+   * holds steady (most of a face, most of the time) was changed by hand:
+   * the hand-set parts are put back as the model has them, and the clip
+   * is taken off and put on again at the same moment in its loop, which
+   * makes the mixer write every value afresh.
+   */
+  private resync(): void {
+    this.resetFaces();
+    const action = this.action;
+    if (!action) return;
+    const { time, timeScale } = action;
+    this.mixer.stopAllAction();
+    action.play();
+    action.time = time;
+    action.timeScale = timeScale;
+    this.mixer.update(0);
+    this.showFaces();
+  }
+
+  /** Every face part, on both poses, back to how the model has it at rest. */
+  private resetFaces(): void {
+    for (const pose of ['standing', 'seated'] as const) {
+      for (const part of Object.values(this.faces[pose])) part.scale.setScalar(this.restScale.get(part) ?? 1);
+      const pupils = this.faces[pose].WidePupils;
+      if (pupils) {
+        pupils.position.x = this.pupilHome[pose].x;
+        pupils.position.y = this.pupilHome[pose].y;
+      }
+    }
   }
 
   /** Advance the clip and tidy the face. */
@@ -285,7 +324,9 @@ export class GuestActor {
     for (const [pose, prefix] of [['standing', 'St-'], ['seated', 'Se-']] as const) {
       for (const name of [...EYES, ...MOUTHS, 'WidePupils']) {
         const part = this.root.getObjectByName(prefix + name);
-        if (part) this.faces[pose][name] = part;
+        if (!part) continue;
+        this.faces[pose][name] = part;
+        this.restScale.set(part, part.scale.x);
       }
       const pupils = this.faces[pose].WidePupils;
       if (pupils) this.pupilHome[pose] = { x: pupils.position.x, y: pupils.position.y };

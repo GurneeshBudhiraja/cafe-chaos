@@ -97,7 +97,8 @@ await page.waitForFunction(() => window.__cafe.guests.gaveUp >= 1, null, { timeo
 // One snapshot, taken in the page the moment the line has settled again.
 const stepped = await page.waitForFunction((id) => {
   const { guests } = window.__cafe;
-  if (guests.line.some((g) => g.id === id) || guests.line.some((g) => g.walk)) return null;
+  // Settled: the one who left is out of the line, and everyone left in it stands on the spot that matches their place.
+  if (guests.line.some((g) => g.id === id) || guests.line.some((g, i) => g.walk || g.spot !== i)) return null;
   const leaver = guests.guests.find((g) => g.id === id);
   return { gaveUp: guests.gaveUp, line: guests.line.map((g) => g.id), spots: guests.line.map((g) => g.spot), leaver: leaver ? leaver.state : 'gone' };
 }, headBefore, { timeout: 120000 }).then((r) => r.jsonValue());
@@ -113,7 +114,7 @@ const marching = await page.waitForFunction(() => {
   return g ? { z: g.actor.root.position.z, x: g.actor.root.position.x, y: g.actor.root.position.y, side: g.side, lane: g.lane, clip: g.actor.clip } : null;
 }, null, { timeout: 240000 }).then((r) => r.jsonValue());
 await h.screenshot('artifacts/guests-4-march.png');
-check('a leaver marches off along a lane in front of the café', marching.clip === 'Walk' && Math.abs(marching.y) < 0.002 && marching.z > 0.37 && marching.z < 0.48, `side ${marching.side}, lane ${marching.lane}, at x ${marching.x.toFixed(2)} z ${marching.z.toFixed(3)} on the table (y ${marching.y.toFixed(3)}), clip ${marching.clip}`);
+check('a leaver marches off along a lane in front of the café', marching.clip === 'Walk' && Math.abs(marching.y) < 0.002 && marching.z > 0.37 && marching.z < 0.5, `side ${marching.side}, lane ${marching.lane}, at x ${marching.x.toFixed(2)} z ${marching.z.toFixed(3)} on the table (y ${marching.y.toFixed(3)}), clip ${marching.clip}`);
 await page.waitForFunction(() => window.__cafe.guests.left >= 1, null, { timeout: 300000 });
 const end = await state();
 check('it fades out at the end, and there were never more than ten on stage', end.left >= 1 && end.peak <= 10, `left ${end.left}, peak ${end.peak}, on stage now ${end.all.length}`);

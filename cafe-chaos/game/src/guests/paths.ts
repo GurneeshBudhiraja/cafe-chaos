@@ -72,7 +72,7 @@ const EXIT_Z = 0.082;
 /** Then down the table outside the fence, along this x, to the front. */
 const EXIT_DOWN_X = 0.515;
 /** The lanes along the front of the café (z), clear of the grab pill. Leavers are dealt lanes in turn so they do not bunch. */
-export const MARCH_LANES_Z = [0.39, 0.425, 0.46];
+export const MARCH_LANES_Z = [0.41, 0.445, 0.48];
 /** Where a march ends (x): the left end of the plate, or out to the right. */
 const MARCH_END_X = { left: -0.5, right: 0.9 };
 

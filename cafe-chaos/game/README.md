@@ -10,11 +10,14 @@ were sized are in [`../START-HERE.md`](../START-HERE.md).
 As soon as the session starts, the café appears on the table in front of
 the player, below the gaze so it is looked down on, the room dims to dusk
 around it, and its lamps come up: a lo-fi night at the café, its light
-spilling out over the real table. Like a Horizon OS window, the café has
-a grab pill on the side facing the player (pinch and drag to move it) and
-a bracket at each corner (pinch and pull to resize, swing to turn), always
-visible, in the café's own style; pinching the café itself works too. The
-player's hands are drawn in the same warm style.
+spilling out over the real table. Guests walk up and line up outside the
+door; the player pinches one up, carries it over the café and lets go
+over the seat that glows blue; after its meal the guest hops down and
+leaves. Like a Horizon OS window, the café has a grab pill on the side
+facing the player (pinch and drag to move it) and a bracket at each
+corner (pinch and pull to resize, swing to turn), always visible, in the
+café's own style. The player's hands are soft plush hands in the same
+warm cream.
 
 **The café** (`src/systems/cafe-system.ts`):
 
@@ -41,6 +44,52 @@ player's hands are drawn in the same warm style.
 - **Size**: the whole café hangs from one parent, scaled by `CAFE_SCALE`
   (1.0: the modelled 92 × 62 cm base, a 70 × 46 cm café room) until the
   player resizes it.
+
+**The guests** (`src/systems/guest-system.ts`, `src/guests/`): the
+snack-spirit cast from `public/models/guest-*.glb`.
+
+- **Who comes** (`guests/cast.ts`): each guest is a random species (mochi,
+  onigiri, tofu), tinted one of seven pastels and dressed in up to two
+  things from `accessories.glb` (chef's hat, beret, headband, glasses, bow,
+  apron, vest). A newcomer never looks the same as the guest before it.
+- **How many** (`guests/rules.ts`): never more than ten on stage, counting
+  everyone, and five in the line. Arrivals come every 3.5 to 6.5 seconds
+  when the café is empty and slow as it fills, so it fills briskly and
+  then settles.
+- **The line**: single file outside the door, its head on the deck, turned
+  partly to the player so faces show. Each guest has its own patience (40
+  seconds, give or take a quarter): past halfway it taps its foot and
+  gives the side-eye, then it gives up and everyone behind steps up.
+- **Picking up**: a pinch closing on a guest lifts it. It hangs from the
+  fingers, legs kicking, turned to face the player. A guest in the line or
+  in a seat watches a free hand that comes close with wide eyes, so it is
+  plain they can be picked up.
+- **Expressions** (`guests/expressions.ts`), from the models' own face parts
+  (five pairs of eyes, five mouths, pupils that look about): startled when
+  picked up; wondering what is happening at arm's length, eyes sweeping
+  round; and, held up to the player's face (within 40 cm), a run of
+  feelings: curious, confused with its head on one side, searching left,
+  right and down, sad and drooping, sulking with its eyes screwed shut,
+  then won over and beaming; then round again.
+- **The seat glow** (`guests/seat-glow.ts`): while a guest is carried,
+  every free seat shows a small blue dot, and the seat it would land on
+  glows sky blue: a pad on the cushion, a halo, and a soft column of light
+  so it shows from the player's seat. Blue because nothing else in the
+  café is.
+- **Sitting**: let go over the glowing seat and the guest hops onto it:
+  pleased, then eating, then idle. Let go anywhere else and it hops back to
+  its place in the line (or its own seat). 23 seats are usable; the six on
+  the far side of the back row's four-seaters are inside the shell's
+  counter and are left out (`guests/paths.ts`).
+- **Leaving**: after a minute seated, a guest hops off its chair to the
+  nearest aisle and walks out of the door. Everyone who leaves, fed or fed
+  up, goes toward the front and marches off left or right at random along
+  one of three lanes on the table in front of the café, keeping a gap
+  behind the one ahead, and fades out at the end.
+- **Cost**: each pose's nine body parts are folded into one skinned mesh
+  whose bones are the parts themselves, hidden face parts are not drawn,
+  and the contact shadows are one instanced mesh, so a guest is about 8
+  draw calls, not 22.
 
 **The handles** (`src/systems/handle-system.ts`, `src/handles/handles.ts`):
 the café's grab pill and corner brackets, in the manner of a Horizon OS
@@ -88,14 +137,19 @@ missed frame shows as judder and smearing when the head moves).
   `node scripts/probe-perf.mjs` counts what a frame draws and times the
   parts of the look in the emulator.
 
-**The hands** (`src/hands/cafe-hand.ts`): the player's tracked hands use
-IWSDK's own hand mesh but the café's materials in place of the stock white
-outline: translucent warm cream with a faint inner glow that brightens as
-the fingers pinch, and a thin amber rim at the silhouette. Clear enough to
-see what is under a fingertip; bright enough to read over the dimmed room.
+**The hands** (`src/hands/cafe-hand.ts`): the player's tracked hands are
+soft plush hands in the café's warm cream, in place of the stock white
+outline. The mesh is IWSDK's own tracked hand; the look is all in the
+material, so it is code, not a modelled asset: matte and solid (a hand
+behind the door frame is hidden by it, a guest hangs from real-looking
+fingers), a fine felt grain, a soft velvet edge light, an amber glow at
+the thumb and forefinger tips as they pinch, and a wrist that fades out.
 
 **Holding the café directly** (`src/systems/hold-system.ts`; the numbers in
-`src/hold/hold.ts`), for anyone who reaches for the model itself: pinch anywhere on or just around the café (over its
+`src/hold/hold.ts`). This is switched off in play (`HoldSystem.directGrab`):
+with guests to pick up all over the café, a pinch that just misses one
+must not drag the whole café away, so the pill and brackets are the way to
+move it. Switched on, it works like this: pinch anywhere on or just around the café (over its
 garden, roof or fence, within 6 cm) and it follows the pinch: lift it,
 slide it along the table, set it down elsewhere. Pinch with both hands
 and the distance between them resizes it (between 0.3× and 2.5×), the
@@ -169,7 +223,8 @@ room has a desk-height table), from a running dev server:
   layout (4 checks) and screenshots.
 - `node scripts/check-mood.mjs`: the passthrough has dimmed around the
   head and the lamps are up, the café carries its lamps, halos, key light
-  and spill, and the renderer is set for the look (3 checks), with
+  and spill, the renderer is set for the look, and the frame budget holds
+  (4 checks), with
   screenshots of the seated view, the gate, the counter and a low look
   along the table.
 - `node scripts/check-handles.mjs`: the pill lies outside the edge facing
@@ -178,12 +233,34 @@ room has a desk-height table), from a running dev server:
   it in place and swinging it turns it, the bracket staying under the
   fingers; and the surface finder takes a couch or an unlabelled box and
   refuses the floor, a too-low, too-far or behind surface and a wall
-  (15 checks), with screenshots.
+  (16 checks), with screenshots.
 - `node scripts/check-hold.mjs`: one hand carries the café exactly with the
   pinch and leaves it where it is put down, a pinch away from it takes
   nothing, two hands resize it by their spread and turn it by their line
-  with the point between them kept, and the hold frame glows near and
-  held (12 checks), with screenshots of the café lifted and enlarged.
+  with the point between them kept (9 checks, with direct holding switched
+  on for the check), with screenshots of the café lifted and enlarged.
+- `node scripts/check-guests.mjs`: guests arrive and line up on their
+  spots, a mix of species, colours and outfits; each draws only what
+  shows; a guest who waits too long shows it, gives up, and the line steps
+  up; a leaver marches off along a lane in front and fades; never more than
+  ten on stage (8 checks), with screenshots.
+- `node scripts/check-seating.mjs`: a pinch picks a guest up and the café
+  stays put; carried, it hangs from the pinch and faces the player; the
+  seat under it glows and the other free seats show dots; let go there it
+  sits; let go elsewhere it hops back to the line; its time up, it hops
+  off, goes out of the door and marches away, its seat free (8 checks),
+  with screenshots.
+- `node scripts/check-expressions.mjs`: a guest watches a hand that comes
+  close; picked up it is startled, then wonders; up at the face it goes
+  through its feelings in order, each with its own face and lean; put back
+  its face is its own again (7 checks), with a close-up of each expression.
+- `node scripts/look-hands.mjs`: pictures of the hands, open, pinching and
+  close up. `node scripts/look-top.mjs`: a plan view of the café with a
+  grid, for laying out paths.
+- `npm run record:guests`: the whole story as the headset shows it (the
+  line forming, a guest picked up and brought to the face, seated on the
+  glowing seat, another giving up, the first leaving after its meal), to
+  `artifacts/guests.mp4`. Timers are shortened there so it fits one video.
 - `npm run record:handles`: the handles in use (the pill carrying the café,
   a corner pulled to grow and swung to turn it, the pill moving edge as the
   viewer moves round), as the headset shows it, to `artifacts/handles.mp4`.
@@ -197,17 +274,29 @@ room has a desk-height table), from a running dev server:
 
 ```
 src/
-  index.ts                   World, the café, hold, handle and mood systems, lighting, the hands
+  index.ts                   World, the systems (café, hold, handles, guests, mood, frame budget), lighting, the hands
   assets.ts                  the model manifest (the café's pieces first)
   cafe/layout.ts             the floor plan and the dressing (meals)
   cafe/materials.ts          the café's materials on the grey-box pieces
   systems/cafe-system.ts     building the café and placing it on the table
-  systems/hold-system.ts     pinching the café to move, resize and turn it
+  systems/hold-system.ts     reading the pinches; carrying, resizing and turning the café
+  systems/guest-system.ts    the guests: arriving, the line, carrying, sitting, leaving
+  systems/render-budget-system.ts  the resting shadow map, the refresh rate, the fps readout
+  cafe/static-batch.ts       the furniture merged into one mesh per material
+  guests/rules.ts            every number that paces the guests
+  guests/cast.ts             species, colours and outfits, at random
+  guests/actor.ts            one guest: its model, clips, face, materials, folded skin
+  guests/expressions.ts      how a held guest acts, and the face it makes at a hand
+  guests/paths.ts            the line, the aisles, the way out, the lanes in front
+  guests/walker.ts           following a path
+  guests/seats.ts            the usable seats and who is on them
+  guests/seat-glow.ts        the blue glow on the landing seat, the dots on free seats
+  guests/blobs.ts            the guests' contact shadows
   systems/handle-system.ts   the grab pill and corner brackets: placing and working them
   systems/mood-system.ts     the dusk, the lamps coming up, the lanterns' breath
   hold/hold.ts               the numbers behind holding the café
   handles/handles.ts         the pill and bracket shapes, and the numbers behind them
-  hands/cafe-hand.ts         the player's hands in the café's style
+  hands/cafe-hand.ts         the player's plush hands (a material on the tracked hand mesh)
   lighting.ts                the renderer and the fill light
   light/mood.ts              every number that tunes the look
   light/dimmer.ts            the passthrough dimmer

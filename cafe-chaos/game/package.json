@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "record": "node scripts/record-cafe.mjs",
     "record:hold": "node scripts/record-hold.mjs",
-    "record:handles": "node scripts/record-handles.mjs"
+    "record:handles": "node scripts/record-handles.mjs",
+    "record:guests": "node scripts/record-guests.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",

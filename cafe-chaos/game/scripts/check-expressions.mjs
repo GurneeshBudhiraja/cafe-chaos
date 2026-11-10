@@ -24,6 +24,8 @@ const check = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
 };
 const add = (a, b, k = 1) => a.map((v, i) => v + b[i] * k);
+/** Exactly one pair of eyes and one mouth are drawn. */
+const oneFace = (g) => g.parts.filter((p) => p.startsWith('Eyes')).length === 1 && g.parts.filter((p) => p.startsWith('Mouth')).length === 1;
 
 const h = await startHeadset({
   async prepare(h) {
@@ -109,7 +111,7 @@ const rest = await guestState(id);
   await frames(3);
   const gone = await guestState(id);
   const followed = near.pupils && moved.pupils && Math.hypot(near.pupils[0] - moved.pupils[0], near.pupils[1] - moved.pupils[1]) > 0.0003;
-  check('a guest in the line watches a hand that comes close', near.watching && near.eyes === 'EyesWide' && near.pupilsShown && followed && !gone.watching && gone.eyes !== 'EyesWide',
+  check('a guest in the line watches a hand that comes close', near.watching && near.eyes === 'EyesWide' && near.pupilsShown && followed && !gone.watching && !gone.parts.includes('EyesWide') && !gone.parts.includes('MouthO') && oneFace(gone),
     `${(Math.hypot(near.pinch[0] - near.grip[0], near.pinch[1] - near.grip[1], near.pinch[2] - near.grip[2]) * 100).toFixed(1)} cm away: watching ${near.watching} with ${near.eyes}/${near.mouth}, pupils followed the hand ${followed}; hand away: watching ${gone.watching}, ${gone.eyes}/${gone.mouth}`);
 }
 
@@ -191,7 +193,7 @@ await handTo('right', AWAY.right);
 await frames(3);
 {
   const back = await guestState(id);
-  check('put back, its face is its own again', back.state === 'queued' && back.mood === null && back.eyes !== 'EyesHappy' && Math.abs(back.roll) < 0.01 && Math.abs(back.pitch) < 0.01, `${back.state}, clip ${back.clip}, ${back.eyes}/${back.mouth}, lean ${back.roll.toFixed(2)}/${back.pitch.toFixed(2)}`);
+  check('put back, its face is its own again', back.state === 'queued' && back.mood === null && oneFace(back) && !back.parts.includes('EyesHappy') && !back.parts.includes('EyesWide') && !back.parts.includes('EyesCross') && Math.abs(back.roll) < 0.01 && Math.abs(back.pitch) < 0.01, `${back.state}, clip ${back.clip}, showing ${back.parts.join('+')}, lean ${back.roll.toFixed(2)}/${back.pitch.toFixed(2)}`);
 }
 
 const errors = await h.finish();
