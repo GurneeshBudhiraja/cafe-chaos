@@ -25,17 +25,19 @@ import { CafeSystem } from './systems/cafe-system.js';
 import { HandleSystem } from './systems/handle-system.js';
 import { HoldSystem } from './systems/hold-system.js';
 import { MoodSystem } from './systems/mood-system.js';
+import { RenderBudgetSystem } from './systems/render-budget-system.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(MoodSystem);
+  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(MoodSystem).registerSystem(RenderBudgetSystem);
   const system = world.getSystem(CafeSystem)!;
   const lights = setUpLighting(world, system.cafe);
   const mood = world.getSystem(MoodSystem)!;
   const hold = world.getSystem(HoldSystem)!;
   const handles = world.getSystem(HandleSystem)!;
+  const budget = world.getSystem(RenderBudgetSystem)!;
   mood.lights = lights;
   themeHands(world);
 
   // Dev only: lets the check and recording scripts find the world, the café, its lights, the mood, the hold, the handles and the surface finder.
-  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, findSurfaceSpot };
+  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, budget, findSurfaceSpot };
 });

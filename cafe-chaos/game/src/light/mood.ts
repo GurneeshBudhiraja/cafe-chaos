@@ -55,7 +55,11 @@ export const HOUSE = {
   shadowRadius: 3,
 };
 
-/** A lamp in the café (café space): a point light just below its paper, and a soft halo around it (halo 0: none). */
+/**
+ * A light in the café (café space): a point light, cut off beyond
+ * `distance`. Every light here is worked out for every lit pixel of the
+ * café, so there are as few as carry the look: five.
+ */
 export interface Lamp {
   position: readonly [number, number, number];
   color: number;
@@ -63,22 +67,41 @@ export interface Lamp {
   intensity: number;
   /** Metres: beyond this the light is cut off (keeps the fragment cost bounded on the headset). */
   distance: number;
-  /** The halo sprite's diameter in metres, and its opacity. */
-  halo: number;
-  haloOpacity: number;
+  /** Lanterns breathe (see BREATH); the others hold steady. */
+  breathes: boolean;
 }
 
-/** Where the shell's lamps are (from the model: `GateLamps` and `LanternPapers`). */
 export const LAMPS: Lamp[] = [
   // The two post lamps at the entrance, either side of the door frame: their pools reach out onto the table.
-  { position: [0.34, 0.078, -0.036], color: 0xffa858, intensity: 0.08, distance: 0.5, halo: 0.08, haloOpacity: 0.5 },
-  { position: [0.34, 0.078, 0.146], color: 0xffa858, intensity: 0.08, distance: 0.5, halo: 0.08, haloOpacity: 0.5 },
-  // The three paper lanterns under the eave over the counter.
-  { position: [-0.22, 0.124, -0.158], color: 0xffbe74, intensity: 0.11, distance: 0.5, halo: 0.11, haloOpacity: 0.45 },
-  { position: [0, 0.124, -0.158], color: 0xffbe74, intensity: 0.11, distance: 0.5, halo: 0.11, haloOpacity: 0.45 },
-  { position: [0.22, 0.124, -0.158], color: 0xffbe74, intensity: 0.11, distance: 0.5, halo: 0.11, haloOpacity: 0.45 },
+  { position: [0.34, 0.078, -0.036], color: 0xffa858, intensity: 0.08, distance: 0.5, breathes: false },
+  { position: [0.34, 0.078, 0.146], color: 0xffa858, intensity: 0.08, distance: 0.5, breathes: false },
+  // The paper lanterns under the eave over the counter: the outer two carry the light for all three.
+  { position: [-0.2, 0.124, -0.158], color: 0xffbe74, intensity: 0.14, distance: 0.5, breathes: true },
+  { position: [0.2, 0.124, -0.158], color: 0xffbe74, intensity: 0.14, distance: 0.5, breathes: true },
   // The room's own warmth: an unseen light high in the middle of the café, so the tables sit in a cosy wash.
-  { position: [0, 0.15, -0.03], color: 0xffc080, intensity: 0.1, distance: 0.6, halo: 0, haloOpacity: 0 },
+  { position: [0, 0.15, -0.05], color: 0xffc080, intensity: 0.13, distance: 0.6, breathes: false },
+];
+
+/**
+ * A halo: the soft glow drawn around a lamp's paper (a sprite, nearly
+ * free to draw). One per visible lamp of the shell (`GateLamps` and
+ * `LanternPapers` in the model), whether or not it has a light of its own.
+ */
+export interface Halo {
+  position: readonly [number, number, number];
+  color: number;
+  /** Diameter in metres, and opacity. */
+  size: number;
+  opacity: number;
+  breathes: boolean;
+}
+
+export const HALOS: Halo[] = [
+  { position: [0.34, 0.078, -0.036], color: 0xffa858, size: 0.08, opacity: 0.5, breathes: false },
+  { position: [0.34, 0.078, 0.146], color: 0xffa858, size: 0.08, opacity: 0.5, breathes: false },
+  { position: [-0.22, 0.124, -0.158], color: 0xffbe74, size: 0.11, opacity: 0.45, breathes: true },
+  { position: [0, 0.124, -0.158], color: 0xffbe74, size: 0.11, opacity: 0.45, breathes: true },
+  { position: [0.22, 0.124, -0.158], color: 0xffbe74, size: 0.11, opacity: 0.45, breathes: true },
 ];
 
 /** The glowing materials, set for the night: emissive strength, and a warmer paper colour where the day one reads white. */
@@ -94,4 +117,4 @@ export const SPILL_RADIUS = 0.85;
  * the lamps and the house light reach it, each falling off with distance,
  * so it has no edge of its own: the feather below is only a safety bound.
  */
-export const SPILL = { color: 0xffdcb4, strength: 0.45 };
+export const SPILL = { color: 0xffdcb4, strength: 0.62 };

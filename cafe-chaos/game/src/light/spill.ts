@@ -7,12 +7,13 @@
  * the house light their shadows lie on the real table. Nothing lights
  * the disc evenly, so it has no edge of its own.
  *
- * It is a standard material with the indirect light (ambient, fill and
- * environment) and the moon removed from its shader, so only the café's
- * own lamps show on it.
+ * It is a matte (Lambert) material, the cheapest that is lit per pixel:
+ * the disc covers a large part of the view, so its shader is kept light.
+ * The indirect light (ambient, fill and environment) and the moon are
+ * removed from its shader, so only the café's own lamps show on it.
  */
 
-import { CanvasTexture, CircleGeometry, Color, CustomBlending, Mesh, MeshStandardMaterial, OneFactor, ShaderChunk, SrcAlphaFactor, ZeroFactor } from '@iwsdk/core';
+import { CanvasTexture, CircleGeometry, Color, CustomBlending, Mesh, MeshLambertMaterial, OneFactor, ShaderChunk, SrcAlphaFactor, ZeroFactor } from '@iwsdk/core';
 import { SPILL, SPILL_RADIUS } from './mood.js';
 
 /** The line in three's lighting chunk that reads a directional light (the moon is the only one). */
@@ -39,10 +40,8 @@ function featherTexture(): CanvasTexture {
 }
 
 export function makeSpill(): Mesh {
-  const material = new MeshStandardMaterial({
+  const material = new MeshLambertMaterial({
     color: new Color(SPILL.color).multiplyScalar(SPILL.strength),
-    roughness: 1,
-    metalness: 0,
     transparent: true,
     // Add colour only, never alpha: the page's canvas is composited over the passthrough with
     // premultiplied alpha, so an ordinary additive blend would also cover the real table (and

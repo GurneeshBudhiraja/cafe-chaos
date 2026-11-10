@@ -8,14 +8,14 @@
 
 import { Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, Object3D, PointLight, SpotLight, type Material, type Sprite } from '@iwsdk/core';
 import { makeHalo } from './halo.js';
-import { GLOW, HOUSE, LAMPS, MOON } from './mood.js';
+import { GLOW, HALOS, HOUSE, LAMPS, MOON } from './mood.js';
 import { makeSpill } from './spill.js';
 
 export interface CafeLights {
   /** One per entry in LAMPS, in order. */
   lamps: PointLight[];
-  /** The halo of each lamp (undefined where a lamp has none), same order. */
-  halos: (Sprite | undefined)[];
+  /** One per entry in HALOS, in order. */
+  halos: Sprite[];
   /** The faint cool moon (no shadows). */
   moon: DirectionalLight;
   /** The warm house light over the counter: the one that casts shadows. */
@@ -27,22 +27,19 @@ export interface CafeLights {
 export function lightTheCafe(cafe: Group): CafeLights {
   brightenGlow(cafe);
   setShadowFlags(cafe);
-  const lamps: PointLight[] = [];
-  const halos: (Sprite | undefined)[] = [];
-  for (const lamp of LAMPS) {
+  const lamps = LAMPS.map((lamp) => {
     const light = new PointLight(lamp.color, lamp.intensity, lamp.distance, 2);
     light.position.set(...lamp.position);
     light.name = 'Lamp';
     cafe.add(light);
-    lamps.push(light);
-    let halo: Sprite | undefined;
-    if (lamp.halo > 0) {
-      halo = makeHalo(lamp.halo, lamp.color, lamp.haloOpacity);
-      halo.position.set(lamp.position[0], lamp.position[1] + 0.006, lamp.position[2]);
-      cafe.add(halo);
-    }
-    halos.push(halo);
-  }
+    return light;
+  });
+  const halos = HALOS.map((spec) => {
+    const halo = makeHalo(spec.size, spec.color, spec.opacity);
+    halo.position.set(spec.position[0], spec.position[1] + 0.006, spec.position[2]);
+    cafe.add(halo);
+    return halo;
+  });
   const moon = new DirectionalLight(MOON.color, MOON.intensity);
   moon.name = 'Moon';
   moon.position.set(...MOON.position);

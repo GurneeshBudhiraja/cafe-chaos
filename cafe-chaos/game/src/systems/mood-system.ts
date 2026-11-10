@@ -10,7 +10,7 @@
 import { createSystem, Vector3 } from '@iwsdk/core';
 import type { CafeLights } from '../light/cafe-lights.js';
 import { PassthroughDimmer } from '../light/dimmer.js';
-import { BREATH, DIM_FADE_SECONDS, DIM_LEVEL, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS } from '../light/mood.js';
+import { BREATH, DIM_FADE_SECONDS, DIM_LEVEL, HALOS, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS } from '../light/mood.js';
 import { CafeSystem } from './cafe-system.js';
 
 export class MoodSystem extends createSystem({}) {
@@ -65,13 +65,13 @@ export class MoodSystem extends createSystem({}) {
   private light(): void {
     if (!this.lights) return;
     const { lamps, halos } = this.lights;
+    // Each lantern breathes on its own phase; the gate lamps and the room light hold steady.
+    const breath = (breathes: boolean, phase: number): number => (breathes ? 1 + BREATH.depth * Math.sin(this.time * BREATH.rate * Math.PI * 2 + phase * 1.7) : 1);
     lamps.forEach((lamp, i) => {
-      const spec = LAMPS[i];
-      // Each lantern breathes on its own phase; the gate lamps and the room light hold steady.
-      const breath = spec.halo >= 0.1 ? 1 + BREATH.depth * Math.sin(this.time * BREATH.rate * Math.PI * 2 + i * 1.7) : 1;
-      lamp.intensity = spec.intensity * this.lampsUp * breath;
-      const halo = halos[i];
-      if (halo) halo.material.opacity = spec.haloOpacity * this.lampsUp * breath;
+      lamp.intensity = LAMPS[i].intensity * this.lampsUp * breath(LAMPS[i].breathes, i);
+    });
+    halos.forEach((halo, i) => {
+      halo.material.opacity = HALOS[i].opacity * this.lampsUp * breath(HALOS[i].breathes, i);
     });
   }
 }

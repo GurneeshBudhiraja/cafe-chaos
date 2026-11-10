@@ -24,6 +24,7 @@ import { AssetManager, createSystem, Euler, Group, Quaternion, Vector3, XRPlane 
 import type { ModelName } from '../assets.js';
 import { DRESSING, FLOOR_TOP_M, OPENING_LAYOUT, type Placement } from '../cafe/layout.js';
 import { dressGreyBox } from '../cafe/materials.js';
+import { batchStatic, type BatchReport } from '../cafe/static-batch.js';
 import { findSurfaceSpot, type DetectedSurface } from '../lib/desk-placement.js';
 
 /**
@@ -57,6 +58,8 @@ export class CafeSystem extends createSystem({
   readonly pieces: Object3D[] = [];
   /** Every seat anchor in the café (`Seat-N` nodes), for the game to come. */
   readonly seats: Object3D[] = [];
+  /** What the static batch folded together (see cafe/static-batch.ts). */
+  batch: BatchReport = { merged: 0, batches: 0 };
   placed = false;
   onDesk = false;
   /** Set once the player has moved the café themselves: it is theirs to place from then on. */
@@ -90,6 +93,8 @@ export class CafeSystem extends createSystem({
     this.cafe.traverse((node) => {
       if (/^Seat-\d+$/.test(node.name)) this.seats.push(node);
     });
+    // The furniture stands still inside the café: draw it as one mesh per material.
+    this.batch = batchStatic(this.cafe);
     this.world.createTransformEntity(this.cafe);
     this.showPreview();
   }

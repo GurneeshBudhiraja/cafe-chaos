@@ -6,7 +6,9 @@
  * 2. the café carries its lamps (point lights with halos), the shadow-
  *    casting house light and the light spill on the table;
  * 3. the renderer is set up for the look (filmic tone mapping, soft shadow
- *    maps), with no console errors.
+ *    maps), with no console errors;
+ * 4. the frame budget holds: the furniture is batched and the shadow map
+ *    is only redrawn when the café moves.
  * Then saves headset-view screenshots: seated, the gate lamps and their
  * spill, the lanterns over the counter, and a low look along the table.
  *
@@ -60,8 +62,30 @@ const state = await page.evaluate(() => {
   };
 });
 check('the passthrough has dimmed around the head and the lamps are up', state.dim >= 0.3 && state.domeVisible && state.domeOffset < 0.01 && state.lampsUp === 1 && state.lit, `level ${state.dim}, dome ${state.domeOffset} m from the head, lamps up ${state.lampsUp}, all lit ${state.lit}`);
-check('the café carries its lamps, house light and spill', state.lamps === 6 && state.halos === 5 && state.houseShadow && state.spill, `${state.lamps} lamps, ${state.halos} halos, house light shadows ${state.houseShadow}, spill ${state.spill}`);
-check('the renderer is set for the look', state.shadowMap && state.toneMapping === 4 && state.envIntensity < 0.8 && state.casters > 30, `shadow maps ${state.shadowMap}, tone mapping ${state.toneMapping} (4 = ACES), environment ${state.envIntensity}, ${state.casters} shadow casters`);
+check('the café carries its lamps, house light and spill', state.lamps === 5 && state.halos === 5 && state.houseShadow && state.spill, `${state.lamps} lamps, ${state.halos} halos, house light shadows ${state.houseShadow}, spill ${state.spill}`);
+check('the renderer is set for the look', state.shadowMap && state.toneMapping === 4 && state.envIntensity < 0.8 && state.casters > 20, `shadow maps ${state.shadowMap}, tone mapping ${state.toneMapping} (4 = ACES), environment ${state.envIntensity}, ${state.casters} shadow casters`);
+
+// The frame budget: the furniture is batched, and with the café still the shadow map is not redrawn.
+{
+  const still = await page.evaluate(async () => {
+    const { world, system, budget } = window.__cafe;
+    const frame = () => world.renderer.info.render.frame;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const wait = async (n) => { const f = frame(); while (frame() < f + n) await sleep(8); };
+    await wait(5);
+    const before = budget.shadowDraws;
+    await wait(4);
+    const idle = budget.shadowDraws - before;
+    // Nudge the café: the map must follow.
+    system.cafe.position.x += 0.01;
+    await wait(3);
+    const moved = budget.shadowDraws - before - idle;
+    system.cafe.position.x -= 0.01;
+    await wait(5);
+    return { idle, moved, batch: system.batch, calls: world.renderer.info.render.calls };
+  });
+  check('the furniture is batched and the shadow map rests while the café is still', still.batch.merged > 40 && still.batch.batches < 15 && still.idle === 0 && still.moved > 0, `${still.batch.merged} meshes in ${still.batch.batches} batches, ${still.calls} draw calls a frame (both eyes), shadow redraws: ${still.idle} still, ${still.moved} after a move`);
+}
 
 await h.head(SEAT, { x: LOOK.x, y: LOOK.y + 0.1, z: LOOK.z }, 400);
 await h.pause(300);

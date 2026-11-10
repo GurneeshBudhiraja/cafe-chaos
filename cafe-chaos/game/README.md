@@ -65,6 +65,29 @@ limits and brightness are the constants at the top of
 Pinches near a handle are kept from the café's own grab, so a handle
 always wins where they overlap.
 
+**The frame budget** (`src/systems/render-budget-system.ts`,
+`src/cafe/static-batch.ts`): what keeps the café smooth on the headset (a
+missed frame shows as judder and smearing when the head moves).
+
+- **One mesh per material.** The furniture never moves inside the café, so
+  every opaque mesh sharing a material is merged at start-up: about 90
+  meshes become about ten, and a frame is roughly 65 draw calls instead of
+  200. The originals stay, hidden, for their anchors. Anything that moves on
+  its own is marked `userData.dynamic` and left out.
+- **The shadow map rests.** The house light and its shadow casters stand
+  still inside the café, so the map is redrawn only when the café is moved,
+  turned or resized (or when something calls `touchShadows()`), not every
+  frame.
+- **Five lights, not seven.** Every light is worked out for every lit pixel:
+  the centre lantern's light is carried by its neighbours and the room
+  light (its paper and halo still glow).
+- **A matte spill.** The disc on the table covers much of the view, so it
+  uses the cheapest lit material.
+- **A steady 72 Hz** is asked of the headset where it offers a choice.
+- Add `?fps` to the address for a frames-per-second readout over the café.
+  `node scripts/probe-perf.mjs` counts what a frame draws and times the
+  parts of the look in the emulator.
+
 **The hands** (`src/hands/cafe-hand.ts`): the player's tracked hands use
 IWSDK's own hand mesh but the café's materials in place of the stock white
 outline: translucent warm cream with a faint inner glow that brightens as
