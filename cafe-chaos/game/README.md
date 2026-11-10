@@ -10,14 +10,15 @@ were sized are in [`../START-HERE.md`](../START-HERE.md).
 As soon as the session starts, the café appears on the table in front of
 the player, below the gaze so it is looked down on, the room dims to dusk
 around it, and its lamps come up: a lo-fi night at the café, its light
-spilling out over the real table. Guests walk up and line up outside the
+spilling out over the real table. Six baristas work behind the counter
+and carry trays out to the tables, steam rises over the kettle and
+blossom falls from the cherry tree. Guests walk up and line up outside the
 door; the player pinches one up, carries it over the café and lets go
 over the seat that glows blue; after its meal the guest hops down and
 leaves. Like a Horizon OS window, the café has a grab pill on the side
 facing the player (pinch and drag to move it) and a bracket at each
 corner (pinch and pull to resize, swing to turn), always visible, in the
-café's own style. The player's hands are soft plush hands in the same
-warm cream.
+café's own style. The player's hands are the café's own cream hands.
 
 **The café** (`src/systems/cafe-system.ts`):
 
@@ -26,8 +27,10 @@ warm cream.
   waiting bench by the gate, the opening layout's ten tables (three
   four-seaters and two two-seaters in the back row, five two-seaters in
   the front row), a two-stool bar along the left wall, the quiet armchair
-  corner at the back right, and meals already out on eight tables
-  (`src/cafe/layout.ts`). The grey-box pieces are dressed in the café's
+  corner at the back right (`src/cafe/layout.ts`). The shell is the dressed-counter
+  version: a walnut service bar with a duckboard behind it for the
+  baristas, a back bar, a chalk menu board, and the Meta mark cut into a
+  garden stone. The grey-box pieces are dressed in the café's
   own walnut, indigo and ceramic at load (`src/cafe/materials.ts`); the
   models themselves are untouched.
 - **Placement**: the nearest detected flat surface in front of the player
@@ -91,6 +94,39 @@ snack-spirit cast from `public/models/guest-*.glb`.
   and the contact shadows are one instanced mesh, so a guest is about 8
   draw calls, not 22.
 
+**The baristas** (`src/systems/barista-system.ts`, `src/baristas/`): six
+blocky, pixel-skinned looks on one rig (`public/models/barista-*.glb`).
+While the café is being tested all six are on the staff at once; the
+game will later unlock them one by one and hand them real orders.
+
+- **Behind the counter** each has a station on the duckboard. There it
+  works, hands busy over the bar, and every few seconds does something
+  else for a moment: shuffles a step along the bar, turns to the back bar
+  for the kettle or the tins, looks about, or waves when a guest joins
+  the line.
+- **Serving**: every few seconds one, picked at random, takes a tray (tea
+  with dango, or a latte with dorayaki), slips along the lane behind the
+  others, comes round the counter's right-hand end and down between the
+  two back tables, and carries it to a table picked at random (likelier
+  one with a guest at it). It serves with a lean, leaves the tray on the
+  table top, bows, and walks back. Never more than three are out at once.
+  A tray is cleared from its table after about half a minute.
+- The tables start bare: the food arrives by tray.
+- **Cost**: a barista's seven boxes are folded into one skinned mesh, so
+  each is one draw call; the trays share the shell's bar-palette material.
+- The pace is in `baristas/rules.ts`, the stations and routes in
+  `baristas/routes.ts`.
+
+**The ambience** (`src/systems/ambience-system.ts`, `src/ambience/`):
+
+- **Steam**: the shell's own two-second `Ambient` clip, in which six puffs
+  over the kettle, the pour-over and the espresso machine rise, swell and
+  thin away, plays on the shell all the time.
+- **Blossom**: 34 petals drift down from the cherry tree, rocking and
+  spinning, carried over the café by a light breeze, and start again from
+  the top when they settle (on the roof, the plate or the table). They
+  are three instanced meshes, so three draw calls.
+
 **The handles** (`src/systems/handle-system.ts`, `src/handles/handles.ts`):
 the café's grab pill and corner brackets, in the manner of a Horizon OS
 window but always visible and in the café's paper-lantern cream with an
@@ -138,12 +174,17 @@ missed frame shows as judder and smearing when the head moves).
   parts of the look in the emulator.
 
 **The hands** (`src/hands/cafe-hand.ts`): the player's tracked hands are
-soft plush hands in the café's warm cream, in place of the stock white
-outline. The mesh is IWSDK's own tracked hand; the look is all in the
-material, so it is code, not a modelled asset: matte and solid (a hand
-behind the door frame is hidden by it, a guest hangs from real-looking
-fingers), a fine felt grain, a soft velvet edge light, an amber glow at
-the thumb and forefinger tips as they pinch, and a wrist that fades out.
+the café's own minimal cream hands (`public/models/cafe-hand-left.glb` and
+`-right.glb`, from `../models/20-hands/`), in place of the stock white
+outline: soft tapered finger segments with ball joints, a plain rounded
+palm and a thin sage cuff. Each segment is a node named after a WebXR
+hand joint, so IWSDK's hand visual poses them straight from the headset's
+joints. In code, the 21 cream segments are folded into one skinned mesh
+(two draw calls a hand with the cuff, not 22); the hands are solid, so
+they hide and are hidden by the café and the guests as real hands would;
+the cream is warmed a little and has a warm light of its own, so it does
+not go grey in the night's blue fill; and the tips of the thumb and
+forefinger glow amber as they pinch.
 
 **Holding the café directly** (`src/systems/hold-system.ts`; the numbers in
 `src/hold/hold.ts`). This is switched off in play (`HoldSystem.directGrab`):
@@ -254,6 +295,11 @@ room has a desk-height table), from a running dev server:
   close; picked up it is startled, then wonders; up at the face it goes
   through its feelings in order, each with its own face and lean; put back
   its face is its own again (7 checks), with a close-up of each expression.
+- `node scripts/check-baristas.mjs`: all six baristas are at their
+  stations, each one draw call; they keep busy behind the counter; one
+  takes a tray out, serves, bows and walks back, the tray left on the
+  table top; they take turns, never more than three out; trays are
+  cleared; steam rises and blossom falls (10 checks), with screenshots.
 - `node scripts/look-hands.mjs`: pictures of the hands, open, pinching and
   close up. `node scripts/look-top.mjs`: a plan view of the café with a
   grid, for laying out paths.
@@ -274,7 +320,7 @@ room has a desk-height table), from a running dev server:
 
 ```
 src/
-  index.ts                   World, the systems (café, hold, handles, guests, mood, frame budget), lighting, the hands
+  index.ts                   World, the systems (café, hold, handles, guests, baristas, ambience, mood, frame budget), lighting, the hands
   assets.ts                  the model manifest (the café's pieces first)
   cafe/layout.ts             the floor plan and the dressing (meals)
   cafe/materials.ts          the café's materials on the grey-box pieces
@@ -283,6 +329,13 @@ src/
   systems/guest-system.ts    the guests: arriving, the line, carrying, sitting, leaving
   systems/render-budget-system.ts  the resting shadow map, the refresh rate, the fps readout
   cafe/static-batch.ts       the furniture merged into one mesh per material
+  systems/barista-system.ts  the staff: working the bar, carrying trays out, serving, coming back
+  systems/ambience-system.ts the steam clip and the falling blossom
+  baristas/barista.ts        one barista: its model, clips and tray
+  baristas/routes.ts         the stations, the way round the counter, where to stand at each table
+  baristas/rules.ts          every number that paces the staff
+  ambience/petals.ts         the petals' fall, as instanced meshes
+  lib/fold-parts.ts          folding a character's rigid parts into one skinned mesh
   guests/rules.ts            every number that paces the guests
   guests/cast.ts             species, colours and outfits, at random
   guests/actor.ts            one guest: its model, clips, face, materials, folded skin
@@ -296,7 +349,7 @@ src/
   systems/mood-system.ts     the dusk, the lamps coming up, the lanterns' breath
   hold/hold.ts               the numbers behind holding the café
   handles/handles.ts         the pill and bracket shapes, and the numbers behind them
-  hands/cafe-hand.ts         the player's plush hands (a material on the tracked hand mesh)
+  hands/cafe-hand.ts         the player's hands: the cream hand models, posed by the headset's joints
   lighting.ts                the renderer and the fill light
   light/mood.ts              every number that tunes the look
   light/dimmer.ts            the passthrough dimmer

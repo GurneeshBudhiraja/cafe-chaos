@@ -1,14 +1,17 @@
 /**
- * The guests, recorded as the headset shows it (Quest 3 field of view,
- * no captions): the viewer sits at the table and the café pops up;
- * guests of all three kinds walk up and line up outside the door; the
- * viewer leans over for a look at the line; a hand comes close and a
- * guest watches it, is pinched up, startled, and brought up to the
- * viewer's face, where it goes through its feelings from curious to won
- * over; it is carried over the café, the seat under it glowing blue, and
- * let go to sit down; a second guest is seated; someone in the line
- * loses patience and marches off along the front; and the first guest,
- * its meal over, hops off its chair, walks out of the door and away.
+ * The café alive, recorded as the headset shows it (Quest 3 field of
+ * view, no captions): the viewer sits at the table and the café pops up,
+ * blossom falling from the tree; a lean in to the counter, where the
+ * baristas are at work under the rising steam and the first of them
+ * sets off with a tray; guests of all three kinds walk up and line up
+ * outside the door, and the viewer leans over for a look at the line; a
+ * hand comes close and a guest watches it, is pinched up, startled, and
+ * brought up to the viewer's face, where it goes through its feelings
+ * from curious to won over; it is carried over the café, the seat under
+ * it glowing blue, and let go to sit down; a second guest is seated;
+ * someone in the line loses patience and marches off along the front;
+ * and the first guest, its meal over, hops off its chair, walks out of
+ * the door and away, while the baristas go on serving the tables.
  *
  * So the whole story fits in one video, guests give up after about half
  * a minute in the line here and stay seated for half a minute (in play:
@@ -108,10 +111,15 @@ const HANG = 0.042 + 0.03;
 // 1. Seated; the café pops up, the room dims, the lamps come up; the first guests are on their way.
 await pause(4200);
 
+// 1b. A lean in to the counter: the baristas at work, the steam, and the first tray setting off.
+await h.head(P(await toWorld([-0.02, 0.27, 0.2])), P(await toWorld([-0.08, 0.08, -0.17])), 2200);
+await until(() => window.__cafe.baristas.staff.some((m) => m.state === 'out' && m.barista.root.position.x > 0.1));
+await pause(2600);
+
 // 2. Lean right over for a close look at the line as it forms outside the door.
 const lineView = await toWorld([0.66, 0.17, 0.33]);
 const lineAt = await toWorld([0.56, 0.04, 0.03]);
-await h.head(P(lineView), P(lineAt), 2600);
+await h.head(P(lineView), P(lineAt), 2400);
 await until(() => window.__cafe.guests.line.filter((g) => g.state === 'queued' && !g.walk).length >= 3);
 await pause(2000);
 
@@ -196,7 +204,7 @@ await pause(2500);
 
 const stats = await page.evaluate(() => {
   const { guests } = window.__cafe;
-  return { arrived: guests.arrived, seated: guests.seated, gaveUp: guests.gaveUp, left: guests.left, peak: guests.peak };
+  return { arrived: guests.arrived, seated: guests.seated, gaveUp: guests.gaveUp, left: guests.left, peak: guests.peak, traysServed: window.__cafe.baristas.servedCount };
 });
 const errors = await h.finish();
 console.log(JSON.stringify(stats));

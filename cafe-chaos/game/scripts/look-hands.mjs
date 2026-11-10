@@ -1,5 +1,5 @@
 /**
- * A look at the hands: open over the café, pinching, and from close.
+ * A look at the hands (the café's cream hand models): open over the café, pinching, and from close.
  * Usage: dev server running, then `node scripts/look-hands.mjs`.
  * Output: artifacts/hands-*.png.
  */

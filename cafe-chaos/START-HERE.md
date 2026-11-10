@@ -46,7 +46,7 @@ It is hands only and seated, built with IWSDK (WebXR) for the Quest 3/3S and Met
 | 18 | `barista-sora`, `-momo`, `-yuki`, `-ren`, `-hana`, `-kenji` | **Final art:** six blocky pixel-skinned barista looks on one rig (7.4 cm, 7 clips incl. Walk/Carry/Serve); stand on the shell's `BaristaSpot-1/2`; unlockable |
 | 19 | `petals` | **Final art:** sakura petal meshes (two petals, one blossom) for falling petals; the fall is code, see its INTEGRATION.md |
 | 21 | `tray-tea`, `tray-coffee` | **Final art:** serving trays with orders on them; parent to a barista's `Tray` empty for `Carry`/`Serve` |
-| 20 | `cafe-hand`, `cafe-tips` | **Candidates:** themed hand-tracking hands (a mochi mitten, or pinch-finger caps); design not final |
+| 20 | `cafe-hand-left`, `cafe-hand-right` | **Final art:** minimal matte cream hands for hand tracking, 25 joint-named rigid segments each, no skinning; see its INTEGRATION.md for the IWSDK hook |
 
 The **second janitor** unlock reuses `janitor`. The **rating meter**, end-of-shift card and other panels are UI (UIKitML), not models.
 

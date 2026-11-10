@@ -12,7 +12,7 @@
  * The café has a grab pill on the side facing the player (pinch and
  * drag to move it) and a bracket at each corner (pinch and pull to
  * resize, swing to turn), as a Horizon OS window does. The player's
- * hands are soft plush hands in the same warm cream.
+ * hands are the café's own cream hands.
  *
  * `virtual:iwsdk-project` (from iwsdk.config.json) brings the scene, the
  * model manifest, components and XR features (AR with hand tracking and
