@@ -2,8 +2,7 @@
  * The café alive, recorded as the headset shows it (Quest 3 field of
  * view, no captions): the viewer sits at the table and the café pops up,
  * blossom falling from the tree; a lean in to the counter, where the
- * baristas are at work under the rising steam and the first of them
- * sets off with a tray; guests of all three kinds walk up and line up
+ * servers are at work under the rising steam; guests of all three kinds walk up and line up
  * outside the door, and the viewer leans over for a look at the line; a
  * hand comes close and a guest watches it, is pinched up, startled, and
  * brought up to the viewer's face, where it goes through its feelings
@@ -115,10 +114,9 @@ const HANG = 0.042 + 0.03;
 // 1. Seated; the café pops up, the room dims, the lamps come up; the first guests are on their way.
 await pause(4200);
 
-// 1b. A lean in to the counter: the baristas at work, the steam, and the first tray setting off.
+// 1b. A lean in to the counter: the servers at work behind it, under the steam.
 await h.head(P(await toWorld([-0.02, 0.27, 0.2])), P(await toWorld([-0.08, 0.08, -0.17])), 2200);
-await until(() => window.__cafe.baristas.staff.some((m) => m.state === 'out' && m.barista.root.position.x > 0.1));
-await pause(2600);
+await pause(3600);
 
 // 2. Lean right over for a close look at the line as it forms outside the door.
 const lineView = await toWorld([0.66, 0.17, 0.33]);
@@ -226,7 +224,7 @@ function addTheme(video) {
   const mixed = video.replace(/\.mp4$/, '.music.mp4');
   execFileSync('ffmpeg', [
     '-y', '-loglevel', 'error', '-i', video, '-stream_loop', '-1', '-i', 'public/audio/theme.mp3',
-    '-filter_complex', `[1:a]volume=0.37,afade=t=in:d=4,afade=t=out:st=${(seconds - 2.5).toFixed(2)}:d=2.5[a]`,
+    '-filter_complex', `[1:a]volume=0.1,afade=t=in:d=4,afade=t=out:st=${(seconds - 2.5).toFixed(2)}:d=2.5[a]`,
     '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-t', seconds.toFixed(2), '-movflags', '+faststart', mixed,
   ]);
   renameSync(mixed, video);

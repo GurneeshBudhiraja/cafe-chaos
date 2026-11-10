@@ -7,25 +7,33 @@
  *   outfit. They fade in as they walk up to the back of the line.
  * - The line: single file outside the door, its head on the deck. When
  *   someone leaves the line, everyone behind steps up a place.
- * - Waiting: each guest in the line has its own patience. Past the
- *   halfway mark it shows (foot tapping, side-eye); when it runs out the
- *   guest gives up.
+ * - Waiting: each guest in the line has its own patience, shown by a
+ *   little dial over its head (guests/patience-dial.ts). Past the
+ *   halfway mark it shows in the guest too (foot tapping, side-eye);
+ *   when it runs out the guest gives up.
+ * - In the hand a guest from the line is still waiting: its dial keeps
+ *   running, and if its patience runs out there it fades away from the
+ *   hand.
  * - Picking up: a pinch closing on a guest lifts it. It hangs from the
  *   fingers, kicking, turned to face the player, and acts out how it
  *   feels (guests/expressions.ts): startled, then wondering what is
- *   happening, and, held up to the player's face, a run of feelings from
- *   curious to sad to won over. The seat it would land on glows violet
+ *   happening, and, held up to the player's face, curious, confused,
+ *   looking for a way out and worried, by turns. The seat it would land on glows violet
  *   (guests/seat-glow.ts); letting go over that seat sits it down,
  *   letting go anywhere else sends it back where it came from.
  * - Watching: a guest on its feet or in a seat follows a hand that comes
  *   close with wide eyes, so it is plain they can be picked up.
- * - Sitting: happy at first, then eating, then idle; after a minute it
+ * - Sitting: happy at first, then waiting for its order (the servers
+ *   bring it: systems/barista-system.ts), eating once served, then idle; after a minute it
  *   hops off its chair and leaves.
- * - Leaving: every guest who leaves goes out of the door, down the deck
- *   at the side and along the garden path at the front of the plate, and
- *   fades out as it reaches the path's end, never stepping off the
- *   platform. Nobody is told the way: each finds it on the navigation
- *   grid (nav/nav-grid.ts), which is read from the café's geometry.
+ * - Giving up: a guest whose patience runs out turns round and walks
+ *   back the way it came, beside the line, and fades out.
+ * - Leaving: a guest who has eaten comes out of the room's front
+ *   opening, by the Meta stone, and turns left or right along the garden
+ *   path (the quieter side, a coin toss when level), fading out at that
+ *   end, never stepping off the platform. Nobody is told the way: each
+ *   finds it on the navigation grid (nav/nav-grid.ts), which is read
+ *   from the café's geometry.
  *
  * Guests are children of the café group, so they move, turn and scale
  * with it.
@@ -36,12 +44,13 @@ import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/ac
 import { Blobs } from '../guests/blobs.js';
 import { randomLook, type Look } from '../guests/cast.js';
 import { HeldAct, watchingFace } from '../guests/expressions.js';
-import { ARRIVAL_POINT, EXIT_ENDS, FRONT_PATH_Z, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
+import { ARRIVAL_POINT, EXIT_ENDS, FRONT_OPENING, FRONT_PATH_Z, pathBack, QUEUE_SPOTS, QUEUE_YAW, type Side } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
-  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, SEAT_REACH_M, SEATED_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, WATCH_RADIUS_M,
+  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, SEAT_REACH_M, SEATED_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
 } from '../guests/rules.js';
 import { SeatGlow } from '../guests/seat-glow.js';
+import { DIAL, PatienceDial } from '../guests/patience-dial.js';
 import { collectSeats, LANDING_REACH_M, seatUnder, type Seat } from '../guests/seats.js';
 import { Walk, yawDelta } from '../guests/walker.js';
 import { CafeSystem } from './cafe-system.js';
@@ -53,8 +62,10 @@ import { HoldSystem } from './hold-system.js';
  * arriving: walking up to the line. queued: in the line. held: in the
  * player's fingers. hop: in the air between two places (onto a seat,
  * back to the line, off a seat). seated. leaving: on the way out.
+ * vanishing: its patience ran out in the player's hand, and it is
+ * fading away there.
  */
-export type GuestState = 'arriving' | 'queued' | 'held' | 'hop' | 'seated' | 'leaving';
+export type GuestState = 'arriving' | 'queued' | 'held' | 'hop' | 'seated' | 'leaving' | 'vanishing';
 
 /** A short jump from one place to another, and what happens on landing. */
 interface Hop {
@@ -80,10 +91,12 @@ export interface Guest {
   /** The way it faces, and the way it should (yaw about +Y, café space). */
   yaw: number;
   targetYaw: number;
-  /** Seconds of patience left in the line, and what it started with. */
+  /** Seconds of patience left in the line, and what it started with; and the dial over its head that shows it. */
   patience: number;
   patienceFull: number;
-  /** Leaving: which end of the front path it is making for. */
+  dial: PatienceDial;
+  /** Leaving by the front: which end of the path it is making for, and which spot there (null and -1 for one walking back from the line). */
+  side: Side | null;
   lane: number;
   /** The ground under it (café space), for its blob. */
   ground: number;
@@ -94,6 +107,10 @@ export interface Guest {
   /** Seated: its seat, and for how long (seconds). */
   seat: Seat | null;
   seatedFor: number;
+  /** True once a server has brought its order (it eats from then on). */
+  served: boolean;
+  /** Vanishing: how long it has been fading (seconds). */
+  vanishing: number;
   hop: Hop | null;
   /** Held: its performance; and the lean of its body (radians), eased. */
   act: HeldAct | null;
@@ -106,6 +123,9 @@ export interface Guest {
 /** A step down or up of more than this is hopped, not walked (metres). */
 const HOP_STEP_M = 0.01;
 const HOP_HEIGHT_M = 0.014;
+
+/** Was this guest taken from the line (and so is still waiting to be seated)? */
+const fromLine = (guest: Guest): boolean => !!guest.home && 'line' in guest.home;
 
 export class GuestSystem extends createSystem({}) {
   /** Everyone on stage. */
@@ -134,7 +154,8 @@ export class GuestSystem extends createSystem({}) {
   private placement = -1;
   private nextSpawnIn = FIRST_SPAWN_SECONDS;
   private lastLook: Look | undefined;
-  private nextLane = 0;
+  private readonly nextLane: Record<Side, number> = { left: 0, right: 0 };
+  private lastSides: [Side | null, Side | null] = [null, null];
   private holdSystem: HoldSystem | undefined;
   private handles: HandleSystem | undefined;
   private readonly pinched: Record<Hand, boolean> = { left: false, right: false };
@@ -150,7 +171,7 @@ export class GuestSystem extends createSystem({}) {
     this.handles = this.world.getSystem(HandleSystem);
     const cafe = this.cafeSystem.cafe;
     cafe.add(this.blobs.mesh);
-    this.seats = collectSeats(cafe, this.cafeSystem.seats, this.cafeSystem.nav);
+    this.seats = collectSeats(cafe, this.cafeSystem.seats, this.cafeSystem.nav, this.cafeSystem.pieces);
     this.glow = new SeatGlow(cafe, this.seats.length);
     // A pinch on or just around a guest is the guests' business, never the café's.
     this.holdSystem?.claims.push((point) => this.nearestGuest(point, CLAIM_RADII) !== null);
@@ -173,10 +194,12 @@ export class GuestSystem extends createSystem({}) {
     this.blobs.begin();
     for (const guest of [...this.guests]) {
       if (guest.state === 'queued') this.wait(guest, delta);
+      if (guest.state === 'held') this.waitInHand(guest, delta);
+      if (guest.state === 'vanishing') this.vanish(guest, delta);
       if (guest.state === 'seated') this.sitting(guest, delta);
       if (guest.state === 'queued' || guest.state === 'seated') this.watch(guest);
       if (guest.state === 'hop') this.hopping(guest, delta);
-      else if (guest.state !== 'held') this.step(guest, delta);
+      else if (guest.state !== 'held' && guest.state !== 'vanishing') this.step(guest, delta);
       this.show(guest, delta);
     }
     this.blobs.end();
@@ -186,7 +209,10 @@ export class GuestSystem extends createSystem({}) {
 
   /** Take every guest away (a new session, or the café placed afresh). */
   clear(): void {
-    for (const guest of this.guests) guest.actor.dispose();
+    for (const guest of this.guests) {
+      guest.dial.dispose();
+      guest.actor.dispose();
+    }
     this.guests.length = 0;
     this.line.length = 0;
     for (const seat of this.seats) seat.occupant = 0;
@@ -201,7 +227,7 @@ export class GuestSystem extends createSystem({}) {
     this.nextSpawnIn -= delta;
     if (this.nextSpawnIn > 0) return;
     // A guest lifted out of the line keeps its place: it may be put back.
-    const awayFromLine = this.guests.filter((g) => (g.state === 'held' || g.state === 'hop') && g.home && 'line' in g.home).length;
+    const awayFromLine = this.guests.filter((g) => (g.state === 'held' || g.state === 'hop') && fromLine(g)).length;
     if (!this.arrivals || this.guests.length >= MAX_GUESTS || this.line.length + awayFromLine >= MAX_QUEUE) {
       // No room just now: look again shortly.
       this.nextSpawnIn = 0.5;
@@ -229,6 +255,9 @@ export class GuestSystem extends createSystem({}) {
     actor.setOpacity(0);
     this.cafeSystem.cafe.add(actor.root);
     const patience = this.patienceSeconds * (1 + (Math.random() * 2 - 1) * PATIENCE_SPREAD);
+    const dial = new PatienceDial();
+    dial.sprite.position.set(0, actor.bubbleAnchor.position.y + DIAL.above, 0);
+    actor.root.add(dial.sprite);
     const guest: Guest = {
       id: this.arrived,
       actor,
@@ -240,13 +269,17 @@ export class GuestSystem extends createSystem({}) {
       targetYaw: -Math.PI / 2,
       patience,
       patienceFull: patience,
-      lane: 0,
+      dial,
+      side: null,
+      lane: -1,
       ground: ARRIVAL_POINT.y,
       hand: null,
       home: null,
       target: null,
       seat: null,
       seatedFor: 0,
+      served: false,
+      vanishing: 0,
       hop: null,
       act: null,
       roll: 0,
@@ -285,27 +318,79 @@ export class GuestSystem extends createSystem({}) {
     guest.actor.play(impatient ? 'Impatient' : 'Idle');
   }
 
-  /** Out of the line and away (given up). */
+  /**
+   * A guest picked up out of the line is still waiting: its patience
+   * keeps running down in the player's hand (its dial still showing), and
+   * if it runs out there, the guest fades away from the hand.
+   */
+  private waitInHand(guest: Guest, delta: number): void {
+    if (!fromLine(guest)) return;
+    guest.patience -= delta;
+    if (guest.patience > 0) return;
+    this.gaveUp++;
+    guest.state = 'vanishing';
+    guest.vanishing = 0;
+    guest.target = null;
+    guest.act = null;
+    guest.actor.setFace(null);
+  }
+
+  /** Fading away where it is (in the hand, if the hand still holds it); gone when the fade ends. */
+  private vanish(guest: Guest, delta: number): void {
+    guest.vanishing += delta;
+    if (guest.vanishing < VANISH_SECONDS) return;
+    this.remove(guest);
+    this.left++;
+  }
+
+  /** Out of the line (given up): it turns round and walks back the way it came, beside the line. */
   private leaveFromLine(guest: Guest): void {
     this.line.splice(this.line.indexOf(guest), 1);
     guest.spot = -1;
-    this.startLeaving(guest);
+    guest.state = 'leaving';
+    guest.side = null;
+    guest.lane = -1;
+    guest.walk = new Walk(pathBack(guest.actor.root.position));
+    guest.speed = SPEED.leave;
   }
 
   /**
-   * Send a guest away: out of the door, down the side and along the
-   * front path to one of its ends, by whatever way the navigation grid
-   * finds from where the guest is.
+   * Send a guest who has eaten away: out of the room's front opening by
+   * the Meta stone, then left or right along the garden path to its end.
+   * The way to the opening, and from there to the end, is whatever the
+   * navigation grid finds from where the guest is.
    */
   private startLeaving(guest: Guest): void {
     guest.state = 'leaving';
-    // Ends are dealt in turn, so two guests leaving together walk abreast, not through each other.
-    guest.lane = this.nextLane++ % EXIT_ENDS.length;
+    const { side, lane } = this.pickExit();
+    guest.side = side;
+    guest.lane = lane;
+    const nav = this.cafeSystem.nav;
     const from = guest.actor.root.position;
-    const path = this.cafeSystem.nav.findPath(from, EXIT_ENDS[guest.lane]);
+    const out = nav.findPath(from, FRONT_OPENING);
+    const along = nav.findPath(FRONT_OPENING, EXIT_ENDS[side][lane]);
     // With no way out (it should not happen) the guest simply fades where it stands.
-    guest.walk = new Walk(path ?? [from, from.clone().setX(from.x + FADE_OUT_M)]);
+    guest.walk = new Walk(out && along ? [...out, ...along.slice(2)] : [from, from.clone().setX(from.x + FADE_OUT_M)]);
     guest.speed = SPEED.leave;
+  }
+
+  /**
+   * Left or right at the front, so that neither end crowds: the side
+   * with fewer guests on their way to it; a coin toss when they are
+   * level; and never the same side three times running, so a run of
+   * tosses cannot send a little crowd one way. At that end, the spots
+   * are dealt in turn.
+   */
+  pickExit(): { side: Side; lane: number } {
+    const going = (side: Side): number => this.guests.filter((g) => g.state === 'leaving' && g.side === side).length;
+    const left = going('left');
+    const right = going('right');
+    let side: Side = left < right ? 'left' : right < left ? 'right' : Math.random() < 0.5 ? 'left' : 'right';
+    const [last, before] = this.lastSides;
+    if (last === before && last === side) side = side === 'left' ? 'right' : 'left';
+    this.lastSides = [side, last];
+    const lane = this.nextLane[side]++ % EXIT_ENDS[side].length;
+    return { side, lane };
   }
 
   // ------------------------------------------------------------- the hands
@@ -328,11 +413,43 @@ export class GuestSystem extends createSystem({}) {
         else this.targets[i] = this.carry(carried, pinch.point, delta);
         return;
       }
+      // One fading away in this hand stays in it while the fingers stay closed; it lands nowhere.
+      const fading = this.guests.find((g) => g.state === 'vanishing' && g.hand === hand);
+      if (fading) {
+        if (pinch.closed) this.follow(fading, pinch.point, delta);
+        else fading.hand = null;
+        return;
+      }
       // A pinch closing now, on a guest, with the hand free (not on the café's handles).
       if (!fresh || hold.holding.includes(hand) || this.handles?.near(pinch.point)) return;
       const guest = this.nearestGuest(pinch.point, 1);
       if (guest) this.pickUp(guest, hand);
     });
+  }
+
+  /** A server has brought this guest its order: it eats from now on. */
+  serve(id: number): void {
+    const guest = this.guests.find((g) => g.id === id);
+    if (guest) guest.served = true;
+  }
+
+  /**
+   * Seat a guest from the line on a free seat directly, as letting go
+   * over that seat would (for the checks and for setting a scene). True
+   * if it was seated.
+   */
+  seatGuest(id: number, seatIndex: number): boolean {
+    const guest = this.guests.find((g) => g.id === id && (g.state === 'queued' || g.state === 'arriving'));
+    const seat = this.seats[seatIndex];
+    if (!guest || !seat || seat.occupant !== 0) return false;
+    guest.home = { line: this.line.indexOf(guest) };
+    this.line.splice(this.line.indexOf(guest), 1);
+    guest.spot = -1;
+    guest.walk = null;
+    seat.occupant = guest.id;
+    guest.actor.play('Lifted');
+    this.startHop(guest, seat.position, seat.yaw, HOP.sit, () => this.sit(guest, seat, true));
+    return true;
   }
 
   /** The guest a hand is carrying, if any. */
@@ -378,9 +495,7 @@ export class GuestSystem extends createSystem({}) {
   private carry(guest: Guest, pinch: Vector3, delta: number): Seat | null {
     const cafe = this.cafeSystem.cafe;
     const root = guest.actor.root;
-    cafe.worldToLocal(this.at.copy(pinch));
-    this.at.y -= GRIP_HEIGHT_M;
-    root.position.lerp(this.at, 1 - Math.exp(-CARRY_FOLLOW * delta));
+    this.follow(guest, pinch, delta);
     // Face the player, so the face shows.
     cafe.worldToLocal(this.player.head.getWorldPosition(this.head));
     guest.targetYaw = Math.atan2(this.head.x - root.position.x, this.head.z - root.position.z);
@@ -399,6 +514,13 @@ export class GuestSystem extends createSystem({}) {
     const spoken = this.guests.find((g) => g !== guest && g.state === 'held')?.target ?? null;
     guest.target = seatUnder(this.seats, root.position, SEAT_REACH_M, own, spoken);
     return guest.target;
+  }
+
+  /** Hang a guest from the pinch by its grip. */
+  private follow(guest: Guest, pinch: Vector3, delta: number): void {
+    this.cafeSystem.cafe.worldToLocal(this.at.copy(pinch));
+    this.at.y -= GRIP_HEIGHT_M;
+    guest.actor.root.position.lerp(this.at, 1 - Math.exp(-CARRY_FOLLOW * delta));
   }
 
   /** Let go: onto the glowing seat if there is one, else back where it came from. */
@@ -463,20 +585,22 @@ export class GuestSystem extends createSystem({}) {
     guest.actor.root.rotation.y = seat.yaw;
     if (fresh) {
       guest.seatedFor = 0;
+      guest.served = false;
       this.seated++;
     }
     guest.actor.play(fresh ? 'SitHappy' : 'SitIdle');
   }
 
-  /** A seated guest: pleased, then eating, then idle; when its time is up it gets down and leaves. */
+  /** A seated guest: pleased, then waiting for its order, eating once served, then idle; when its time is up it gets down and leaves. */
   private sitting(guest: Guest, delta: number): void {
     guest.seatedFor += delta;
     if (guest.seatedFor >= this.seatedSeconds) {
       this.standUp(guest);
       return;
     }
+    // Pleased to be seated; then it waits for its order, eats once a server has brought it, and sits back at the end.
     const last = guest.seatedFor > this.seatedSeconds - Math.min(IDLE_LAST_SECONDS, this.seatedSeconds * 0.25);
-    guest.actor.play(guest.seatedFor < HAPPY_SECONDS ? 'SitHappy' : last ? 'SitIdle' : 'SitEating');
+    guest.actor.play(guest.seatedFor < HAPPY_SECONDS ? 'SitHappy' : last || !guest.served ? 'SitIdle' : 'SitEating');
   }
 
   /** Off the chair with a hop, to the nearest aisle, out of the door and away. */
@@ -567,11 +691,12 @@ export class GuestSystem extends createSystem({}) {
     guest.actor.play('Idle');
   }
 
-  /** True if another leaver making for the same end is just ahead. */
+  /** True if another leaver making for the same spot at the same end is just ahead. */
   private crowded(guest: Guest): boolean {
+    if (!guest.side) return false;
     const mine = guest.walk!.remaining;
     for (const other of this.guests) {
-      if (other === guest || other.state !== 'leaving' || !other.walk || other.lane !== guest.lane) continue;
+      if (other === guest || other.state !== 'leaving' || !other.walk || other.side !== guest.side || other.lane !== guest.lane) continue;
       const ahead = mine - other.walk.remaining;
       if (ahead > 0 && ahead < FOLLOW_GAP_M) return true;
     }
@@ -584,15 +709,21 @@ export class GuestSystem extends createSystem({}) {
     let opacity = 1;
     if (guest.state === 'arriving' && walk) opacity = Math.min(1, walk.walked / FADE_IN_M);
     if (guest.state === 'leaving' && walk) opacity = Math.min(1, walk.remaining / FADE_OUT_M);
+    if (guest.state === 'vanishing') opacity = Math.max(0, 1 - guest.vanishing / VANISH_SECONDS);
     guest.actor.setOpacity(opacity);
     guest.actor.update(delta);
+    // The dial shows for as long as the guest is waiting to be seated: in the line, and in the player's hand
+    // (or the air) on its way from the line, where its patience is still running.
+    const waiting = guest.state === 'queued' || guest.state === 'vanishing' || ((guest.state === 'held' || guest.state === 'hop') && fromLine(guest));
+    guest.dial.update(guest.patience / guest.patienceFull, waiting, opacity, delta);
     // A blob under everyone on their feet (not the seated, nor the carried).
     const p = guest.actor.root.position;
-    if (guest.state !== 'seated' && guest.state !== 'held') this.blobs.add(p.x, guest.ground, p.z, opacity);
+    if (guest.state !== 'seated' && guest.state !== 'held' && guest.state !== 'vanishing') this.blobs.add(p.x, guest.ground, p.z, opacity);
   }
 
   private remove(guest: Guest): void {
     for (const seat of this.seats) if (seat.occupant === guest.id) seat.occupant = 0;
+    guest.dial.dispose();
     guest.actor.dispose();
     const i = this.guests.indexOf(guest);
     if (i >= 0) this.guests.splice(i, 1);

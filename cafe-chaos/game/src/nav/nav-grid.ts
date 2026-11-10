@@ -16,7 +16,9 @@
  *    a table top is too high and is never ground. The player's table beyond the plate is ground too,
  *    reached by a hop where the plate's edge is low and open.
  * 3. Clearance: how far each ground square is from the nearest thing
- *    that is not ground. A character needs its own half-width of it.
+ *    that is not ground. A character needs its own half-width of it,
+ *    and only squares with that much room, joined to the rest of the
+ *    floor by squares with as much, count as places it can get to.
  *
  * A path is then a search (A*) over the squares with enough clearance,
  * preferring the middle of the way, pulled straight wherever there is a
@@ -74,6 +76,13 @@ export class NavGrid {
   readonly ground: Uint8Array;
   /** Per square: the distance to the nearest square that is not ground, in squares. */
   readonly clearance: Float32Array;
+  /**
+   * Per square: 1 if a character can get there: ground, with room for its
+   * width, and joined to the rest by squares that are the same. (A gap
+   * between two chairs can be wide enough to stand in and still be cut
+   * off by gaps too tight to walk through; nobody is ever sent there.)
+   */
+  readonly reachable: Uint8Array;
   /** How long the last build took (milliseconds), and how many triangles it read. */
   buildMs = 0;
   triangles = 0;
@@ -100,6 +109,7 @@ export class NavGrid {
     this.height = new Float32Array(n);
     this.ground = new Uint8Array(n);
     this.clearance = new Float32Array(n);
+    this.reachable = new Uint8Array(n);
     this.blocked = new Uint8Array(n);
     this.g = new Float32Array(n);
     this.f = new Float32Array(n);
@@ -119,6 +129,7 @@ export class NavGrid {
     this.drawBarriers();
     this.spread();
     this.measure();
+    this.join();
     this.buildMs = performance.now() - started;
   }
 
@@ -279,6 +290,51 @@ export class NavGrid {
     }
   }
 
+  /** Mark the squares a character can get to: those with room, joined (by walkable steps) to the roomy square nearest the seed. */
+  private join(): void {
+    const { nx, nz, reachable } = this;
+    reachable.fill(0);
+    const need = this.options.radius / this.options.cell;
+    const roomy = (i: number): boolean => this.ground[i] === 1 && this.clearance[i] >= need;
+    // The roomy square nearest the seed.
+    const { min, cell, seed } = this.options;
+    const sx = Math.floor((seed.x - min.x) / cell);
+    const sz = Math.floor((seed.z - min.z) / cell);
+    let start = -1;
+    for (let ring = 0; ring < 40 && start < 0; ring++) {
+      for (let dz = -ring; dz <= ring && start < 0; dz++) {
+        for (let dx = -ring; dx <= ring; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== ring) continue;
+          const ix = sx + dx;
+          const iz = sz + dz;
+          if (ix < 0 || iz < 0 || ix >= nx || iz >= nz || !roomy(iz * nx + ix)) continue;
+          start = iz * nx + ix;
+          break;
+        }
+      }
+    }
+    if (start < 0) return;
+    const queue = this.from;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    reachable[start] = 1;
+    while (head < tail) {
+      const i = queue[head++];
+      const ix = i % nx;
+      const iz = (i - ix) / nx;
+      for (let k = 0; k < 4; k++) {
+        const jx = ix + (k === 0 ? 1 : k === 1 ? -1 : 0);
+        const jz = iz + (k === 2 ? 1 : k === 3 ? -1 : 0);
+        if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+        const j = jz * nx + jx;
+        if (reachable[j] || !roomy(j) || !this.passes(i, j)) continue;
+        reachable[j] = 1;
+        queue[tail++] = j;
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- asking
 
   /** The square at a point of the plan (-1 outside the grid). */
@@ -308,7 +364,7 @@ export class NavGrid {
   }
 
   private open(i: number): boolean {
-    return this.ground[i] === 1 && this.clearance[i] >= this.options.radius / this.options.cell;
+    return this.reachable[i] === 1;
   }
 
   /** The nearest place a character can stand to a point, within `reach` metres; null if none. */

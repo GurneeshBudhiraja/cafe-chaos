@@ -6,8 +6,8 @@
  * 2. picked up, it is startled, then, held at arm's length, wonders what
  *    is happening, its eyes moving;
  * 3. brought up to the player's face it goes through curious, confused,
- *    searching, sad, sulking and happy, in that order, each with the face
- *    parts and the lean that belong to it;
+ *    searching and worried, in that order, each with the face parts and
+ *    the lean that belong to it, and never a pleased face;
  * 4. put back, its face is its own again; and no console errors.
  * Saves a close-up of each expression.
  *
@@ -25,7 +25,13 @@ const check = (name, ok, detail) => {
 };
 const add = (a, b, k = 1) => a.map((v, i) => v + b[i] * k);
 /** Exactly one pair of eyes and one mouth are drawn. */
-const oneFace = (g) => g.parts.filter((p) => p.startsWith('Eyes')).length === 1 && g.parts.filter((p) => p.startsWith('Mouth')).length === 1;
+const oneFace = (g) => {
+  const eyes = g.parts.filter((p) => p.startsWith('Eyes'));
+  const mouths = g.parts.filter((p) => p.startsWith('Mouth'));
+  // Mid-blink the clip itself shows the closing lids over the eyes for a frame or two.
+  const blinking = eyes.length === 2 && eyes.includes('EyesClosed');
+  return (eyes.length === 1 || blinking) && mouths.length === 1;
+};
 
 const h = await startHeadset({
   async prepare(h) {
@@ -145,7 +151,7 @@ const head = [SEAT.x, SEAT.y, SEAT.z];
 const close = add(head, [-0.15, -0.035, 0.0]);
 await drag(up, close, 6);
 await h.head(SEAT, { x: close[0], y: close[1] - 0.012, z: close[2] }, 300);
-const WANT = ['curious', 'confused', 'searching', 'sad', 'sulking', 'happy'];
+const WANT = ['curious', 'confused', 'searching', 'worried'];
 const shots = {};
 for (const mood of WANT) {
   // The emulator's frames are slow: stop the game clock the moment the guest is well into this mood, so the
@@ -168,20 +174,20 @@ for (const mood of WANT) {
   await page.evaluate(() => (window.__cafe.system.timeScale = 1));
 }
 {
-  const seen = shots.happy.seen;
+  const seen = shots.worried.seen;
   const order = WANT.every((m, i) => seen.indexOf(m) >= 0 && (i === 0 || seen.indexOf(m) > seen.indexOf(WANT[i - 1])));
   const faces = {
     curious: shots.curious.eyes === 'EyesWide' || shots.curious.eyes === 'EyesClosed',
     confused: shots.confused.mouth === 'MouthFrown',
     searching: shots.searching.eyes === 'EyesWide' && shots.searching.mouth === 'MouthO',
-    sad: shots.sad.mouth === 'MouthFrown' && (shots.sad.eyes === 'EyesOpen' || shots.sad.eyes === 'EyesClosed'),
-    sulking: shots.sulking.eyes === 'EyesCross' && shots.sulking.mouth === 'MouthFrown',
-    happy: shots.happy.eyes === 'EyesHappy' && (shots.happy.mouth === 'MouthSmile' || shots.happy.mouth === 'MouthOpen'),
+    worried: shots.worried.mouth === 'MouthFrown' && (shots.worried.eyes === 'EyesOpen' || shots.worried.eyes === 'EyesClosed'),
   };
   const oneFace = WANT.every((m) => shots[m].parts.filter((p) => p.startsWith('Eyes')).length === 1 && shots[m].parts.filter((p) => p.startsWith('Mouth')).length === 1);
-  check('up at the face it goes through its feelings in order', order && shots.curious.distance < 0.4, `seen: ${seen.slice(0, 9).join(' > ')}; ${(shots.curious.distance * 100).toFixed(0)} cm from the head`);
-  check('each feeling shows its own face, one pair of eyes and one mouth at a time', Object.values(faces).every(Boolean) && oneFace, WANT.map((m) => `${m}: ${shots[m].eyes}/${shots[m].mouth}${faces[m] ? '' : ' (wrong)'}`).join(', '));
-  check('it leans with its feelings: droops when sad, tilts its head when confused', shots.sad.pitch > 0.1 && Math.abs(shots.happy.pitch) < 0.1 && Math.abs(shots.confused.roll) > 0.03, `pitch sad ${shots.sad.pitch.toFixed(2)}, happy ${shots.happy.pitch.toFixed(2)}; roll confused ${shots.confused.roll.toFixed(2)}`);
+  // Everything shown while held belongs to being held: never the pleased faces.
+  const pleased = [...WANT.map((m) => shots[m]), startled, wondering].some((g) => g.parts.includes('EyesHappy') || g.parts.includes('MouthSmile'));
+  check('up at the face it goes through its feelings in order', order && shots.curious.distance < 0.4, `seen: ${seen.slice(0, 7).join(' > ')}; ${(shots.curious.distance * 100).toFixed(0)} cm from the head`);
+  check('each shows its own face, one pair of eyes and one mouth at a time, and none of them pleased', Object.values(faces).every(Boolean) && oneFace && !pleased && !seen.includes('happy'), WANT.map((m) => `${m}: ${shots[m].eyes}/${shots[m].mouth}${faces[m] ? '' : ' (wrong)'}`).join(', ') + `; a pleased face shown ${pleased}`);
+  check('it leans with its feelings: droops when worried, tilts its head when confused', shots.worried.pitch > 0.1 && Math.abs(shots.curious.pitch) < 0.16 && Math.abs(shots.confused.roll) > 0.03, `pitch worried ${shots.worried.pitch.toFixed(2)}, curious ${shots.curious.pitch.toFixed(2)}; roll confused ${shots.confused.roll.toFixed(2)}`);
 }
 
 // 4. Put back: its own face again.

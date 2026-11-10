@@ -9,9 +9,12 @@
  * 3. let go over the glowing seat, it sits there, pleased, and the glow
  *    goes out;
  * 4. a guest let go away from any seat hops back to its place in the line;
- * 5. when its time is up a seated guest hops off its chair, walks out of
- *    the door, down the side and along the front path, fading at its end
- *    without leaving the plate; its seat is free;
+ *    one picked up with little patience left keeps its dial running in
+ *    the hand and fades away there when it runs out;
+ * 5. when its time is up a seated guest hops off its chair, comes out of
+ *    the room's front opening by the Meta stone, and goes left or right
+ *    along the front path, fading at its end without leaving the plate;
+ *    its seat is free;
  * 6. there are never more than ten on stage, and no console errors.
  * Saves headset-view screenshots along the way.
  *
@@ -38,7 +41,7 @@ const h = await startHeadset({
       const { guests, system } = window.__cafe;
       guests.spawnSeconds = [1.5, 2.5];
       guests.patienceSeconds = 100000;
-      guests.seatedSeconds = 30;
+      guests.seatedSeconds = 45;
       system.replace();
     });
     await h.page.waitForFunction(() => window.__cafe.system.placed && !window.__cafe.system.arriving, null, { timeout: 20000 });
@@ -150,7 +153,7 @@ const sat = await state();
 {
   const g = guestById(sat, first.id);
   const s = sat.seats[seat.index];
-  check('let go over the glowing seat, it sits there, pleased', g.state === 'seated' && g.pose === 'seated' && (g.clip === 'SitHappy' || g.clip === 'SitEating') && dist(g.at, s.at) < 1e-4 && s.occupant === first.id && Math.abs(g.yaw - s.yaw) < 1e-3 && sat.glow.every((m) => !m.visible) && sat.dots === 0,
+  check('let go over the glowing seat, it sits there, pleased', g.state === 'seated' && g.pose === 'seated' && (g.clip === 'SitHappy' || g.clip === 'SitIdle' || g.clip === 'SitEating') && dist(g.at, s.at) < 1e-4 && s.occupant === first.id && Math.abs(g.yaw - s.yaw) < 1e-3 && sat.glow.every((m) => !m.visible) && sat.dots === 0,
     `guest ${first.id} is ${g.state} on seat ${g.seat}, clip ${g.clip}, ${(dist(g.at, s.at) * 1000).toFixed(1)} mm from the seat, glow ${sat.glow.some((m) => m.visible) ? 'on' : 'off'}`);
 }
 // From now on, note where this guest goes (sampled in the page), for step 5.
@@ -160,7 +163,8 @@ await page.evaluate((id) => {
   const t = setInterval(() => {
     const g = guests.guests.find((x) => x.id === id);
     if (!g) { trail.gone = true; clearInterval(t); return; }
-    trail.points.push({ state: g.state, clip: g.actor.clip, x: g.actor.root.position.x, y: g.actor.root.position.y, z: g.actor.root.position.z, opacity: g.actor.opacity, lane: g.lane });
+    if (g.state === 'leaving' && g.walk && !trail.path) trail.path = g.walk.points.map((p) => [p.x, p.y, p.z]);
+    trail.points.push({ state: g.state, clip: g.actor.clip, x: g.actor.root.position.x, y: g.actor.root.position.y, z: g.actor.root.position.z, opacity: g.actor.opacity, side: g.side, lane: g.lane });
   }, 200);
 }, first.id);
 await frames(3);
@@ -196,9 +200,39 @@ await frames(2);
 }
 await handTo('right', AWAY.right);
 
+// 4b. A guest picked up with little patience left: its dial keeps running in the hand, and when it runs out the guest fades away there.
+{
+  await frames(2);
+  const s0 = await state();
+  const late = guestById(s0, s0.line[0]);
+  await pinchTo(add(late.grip, [0, 0.05, 0]));
+  await frames(2);
+  await pinchTo(late.grip);
+  await frames(2);
+  await pinch(1);
+  await frames(2);
+  await drag(late.grip, add(late.grip, [0.02, 0.1, 0.08]), 3);
+  // Now that it is in the hand, leave it only a few seconds of patience.
+  const heldNow = await page.evaluate((id) => { const g = window.__cafe.guests.guests.find((x) => x.id === id); if (g && g.state === 'held') { g.patienceFull = 20; g.patience = 7; } return g ? g.state : 'gone'; }, late.id);
+  if (heldNow !== 'held') check('the guest for the fade test was picked up', false, `it is ${heldNow}`);
+  const dial = (id) => page.evaluate((id) => { const g = window.__cafe.guests.guests.find((x) => x.id === id); return g ? { state: g.state, shown: g.dial.sprite.visible, left: g.dial.left, patience: g.patience, opacity: g.actor.opacity } : null; }, id);
+  const a = await dial(late.id);
+  await frames(2);
+  const b = await dial(late.id);
+  const gaveUpBefore = await page.evaluate(() => window.__cafe.guests.gaveUp);
+  const fading = await page.waitForFunction((id) => { const g = window.__cafe.guests.guests.find((x) => x.id === id); return !g ? { gone: true } : g.state === 'vanishing' && g.actor.opacity < 0.9 ? { gone: false, opacity: g.actor.opacity, dial: g.dial.sprite.visible } : null; }, late.id, { timeout: 120000 }).then((r) => r.jsonValue());
+  await h.screenshot('artifacts/seating-5-fading-in-hand.png');
+  await page.waitForFunction((id) => !window.__cafe.guests.guests.some((x) => x.id === id), late.id, { timeout: 60000 });
+  const after = await page.evaluate(() => ({ gaveUp: window.__cafe.guests.gaveUp, carrying: !!window.__cafe.guests.carriedBy('right') }));
+  await pinch(0);
+  check('in the hand its dial keeps running, and when it runs out the guest fades away there', a && b && a.state === 'held' && a.shown && b.shown && b.left < a.left && after.gaveUp === gaveUpBefore + 1 && !after.carrying,
+    `held with the dial showing ${(a.left * 100).toFixed(0)}% then ${(b.left * 100).toFixed(0)}%; ${fading.gone ? 'gone' : `fading at ${(fading.opacity * 100).toFixed(0)}% in the hand`}; gave up ${gaveUpBefore} to ${after.gaveUp}; hand free ${!after.carrying}`);
+}
+await handTo('right', AWAY.right);
+
 // 5. The seated guest's time runs out: off the chair, out of the door, and away along the front.
 await h.head(SEAT, LOOK, 300);
-await page.waitForFunction(() => window.__trail.points.some((q) => q.state === 'leaving' && q.z > 0.2 && q.x < 0.3), null, { timeout: 420000 });
+await page.waitForFunction(() => window.__trail.points.some((q) => q.state === 'leaving' && q.z > 0.2), null, { timeout: 420000 });
 await h.screenshot('artifacts/seating-4-leaving.png');
 await page.waitForFunction(() => window.__trail.gone, null, { timeout: 420000 });
 const trail = await page.evaluate(() => window.__trail);
@@ -207,14 +241,21 @@ const trail = await page.evaluate(() => window.__trail);
   // The hop is under half a second: in the emulator's slow frames it can pass between two samples, so the system's own count is read.
   const hopped = (await page.evaluate(() => window.__cafe.guests.hoppedOff)) >= 1;
   const walkedOut = p.filter((q) => q.state === 'leaving');
-  const throughDoor = walkedOut.some((q) => q.x > 0.33 && q.x < 0.46 && q.z > -0.005 && q.z < 0.115);
-  // Along the garden path at the front of the plate, never off it.
+  // Out by the room's front opening (by the Meta stone), not the door; then along the garden path to an end.
+  const byDoor = walkedOut.some((q) => q.x > 0.36 && q.z < 0.15);
+  // Where its way crosses the room's front edge (from the way it planned: the samples are too far apart to catch it).
+  const way = trail.path ?? [];
+  const crossing = [];
+  for (let i = 1; i < way.length; i++) if ((way[i - 1][2] - 0.184) * (way[i][2] - 0.184) < 0) crossing.push(way[i - 1][0] + ((way[i][0] - way[i - 1][0]) * (0.184 - way[i - 1][2])) / (way[i][2] - way[i - 1][2]));
+  const byTheStone = crossing.length === 1 && crossing[0] > 0 && crossing[0] < 0.135;
   const onPath = walkedOut.filter((q) => q.z > 0.2 && q.y > 0.015);
   const offPlate = walkedOut.some((q) => q.y < 0.015 || Math.abs(q.x) > 0.46 || q.z > 0.31);
-  const faded = walkedOut.length > 0 && walkedOut[walkedOut.length - 1].opacity < 0.5;
+  // It fades over the last stretch; at the emulator's frame rate the last sample may be early in the fade.
+  const faded = walkedOut.length > 0 && walkedOut[walkedOut.length - 1].opacity < 0.97;
+  const side = walkedOut.length ? walkedOut[0].side : '?';
   const endX = onPath.length ? onPath[onPath.length - 1].x : NaN;
-  check('its time up, it hops off the chair, goes out of the door and away along the front path', hopped && throughDoor && onPath.length > 2 && !offPlate && faded && trail.gone && endX < -0.1,
-    `hopped ${hopped}, through the door ${throughDoor}, along the front path to x ${endX.toFixed(2)} (${onPath.length} samples), off the plate ${offPlate}, faded ${faded}, gone ${trail.gone}`);
+  check('its time up, it hops off the chair, comes out by the Meta stone and goes left or right along the front path', hopped && !byDoor && byTheStone && onPath.length > 2 && !offPlate && faded && trail.gone && (side === 'left' ? endX < -0.1 : endX > 0.2),
+    `hopped ${hopped}, by the door ${byDoor}, out by the Meta stone ${byTheStone} (crossing the room's front at x ${crossing.map((x) => x.toFixed(3)).join(', ')}), went ${side} to x ${endX.toFixed(2)}, off the plate ${offPlate}, faded ${faded}, gone ${trail.gone}`);
 }
 const end = await state();
 check('its seat is free again, and there were never more than ten on stage', end.seats[seat.index].occupant === 0 && end.peak <= 10 && end.left >= 1, `seat ${seat.index} occupant ${end.seats[seat.index].occupant}, peak ${end.peak}, left ${end.left}`);

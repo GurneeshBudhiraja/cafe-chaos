@@ -61,3 +61,40 @@ export function servePointFor(nav: NavGrid, table: number, centre: Vector3, top:
     tray: new Vector3(centre.x + (dx / away) * TRAY_IN_M, top, centre.z + (dz / away) * TRAY_IN_M),
   };
 }
+
+/** A server can set an order down from this far away at most (metres from the guest's place to where it stands). */
+const SERVE_ARM_M = 0.085;
+/** Between the server and the guest's place nothing may stand higher than this above the table top (metres): chairs and the table itself are fine, the counter is not. */
+const OVER_M = 0.02;
+/** Two places to stand closer together than this count as the same place (metres). */
+const SAME_PLACE_M = 0.03;
+
+/**
+ * The places a server could stand to serve one guest: looking out from
+ * the guest's own place at the table in eight directions, the first
+ * place in each with room to stand (and that can be walked to), within
+ * arm's reach and with nothing tall in between. A two-seater in the middle of the room gives one on each
+ * aisle side; a four-seater against the counter, the gap beside it. The
+ * server then uses whichever it can walk to soonest, which is the side
+ * it is already on, never the far side of the table with the long way
+ * round. `place` is where the order goes down (the table's meal spot for
+ * that seat, café space). Empty if there is nowhere to stand by it.
+ */
+export function servePointsForPlace(nav: NavGrid, table: number, place: Vector3): ServePoint[] {
+  const points: ServePoint[] = [];
+  for (let k = 0; k < 8; k++) {
+    const dx = Math.sin((k * Math.PI) / 4);
+    const dz = Math.cos((k * Math.PI) / 4);
+    for (let r = 0.015; r <= SERVE_ARM_M; r += 0.005) {
+      const x = place.x + dx * r;
+      const z = place.z + dz * r;
+      // Nothing tall between here and the guest's place: a server does not serve over the counter, a wall or a plant.
+      if (nav.heightAt(x, z) > place.y + OVER_M) break;
+      if (!nav.walkable(x, z)) continue;
+      const stand = new Vector3(x, nav.heightAt(x, z), z);
+      if (!points.some((p) => Math.hypot(p.stand.x - x, p.stand.z - z) < SAME_PLACE_M)) points.push({ table, stand, yaw: Math.atan2(-dx, -dz), tray: place.clone() });
+      break;
+    }
+  }
+  return points;
+}

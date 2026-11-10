@@ -15,8 +15,8 @@
 
 import type { World } from '@iwsdk/core';
 
-/** How loud the theme plays (0 to 1): present, never in the way. */
-export const THEME_VOLUME = 0.2;
+/** How loud the theme plays (0 to 1): 5 %, barely there, a room tone more than a song. */
+export const THEME_VOLUME = 0.05;
 /** It comes in over this long, and goes out over this long (seconds). */
 const FADE = { in: 4, out: 1.2 };
 

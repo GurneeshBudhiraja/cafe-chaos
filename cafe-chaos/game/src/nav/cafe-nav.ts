@@ -21,9 +21,11 @@ export const CAFE_NAV: NavOptions = {
   hop: 0.03,
   radius: 0.014,
   barriers: [
-    // The room is open along its front (a low step down to the garden path), but nobody walks out
-    // that way: the door is the way in and out.
-    [-0.36, 0.184, 0.365, 0.184],
+    // The room is open along its front (a low step down to the garden path). Nobody steps out just
+    // anywhere along it: the way out is the opening by the Meta stone, between these two lines
+    // (to the left of the waiting bench).
+    [-0.36, 0.184, 0.0, 0.184],
+    [0.135, 0.184, 0.365, 0.184],
   ],
   // The middle of the café floor (the shell's `FloorTop` anchor).
   seed: { x: 0, z: -0.04 },

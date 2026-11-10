@@ -97,7 +97,7 @@ check('the renderer is set for the look', state.shadowMap && state.toneMapping =
     for (let i = 0; i < 100 && a.readyState < 1; i++) await new Promise((r) => setTimeout(r, 100));
     return { src: a.src, loop: a.loop, duration: a.duration, asked: theme.asked, started: theme.started, volume: a.volume, error: a.error ? a.error.message : null };
   });
-  check('the theme is loaded, looping, and was asked to play at the start', /audio\/theme\.mp3$/.test(theme.src) && theme.loop && theme.duration > 100 && theme.asked >= 1 && !theme.error && theme.volume <= 0.21,
+  check('the theme is loaded, looping, and was asked to play at the start', /audio\/theme\.mp3$/.test(theme.src) && theme.loop && theme.duration > 100 && theme.asked >= 1 && !theme.error && theme.volume <= 0.051,
     `${theme.src.split('/').slice(-2).join('/')}, ${theme.duration.toFixed(0)} s, loop ${theme.loop}, asked to play ${theme.asked} time(s), playing ${theme.started} (the emulator's browser may hold sound back), volume ${theme.volume.toFixed(2)}`);
 }
 

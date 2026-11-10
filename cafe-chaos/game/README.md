@@ -15,8 +15,9 @@ and carry trays out to the tables, steam rises over the kettle and
 blossom falls from the cherry tree. Guests walk up and line up outside the
 door; the player pinches one up, carries it over the café and lets go
 over the seat that glows a soft violet; after its meal the guest hops
-down and leaves along the front path. A quiet lo-fi theme plays under it
-all from the moment the session starts. Like a Horizon OS window, the café has a grab pill on the side
+down, comes out by the Meta stone at the front and goes left or right
+along the garden path. A very quiet lo-fi theme plays under it all from
+the moment the session starts. Like a Horizon OS window, the café has a grab pill on the side
 facing the player (pinch and drag to move it) and a bracket at each
 corner (pinch and pull to resize, swing to turn), always visible, in the
 café's own style. The player's hands are the café's own cream hands.
@@ -69,13 +70,13 @@ the furniture, anything added later), in about a tenth of a second:
   middle, pulled straight wherever there is a clear line, with the ground's
   height along it so feet follow the steps. Ways are remembered.
 
-Guests use it to leave (from a seat, or from the line) and baristas to
+Guests use it to leave (from a seat) and baristas to
 reach a table and get home. The same grid says which seats are buried in
 furniture and where there is room to stand to serve a table. Put a new
 table anywhere, call `system.nav.rebuild()` (and `baristas.findTables()`),
 and it is walked round and served with nothing else changed. The one thing
-the grid is told: the room's open front is a barrier, so the door is the
-way in and out.
+the grid is told: the room's open front is a barrier except for the
+opening by the Meta stone, which is the way out.
 
 **The guests** (`src/systems/guest-system.ts`, `src/guests/`): the
 snack-spirit cast from `public/models/guest-*.glb`.
@@ -89,20 +90,33 @@ snack-spirit cast from `public/models/guest-*.glb`.
   when the café is empty and slow as it fills, so it fills briskly and
   then settles.
 - **The line**: single file outside the door, its head on the deck, turned
-  partly to the player so faces show. Each guest has its own patience (40
-  seconds, give or take a quarter): past halfway it taps its foot and
-  gives the side-eye, then it gives up and everyone behind steps up.
+  partly to the player so faces show. Each guest has its own patience, 32
+  seconds give or take 15%, shown by a little dial over its head
+  (`guests/patience-dial.ts`): a cream badge whose ring empties clockwise,
+  mint, then amber from half, then coral and throbbing for the last
+  quarter. Past halfway the guest taps its foot too. When it runs out the
+  guest turns round and walks back the way it came, beside the line, and
+  fades out; everyone behind steps up. The dial keeps running, and showing,
+  while a guest from the line is in the player's hand; if it runs out
+  there, the guest fades away from the hand.
+- **Why 32 seconds**: reaching for a guest, carrying it and choosing a seat
+  takes five or six seconds, so a full line of five takes about half a
+  minute. At 32 a player who keeps at it saves everyone; one who drifts
+  for ten seconds loses the guest at the back. Shorter, and the back of a
+  full line cannot be saved at all; much longer, and the timers stop
+  mattering.
 - **Picking up**: a pinch closing on a guest lifts it. It hangs from the
   fingers, legs kicking, turned to face the player. A guest in the line or
   in a seat watches a free hand that comes close with wide eyes, so it is
   plain they can be picked up.
 - **Expressions** (`guests/expressions.ts`), from the models' own face parts
-  (five pairs of eyes, five mouths, pupils that look about): startled when
-  picked up; wondering what is happening at arm's length, eyes sweeping
-  round; and, held up to the player's face (within 40 cm), a run of
-  feelings: curious, confused with its head on one side, searching left,
-  right and down, sad and drooping, sulking with its eyes screwed shut,
-  then won over and beaming; then round again.
+  (five pairs of eyes, five mouths, pupils that look about). Everything a
+  held guest shows belongs to the one feeling of being picked up, surprise
+  and then unease, never pleasure: startled when picked up; wondering what
+  is happening at arm's length, eyes sweeping round; and, held up to the
+  player's face (within 40 cm), curious, confused with its head on one
+  side, looking left, right and down for a way out, and worried, drooping
+  with a small frown; then round again. Being pleased is for the seat.
 - **The seat glow** (`guests/seat-glow.ts`): while a guest is carried,
   every free seat shows a small violet dot, and the seat it would land on
   glows a soft, cool violet: a wash on the cushion, a halo, and a faint
@@ -115,39 +129,59 @@ snack-spirit cast from `public/models/guest-*.glb`.
   the far side of the back row's four-seaters are inside the shell's
   counter, which the navigation grid sees, and are left out.
 - **Leaving**: after a minute seated, a guest hops off its chair to the
-  nearest place with room to stand. Everyone who leaves, fed or fed up,
-  goes out of the door, down the deck at the side and along the garden
-  path at the front of the plate, keeping a gap behind the one ahead, and
-  fades out as it reaches the path's end. Nobody steps off the platform to
-  leave. Only the end of the path is given (`guests/paths.ts`); the way
-  there is found on the grid.
+  nearest place with room to stand, comes out of the room's front opening
+  by the Meta stone, and there turns left or right along the garden path,
+  fading out at that end. Nobody steps off the platform. The side is the
+  one with fewer guests already on their way to it, a coin toss when they
+  are level, and never the same side three times running, so neither end
+  crowds; at each end there are three spots dealt in turn. Only the
+  opening and the ends are given (`guests/paths.ts`); the ways between are
+  found on the grid.
+- **Pace**: guests walk briskly (about 6 to 8 cm a second), with the Walk
+  clip played faster to match.
 - **Cost**: each pose's nine body parts are folded into one skinned mesh
   whose bones are the parts themselves, hidden face parts are not drawn,
   and the contact shadows are one instanced mesh, so a guest is about 8
   draw calls, not 22.
 
-**The baristas** (`src/systems/barista-system.ts`, `src/baristas/`): six
-blocky, pixel-skinned looks on one rig (`public/models/barista-*.glb`).
+**The servers** (`src/systems/barista-system.ts`, `src/baristas/`): six
+blocky, pixel-skinned baristas on one rig (`public/models/barista-*.glb`).
 While the café is being tested all six are on the staff at once; the
-game will later unlock them one by one and hand them real orders.
+game will later unlock them one by one.
 
 - **Behind the counter** each has a station on the duckboard. There it
   works, hands busy over the bar, and every few seconds does something
   else for a moment: shuffles a step along the bar, turns to the back bar
   for the kettle or the tins, looks about, or waves when a guest joins
-  the line.
-- **Serving**: every few seconds one, picked at random, takes a tray (tea
-  with dango, or a latte with dorayaki) and carries it to a table (or the
-  bar, or the quiet corner) picked at random (likelier
-  one with a guest at it). It serves with a lean, leaves the tray on the
-  table top, bows, and walks back. Never more than three are out at once.
-  A tray is cleared from its table after about half a minute.
-- The tables start bare: the food arrives by tray.
-- **Cost**: a barista's seven boxes are folded into one skinned mesh, so
+  the line. With nobody seated, nobody comes out.
+- **Orders**: the moment a guest is seated it has an order. A server takes
+  a tray (tea with dango, or a latte with dorayaki), comes round the
+  counter's end, carries it to that guest, serves with a lean, sets the
+  tray down at the guest's own place (the table's meal spot for that
+  seat), bows, and walks back. The guest waits, then eats once served; the
+  tray is cleared when the guest leaves. Never more than three servers
+  are out at once.
+- **Who serves whom** (the dispatcher):
+  1. From the bar it is first come, first served: the oldest waiting
+     orders go first. Orders placed together (within a second and a half)
+     count as equals, and among them the nearer goes first. Each goes to
+     the free server that makes the walking, in all, least.
+  2. On the way: a server walking to one guest turns to a waiting guest
+     that is nearer it, and the guest it was walking to goes back to the
+     front of the queue for the next server. An order can be passed over
+     only once, so nobody is starved, and a server only turns for a real
+     saving (6 cm or more), so nobody dithers.
+  3. Two servers on their way swap guests if that is less walking in all.
+
+  "Nearer" is always real walking distance on the navigation grid, round
+  the tables: a guest just across a table can be far, one down the aisle
+  near. Where to stand for each guest is found on the grid too: the
+  nearest place with room to stand to that guest's own place, so the
+  server comes to the guest's side of the table.
+- **Cost**: a server's seven boxes are folded into one skinned mesh, so
   each is one draw call; the trays share the shell's bar-palette material.
-- The pace is in `baristas/rules.ts`, the stations in `baristas/routes.ts`.
-  The way round the counter and where to stand at each table are found on
-  the navigation grid.
+- The pace and the dispatcher's numbers are in `baristas/rules.ts`, the
+  stations in `baristas/routes.ts`.
 
 **The ambience** (`src/systems/ambience-system.ts`, `src/ambience/`):
 
@@ -161,7 +195,7 @@ game will later unlock them one by one and hand them real orders.
 
 **The theme** (`src/audio/theme.ts`, `public/audio/`): a soft lo-fi track
 plays under the whole game from the moment the session starts, quietly
-(20 % volume), coming in over four seconds with the dusk, looping, and
+(5 % volume), coming in over four seconds with the dusk, looping, and
 fading out when the session ends. It is "Tokyo Sunset" by HoliznaCC0,
 public domain under CC0 1.0: free for any use, commercial included, with
 no permission or credit needed. The source and licence are recorded in
@@ -323,31 +357,36 @@ room has a desk-height table), from a running dev server:
 - `node scripts/check-guests.mjs`: guests arrive and line up on their
   spots, a mix of species, colours and outfits; each draws only what
   shows; a guest who waits too long shows it, gives up, and the line steps
-  up; a leaver goes along the front path and fades at its end without
-  stepping off the plate; never more than ten on stage (8 checks), with
+  up; each has a patience dial that runs down; one who gives up turns
+  round and walks back the way it came; never more than ten on stage; and
+  the left-or-right choice at the front is even (10 checks), with
   screenshots.
 - `node scripts/check-seating.mjs`: a pinch picks a guest up and the café
   stays put; carried, it hangs from the pinch and faces the player; the
   seat under it glows and the other free seats show dots; let go there it
   sits; let go elsewhere it hops back to the line; its time up, it hops
-  off, goes out of the door and away along the front path, its seat free
-  (8 checks), with screenshots.
+  off, comes out by the Meta stone and goes left or right along the front
+  path, its seat free (8 checks), with screenshots.
 - `node scripts/check-expressions.mjs`: a guest watches a hand that comes
   close; picked up it is startled, then wonders; up at the face it goes
-  through its feelings in order, each with its own face and lean; put back
-  its face is its own again (7 checks), with a close-up of each expression.
+  through curious, confused, searching and worried in order, each with its
+  own face and lean and none of them pleased; put back its face is its own
+  again (7 checks), with a close-up of each expression.
 - `node scripts/check-nav.mjs`: the navigation grid is built from the
   café's meshes, quickly; it has the café right (where one can and cannot
-  stand); a guest's way out is the door, the side and the front path,
-  never across the open front or off the plate; a barista's way goes round
+  stand); a guest's way out is the front opening by the Meta stone and
+  then left or right along the path, never off the plate; a barista's way goes round
   the counter; ways are remembered; and a table dropped into the middle of
   a way is walked round after a rebuild (10 checks). `PICTURE=1` prints the
   grid as text. Runs in the desktop preview, no headset emulation needed.
-- `node scripts/check-baristas.mjs`: all six baristas are at their
-  stations, each one draw call; they keep busy behind the counter; one
-  takes a tray out, serves, bows and walks back, the tray left on the
-  table top; they take turns, never more than three out; trays are
-  cleared; steam rises and blossom falls (10 checks), with screenshots.
+- `node scripts/check-baristas.mjs`: all six servers are at their
+  stations, each one draw call; with nobody seated they keep busy and stay
+  in; steam rises and blossom falls; the moment a guest is seated a server
+  sets off with a tray, serves it at its own place, and goes home; of two
+  seated together the nearer is served first; a server on its way turns to
+  a guest seated nearer it; three seated together get three servers at
+  once; a tray is cleared when its guest leaves (11 checks), with
+  screenshots.
 - `node scripts/look-hands.mjs`: pictures of the hands, open, pinching and
   close up. `node scripts/look-top.mjs`: a plan view of the café with a
   grid, for laying out paths.
@@ -356,6 +395,11 @@ room has a desk-height table), from a running dev server:
   glowing seat, another giving up, the first leaving after its meal), with
   the theme mixed in, to `artifacts/guests.mp4`. Timers are shortened there
   so it fits one video.
+- `npm run record:exits`: a short clip of the line with its dials, a guest
+  lifted and fretting, servers bringing the seated guests their trays, a
+  give-up turning back, one fading from the hand as its dial runs out, and
+  seated guests leaving by the Meta stone to the left and right, to
+  `artifacts/exits.mp4`.
 - `npm run record:handles`: the handles in use (the pill carrying the café,
   a corner pulled to grow and swung to turn it, the pill moving edge as the
   viewer moves round), as the headset shows it, to `artifacts/handles.mp4`.
@@ -378,11 +422,11 @@ src/
   systems/guest-system.ts    the guests: arriving, the line, carrying, sitting, leaving
   systems/render-budget-system.ts  the resting shadow map, the refresh rate, the fps readout
   cafe/static-batch.ts       the furniture merged into one mesh per material
-  systems/barista-system.ts  the staff: working the bar, carrying trays out, serving, coming back
+  systems/barista-system.ts  the servers: working the bar, taking orders, the dispatcher, serving, coming back
   systems/ambience-system.ts the steam clip and the falling blossom
   baristas/barista.ts        one barista: its model, clips and tray
   baristas/routes.ts         the stations, and finding where to stand at a table
-  baristas/rules.ts          every number that paces the staff
+  baristas/rules.ts          every number that paces the servers and the dispatcher
   ambience/petals.ts         the petals' fall, as instanced meshes
   lib/fold-parts.ts          folding a character's rigid parts into one skinned mesh
   nav/nav-grid.ts            the navigation grid: reading the geometry, ground, clearance, A*, smoothing
@@ -392,7 +436,8 @@ src/
   guests/cast.ts             species, colours and outfits, at random
   guests/actor.ts            one guest: its model, clips, face, materials, folded skin
   guests/expressions.ts      how a held guest acts, and the face it makes at a hand
-  guests/paths.ts            the line outside the door, and where leavers are going
+  guests/paths.ts            the line outside the door, the way back for those who give up, the front opening and the path's ends
+  guests/patience-dial.ts    the little patience timer over each guest in the line
   guests/walker.ts           following a path
   guests/seats.ts            the usable seats and who is on them
   guests/seat-glow.ts        the blue glow on the landing seat, the dots on free seats

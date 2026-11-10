@@ -15,6 +15,10 @@ export interface Seat {
   yaw: number;
   /** The id of the guest sitting there or on its way there (0: free). */
   occupant: number;
+  /** Which piece of the café (an index into its pieces) the seat belongs to: its table. -1 if none. */
+  table: number;
+  /** Where this seat's order is set down on the table (café space): the table's `Meal-N` anchor for `Seat-N`. Null if the table has none. */
+  meal: Vector3 | null;
 }
 
 /** A seat with something standing this far above it (metres) is buried in furniture: nobody can sit there. */
@@ -28,7 +32,7 @@ export const LANDING_REACH_M = 0.09;
  * row's four-seaters are, inside the counter) or has nowhere to stand
  * beside it.
  */
-export function collectSeats(cafe: Group, anchors: Object3D[], nav: NavGrid): Seat[] {
+export function collectSeats(cafe: Group, anchors: Object3D[], nav: NavGrid, pieces: Object3D[] = []): Seat[] {
   cafe.updateMatrixWorld(true);
   const seats: Seat[] = [];
   const ahead = new Vector3();
@@ -37,7 +41,12 @@ export function collectSeats(cafe: Group, anchors: Object3D[], nav: NavGrid): Se
     if (nav.heightAt(position.x, position.z) > position.y + BURIED_M || !nav.nearest(position.x, position.z, LANDING_REACH_M)) continue;
     // The anchor's +Z, brought into café space: the way the sitter faces.
     cafe.worldToLocal(anchor.localToWorld(ahead.set(0, 0, 1))).sub(position);
-    seats.push({ index: seats.length, position, yaw: Math.atan2(ahead.x, ahead.z), occupant: 0 });
+    // The piece of furniture it belongs to, and that piece's meal spot with the same number as the seat.
+    let piece: Object3D | null = anchor;
+    while (piece && !pieces.includes(piece)) piece = piece.parent;
+    const spot = piece?.getObjectByName(anchor.name.replace('Seat', 'Meal')) ?? piece?.getObjectByName('Meal-1');
+    const meal = spot ? cafe.worldToLocal(spot.getWorldPosition(new Vector3())) : null;
+    seats.push({ index: seats.length, position, yaw: Math.atan2(ahead.x, ahead.z), occupant: 0, table: piece ? pieces.indexOf(piece) : -1, meal });
   }
   return seats;
 }

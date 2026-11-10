@@ -7,8 +7,10 @@
  * 2. they are a mix: more than one species, colour and outfit;
  * 3. a guest who waits too long first shows it (the Impatient clip), then
  *    gives up, and everyone behind steps up a place;
- * 4. a leaver goes along the garden path at the front of the plate and
- *    fades at its end, without stepping off the plate;
+ * 4. each guest in the line has a patience dial that runs down; the one
+ *    who gives up turns round and walks back the way it came, beside the
+ *    line, and fades out; and the left-or-right choice at the front is
+ *    even;
  * 5. there are never more than ten on stage, and no console errors.
  * Saves headset-view screenshots along the way.
  *
@@ -55,7 +57,7 @@ const state = () => page.evaluate(() => {
     id: x.id, state: x.state, clip: x.actor.clip, spot: x.spot, walking: !!x.walk, yaw: +x.yaw.toFixed(2),
     at: x.actor.root.position.toArray().map((v) => +v.toFixed(3)), opacity: +x.actor.opacity.toFixed(2),
     look: `${x.actor.look.species}/${x.actor.look.tintName}/${x.actor.look.outfit.join('+') || 'bare'}`, species: x.actor.look.species, tint: x.actor.look.tintName,
-    outfit: x.actor.look.outfit, patience: +x.patience.toFixed(1), lane: x.lane,
+    outfit: x.actor.look.outfit, patience: +x.patience.toFixed(1), side: x.side, lane: x.lane,
     drawn: (() => { let n = 0; x.actor.root.traverse((o) => { let v = o.isMesh && o.layers.mask !== 0; for (let p = o; p && v; p = p.parent) v = p.visible; if (v) n++; }); return n; })(),
   });
   return { all: guests.guests.map(g), line: guests.line.map((x) => x.id), arrived: guests.arrived, gaveUp: guests.gaveUp, left: guests.left, peak: guests.peak };
@@ -75,6 +77,20 @@ const full = await state();
   check('they are a mix of species, colours and outfits', species.size >= 2 && tints.size >= 2, `${[...species].join(', ')}; ${[...tints].join(', ')}; ${dressed} of ${full.all.length} dressed: ${full.all.map((g) => g.look).join(' | ')}`);
   check('a standing guest draws only the parts that show', full.all.every((g) => g.drawn <= 9), `meshes drawn per guest: ${full.all.map((g) => g.drawn).join(', ')}`);
 }
+{
+  const dials = await page.evaluate(async () => {
+    const { guests, world } = window.__cafe;
+    const read = () => guests.line.map((g) => ({ shown: g.dial.sprite.visible, left: g.dial.left, full: g.patienceFull }));
+    const a = read();
+    const f = world.renderer.info.render.frame;
+    await new Promise((r) => { const t = setInterval(() => { if (world.renderer.info.render.frame >= f + 3) { clearInterval(t); r(); } }, 8); });
+    return { a, b: read() };
+  });
+  const shown = dials.a.every((d) => d.shown && d.left > 0 && d.left <= 1);
+  const draining = dials.a.every((d, i) => dials.b[i] && dials.b[i].left < d.left);
+  const span = dials.a.map((d) => d.full);
+  check('each guest in the line has a patience dial that runs down', shown && draining && Math.min(...span) >= 25.5 && Math.max(...span) <= 34.5, `dials at ${dials.a.map((d) => `${(d.left * 100).toFixed(0)}%`).join(', ')}, then ${dials.b.map((d) => `${(d.left * 100).toFixed(0)}%`).join(', ')}; patience ${span.map((v) => v.toFixed(0)).join(', ')} s (30 s here, give or take 15%)`);
+}
 // A look at the line from the front right.
 await h.head(await toWorld([0.62, 0.34, 0.62]), await toWorld([0.5, 0.03, 0.03]), 500);
 await h.pause(400);
@@ -91,7 +107,19 @@ const impatient = await page.waitForFunction(() => {
 }, null, { timeout: 240000 }).then((r) => r.jsonValue());
 check('a guest who waits too long shows it', impatient.patience < impatient.full * 0.5 && impatient.patience > 0, impatient.all);
 await h.screenshot('artifacts/guests-3-impatient.png');
-await page.evaluate(() => (window.__cafe.guests.arrivals = false));
+await page.evaluate(() => {
+  const { guests } = window.__cafe;
+  guests.arrivals = false;
+  // From now on, note every guest walking back from the line (the emulator's frames are slow: nothing is left to chance).
+  window.__back = [];
+  setInterval(() => {
+    for (const g of guests.guests) {
+      if (g.state !== 'leaving' || g.side !== null) continue;
+      const p = g.actor.root.position;
+      window.__back.push({ id: g.id, x: p.x, y: p.y, z: p.z, yaw: g.yaw, clip: g.actor.clip, opacity: g.actor.opacity });
+    }
+  }, 60);
+});
 const headBefore = (await state()).line[0];
 await page.waitForFunction(() => window.__cafe.guests.gaveUp >= 1, null, { timeout: 240000 });
 // One snapshot, taken in the page the moment the line has settled again.
@@ -107,32 +135,34 @@ const stepped = await page.waitForFunction((id) => {
   check('it gives up and the line steps up a place', stepped.gaveUp >= 1 && inOrder && (stepped.leaver === 'leaving' || stepped.leaver === 'gone'), `gave up ${stepped.gaveUp}, line now ${stepped.line.join(',')} on spots ${stepped.spots.join(',')}, the one who left is ${stepped.leaver}`);
 }
 
-// 3. The leaver goes along the front path, on the plate, and fades at its end.
-await h.head(SEAT, await toWorld([0.1, 0.02, 0.3]), 500);
-const marching = await page.waitForFunction(() => {
-  const g = window.__cafe.guests.guests.find((x) => x.state === 'leaving' && x.actor.root.position.z > 0.2 && x.actor.root.position.x < 0.3 && x.actor.opacity === 1);
-  return g ? { z: g.actor.root.position.z, x: g.actor.root.position.x, y: g.actor.root.position.y, lane: g.lane, clip: g.actor.clip } : null;
-}, null, { timeout: 240000 }).then((r) => r.jsonValue());
-await h.screenshot('artifacts/guests-4-march.png');
-check('a leaver goes along the front path, still on the plate', marching.clip === 'Walk' && marching.y > 0.015 && marching.y < 0.03 && marching.z > 0.19 && marching.z < 0.31 && Math.abs(marching.x) < 0.46, `making for end ${marching.lane}, at x ${marching.x.toFixed(2)} z ${marching.z.toFixed(3)} on the plate (y ${marching.y.toFixed(3)}), clip ${marching.clip}`);
-// From now on, note whether any leaver steps off the plate.
-await page.evaluate(() => {
-  const { guests } = window.__cafe;
-  window.__off = 0;
-  setInterval(() => {
-    for (const g of guests.guests) {
-      const p = g.actor.root.position;
-      // Leavers who began in the line start out on the player's table: count only those who have been on the plate.
-      if (g.state !== 'leaving') continue;
-      if (p.y > 0.015) g.__onPlate = true;
-      else if (g.__onPlate) window.__off++;
-    }
-  }, 100);
-});
+// 3. The one who gave up turns round and walks back the way it came, beside the line.
+await h.head(SEAT, await toWorld([0.6, 0.02, 0.1]), 500);
+await page.waitForFunction(() => window.__back.some((q) => q.x > 0.56 && q.opacity === 1), null, { timeout: 240000 });
+await h.screenshot('artifacts/guests-4-turning-back.png');
+{
+  const back = await page.evaluate(() => window.__back);
+  const walkingBack = back.find((q) => q.x > 0.56 && q.opacity === 1);
+  const mine = back.filter((q) => q.id === walkingBack.id);
+  // Facing away from the door (+X is a yaw of a quarter turn), on the table beside the line, going steadily away.
+  const facingAway = Math.abs(Math.atan2(Math.sin(walkingBack.yaw - Math.PI / 2), Math.cos(walkingBack.yaw - Math.PI / 2))) < 0.5;
+  const away = mine.every((q, i) => i === 0 || q.x >= mine[i - 1].x - 1e-6);
+  check('one who gives up turns round and walks back the way it came', walkingBack.clip === 'Walk' && facingAway && away && Math.abs(walkingBack.y) < 0.002 && walkingBack.z > 0.06 && walkingBack.z < 0.09,
+    `guest ${walkingBack.id} at x ${walkingBack.x.toFixed(2)} z ${walkingBack.z.toFixed(3)} on the table beside the line, facing away from the door ${facingAway}, always going away ${away}, clip ${walkingBack.clip}`);
+}
 await page.waitForFunction(() => window.__cafe.guests.left >= 1, null, { timeout: 300000 });
 const end = await state();
-const off = await page.evaluate(() => window.__off);
-check('it fades out at the end without stepping off the plate, and there were never more than ten on stage', end.left >= 1 && end.peak <= 10 && off === 0, `left ${end.left}, stepped off the plate ${off} times, peak ${end.peak}, on stage now ${end.all.length}`);
+check('it fades out at the end, and there were never more than ten on stage', end.left >= 1 && end.peak <= 10, `left ${end.left}, peak ${end.peak}, on stage now ${end.all.length}`);
+
+// 4. Left or right at the front: neither end is favoured, and never three the same way running.
+{
+  const picks = await page.evaluate(() => Array.from({ length: 30 }, () => window.__cafe.guests.pickExit()));
+  const left = picks.filter((p) => p.side === 'left').length;
+  let run = 1;
+  let longest = 1;
+  for (let i = 1; i < picks.length; i++) { run = picks[i].side === picks[i - 1].side ? run + 1 : 1; longest = Math.max(longest, run); }
+  const lanes = new Set(picks.map((p) => `${p.side}${p.lane}`)).size;
+  check('leavers are sent left and right evenly', left >= 11 && left <= 19 && longest <= 2 && lanes === 6, `of 30: ${left} left, ${30 - left} right, longest run the same way ${longest}, ${lanes} different end spots used`);
+}
 
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');

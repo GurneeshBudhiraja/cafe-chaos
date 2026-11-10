@@ -4,14 +4,13 @@
  * that:
  * 1. the grid is built from the café's own meshes, quickly;
  * 2. it has the café right: the aisles, the door, the deck, the front
- *    path, the duckboard and the player's table are places to stand; the
- *    counter, a table, a chair seat, the fence and the room's open front
- *    are not;
- * 3. a guest's way from a seat to the exit goes out of the door, down
- *    the side and along the front path, never across the room's open
- *    front and never off the plate;
- * 4. a guest giving up in the line gets onto the plate and leaves the
- *    same way;
+ *    path, the duckboard, the front opening and the player's table are
+ *    places to stand; the counter, a table, a chair seat, the fence and
+ *    the rest of the room's front are not;
+ * 3. a guest's way out from a seat goes through the room's front opening
+ *    by the Meta stone and left along the garden path, not by the door
+ *    and never off the plate;
+ * 4. or right along the path, the same;
  * 5. a barista's way from its station to a table goes round the counter;
  * 6. the same way asked for again costs nothing (it is remembered);
  * 7. a table put down in the middle of a way, and the grid rebuilt, is
@@ -42,33 +41,36 @@ const facts = await page.evaluate(async () => {
   const { system, guests, baristas } = window.__cafe;
   const nav = system.nav;
   const V = system.cafe.position.constructor;
-  const { EXIT_ENDS, QUEUE_SPOTS } = await import('/src/guests/paths.ts');
+  const { EXIT_ENDS, FRONT_OPENING } = await import('/src/guests/paths.ts');
   const { stationPoint } = await import('/src/baristas/routes.ts');
   const P = (p) => [+p.x.toFixed(4), +p.y.toFixed(4), +p.z.toFixed(4)];
   const seat = guests.seats.reduce((best, s) => (Math.hypot(s.position.x - 0.093, s.position.z + 0.135) < Math.hypot(best.position.x - 0.093, best.position.z + 0.135) ? s : best));
   const landing = nav.nearest(seat.position.x, seat.position.z, 0.09);
+  // A guest's way out, as the game builds it: to the front opening, then along the path to an end.
+  const join = (a, b) => (a && b ? [...a, ...b.slice(2)] : null);
   const searches0 = nav.searches;
-  const out = nav.findPath(landing, EXIT_ENDS[0]);
+  const toOpening = nav.findPath(landing, FRONT_OPENING);
   const searches1 = nav.searches;
-  const again = nav.findPath(landing, EXIT_ENDS[0]);
+  const again = nav.findPath(landing, FRONT_OPENING);
   const searches2 = nav.searches;
-  const giveUp = nav.findPath(QUEUE_SPOTS[2], EXIT_ENDS[1]);
+  const out = join(toOpening, nav.findPath(FRONT_OPENING, EXIT_ENDS.left[0]));
+  const outRight = join(toOpening, nav.findPath(FRONT_OPENING, EXIT_ENDS.right[1]));
   const table = baristas.servePoints[0];
   const serve = nav.findPath(stationPoint(1), table.stand);
-  window.__navFacts = { landing, exit: EXIT_ENDS[0], seat };
+  window.__navFacts = { landing, exit: FRONT_OPENING, seat };
   return {
     buildMs: nav.buildMs, triangles: nav.triangles, cells: nav.nx * nav.nz, size: [nav.nx, nav.nz],
     stand: {
       'the middle aisle': nav.walkable(0, -0.04), 'the door': nav.walkable(0.335, 0.055), 'the deck': nav.walkable(0.41, 0.1), 'the front path': nav.walkable(-0.1, 0.25),
-      'the duckboard': !!nav.nearest(-0.1, -0.205, 0.012), "the player's table": nav.walkable(0.6, 0.03),
+      'the duckboard': !!nav.nearest(-0.1, -0.205, 0.012), "the player's table": nav.walkable(0.6, 0.03), 'the front opening by the Meta stone': nav.walkable(0.065, 0.186),
     },
     not: {
       'the counter': nav.walkable(-0.1, -0.165), 'a table': nav.walkable(0, 0.025), 'a chair seat': nav.walkable(seat.position.x, seat.position.z), 'the fence': nav.walkable(0.456, 0.2),
-      "the room's open front": nav.walkable(0, 0.184), 'the back-bar cabinet': nav.walkable(-0.1, -0.25),
+      "the room's front away from the opening": nav.walkable(-0.2, 0.184) || nav.walkable(0.25, 0.184), 'the back-bar cabinet': nav.walkable(-0.1, -0.25),
     },
     seats: guests.seats.length, servePoints: baristas.servePoints.map((p) => ({ table: p.table, stand: P(p.stand), yaw: +p.yaw.toFixed(2) })),
-    out: out ? out.map(P) : null, giveUp: giveUp ? giveUp.map(P) : null, serve: serve ? serve.map(P) : null,
-    remembered: searches1 === searches0 + 1 && searches2 === searches1 && !!again && again.length === out.length,
+    out: out ? out.map(P) : null, outRight: outRight ? outRight.map(P) : null, serve: serve ? serve.map(P) : null,
+    remembered: searches1 === searches0 + 1 && searches2 === searches1 && !!again && again.length === toOpening.length,
     picture: nav.picture(2, out ?? []),
     station: P(stationPoint(1)), tableStand: P(table.stand),
   };
@@ -83,12 +85,12 @@ check('the grid is built from the café itself, quickly', facts.triangles > 2000
   check('the seats and the tables are found from it', facts.seats === 23 && facts.servePoints.length === 12, `${facts.seats} usable seats, ${facts.servePoints.length} places to serve (ten tables, the bar, the quiet corner), each with somewhere to stand`);
 }
 
-/** What a way does: its length, whether it goes through the door, crosses the room's front, or leaves the plate. */
+/** What a way does: its length, whether it uses the door, where it crosses the room's front, and whether it leaves the plate. */
 const describe = (path) => {
   let length = 0;
   let door = false;
-  let front = false;
   let off = false;
+  const crossings = [];
   for (let i = 1; i < path.length; i++) {
     const [ax, , az] = path[i - 1];
     const [bx, , bz] = path[i];
@@ -97,23 +99,23 @@ const describe = (path) => {
     for (let s = 0; s <= steps; s++) {
       const x = ax + ((bx - ax) * s) / steps;
       const z = az + ((bz - az) * s) / steps;
-      if (x > 0.33 && x < 0.375 && z > -0.005 && z < 0.115) door = true;
-      if (i > 1 && (Math.abs(x) > 0.461 || Math.abs(z) > 0.311)) off = true;
+      if (x > 0.335 && x < 0.375 && z > -0.005 && z < 0.115) door = true;
+      if (Math.abs(x) > 0.461 || Math.abs(z) > 0.311) off = true;
     }
-    if (ax < 0.33 && bx < 0.33 && (az - 0.184) * (bz - 0.184) < 0) front = true;
+    if ((az - 0.184) * (bz - 0.184) < 0) crossings.push(ax + ((bx - ax) * (0.184 - az)) / (bz - az));
   }
-  return { length, door, front, off, end: path[path.length - 1] };
+  return { length, door, off, crossings, end: path[path.length - 1] };
 };
-if (facts.out) {
-  const d = describe(facts.out);
-  check('from a seat the way out is the door, the side and the front path', d.door && !d.front && !d.off && Math.hypot(d.end[0] + 0.275, d.end[2] - 0.218) < 0.02, `${facts.out.length} points, ${(d.length * 100).toFixed(0)} cm, through the door ${d.door}, across the open front ${d.front}, off the plate ${d.off}, ends at [${d.end[0]}, ${d.end[2]}]`);
-} else check('from a seat the way out is the door, the side and the front path', false, 'no way found');
-if (facts.giveUp) {
-  // The first point is the place in the line, out on the player's table; from the second on it must be on the plate.
-  const onPlate = facts.giveUp.slice(1).findIndex((p) => Math.abs(p[0]) <= 0.461 && p[1] > 0.01);
-  const d = describe(facts.giveUp.slice(Math.max(0, onPlate)));
-  check('a guest giving up in the line gets onto the plate and leaves along the front', onPlate >= 0 && !d.off && !d.front && d.end[2] > 0.2, `${facts.giveUp.length} points, on the plate from point ${onPlate + 1}, off again ${d.off}, ends at [${d.end[0]}, ${d.end[2]}]`);
-} else check('a guest giving up in the line gets onto the plate and leaves along the front', false, 'no way found');
+const byTheStone = (d) => d.crossings.length === 1 && d.crossings[0] > 0 && d.crossings[0] < 0.135;
+if (facts.out && facts.outRight) {
+  const l = describe(facts.out);
+  const r = describe(facts.outRight);
+  check('from a seat the way out is the front opening by the Meta stone, then left along the path', byTheStone(l) && !l.door && !l.off && l.end[0] < -0.2 && l.end[2] > 0.2, `${facts.out.length} points, ${(l.length * 100).toFixed(0)} cm, crosses the room's front at x ${l.crossings.map((x) => x.toFixed(3)).join(', ')}, by the door ${l.door}, off the plate ${l.off}, ends at [${l.end[0]}, ${l.end[2]}]`);
+  check('or right along the path', byTheStone(r) && !r.door && !r.off && r.end[0] > 0.3 && r.end[2] > 0.2, `${facts.outRight.length} points, ${(r.length * 100).toFixed(0)} cm, crosses at x ${r.crossings.map((x) => x.toFixed(3)).join(', ')}, off the plate ${r.off}, ends at [${r.end[0]}, ${r.end[2]}]`);
+} else {
+  check('from a seat the way out is the front opening by the Meta stone, then left along the path', false, 'no way found');
+  check('or right along the path', false, 'no way found');
+}
 if (facts.serve) {
   const xs = facts.serve.map((p) => p[0]);
   const behind = facts.serve[0][2] < -0.19;

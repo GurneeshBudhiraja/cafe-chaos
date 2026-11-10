@@ -20,19 +20,37 @@ export const SPAWN_STRETCH = 1.6;
 /** The first guest arrives this long after the café is placed. */
 export const FIRST_SPAWN_SECONDS = 1.5;
 
-/** How long a guest waits in the line before giving up (seconds), and the share of it after which it shows (the Impatient clip). */
-export const PATIENCE_SECONDS = 40;
-export const IMPATIENT_AFTER = 0.55;
-/** Each guest's patience differs from that by up to this share either way, so a whole line never gives up in the same breath. */
-export const PATIENCE_SPREAD = 0.25;
+/**
+ * How long a guest waits in the line before giving up (seconds).
+ *
+ * The sweet spot comes from how long the line takes to serve. Reaching
+ * for a guest, carrying it over and choosing a seat takes a player about
+ * five or six seconds, so a full line of five takes about half a minute.
+ * At 32 seconds a player who keeps at it saves everyone, the last with a
+ * few seconds to spare; one who drifts for ten seconds loses the guest at
+ * the back. Shorter than this and the back of a full line cannot be
+ * saved at all, which feels unfair; much longer and the timers stop
+ * mattering and the line just sits there. A guest's own patience differs
+ * from that by up to `PATIENCE_SPREAD` either way, so a whole line never
+ * gives up in the same breath. It shows its impatience (the foot tap)
+ * once `IMPATIENT_AFTER` of it has gone; its dial (guests/patience-dial.ts)
+ * shows the rest.
+ */
+export const PATIENCE_SECONDS = 32;
+export const IMPATIENT_AFTER = 0.5;
+export const PATIENCE_SPREAD = 0.15;
 /** How long a seated guest stays before leaving (seconds). */
 export const SEATED_SECONDS = 60;
 /** A just-seated guest is happy for this long, then eats, then sits idle for the last stretch. */
 export const HAPPY_SECONDS = 3;
 export const IDLE_LAST_SECONDS = 12;
 
-/** Walking speeds in the café's space (metres per second). The Walk clip looks right from about 2 to 5.5 cm/s. */
-export const SPEED = { arrive: 0.036, shuffle: 0.03, leave: 0.045, march: 0.052 };
+/**
+ * Walking speeds in the café's space (metres per second): brisk, so the
+ * line forms and clears quickly and leavers do not linger. The Walk clip
+ * is played faster to match, so feet still land where they should.
+ */
+export const SPEED = { arrive: 0.058, shuffle: 0.05, leave: 0.07, march: 0.08 };
 /** How quickly a guest turns to face its way (radians per second). */
 export const TURN_SPEED = 7;
 /** A guest fades in over this much of its walk in, and out over this much of its walk away (metres). */
@@ -59,3 +77,6 @@ export const HOP = { sit: { seconds: 0.28, height: 0.012 }, back: { seconds: 0.4
 export const WATCH_RADIUS_M = 0.14;
 /** How quickly a held guest's lean follows its acting (per second). */
 export const LEAN_FOLLOW = 9;
+
+/** A guest whose patience runs out while it is in the player's hand fades away there over this long (seconds). */
+export const VANISH_SECONDS = 0.8;

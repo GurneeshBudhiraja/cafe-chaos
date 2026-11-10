@@ -3,15 +3,19 @@
  * models' own face parts (five pairs of eyes, five mouths, pupils that
  * can look about) over the kicking-legs Lifted clip.
  *
+ * Being picked up by a giant hand is alarming, and everything a held
+ * guest shows belongs to that one feeling: surprise, then unease. It is
+ * never pleased about it; being pleased is for when it is put down on a
+ * seat (the SitHappy clip).
+ *
  * - The moment it is picked up it is startled: wide eyes darting, an "o"
  *   mouth, legs going fast.
  * - Held out at arm's length it wonders what is happening: wide eyes
  *   sweeping slowly round, blinking now and then.
- * - Brought up to the player's face it goes through its feelings in
+ * - Brought up to the player's face it studies the player and frets, in
  *   turn: it looks straight at the player, curious; tilts its head,
- *   confused; looks left, right and down for a way out; droops, sad;
- *   screws its eyes shut in a sulk; then warms to the player and beams.
- *   Then round again.
+ *   confused; looks left, right and down for a way out; and droops,
+ *   worried, with a small frown. Then round again.
  *
  * Pure timing and data: the system reads `HeldAct.update()` each frame
  * and applies the face (GuestActor.setFace), the pace of the kicking and
@@ -23,7 +27,7 @@ import type { Face } from './actor.js';
 /** How far the wide eyes' pupils can look from centre (metres on the face). */
 const LOOK_M = 0.001;
 
-export type MoodName = 'startled' | 'wondering' | 'curious' | 'confused' | 'searching' | 'sad' | 'sulking' | 'happy';
+export type MoodName = 'startled' | 'wondering' | 'curious' | 'confused' | 'searching' | 'worried';
 
 /** What the guest is doing this frame. */
 export interface Acting {
@@ -75,7 +79,7 @@ const WONDERING: Mood = {
   },
 };
 
-/** The feelings it goes through when held up to the player's face, in order. */
+/** What it goes through when held up to the player's face, in order: all of a piece with being held (none of them pleased). */
 const NEAR: Mood[] = [
   {
     name: 'curious',
@@ -114,39 +118,15 @@ const NEAR: Mood[] = [
     },
   },
   {
-    name: 'sad',
-    seconds: 2.6,
+    name: 'worried',
+    seconds: 2.8,
     blinks: false,
-    // Plain eyes, a frown, drooping forward, legs barely moving.
+    // Plain eyes that close for a moment now and then, a small frown, drooping a little, legs barely moving.
     act: (t, out) => {
       out.face.eyes = t % 1.6 > 1.35 ? 'EyesClosed' : 'EyesOpen';
       out.face.mouth = 'MouthFrown';
-      out.kick = 0.18;
-      out.pitch = 0.26 + 0.03 * Math.sin(t * 2.4);
-    },
-  },
-  {
-    name: 'sulking',
-    seconds: 1.8,
-    blinks: false,
-    // Eyes screwed shut, shaking its head.
-    act: (t, out) => {
-      out.face.eyes = 'EyesCross';
-      out.face.mouth = 'MouthFrown';
-      out.kick = 1.1;
-      out.shake = 0.3 * Math.sin(t * 13);
-    },
-  },
-  {
-    name: 'happy',
-    seconds: 3,
-    blinks: false,
-    // It has decided the player is all right: smiling eyes, a smile, a happy wriggle.
-    act: (t, out) => {
-      out.face.eyes = 'EyesHappy';
-      out.face.mouth = t % 0.9 < 0.45 ? 'MouthSmile' : 'MouthOpen';
-      out.kick = 0.9;
-      out.roll = 0.14 * Math.sin(t * 6);
+      out.kick = 0.22;
+      out.pitch = 0.2 + 0.03 * Math.sin(t * 2.4);
     },
   },
 ];
