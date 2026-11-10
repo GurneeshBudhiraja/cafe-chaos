@@ -161,7 +161,7 @@ game will later unlock them one by one and hand them real orders.
 
 **The theme** (`src/audio/theme.ts`, `public/audio/`): a soft lo-fi track
 plays under the whole game from the moment the session starts, quietly
-(30 % volume), coming in over four seconds with the dusk, looping, and
+(20 % volume), coming in over four seconds with the dusk, looping, and
 fading out when the session ends. It is "Tokyo Sunset" by HoliznaCC0,
 public domain under CC0 1.0: free for any use, commercial included, with
 no permission or credit needed. The source and licence are recorded in

@@ -226,7 +226,7 @@ function addTheme(video) {
   const mixed = video.replace(/\.mp4$/, '.music.mp4');
   execFileSync('ffmpeg', [
     '-y', '-loglevel', 'error', '-i', video, '-stream_loop', '-1', '-i', 'public/audio/theme.mp3',
-    '-filter_complex', `[1:a]volume=0.55,afade=t=in:d=4,afade=t=out:st=${(seconds - 2.5).toFixed(2)}:d=2.5[a]`,
+    '-filter_complex', `[1:a]volume=0.37,afade=t=in:d=4,afade=t=out:st=${(seconds - 2.5).toFixed(2)}:d=2.5[a]`,
     '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-t', seconds.toFixed(2), '-movflags', '+faststart', mixed,
   ]);
   renameSync(mixed, video);
