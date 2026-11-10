@@ -1,42 +1,42 @@
-# Themed hands (work in progress — two candidates)
+# `cafe-hand-left`, `cafe-hand-right` — the player's hands
 
-Quest hand tracking gives the game 25 joints per hand every frame. IWSDK draws a generic
-"ghost" hand from them: an invisible occluder mesh plus a thin white outline, loaded from the
-WebXR input-profiles CDN (`generic-hand/left.glb`), skinned and driven by joint matrices
-(`@iwsdk/xr-input`, `AnimatedHand`). There is no config switch for it, but the visual class can
-be swapped at runtime, which is what these files are for.
+A minimal matte hand for Quest hand tracking: cream (the café's ceramic white), soft tapered
+finger segments with ball joints so bends stay continuous, a plain rounded palm and a thin sage
+cuff. No pads, patterns or logos. ~4,000 triangles, two flat materials (`HandCream`,
+`HandSage`), 70 KB each. The right hand is the left's mirror.
 
-## How a custom hand plugs in
+## How it plugs into IWSDK (no skinning needed)
 
-`AnimatedHand.update()` poses **any node whose name is a WebXR joint name** with that joint's
-matrix (relative to the grip space, applied as the node's local transform). So a rigid hand
-needs no skinning: a glb with sibling nodes named `wrist`, `thumb-metacarpal`,
-`thumb-phalanx-proximal`, … `pinky-finger-tip` (25 names), each mesh modelled with its origin at
-the joint, the bone running along −Z and the back of the hand along +Y. Missing joints are
-skipped, so a file with only two nodes is fine.
+IWSDK's `AnimatedHand` poses **any node whose name is a WebXR joint name** with that joint's
+matrix (relative to the grip space, written as the node's local transform). Each file is a root
+(`cafe-hand-left` / `-right`, extras `hand: "left"|"right"`) with **25 sibling nodes** named
+`wrist`, `thumb-metacarpal`, `thumb-phalanx-proximal`, `thumb-phalanx-distal`, `thumb-tip`,
+`index-finger-metacarpal`, `index-finger-phalanx-proximal`, `…-intermediate`, `…-distal`,
+`index-finger-tip`, and the same for `middle-`, `ring-` and `pinky-finger`, plus a `cuff` mesh
+that rides with the wrist. Each mesh is modelled at its joint with the bone along −Z and the back
+of the hand along +Y (the WebXR joint frame), so posing the nodes is the whole job.
 
 ```ts
 import { AnimatedHand } from '@iwsdk/core';
 class CafeHandL extends AnimatedHand {
-  static assetKeyPrefix = 'cafe-hand'; static assetProfileId = 'cafe-hand';
-  static assetPath = '/models/cafe-hand.glb';                 // or cafe-tips.glb
+  static assetKeyPrefix = 'cafe-hand'; static assetProfileId = 'cafe-hand-left';
+  static assetPath = '/models/cafe-hand-left.glb';
   init() { this.model.traverse((o: any) => { if (o.isMesh) o.frustumCulled = false; }); }
 }
-class CafeHandR extends CafeHandL { static assetPath = '/models/cafe-hand-right.glb'; }
+class CafeHandR extends CafeHandL { static assetProfileId = 'cafe-hand-right'; static assetPath = '/models/cafe-hand-right.glb'; }
 world.input.xr.visualAdapters.hand.left.updateVisualImplementation(CafeHandL);
 world.input.xr.visualAdapters.hand.right.updateVisualImplementation(CafeHandR);
 ```
 
-(The left file is built; the right one is its mirror, exported once the design is chosen.)
+Give each class its own `assetProfileId` (the SDK caches visuals by it). The `cuff` node is not
+a joint; parent it to `wrist` in code (`model.getObjectByName('wrist').add(cuff)`) or leave it
+and it stays at the grip.
 
-## The two candidates
+This replaces IWSDK's ghost outline. If the game wants the hand to still occlude virtual objects
+in passthrough, keep the SDK's `stencilMaterial` on a copy of the meshes (see
+`@iwsdk/xr-input/dist/visual/impl/animated-hand.js`).
 
-| File | Idea | What the player sees |
-|---|---|---|
-| `cafe-hand.glb` | **Mochi mitten**: a full soft white hand with pink paw pads, a sakura on the back and a pink cuff; 25 rigid segments, 3.5 k tris | Their hand replaced by a plush café glove. Fully themed, but it covers the real hand in passthrough and any tracking jitter shows on the whole hand. |
-| `cafe-tips.glb` | **Pinch caps**: only the thumb and index tips get a pink cap with a gold rim and a white "bean"; 2 nodes, 14 KB | Their own real hand stays visible; the two fingers that matter for the game's pinch are marked. Cheapest, least jitter, and it quietly teaches the pinch gesture. |
+## Blender
 
-Both keep the occlusion behaviour only if the game also keeps IWSDK's `stencilMaterial` on an
-occluder copy (see `@iwsdk/xr-input/dist/visual/impl/animated-hand.js`).
-
-See `previews/` for the current look; the design is not final.
+`cafe-shell-art.blend`, scene `HandArt`; script `hand_build.py` (text block): finger lengths,
+radii and splay in `FINGERS`/`THUMB`, colours in `flat()` at the top.
