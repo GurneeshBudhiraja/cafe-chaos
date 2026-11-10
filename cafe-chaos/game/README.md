@@ -45,9 +45,13 @@ player's hands are drawn in the same warm style.
 **The handles** (`src/systems/handle-system.ts`, `src/handles/handles.ts`):
 the café's grab pill and corner brackets, in the manner of a Horizon OS
 window but always visible and in the café's paper-lantern cream with an
-amber glow. They lie flat on the table just outside the base, keep their
-own size whatever size the café is, follow the café wherever it goes, and
-brighten as a hand comes near and fully while held.
+amber glow. They are low cream blocks standing on the table just outside
+the base (not flat marks, so they still read when the player looks across
+the table at a shallow angle), they grow with the café within limits so
+they stay in proportion to it, follow the café wherever it goes, and
+brighten as a hand comes near and fully while held. Their sizes, growth
+limits and brightness are the constants at the top of
+`src/handles/handles.ts`.
 
 - **The pill** lies outside the edge of the base that faces the player and
   moves to another edge as the player moves round the café (with a little

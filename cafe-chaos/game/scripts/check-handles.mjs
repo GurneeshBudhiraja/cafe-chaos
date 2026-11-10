@@ -121,7 +121,7 @@ const start = await state();
   const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => toWorld(start, [sx > 0 ? b.max[0] : b.min[0], 0, sz > 0 ? b.max[2] : b.min[2]]));
   const gaps = start.brackets.map((p, i) => dist(p, corners[i]));
   check('a bracket wraps each corner', gaps.every((g) => g > 0.012 && g < 0.025), `vertex gaps ${gaps.map((g) => (g * 100).toFixed(1)).join(', ')} cm`);
-  check('the handles rest half-lit', start.pillShow > 0.4 && start.pillShow < 0.6 && start.bracketShow.every((s) => s > 0.4 && s < 0.6), `pill ${start.pillShow.toFixed(2)}, brackets ${start.bracketShow.map((s) => s.toFixed(2)).join(', ')}`);
+  check('the handles rest well lit', start.pillShow > 0.7 && start.pillShow < 0.9 && start.bracketShow.every((s) => s > 0.7 && s < 0.9), `pill ${start.pillShow.toFixed(2)}, brackets ${start.bracketShow.map((s) => s.toFixed(2)).join(', ')}`);
   await page.screenshot({ path: 'artifacts/handles-1-seated.png' });
   // Move round to the café's right side (its +x), looking at it.
   const rightSide = toWorld(start, [b.max[0] + 0.5, 0.4, 0]);

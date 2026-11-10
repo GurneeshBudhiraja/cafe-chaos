@@ -19,7 +19,7 @@
 
 import { createSystem, Vector3 } from '@iwsdk/core';
 import { SCALE_MAX, SCALE_MIN } from '../hold/hold.js';
-import { BRACKET, CORNER_SIGNS, LIFT_M, NEAR_M, PILL, REACH_M, SHOW, SIDE_HYSTERESIS, makeBracket, makePill, type Corner, type Handle, type Side } from '../handles/handles.js';
+import { BRACKET, CORNER_SIGNS, LIFT_M, NEAR_M, PILL, REACH_M, SHOW, SIDE_HYSTERESIS, growFor, makeBracket, makePill, type Corner, type Handle, type Side } from '../handles/handles.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
 import { CafeSystem } from './cafe-system.js';
 import { HoldSystem } from './hold-system.js';
@@ -93,7 +93,8 @@ export class HandleSystem extends createSystem({}) {
     const best = Math.max(Math.abs(fx), Math.abs(fz));
     if (want !== this.side && best > current + SIDE_HYSTERESIS) this.side = want;
     const s = cafe.scale.x;
-    const gap = (PILL.gap + PILL.width / 2) / s;
+    const grow = growFor(s);
+    const gap = ((PILL.gap + PILL.width / 2) * grow) / s;
     switch (this.side) {
       case 'front':
         this.v.set(0, 0, b.max.z + gap);
@@ -110,6 +111,7 @@ export class HandleSystem extends createSystem({}) {
     }
     this.v.y = LIFT_M / s;
     const group = this.pill.group;
+    group.scale.setScalar(grow);
     cafe.localToWorld(group.position.copy(this.v));
     // Along the edge: the pill's length runs along X for the front and back edges, along Z for the sides.
     group.rotation.set(0, cafe.rotation.y + (this.side === 'left' || this.side === 'right' ? Math.PI / 2 : 0), 0);
@@ -120,11 +122,13 @@ export class HandleSystem extends createSystem({}) {
     const cafe = this.cafe!.cafe;
     const b = this.hold!.bounds;
     const s = cafe.scale.x;
-    const gap = BRACKET.gap / s;
+    const grow = growFor(s);
+    const gap = (BRACKET.gap * grow) / s;
     this.brackets.forEach((bracket, i) => {
       const [sx, sz] = CORNER_SIGNS[i];
       this.v.set(sx > 0 ? b.max.x + gap : b.min.x - gap, LIFT_M / s, sz > 0 ? b.max.z + gap : b.min.z - gap);
       const group = bracket.group;
+      group.scale.setScalar(grow);
       cafe.localToWorld(group.position.copy(this.v));
       // The bracket's arms run along +X and +Z from its vertex; turn them to point back toward the base.
       // Front-right (+x,+z): arms toward -x,-z: a half turn. Front-left (-x,+z): arms toward +x,-z. And so on.
@@ -139,14 +143,17 @@ export class HandleSystem extends createSystem({}) {
   private nearest(point: Vector3): 'pill' | Corner | null {
     this.pill.group.getWorldPosition(this.w);
     // The pill is long: measure to the nearest point on its length.
+    // (The group is scaled with the café, so local half-lengths are in the handle's own units.)
     this.pill.group.worldToLocal(this.w.copy(point));
     this.w.x = Math.max(-PILL.length / 2, Math.min(PILL.length / 2, this.w.x));
+    this.w.y = 0;
     this.w.z = 0;
     this.pill.group.localToWorld(this.w);
     if (this.w.distanceTo(point) <= REACH_M) return 'pill';
+    const grow = this.pill.group.scale.x;
     for (let i = 0; i < 4; i++) {
       this.brackets[i].group.getWorldPosition(this.w);
-      if (this.w.distanceTo(point) <= REACH_M + BRACKET.arm * 0.4) return i as Corner;
+      if (this.w.distanceTo(point) <= REACH_M + BRACKET.arm * grow * 0.4) return i as Corner;
     }
     return null;
   }
@@ -206,10 +213,11 @@ export class HandleSystem extends createSystem({}) {
     const hold = this.hold!;
     const k = Math.min(1, SHOW.fade * delta);
     const carrying = hold.holding.length > 0;
-    this.light(this.pill, carrying ? SHOW.held : this.nearHand(this.pill, PILL.length / 2) ? SHOW.near : SHOW.rest, k);
+    const grow = this.pill.group.scale.x;
+    this.light(this.pill, carrying ? SHOW.held : this.nearHand(this.pill, (PILL.length / 2) * grow) ? SHOW.near : SHOW.rest, k);
     this.brackets.forEach((bracket, i) => {
       const held = this.drag?.corner === i;
-      this.light(bracket, held ? SHOW.held : this.nearHand(bracket, BRACKET.arm * 0.5) ? SHOW.near : SHOW.rest, k);
+      this.light(bracket, held ? SHOW.held : this.nearHand(bracket, BRACKET.arm * grow * 0.5) ? SHOW.near : SHOW.rest, k);
     });
   }
 
@@ -225,6 +233,7 @@ export class HandleSystem extends createSystem({}) {
   private light(handle: Handle, target: number, k: number): void {
     handle.show += (target - handle.show) * k;
     handle.body.opacity = handle.show;
+    handle.side.opacity = handle.show;
     handle.glow.opacity = handle.show * SHOW.glowShare;
   }
 }
