@@ -54,3 +54,8 @@ export const CARRY_FOLLOW = 18;
 export const SEAT_REACH_M = 0.05;
 /** Hops: onto a seat, back to the line, and off a seat (seconds and height in metres). */
 export const HOP = { sit: { seconds: 0.28, height: 0.012 }, back: { seconds: 0.45, height: 0.03 }, off: { seconds: 0.42, height: 0.028 } };
+
+/** A guest on its feet or in a seat watches a free hand that comes within this of it (metres, world; grows with the café). */
+export const WATCH_RADIUS_M = 0.14;
+/** How quickly a held guest's lean follows its acting (per second). */
+export const LEAN_FOLLOW = 9;

@@ -94,6 +94,8 @@ export class GuestActor {
     this.root = gltf.scene.getObjectByName('guest') ?? gltf.scene;
     this.root.removeFromParent();
     this.root.position.set(0, 0, 0);
+    // Yaw first, then lean: a guest can be turned to face somewhere and tilted or drooped from there.
+    this.root.rotation.order = 'YXZ';
     // A guest moves about on its own: keep it out of the café's static batch.
     this.root.userData.dynamic = true;
     for (const clip of gltf.animations) this.clips.set(clip.name, clip);

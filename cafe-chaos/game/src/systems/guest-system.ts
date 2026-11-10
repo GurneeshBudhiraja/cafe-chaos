@@ -11,9 +11,14 @@
  *   halfway mark it shows (foot tapping, side-eye); when it runs out the
  *   guest gives up.
  * - Picking up: a pinch closing on a guest lifts it. It hangs from the
- *   fingers, kicking, turned to face the player. The seat it would land
- *   on glows blue (guests/seat-glow.ts); letting go over that seat sits
- *   it down, letting go anywhere else sends it back where it came from.
+ *   fingers, kicking, turned to face the player, and acts out how it
+ *   feels (guests/expressions.ts): startled, then wondering what is
+ *   happening, and, held up to the player's face, a run of feelings from
+ *   curious to sad to won over. The seat it would land on glows blue
+ *   (guests/seat-glow.ts); letting go over that seat sits it down,
+ *   letting go anywhere else sends it back where it came from.
+ * - Watching: a guest on its feet or in a seat follows a hand that comes
+ *   close with wide eyes, so it is plain they can be picked up.
  * - Sitting: happy at first, then eating, then idle; after a minute it
  *   hops off its chair and leaves.
  * - Leaving: every guest who leaves goes out toward the front, then
@@ -25,13 +30,14 @@
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
-import { castLoaded, GuestActor, WALK_CLIP_SPEED } from '../guests/actor.js';
+import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/actor.js';
 import { Blobs } from '../guests/blobs.js';
 import { randomLook, type Look } from '../guests/cast.js';
+import { HeldAct, watchingFace } from '../guests/expressions.js';
 import { ARRIVAL_POINT, MARCH_LANES_Z, pathFromInside, pathFromQueue, pathOffSeat, QUEUE_SPOTS, QUEUE_YAW, type Side } from '../guests/paths.js';
 import {
-  CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, MAX_GUESTS, MAX_QUEUE,
-  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, SEAT_REACH_M, SEATED_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED,
+  CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
+  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, SEAT_REACH_M, SEATED_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, WATCH_RADIUS_M,
 } from '../guests/rules.js';
 import { SeatGlow } from '../guests/seat-glow.js';
 import { collectSeats, seatUnder, type Seat } from '../guests/seats.js';
@@ -88,6 +94,12 @@ export interface Guest {
   seat: Seat | null;
   seatedFor: number;
   hop: Hop | null;
+  /** Held: its performance; and the lean of its body (radians), eased. */
+  act: HeldAct | null;
+  roll: number;
+  pitch: number;
+  /** True while it is watching a hand (its face is set by hand). */
+  watching: boolean;
 }
 
 /** Leavers march once they are out on the table in front of the plate (z beyond this, café space). */
@@ -131,6 +143,7 @@ export class GuestSystem extends createSystem({}) {
   private readonly at = new Vector3();
   private readonly head = new Vector3();
   private readonly targets: (Seat | null)[] = [null, null];
+  private readonly watchFace: Face = { eyes: 'EyesWide', mouth: 'MouthO', lookX: 0, lookY: 0 };
 
   init(): void {
     this.cafeSystem = this.world.getSystem(CafeSystem)!;
@@ -162,6 +175,7 @@ export class GuestSystem extends createSystem({}) {
     for (const guest of [...this.guests]) {
       if (guest.state === 'queued') this.wait(guest, delta);
       if (guest.state === 'seated') this.sitting(guest, delta);
+      if (guest.state === 'queued' || guest.state === 'seated') this.watch(guest);
       if (guest.state === 'hop') this.hopping(guest, delta);
       else if (guest.state !== 'held') this.step(guest, delta);
       this.show(guest, delta);
@@ -236,6 +250,10 @@ export class GuestSystem extends createSystem({}) {
       seat: null,
       seatedFor: 0,
       hop: null,
+      act: null,
+      roll: 0,
+      pitch: 0,
+      watching: false,
     };
     actor.root.rotation.y = guest.yaw;
     this.guests.push(guest);
@@ -345,6 +363,8 @@ export class GuestSystem extends createSystem({}) {
     guest.hand = hand;
     guest.walk = null;
     guest.target = null;
+    guest.watching = false;
+    guest.act = new HeldAct();
     guest.actor.play('Lifted');
     this.pickedUp++;
   }
@@ -360,6 +380,15 @@ export class GuestSystem extends createSystem({}) {
     cafe.worldToLocal(this.player.head.getWorldPosition(this.head));
     guest.targetYaw = Math.atan2(this.head.x - root.position.x, this.head.z - root.position.z);
     this.turn(guest, delta);
+    // Its performance: the face, how hard it kicks, and how it leans, by how near the player's face it is.
+    const distance = guest.actor.grip.getWorldPosition(this.at).distanceTo(this.player.head.getWorldPosition(this.head));
+    const acting = guest.act!.update(delta, distance);
+    guest.actor.setFace(acting.face);
+    guest.actor.play('Lifted', acting.kick);
+    const k = 1 - Math.exp(-LEAN_FOLLOW * delta);
+    guest.roll += (acting.roll - guest.roll) * k;
+    guest.pitch += (acting.pitch - guest.pitch) * k;
+    root.rotation.set(guest.pitch, guest.yaw + acting.shake, guest.roll);
     const own = guest.home && 'seat' in guest.home ? guest.home.seat : null;
     // The seat the other hand's guest is aimed at is spoken for.
     const spoken = this.guests.find((g) => g !== guest && g.state === 'held')?.target ?? null;
@@ -374,6 +403,8 @@ export class GuestSystem extends createSystem({}) {
     const seat = guest.target ?? homeSeat;
     guest.hand = null;
     guest.target = null;
+    guest.act = null;
+    guest.actor.setFace(null);
     if (seat) {
       // A new seat: take it now so nobody else is aimed at it, and give the old one up.
       const moved = seat !== homeSeat;
@@ -392,6 +423,28 @@ export class GuestSystem extends createSystem({}) {
       guest.targetYaw = QUEUE_YAW;
       guest.actor.play('Idle');
     });
+  }
+
+  /** A guest that can be picked up watches a free hand that comes close: wide eyes following it. */
+  private watch(guest: Guest): void {
+    const hold = this.holdSystem;
+    let seen = false;
+    if (hold && this.world.renderer.xr.isPresenting) {
+      const reach = WATCH_RADIUS_M * Math.max(1, this.cafeSystem.cafe.scale.x);
+      guest.actor.grip.getWorldPosition(this.at);
+      for (const hand of HANDS) {
+        const pinch = hold.pinch[hand];
+        // A tracked hand, not busy carrying, near enough.
+        if (pinch.gap === Infinity || this.carriedBy(hand) || pinch.point.distanceTo(this.at) > reach) continue;
+        // Where the hand is from the guest's own point of view, about its eyes.
+        guest.actor.root.worldToLocal(this.head.copy(pinch.point));
+        guest.actor.setFace(watchingFace(this.head.x, this.head.y - 0.045, this.watchFace));
+        seen = true;
+        break;
+      }
+    }
+    if (!seen && guest.watching) guest.actor.setFace(null);
+    guest.watching = seen;
   }
 
   // ---------------------------------------------------------------- sitting
@@ -454,7 +507,10 @@ export class GuestSystem extends createSystem({}) {
     root.position.y += Math.sin(Math.PI * hop.t) * hop.height;
     guest.yaw = hop.yawFrom + yawDelta(hop.yawFrom, hop.yawTo) * eased;
     guest.targetYaw = hop.yawTo;
-    root.rotation.y = guest.yaw;
+    // Any lean from being held straightens out on the way.
+    guest.roll *= 1 - eased;
+    guest.pitch *= 1 - eased;
+    root.rotation.set(guest.pitch, guest.yaw, guest.roll);
     guest.ground = hop.to.y;
     if (hop.t < 1) return;
     guest.hop = null;
