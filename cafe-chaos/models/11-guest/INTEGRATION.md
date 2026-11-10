@@ -127,7 +127,7 @@ can show at once.
 | `Idle` | Standing | 2 s | Waiting on the bench | Breathing, a glance, a blink |
 | `Impatient` | Standing | 1.5 s | Waited too long | Half-lidded side-eye, frown, foot tapping |
 | `Walk` | Standing | 1 s (two steps) | While the game moves them: gate → bench, seat → gate | A real gait cycle **in place**: heel strike, flat stance, heel rise and push-off, bent-knee swing; arms counter-swinging, hips over the support leg, slight forward lean |
-| `Lifted` | Standing | 1 s | While the player carries them | Wide eyes darting about, "o" mouth, legs kicking, arms flapping, dangling sway |
+| `Lifted` | Standing | 2 s | While the player carries them | Picked up like a person from the side: wide eyes darting left, right, then down at the floor; "o" mouth; body twisting after the eyes and swinging from the grip; arms out and flapping out of step; legs pedalling from hips and knees |
 | `SitIdle` | Seated | 2 s | Seated, nothing special | Breathing, small sway, blink |
 | `SitHappy` | Seated | 1 s | Right after a good seat | Happy squint eyes, open smile, rosy cheeks, bouncing, arms up |
 | `SitEating` | Seated | 1 s | While the meal is eaten | Closed content eyes, "w" nibbling mouth, hands up in turn |

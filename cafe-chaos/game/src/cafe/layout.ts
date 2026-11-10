@@ -9,7 +9,7 @@
  * two two-seaters in the back row, five two-seaters in the front row.
  * Columns are 13 cm apart, the rows 16 cm. Dressing the room further: a
  * two-stool bar along the left wall, a quiet armchair corner at the back
- * right, and a few meals already out on the tables.
+ * right. The tables start bare; the baristas bring the food.
  */
 
 import type { ModelName } from '../assets.js';
@@ -58,14 +58,8 @@ export interface Dressing {
   anchor: string;
 }
 
-/** Meals already out on a few tables, so the café looks open for business. */
-export const DRESSING: Dressing[] = [
-  { model: 'meal', on: 2, anchor: 'Meal-1' },
-  { model: 'meal', on: 2, anchor: 'Meal-4' },
-  { model: 'meal', on: 4, anchor: 'Meal-2' },
-  { model: 'meal', on: 6, anchor: 'Meal-1' },
-  { model: 'meal', on: 8, anchor: 'Meal-2' },
-  { model: 'meal', on: 11, anchor: 'Meal-2' },
-  { model: 'meal', on: 12, anchor: 'Meal-1' },
-  { model: 'meal', on: 13, anchor: 'Meal-1' },
-];
+/**
+ * Nothing is set out on the tables to begin with: the baristas carry the
+ * orders out on trays (see systems/barista-system.ts).
+ */
+export const DRESSING: Dressing[] = [];

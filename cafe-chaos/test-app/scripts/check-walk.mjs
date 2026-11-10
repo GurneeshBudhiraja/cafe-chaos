@@ -35,6 +35,13 @@ const report = await page.evaluate(async () => {
   });
   out.tints = skins.map((m) => (m ? '#' + m.color.getHexString() : null));
   out.distinctSkinMaterials = new Set(skins.map((m) => m?.uuid)).size;
+  // Counter life: two baristas on their spots with clips running, steam puffs moving, petals falling.
+  out.baristas = system.baristas.map((b) => ({ parent: b.root.parent?.name, clips: b.mixer._actions.filter((a) => a.isRunning()).map((a) => a.getClip().name) }));
+  const steam = system.cafe.getObjectByName('Steam-Kettle-1');
+  const s0 = steam?.scale.x; await sleep(400); out.steamMoves = steam ? steam.scale.x !== s0 : null;
+  const petals = system.cafe.getObjectByName('Petals');
+  const y0 = petals?.children[0].position.y; await sleep(300); out.petalFalls = petals ? petals.children[0].position.y !== y0 : null;
+  out.petalCount = petals?.children.length ?? 0;
   // Node check: the three-part legs are there.
   out.legNodes = ['Leg-L', 'Shin-L', 'Foot-L', 'Leg-R', 'Shin-R', 'Foot-R'].every((n) => system.guests[0].root.getObjectByName('St-' + n) && system.guests[0].root.getObjectByName('Se-' + n));
   await sleep(700);

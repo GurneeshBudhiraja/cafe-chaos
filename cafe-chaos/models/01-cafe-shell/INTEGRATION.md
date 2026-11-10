@@ -1,6 +1,6 @@
 # cafe-shell — the Japanese garden café (final art)
 
-**File:** `cafe-shell.glb` — about 31,000 triangles, 30 meshes (one draw call each), 28 materials, 17 packed textures, 3.1 MB.
+**File:** `cafe-shell.glb` — about 40,000 triangles, 38 meshes, 25 materials, 16 packed textures, one 2 s `Ambient` clip, 4.0 MB.
 **This replaces the grey-box shell.** Same root name and anchor names, so game code written
 against the grey box keeps working, but the shell is larger and the entrance moved: re-read
 the sizes below.
@@ -10,9 +10,31 @@ the sizes below.
 A diorama of a Japanese café in a small garden, sitting on the player's real table:
 
 - **Base:** 92 × 62 cm garden plate; the café room itself is 70 × 46 cm, centred.
-- **Café room:** timber posts and beams, glowing shoji-paper walls, a plank floor,
-  a counter along the back wall (coffee machine, pastry case, menu board, hanging
-  paper lanterns under a tiled eave).
+- **Café room:** timber posts and beams, glowing shoji-paper walls, a plank floor, and
+  the counter along the back wall. The counter is a walnut service bar — a framed front with cream
+  panels, bamboo slats and a brass foot rail, under a thick rounded walnut top (y = 0.085); behind it a raised duckboard where the two baristas stand (`BaristaSpot-1/2`
+  anchors, see `../18-barista/`), then a back-bar cabinet with a tetsubin on a brazier,
+  a matcha bowl (with ∞ latte art), a pour-over on a wooden stand, a copper kettle and
+  stacked bowls; one clean wall shelf above with five tea tins (app-sticker labels), a
+  plant, cups and a stack of menus with a tiny headset resting on it; the espresso machine
+  and a lucky cat on the bar, the pastry case at the right end, the menu board on the wall.
+  All the props share **one painted 512 px atlas** (`CafeBarPalette`: 16 materials, each
+  a tile with its own grain, glaze, enamel stripes or hammered copper) so the whole back bar
+  is a handful of draw calls.
+- **`Ambient` clip (2 s loop):** six steam puffs over the kettle, the dripper and the
+  machine rise, swell and shrink away. Play it on the shell's root with an `AnimationMixer`
+  and leave it running (`mixer.clipAction(clip).play()`): that is the "something is
+  brewing". Nothing else in the shell animates.
+- **Menu board:** a chalk-style texture (`MenuBoard`): お品書き / INSTA CAFÉ, Meta-themed
+  items (Insta-gram Latte, Reels Roast, Threads Chai, Llama Matcha; Poke Mochi, Like-button
+  Dango, Horizon Dorayaki, Quest-ard Taiyaki) with coin prices, a NEW! burst, a "most liked!"
+  arrow, the real Meta mark top right, a "how do you do, fellow baristas?" scribble and a blue
+  footer strip — META HACKATHON 2026 · hands-only on Quest — sized to read from the seat.
+  Re-render with `menu_render.py` (text block in the .blend) to change the text.
+- **Meta touches, kept subtle:** the Meta mark (traced from the official vector) carved into the
+  flat stone by the front path — a real 1.6 mm groove in the stone's top, floor in a darker
+  granite grey, no paint — the ∞ latte art, the sticker labels on the tins, the headset on the
+  menus, the footer on the board.
 - **Entrance / right side (+X):** fully **open**: no wall, posts, beams, gate roof or
   curtain on this side, so the player sees every seat from the right with nothing in the
   way. A free-standing timber **door frame** (`GateFrame`: two posts, a top lintel and a tie
@@ -27,6 +49,7 @@ A diorama of a Japanese café in a small garden, sitting on the player's real ta
   a koi pond with lilies (front-left), boulders, a bamboo fence, and
   a cherry tree (back-left) leaning over the roof, with fallen petals.
 - Baked contact shading (AO skirts) along wall bases; no real-time shadows needed.
+- The right-hand moss bed sits 1.8 mm above the gravel so the two no longer z-fight (that was the shimmer on Quest).
 
 ## Numbers the game needs
 

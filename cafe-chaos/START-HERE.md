@@ -26,7 +26,7 @@ It is hands only and seated, built with IWSDK (WebXR) for the Quest 3/3S and Met
 
 | # | Model | Purpose |
 |---|---|---|
-| 01 | `cafe-shell` | **Final art:** the Japanese garden café — 92×62 cm garden base, 70×46 cm café room, entrance gate on the right (+X). See its INTEGRATION.md; it replaces the grey-box shell. |
+| 01 | `cafe-shell` | **Final art:** the Japanese garden café (now with the dressed counter, baristas' duckboard, menu board and `Ambient` steam clip) — 92×62 cm garden base, 70×46 cm café room, entrance gate on the right (+X). See its INTEGRATION.md; it replaces the grey-box shell. |
 | 02 | `waiting-bench` | **Final art:** timber bench with an indigo cushion, four waiting slots 4.6 cm apart; sits on the shell's `BenchSpot`, facing the player |
 | 03 | `table-2` | **Final art:** chunky square table, two short slat-back chairs, sakura-pink cushions |
 | 04 | `table-4` | **Final art:** rectangular table with two segmented sofa benches (2 seats each), indigo |
@@ -43,6 +43,10 @@ It is hands only and seated, built with IWSDK (WebXR) for the Quest 3/3S and Met
 | 15 | `mood-ring` | Mood indicator around a guest's feet |
 | 16 | `seat-glow` | Marks the valid or best seat while carrying |
 | 17 | `coin` | Money |
+| 18 | `barista-sora`, `-momo`, `-yuki`, `-ren`, `-hana`, `-kenji` | **Final art:** six blocky pixel-skinned barista looks on one rig (7.4 cm, 7 clips incl. Walk/Carry/Serve); stand on the shell's `BaristaSpot-1/2`; unlockable |
+| 19 | `petals` | **Final art:** sakura petal meshes (two petals, one blossom) for falling petals; the fall is code, see its INTEGRATION.md |
+| 21 | `tray-tea`, `tray-coffee` | **Final art:** serving trays with orders on them; parent to a barista's `Tray` empty for `Carry`/`Serve` |
+| 20 | `cafe-hand`, `cafe-tips` | **Candidates:** themed hand-tracking hands (a mochi mitten, or pinch-finger caps); design not final |
 
 The **second janitor** unlock reuses `janitor`. The **rating meter**, end-of-shift card and other panels are UI (UIKitML), not models.
 

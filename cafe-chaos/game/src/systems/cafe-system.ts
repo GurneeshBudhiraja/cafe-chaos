@@ -1,7 +1,7 @@
 /**
  * CafeSystem: builds the café from its models the moment the game starts
  * (the garden café shell, the waiting bench by the gate, the ten tables
- * of the opening layout, the bar, the quiet corner and a few meals) and
+ * of the opening layout, the bar and the quiet corner) and
  * puts it on the player's real table.
  *
  * Placement: when the XR session begins, the nearest detected flat
@@ -93,6 +93,13 @@ export class CafeSystem extends createSystem({
     this.cafe.traverse((node) => {
       if (/^Seat-\d+$/.test(node.name)) this.seats.push(node);
     });
+    // What the shell's own clip moves (the steam puffs) stays out of the batch.
+    for (const clip of AssetManager.getGLTF('cafe-shell', { shared: true })?.animations ?? []) {
+      for (const track of clip.tracks) {
+        const node = this.cafe.getObjectByName(track.name.split('.')[0]);
+        if (node) node.userData.dynamic = true;
+      }
+    }
     // The furniture stands still inside the café: draw it as one mesh per material.
     this.batch = batchStatic(this.cafe);
     this.world.createTransformEntity(this.cafe);

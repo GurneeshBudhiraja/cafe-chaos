@@ -30,6 +30,7 @@ import {
 } from '@iwsdk/core';
 import { FLOOR_TOP_M, SAMPLE_LAYOUT } from './cafe-layout.js';
 import { findDeskSpot, type DetectedSurface } from './lib/desk-placement.js';
+import { PetalFall } from './lib/petal-fall.js';
 import { HANDS, readPinchPoint, type Hand } from './lib/hand-pinch.js';
 
 /** Thumb and index tips closer than this pinch; further than RELEASE let go (metres). */
@@ -74,6 +75,9 @@ export class CafeTestSystem extends createSystem({ planes: { required: [Detected
     right: { point: new Vector3(), gap: Infinity },
   };
   private carried: { guest: Guest; hand: Hand; offset: Vector3 } | null = null;
+  readonly baristas: { root: Object3D; mixer: AnimationMixer; play: (clip: string) => void }[] = [];
+  private ambient: AnimationMixer | null = null;
+  private petals: PetalFall | null = null;
   /** Guests walking somewhere (the `Walk` clip in place, the root slid by `update`). */
   private readonly walks: { guest: Guest; from: Vector3; to: Vector3; seconds: number; t: number }[] = [];
   private glow!: Object3D;
@@ -121,6 +125,24 @@ export class CafeTestSystem extends createSystem({ planes: { required: [Detected
       this.cafe.add(root);
       this.sitAt(guest, slot);
     });
+    // Two baristas behind the counter on the shell's BaristaSpot anchors, and the shell's own
+    // `Ambient` clip (steam over the kettle, dripper and machine).
+    const shell = this.cafe.getObjectByName('cafe-shell')!;
+    this.ambient = new AnimationMixer(shell);
+    const ambient = AssetManager.getGLTF('cafe-shell')?.animations.find((c) => c.name === 'Ambient');
+    if (ambient) this.ambient.clipAction(ambient).play();
+    (['barista-sora', 'barista-momo'] as const).forEach((model, i) => {
+      const spot = shell.getObjectByName(`BaristaSpot-${i + 1}`)!;
+      const root = this.copy(model);
+      spot.add(root);
+      root.rotation.y = Math.PI; // face the counter (the player)
+      const mixer = new AnimationMixer(root);
+      const clips = AssetManager.getGLTF(model)!.animations;
+      const play = (name: string) => { mixer.stopAllAction(); mixer.clipAction(clips.find((c) => c.name === name)!).play(); };
+      play(i === 0 ? 'Work' : 'Idle');
+      this.baristas.push({ root, mixer, play });
+    });
+    this.petals = new PetalFall(AssetManager.getGLTF('petals')!.scene, this.cafe);
     // A bubble over the first guest, as the game would show their demand.
     const bubble = this.copy('demand-bubble');
     this.guests[0].root.getObjectByName('BubbleAnchor')!.add(bubble);
@@ -133,6 +155,9 @@ export class CafeTestSystem extends createSystem({ planes: { required: [Detected
 
   update(delta: number): void {
     for (const guest of this.guests) guest.mixer?.update(delta);
+    for (const b of this.baristas) b.mixer.update(delta);
+    this.ambient?.update(delta);
+    this.petals?.update(delta);
     this.stepWalks(delta);
     const presenting = this.world.renderer.xr.isPresenting;
     if (!presenting) return;

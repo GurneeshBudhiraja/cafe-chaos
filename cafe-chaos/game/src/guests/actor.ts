@@ -18,8 +18,8 @@
  * - lets code take the face over for custom moments (expressions.ts).
  */
 
-import { AnimationMixer, AssetManager, BufferAttribute, Color, LoopRepeat, Matrix4, Mesh, Skeleton, SkinnedMesh, type AnimationAction, type AnimationClip, type Bone, type BufferGeometry, type Material, type MeshStandardMaterial, type Object3D } from '@iwsdk/core';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { AnimationMixer, AssetManager, Color, LoopRepeat, type AnimationAction, type AnimationClip, type Material, type Mesh, type MeshStandardMaterial, type Object3D, type SkinnedMesh } from '@iwsdk/core';
+import { foldParts } from '../lib/fold-parts.js';
 import { GUEST_MODEL, type Look } from './cast.js';
 
 export type ClipName = 'Idle' | 'Impatient' | 'Walk' | 'Lifted' | 'SitIdle' | 'SitHappy' | 'SitEating' | 'SitUnhappy';
@@ -271,12 +271,7 @@ export class GuestActor {
     });
   }
 
-  /**
-   * Fold a pose's skin-coloured parts into one skinned mesh. Each part
-   * becomes a bone (the part's own node, which the clips move), and its
-   * vertices are bound wholly to it, so the result moves exactly as the
-   * separate parts did. The part meshes stay as the bones, hidden.
-   */
+  /** Fold a pose's skin-coloured parts (body, arms, legs) into one skinned mesh (see lib/fold-parts.ts). */
   private foldSkin(pose: Object3D): void {
     this.root.updateMatrixWorld(true);
     const parts: Mesh[] = [];
@@ -284,40 +279,8 @@ export class GuestActor {
       const mesh = node as Mesh;
       if (mesh.isMesh && !Array.isArray(mesh.material) && mesh.material.name.startsWith('GuestSkin')) parts.push(mesh);
     });
-    if (parts.length < 2) return;
-    const material = parts[0].material as Material;
-    const toPose = new Matrix4().copy(pose.matrixWorld).invert();
-    const local = new Matrix4();
-    const geometries: BufferGeometry[] = parts.map((part, bone) => {
-      const geometry = part.geometry.clone().applyMatrix4(local.multiplyMatrices(toPose, part.matrixWorld));
-      const count = geometry.attributes.position.count;
-      const index = new Uint16Array(count * 4);
-      const weight = new Float32Array(count * 4);
-      for (let i = 0; i < count; i++) {
-        index[i * 4] = bone;
-        weight[i * 4] = 1;
-      }
-      geometry.setAttribute('skinIndex', new BufferAttribute(index, 4));
-      geometry.setAttribute('skinWeight', new BufferAttribute(weight, 4));
-      return geometry;
-    });
-    const merged = mergeGeometries(geometries, false);
-    for (const geometry of geometries) geometry.dispose();
-    if (!merged) return;
-    const skin = new SkinnedMesh(merged, material);
-    skin.name = `${pose.name}-Skin`;
-    skin.frustumCulled = false;
-    pose.add(skin);
-    skin.updateMatrixWorld(true);
-    // The parts are plain nodes, not Bone objects; a skeleton only needs their world matrices.
-    skin.bind(new Skeleton(parts as unknown as Bone[]), skin.matrixWorld);
-    // The parts themselves are no longer drawn (no layer: the renderer passes over them but still
-    // visits their children), yet stay live in the tree: they are the bones.
-    for (const part of parts) {
-      part.layers.disableAll();
-      part.userData.folded = true;
-    }
-    this.skins.push(skin);
+    const skin = foldParts(pose, parts, `${pose.name}-Skin`);
+    if (skin) this.skins.push(skin);
   }
 
   private collectFaces(): void {
