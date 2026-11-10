@@ -1,12 +1,14 @@
 /**
- * Finding the table to put the café on, from the surfaces Quest has
- * detected (WebXR plane detection: the tables and desks from the headset's
- * Space Setup). IWSDK's SceneUnderstandingSystem turns each plane into an
- * entity whose mesh sits at the plane's pose, with +Y as the surface's up.
+ * Finding a surface to put the café on, from the surfaces Quest has
+ * detected (WebXR plane detection: the planes from the headset's Space
+ * Setup). IWSDK's SceneUnderstandingSystem turns each plane into an entity
+ * whose mesh sits at the plane's pose, with +Y as the surface's up.
  *
- * The desk is the nearest table-like surface in front of the viewer and a
- * comfortable reach below the eyes. The spot on it is straight ahead,
- * moved in from the edges so the café room fits on the desk.
+ * Any flat, upward-facing surface that is not the floor will do: a table,
+ * a desk, a counter, a couch seat, a shelf, a box, labelled or not, as
+ * long as it is in front of the viewer, within reach, and below the eyes.
+ * The spot on it is straight ahead, moved in from the edges so the café
+ * fits on it as far as the surface allows.
  */
 
 import { Vector3, type Object3D } from '@iwsdk/core';
@@ -17,25 +19,24 @@ export interface DetectedSurface {
   plane: XRPlane;
 }
 
-/** Labels that are desks; other labelled surfaces (couch, floor, bed) are not. */
-const DESK_LABELS = new Set(['table', 'desk']);
-/** An unlabelled surface counts as a desk at this height above the floor (metres). */
-const MIN_DESK_HEIGHT_M = 0.55;
-const MAX_DESK_HEIGHT_M = 1.15;
-/** A desk sits this far below the eyes (seated or standing) ... */
-const MIN_BELOW_EYES_M = 0.15;
-const MAX_BELOW_EYES_M = 1.0;
-/** ... and the tablet lands at most this far out, horizontally ... */
-const MAX_REACH_M = 1.0;
+/** Surfaces that are never the one: the floor and its like (ceilings face down and are not horizontal-up anyway). */
+const NEVER_LABELS = new Set(['floor', 'ceiling', 'wall', 'wall face', 'door', 'window', 'window frame', 'door frame', 'global mesh']);
+/** A surface this low is the floor (or a rug on it) whatever it is called (metres above the floor). */
+const MIN_HEIGHT_M = 0.2;
+/** The surface sits this far below the eyes (seated or standing) ... */
+const MIN_BELOW_EYES_M = 0.1;
+const MAX_BELOW_EYES_M = 1.2;
+/** ... and the café lands at most this far out, horizontally ... */
+const MAX_REACH_M = 1.2;
 /** ... and no more than this far to the side of straight ahead (degrees). */
-const MAX_OFF_AHEAD_DEG = 60;
+const MAX_OFF_AHEAD_DEG = 80;
 /**
- * Where the café's centre lands when the desk allows: this far out from the
- * eyes, so the whole café sits below the gaze and is looked down on, while
- * the back row stays within seated reach.
+ * Where the café's centre lands when the surface allows: this far out from
+ * the eyes, so the whole café sits below the gaze and is looked down on,
+ * while the back row stays within seated reach.
  */
 const PREFERRED_REACH_M = 0.45;
-/** Kept between the café's centre and the desk's edge: about half the café room, plus a little. */
+/** Kept between the café's centre and the surface's edge: about half the café room, plus a little. */
 const EDGE_MARGIN_M = 0.25;
 
 const target = new Vector3();
@@ -43,10 +44,10 @@ const local = new Vector3();
 const spot = new Vector3();
 
 /**
- * Put the best desk spot (world space, on the desk's surface) in `out`.
- * `yaw` is the head's yaw (Three's: 0 faces -Z). False when no desk fits.
+ * Put the best spot (world space, on the surface) in `out`.
+ * `yaw` is the head's yaw (Three's: 0 faces -Z). False when no surface fits.
  */
-export function findDeskSpot(
+export function findSurfaceSpot(
   surfaces: Iterable<DetectedSurface>,
   head: Vector3,
   yaw: number,
@@ -54,9 +55,9 @@ export function findDeskSpot(
 ): boolean {
   let best = Infinity;
   for (const { object, plane } of surfaces) {
-    if (!isDesk(plane, object.position.y, head.y)) continue;
+    if (!isSurface(plane, object.position.y, head.y)) continue;
     object.updateWorldMatrix(true, false);
-    // Straight ahead at the preferred reach, at the desk's height.
+    // Straight ahead at the preferred reach, at the surface's height.
     target.set(
       head.x - Math.sin(yaw) * PREFERRED_REACH_M,
       object.position.y,
@@ -75,11 +76,11 @@ export function findDeskSpot(
   return best < Infinity;
 }
 
-function isDesk(plane: XRPlane, height: number, eyes: number): boolean {
+function isSurface(plane: XRPlane, height: number, eyes: number): boolean {
   if (plane.orientation !== 'horizontal') return false;
   const label = plane.semanticLabel;
-  if (label && !DESK_LABELS.has(label)) return false;
-  if (!label && (height < MIN_DESK_HEIGHT_M || height > MAX_DESK_HEIGHT_M)) return false;
+  if (label && NEVER_LABELS.has(label.toLowerCase())) return false;
+  if (height < MIN_HEIGHT_M) return false;
   const below = eyes - height;
   return below >= MIN_BELOW_EYES_M && below <= MAX_BELOW_EYES_M;
 }

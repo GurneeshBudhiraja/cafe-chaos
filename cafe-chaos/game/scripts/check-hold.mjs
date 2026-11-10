@@ -7,9 +7,10 @@
  * 2. a pinch away from the café takes nothing;
  * 3. two hands resize it by their spread and turn it by their line, the
  *    point between them staying under the hands;
- * 4. the hold frame is dark when no hand is near, glows when one is, and
- *    more while the café is held; the café counts as moved by hand.
+ * 4. the café counts as moved by hand once carried.
  * Screenshots: the café lifted mid-carry, and after being enlarged.
+ * (The grab is on the café itself, well away from its handles; the
+ * handles have their own check, check-handles.mjs.)
  *
  * Usage: dev server running, then `node scripts/check-hold.mjs`.
  * Output: artifacts/hold-*.png, and a pass/fail line.
@@ -65,7 +66,6 @@ const state = () =>
       scale: c.scale.x,
       holding: [...hold.holding],
       moved: system.movedByHand,
-      frame: hold.frame.material.opacity,
       point: { left: hold.pinch.left.point.toArray(), right: hold.pinch.right.point.toArray() },
       gap: { left: hold.pinch.left.gap, right: hold.pinch.right.gap },
     };
@@ -94,17 +94,12 @@ await frames(3);
 for (const hand of ['left', 'right']) await pinch(hand, 0);
 await frames(3);
 const rest = await state();
-check('the frame is dark with no hand near', rest.frame < 0.01, `opacity ${rest.frame.toFixed(2)}`);
 
 // 1. One hand: pinch over the front of the café and carry it.
 const start = rest.pos;
-const grabAt = add(start, [0.12, 0.09, 0]); // over the garden, in front of the room, a hand's height up
+const grabAt = add(start, [0.0, 0.12, 0.08]); // over the café room, clear of the pill and brackets, a hand's height up
 await pinchPointTo('right', grabAt);
 await frames(2);
-{
-  const s = await state();
-  check('the frame glows when a hand is near', s.frame > 0.15 && s.frame < 0.3 && s.holding.length === 0, `opacity ${s.frame.toFixed(2)}`);
-}
 await pinch('right', 1);
 await frames(2);
 const lift = [0.1, 0.08, -0.12];
@@ -118,7 +113,6 @@ await frames(2);
   const s = await state();
   check('one hand carries the café with the pinch', s.holding.length === 1 && nearV(s.pos, add(start, lift), 0.006), `moved to ${fmt(s.pos)}, wanted ${fmt(add(start, lift))}`);
   check('carrying keeps its size and turn', near(s.scale, rest.scale, 0.001) && near(s.yaw, rest.yaw, 0.001), `scale ${s.scale.toFixed(3)}, yaw ${s.yaw.toFixed(3)}`);
-  check('the frame glows more while held', s.frame > 0.4, `opacity ${s.frame.toFixed(2)}`);
   await page.screenshot({ path: 'artifacts/hold-1-carry.png' });
 }
 await pinch('right', 0);
@@ -175,7 +169,7 @@ await handTo('right', AWAY.right);
 await frames(3);
 {
   const s = await state();
-  check('it keeps its new size and turn once let go', s.holding.length === 0 && near(s.scale, down.scale * 1.3, 0.02) && s.frame < 0.01, `scale ${s.scale.toFixed(3)}, frame ${s.frame.toFixed(2)}`);
+  check('it keeps its new size and turn once let go', s.holding.length === 0 && near(s.scale, down.scale * 1.3, 0.02), `scale ${s.scale.toFixed(3)}`);
   await h.head(SEAT, { x: s.pos[0], y: s.pos[1], z: s.pos[2] }, 300);
   await page.screenshot({ path: 'artifacts/hold-2-resized.png' });
 }

@@ -4,11 +4,13 @@
  * of the opening layout, the bar, the quiet corner and a few meals) and
  * puts it on the player's real table.
  *
- * Placement: when the XR session begins, the nearest detected desk or
- * table in front of the player is used (WebXR plane detection, the
- * surfaces from the headset's Space Setup), with the café's centre about
- * 35 cm out so the back row stays within seated reach. With no such
- * surface within two seconds, the café floats at arm's reach instead. It
+ * Placement: when the XR session begins, the nearest detected flat
+ * surface in front of the player that is not the floor (a table, desk,
+ * counter, couch seat: WebXR plane detection, the surfaces from the
+ * headset's Space Setup) is used, with the café's centre about 45 cm
+ * out so it is looked down on and the back row stays within seated
+ * reach. With no such surface within two seconds, the café floats
+ * ahead and below the eyes instead. It
  * turns to face the player and pops up out of the table with a short
  * ease. Outside XR (the desktop preview) it simply stands in front of the
  * camera. From then on the player can pinch it to move, resize and turn
@@ -22,7 +24,7 @@ import { AssetManager, createSystem, Euler, Group, Quaternion, Vector3, XRPlane 
 import type { ModelName } from '../assets.js';
 import { DRESSING, FLOOR_TOP_M, OPENING_LAYOUT, type Placement } from '../cafe/layout.js';
 import { dressGreyBox } from '../cafe/materials.js';
-import { findDeskSpot, type DetectedSurface } from '../lib/desk-placement.js';
+import { findSurfaceSpot, type DetectedSurface } from '../lib/desk-placement.js';
 
 /**
  * The café's size: 1 is the modelled size (a 92 x 62 cm garden base, a
@@ -30,9 +32,9 @@ import { findDeskSpot, type DetectedSurface } from '../lib/desk-placement.js';
  * back row leaves comfortable seated reach.
  */
 export const CAFE_SCALE = 1.0;
-/** Give plane detection this long to find a table before floating the café... */
+/** Give plane detection this long to find a surface before floating the café... */
 const DESK_WAIT_MS = 2000;
-/** ...and keep looking this long after floating: a table found late still gets the café. */
+/** ...and keep looking this long after floating: a surface found late still gets the café. */
 const DESK_RETRY_MS = 10000;
 /**
  * With no table: this far ahead of the eyes and this far below them, so
@@ -118,33 +120,27 @@ export class CafeSystem extends createSystem({
     this.sessionStartedAt = performance.now();
   }
 
-  /** Back to where and how big it first was (the dock's Reset): placed afresh, with the pop-up, the night kept. */
-  resetPose(): void {
-    this.movedByHand = false;
-    this.place(true, true);
-  }
-
   // ------------------------------------------------------------ placement
 
-  /** Find the table in front of the player and put the café on it (or float it, once `giveUp`). */
-  private place(giveUp: boolean, quiet = false): void {
+  /** Find a surface in front of the player and put the café on it (or float it, once `giveUp`). */
+  private place(giveUp: boolean): void {
     this.player.head.getWorldPosition(this.head);
     this.player.head.getWorldQuaternion(this.q);
     const yaw = this.euler.setFromQuaternion(this.q, 'YXZ').y;
-    this.onDesk = findDeskSpot(this.surfaces, this.head, yaw, this.spot);
+    this.onDesk = findSurfaceSpot(this.surfaces, this.head, yaw, this.spot);
     if (!this.onDesk && !giveUp) return;
     if (!this.onDesk) this.spot.set(this.head.x - Math.sin(yaw) * FLOAT_AHEAD_M, this.head.y - FLOAT_BELOW_M, this.head.z - Math.cos(yaw) * FLOAT_AHEAD_M);
-    this.settle(this.spot, Math.atan2(this.head.x - this.spot.x, this.head.z - this.spot.z), quiet);
+    this.settle(this.spot, Math.atan2(this.head.x - this.spot.x, this.head.z - this.spot.z));
   }
 
-  /** Put the café at a world spot, its front (+Z) turned to `yaw`, and start the pop-up (`quiet`: not a new placement for the night). */
-  private settle(spot: Vector3, yaw: number, quiet = false): void {
+  /** Put the café at a world spot, its front (+Z) turned to `yaw`, and start the pop-up. */
+  private settle(spot: Vector3, yaw: number): void {
     this.cafe.position.copy(spot);
     this.cafe.rotation.set(0, yaw, 0);
     this.cafe.scale.setScalar(0.001);
     this.cafe.visible = true;
     this.placed = true;
-    if (!quiet) this.placements++;
+    this.placements++;
     this.arrival = 0;
   }
 

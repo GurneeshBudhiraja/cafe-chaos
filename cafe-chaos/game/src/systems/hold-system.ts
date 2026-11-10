@@ -8,16 +8,15 @@
  * between them resizes it, the line between them turns it, and the point
  * between them stays put under the hands, so stretching and turning feel
  * like handling a model on a table. It always stays upright and never
- * sinks below the floor. A warm frame around the base shows when a hand
- * is near enough to take it, and glows while it is held.
+ * sinks below the floor. The handles (HandleSystem) offer the same moves
+ * more visibly; pinches near them are left to them (`exclude`).
  *
  * Pinches are read from the hands' joints (see ../lib/hand-pinch.ts), so
  * this needs no pointer rays. Nothing is allocated per frame.
  */
 
 import { Box3, createSystem, Vector3 } from '@iwsdk/core';
-import { makeHoldFrame } from '../hold/frame.js';
-import { FLOOR_Y, FRAME, HOLD_MARGIN_M, PINCH_M, RELEASE_M, SCALE_MAX, SCALE_MIN } from '../hold/hold.js';
+import { FLOOR_Y, HOLD_MARGIN_M, PINCH_M, RELEASE_M, SCALE_MAX, SCALE_MIN } from '../hold/hold.js';
 import { HANDS, readPinchPoint, type Hand } from '../lib/hand-pinch.js';
 import { CafeSystem } from './cafe-system.js';
 
@@ -38,9 +37,10 @@ export class HoldSystem extends createSystem({}) {
     left: { point: new Vector3(), gap: Infinity, closed: false },
     right: { point: new Vector3(), gap: Infinity, closed: false },
   };
-  readonly frame = makeHoldFrame();
   /** The café's bounds in its own space at scale 1 (set once it is built). */
   readonly bounds = new Box3();
+  /** Pinches for which this returns true are not taken here (they are on a handle). */
+  exclude: ((point: Vector3) => boolean) | null = null;
   private cafe: CafeSystem | null = null;
   // One hand: where the café's origin sits relative to the pinch (world).
   private readonly offset = new Vector3();
@@ -60,7 +60,6 @@ export class HoldSystem extends createSystem({}) {
     this.cafe = this.world.getSystem(CafeSystem) ?? null;
     if (!this.cafe) return;
     const cafe = this.cafe.cafe;
-    cafe.add(this.frame);
     // The bounds of the furniture and shell (not the lights, halos or the wide spill), in café space.
     cafe.updateMatrixWorld(true);
     for (const piece of this.cafe.pieces) this.bounds.expandByObject(piece);
@@ -68,11 +67,10 @@ export class HoldSystem extends createSystem({}) {
     this.bounds.max.sub(cafe.position).divideScalar(cafe.scale.x);
   }
 
-  update(delta: number): void {
+  update(): void {
     const cafe = this.cafe;
     if (!cafe || !cafe.placed || cafe.arriving || !this.world.renderer.xr.isPresenting) {
       this.holding.length = 0;
-      this.glow(0, delta);
       return;
     }
     for (const hand of HANDS) this.read(hand);
@@ -80,8 +78,6 @@ export class HoldSystem extends createSystem({}) {
     this.takeByPinch();
     if (this.holding.length === 2) this.stretch();
     else if (this.holding.length === 1) this.carry();
-    const near = this.holding.length ? FRAME.held : HANDS.some((h) => this.pinch[h].gap < Infinity && this.over(h)) ? FRAME.near : 0;
-    this.glow(near, delta);
   }
 
   // -------------------------------------------------------------- hands
@@ -118,8 +114,8 @@ export class HoldSystem extends createSystem({}) {
     for (const hand of HANDS) {
       const p = this.pinch[hand];
       if (!p.closed || this.holding.includes(hand) || this.holding.length >= 2) continue;
-      // Only a pinch closing this frame takes the café, not one already closed elsewhere.
-      if (this.previous[hand] || !this.over(hand)) continue;
+      // Only a pinch closing this frame takes the café, not one already closed elsewhere, and not one on a handle.
+      if (this.previous[hand] || !this.over(hand) || this.exclude?.(p.point)) continue;
       this.holdWith(hand);
     }
     for (const hand of HANDS) this.previous[hand] = this.pinch[hand].closed;
@@ -185,13 +181,4 @@ export class HoldSystem extends createSystem({}) {
     cafe.scale.setScalar(scale);
   }
 
-  // --------------------------------------------------------------- frame
-
-  /** Fade the frame toward `target` opacity. */
-  private glow(target: number, delta: number): void {
-    const m = this.frame.material;
-    const step = (FRAME.held / FRAME.fade) * delta;
-    m.opacity = m.opacity < target ? Math.min(target, m.opacity + step) : Math.max(target, m.opacity - step);
-    this.frame.visible = m.opacity > 0.002;
-  }
 }

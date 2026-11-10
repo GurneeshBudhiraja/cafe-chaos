@@ -4,9 +4,11 @@
  * the session starts, the garden café with its furniture appears on the
  * table in front of the player, the room dims to dusk around it, and its
  * lamps and lanterns light it, throwing shadows and spilling a warm glow
- * out over the table. A dock of big labelled buttons stands beside the
- * café for moving, turning and resizing it; pinching the café itself
- * works too. The player's hands are drawn in the café's own warm style.
+ * out over the table. The café has a grab pill on the side facing the
+ * player (pinch and drag to move it) and a bracket at each corner (pinch
+ * and pull to resize, swing to turn), as a Horizon OS window does, always
+ * visible, in the café's own style; pinching the café itself works too.
+ * The player's hands are drawn in the same warm style.
  * Guests, seating and the rest of the game come next.
  *
  * `virtual:iwsdk-project` (from iwsdk.config.json) brings the scene, the
@@ -17,22 +19,23 @@
 import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { themeHands } from './hands/cafe-hand.js';
+import { findSurfaceSpot } from './lib/desk-placement.js';
 import { setUpLighting } from './lighting.js';
 import { CafeSystem } from './systems/cafe-system.js';
-import { DockSystem } from './systems/dock-system.js';
+import { HandleSystem } from './systems/handle-system.js';
 import { HoldSystem } from './systems/hold-system.js';
 import { MoodSystem } from './systems/mood-system.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(DockSystem).registerSystem(MoodSystem);
+  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(MoodSystem);
   const system = world.getSystem(CafeSystem)!;
   const lights = setUpLighting(world, system.cafe);
   const mood = world.getSystem(MoodSystem)!;
   const hold = world.getSystem(HoldSystem)!;
-  const dock = world.getSystem(DockSystem)!;
+  const handles = world.getSystem(HandleSystem)!;
   mood.lights = lights;
   themeHands(world);
 
-  // Dev only: lets the check and recording scripts find the world, the café, its lights, the mood, the hold and the dock.
-  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, dock };
+  // Dev only: lets the check and recording scripts find the world, the café, its lights, the mood, the hold, the handles and the surface finder.
+  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, findSurfaceSpot };
 });

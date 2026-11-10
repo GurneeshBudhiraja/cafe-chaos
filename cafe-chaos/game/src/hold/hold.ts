@@ -18,16 +18,3 @@ export const SCALE_MIN = 0.3;
 export const SCALE_MAX = 2.5;
 /** The café's underside never goes below this height (metres, the floor is 0). */
 export const FLOOR_Y = 0.02;
-/** The frame around the base that shows where to pinch: its band and how it glows. */
-export const FRAME = {
-  color: 0xffc890,
-  band: 0.008,
-  /** Outside the base's edge by this much. */
-  inset: -0.015,
-  corner: 0.03,
-  /** Opacity when a hand is near enough to take the café, and while it is held. */
-  near: 0.22,
-  held: 0.42,
-  /** Seconds to fade in and out. */
-  fade: 0.18,
-};
