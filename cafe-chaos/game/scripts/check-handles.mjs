@@ -151,7 +151,8 @@ const start = await state();
   await h.head({ x: rightSide[0], y: rightSide[1], z: rightSide[2] }, { x: start.pos[0], y: start.pos[1], z: start.pos[2] }, 400);
   await frames(3);
   const s = await state();
-  const wantRight = toWorld(start, [b.max[0], 0, 0]);
+  // On the door's side the pill sits toward the back of the edge, clear of the door and the line (PILL_DOOR_SIDE_Z).
+  const wantRight = toWorld(start, [b.max[0], 0, -0.19]);
   check('the pill moves to the edge now facing the viewer', s.side === 'right' && dist(s.pill, wantRight) < 0.06, `side ${s.side}, ${(dist(s.pill, wantRight) * 100).toFixed(1)} cm out from the right edge`);
   await page.screenshot({ path: 'artifacts/handles-3-side.png' });
   await h.head(SEAT, LOOK, 400);

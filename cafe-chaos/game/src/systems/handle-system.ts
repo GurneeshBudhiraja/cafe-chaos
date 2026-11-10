@@ -19,7 +19,7 @@
 
 import { createSystem, Vector3 } from '@iwsdk/core';
 import { SCALE_MAX, SCALE_MIN } from '../hold/hold.js';
-import { BRACKET, CORNER_SIGNS, LIFT_M, NEAR_M, PILL, REACH_M, SHOW, SIDE_HYSTERESIS, growFor, makeBracket, makePill, type Corner, type Handle, type Side } from '../handles/handles.js';
+import { BRACKET, CORNER_SIGNS, LIFT_M, NEAR_M, PILL, PILL_DOOR_SIDE_Z, REACH_M, SHOW, SIDE_HYSTERESIS, growFor, makeBracket, makePill, type Corner, type Handle, type Side } from '../handles/handles.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
 import { CafeSystem } from './cafe-system.js';
 import { HoldSystem } from './hold-system.js';
@@ -103,7 +103,8 @@ export class HandleSystem extends createSystem({}) {
         this.v.set(0, 0, b.min.z - gap);
         break;
       case 'right':
-        this.v.set(b.max.x + gap, 0, 0);
+        // The door is on this side: keep clear of it and of the line outside.
+        this.v.set(b.max.x + gap, 0, PILL_DOOR_SIDE_Z);
         break;
       case 'left':
         this.v.set(b.min.x - gap, 0, 0);

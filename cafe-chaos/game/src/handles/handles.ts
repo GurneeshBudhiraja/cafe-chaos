@@ -14,6 +14,12 @@ import { CustomBlending, ExtrudeGeometry, Group, Mesh, MeshBasicMaterial, OneFac
 
 /** The pill: its length, width and height (metres), how far outside the base's edge it lies. */
 export const PILL = { length: 0.08, width: 0.016, height: 0.008, gap: 0.03 };
+/**
+ * On the door's side (the café's right, +X) the pill does not sit at the
+ * middle of the edge, where the door and the line of guests are, but
+ * this far along the edge toward the back (café space, metres along Z).
+ */
+export const PILL_DOOR_SIDE_Z = -0.19;
 /** The corner brackets: arm length, thickness and height, how far outside the corner the vertex sits. */
 export const BRACKET = { arm: 0.05, thick: 0.012, height: 0.014, gap: 0.012 };
 /** The handles grow with the café's scale, but no smaller or larger than this much of their base size. */
