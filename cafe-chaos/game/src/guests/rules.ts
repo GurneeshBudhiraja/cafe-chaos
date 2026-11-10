@@ -40,3 +40,17 @@ export const FADE_IN_M = 0.1;
 export const FADE_OUT_M = 0.16;
 /** Leaving guests keep at least this far behind the one ahead in their lane (metres). */
 export const FOLLOW_GAP_M = 0.06;
+
+/** A pinch closing within this of a guest's grip picks it up (metres in the café's space, and never less than the world floor). */
+export const PICK_RADIUS_M = 0.04;
+export const PICK_RADIUS_WORLD_MIN_M = 0.03;
+/** A pinch within this many pick radii of a guest belongs to the guests: it never moves the café. */
+export const CLAIM_RADII = 1.7;
+/** A carried guest hangs from the pinch by its grip, this far up its body (café space, from the model). */
+export const GRIP_HEIGHT_M = 0.042;
+/** How tightly a carried guest follows the hand (per second): high is stiff, low is dangly. */
+export const CARRY_FOLLOW = 18;
+/** A carried guest lands on a free seat within this of where it hangs (metres across, café space). */
+export const SEAT_REACH_M = 0.05;
+/** Hops: onto a seat, back to the line, and off a seat (seconds and height in metres). */
+export const HOP = { sit: { seconds: 0.28, height: 0.012 }, back: { seconds: 0.45, height: 0.03 }, off: { seconds: 0.42, height: 0.028 } };

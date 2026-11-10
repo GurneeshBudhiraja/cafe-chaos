@@ -33,7 +33,12 @@ const fmt = (a) => `[${a.map((v) => v.toFixed(3)).join(', ')}]`;
 const h = await startHeadset({
   async prepare(h) {
     await h.head(SEAT, LOOK);
-    await h.page.evaluate(() => window.__cafe.system.replace());
+    await h.page.evaluate(() => {
+      // The guests stay away for this check; pinching the café's own body is switched on (it is off in play).
+      window.__cafe.hold.directGrab = true;
+      window.__cafe.guests.arrivals = false;
+      window.__cafe.system.replace();
+    });
     await h.page.waitForFunction(() => window.__cafe.system.placed && !window.__cafe.system.arriving, null, { timeout: 15000 });
     await h.page.waitForFunction(() => window.__cafe.mood.lampsUp > 0.99, null, { timeout: 20000 });
   },

@@ -9,7 +9,9 @@
  * between them stays put under the hands, so stretching and turning feel
  * like handling a model on a table. It always stays upright and never
  * sinks below the floor. The handles (HandleSystem) offer the same moves
- * more visibly; pinches near them are left to them (`exclude`).
+ * more visibly; pinches near them are left to them (`claims`). Taking
+ * hold of the café by its body is behind `directGrab` (off while there
+ * are guests to pick up); the handles always work.
  *
  * Pinches are read from the hands' joints (see ../lib/hand-pinch.ts), so
  * this needs no pointer rays. Nothing is allocated per frame.
@@ -39,8 +41,15 @@ export class HoldSystem extends createSystem({}) {
   };
   /** The café's bounds in its own space at scale 1 (set once it is built). */
   readonly bounds = new Box3();
-  /** Pinches for which this returns true are not taken here (they are on a handle). */
-  exclude: ((point: Vector3) => boolean) | null = null;
+  /** A pinch any of these claims is not taken here (it is on a handle, or on a guest). */
+  readonly claims: ((point: Vector3) => boolean)[] = [];
+  /**
+   * Whether pinching the café's own body takes hold of it. Off: with
+   * guests to pick up all over the café, a pinch that just misses one
+   * must not drag the whole café away. The pill and the corner brackets
+   * (HandleSystem) move, resize and turn it; they call `holdWith`.
+   */
+  directGrab = false;
   private cafe: CafeSystem | null = null;
   // One hand: where the café's origin sits relative to the pinch (world).
   private readonly offset = new Vector3();
@@ -115,7 +124,7 @@ export class HoldSystem extends createSystem({}) {
       const p = this.pinch[hand];
       if (!p.closed || this.holding.includes(hand) || this.holding.length >= 2) continue;
       // Only a pinch closing this frame takes the café, not one already closed elsewhere, and not one on a handle.
-      if (this.previous[hand] || !this.over(hand) || this.exclude?.(p.point)) continue;
+      if (!this.directGrab || this.previous[hand] || !this.over(hand) || this.claims.some((claim) => claim(p.point))) continue;
       this.holdWith(hand);
     }
     for (const hand of HANDS) this.previous[hand] = this.pinch[hand].closed;

@@ -36,6 +36,8 @@ interface CornerDrag {
 
 export class HandleSystem extends createSystem({}) {
   readonly pill = makePill();
+  /** Whether the handles are up this frame. */
+  shown = false;
   readonly brackets: Handle[] = [makeBracket(), makeBracket(), makeBracket(), makeBracket()];
   /** Which edge of the base the pill is on. */
   side: Side = 'front';
@@ -58,13 +60,14 @@ export class HandleSystem extends createSystem({}) {
       this.world.createTransformEntity(handle.group);
     }
     // The café's own grab leaves pinches near a handle alone.
-    if (this.hold) this.hold.exclude = (point) => this.nearest(point) !== null;
+    this.hold?.claims.push((point) => this.near(point));
   }
 
   update(delta: number): void {
     const cafe = this.cafe;
     const hold = this.hold;
     const shown = !!cafe && !!hold && cafe.placed && this.world.renderer.xr.isPresenting;
+    this.shown = shown;
     for (const handle of [this.pill, ...this.brackets]) handle.group.visible = shown;
     if (!shown) {
       this.drag = null;
@@ -139,6 +142,11 @@ export class HandleSystem extends createSystem({}) {
   }
 
   // ------------------------------------------------------------- taking
+
+  /** Is a world point within reach of a handle? */
+  near(point: Vector3): boolean {
+    return this.shown && this.nearest(point) !== null;
+  }
 
   /** The handle (pill, or a corner index) within reach of a world point, or null. */
   private nearest(point: Vector3): 'pill' | Corner | null {

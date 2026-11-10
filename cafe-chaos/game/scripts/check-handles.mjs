@@ -34,7 +34,11 @@ const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const h = await startHeadset({
   async prepare(h) {
     await h.head(SEAT, LOOK);
-    await h.page.evaluate(() => window.__cafe.system.replace());
+    await h.page.evaluate(() => {
+      // The guests stay away for this check.
+      window.__cafe.guests.arrivals = false;
+      window.__cafe.system.replace();
+    });
     await h.page.waitForFunction(() => window.__cafe.system.placed && !window.__cafe.system.arriving, null, { timeout: 15000 });
     await h.page.waitForFunction(() => window.__cafe.mood.lampsUp > 0.99, null, { timeout: 20000 });
   },
