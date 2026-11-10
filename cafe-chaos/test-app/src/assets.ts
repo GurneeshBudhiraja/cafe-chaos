@@ -29,6 +29,9 @@ export const CAFE_MODELS = [
   'mood-ring',
   'seat-glow',
   'coin',
+  'barista-sora',
+  'barista-momo',
+  'petals',
 ] as const;
 
 export default defineAssets(
