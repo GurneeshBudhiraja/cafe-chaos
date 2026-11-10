@@ -155,7 +155,7 @@ await page.waitForFunction(() => window.__trip.done, null, { timeout: 400000 });
   check('one takes a tray out, serves at a table, bows and walks back', inOrder && carried.every((q) => q.tray && q.clip === 'Carry') && s.some((q) => q.state === 'back' && q.clip === 'Walk' && !q.tray) && home.z < -0.19 && Math.abs(home.y - 0.036) < 1e-3,
     `${trip.name}: ${['out', 'serving', 'bowing', 'back', 'working'].filter((st) => s.some((q) => q.state === st)).join(' > ')}; carried with ${[...new Set(carried.map((q) => q.clip))].join('/')}, home at z ${home.z.toFixed(3)}`);
   const now = await staff();
-  const tables = await page.evaluate(async () => (await import('/src/baristas/routes.ts')).SERVE_POINTS.map((p) => ({ table: p.table, x: p.tray.x, z: p.tray.z })));
+  const tables = await page.evaluate(() => window.__cafe.baristas.servePoints.map((p) => ({ table: p.table, x: p.tray.x, z: p.tray.z })));
   const table = s.find((q) => q.table !== null)?.table;
   const left = now.served.find((t) => t.table === table) ?? now.served[0];
   const want = tables.find((t) => t.table === left?.table);

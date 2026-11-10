@@ -8,7 +8,9 @@
  * 3. the renderer is set up for the look (filmic tone mapping, soft shadow
  *    maps), with no console errors;
  * 4. the frame budget holds: the furniture is batched and the shadow map
- *    is only redrawn when the café moves.
+ *    is only redrawn when the café moves;
+ * 5. the theme is loaded, set to loop, and was asked to play when the
+ *    session began.
  * Then saves headset-view screenshots: seated, the gate lamps and their
  * spill, the lanterns over the counter, and a low look along the table.
  *
@@ -85,6 +87,18 @@ check('the renderer is set for the look', state.shadowMap && state.toneMapping =
     return { idle, moved, batch: system.batch, calls: world.renderer.info.render.calls };
   });
   check('the furniture is batched and the shadow map rests while the café is still', still.batch.merged > 40 && still.batch.batches < 15 && still.idle === 0 && still.moved > 0, `${still.batch.merged} meshes in ${still.batch.batches} batches, ${still.calls} draw calls a frame (both eyes), shadow redraws: ${still.idle} still, ${still.moved} after a move`);
+}
+
+// The theme: the track is there, set to loop quietly, and was asked to play when the session began.
+{
+  const theme = await page.evaluate(async () => {
+    const { theme } = window.__cafe;
+    const a = theme.audio;
+    for (let i = 0; i < 100 && a.readyState < 1; i++) await new Promise((r) => setTimeout(r, 100));
+    return { src: a.src, loop: a.loop, duration: a.duration, asked: theme.asked, started: theme.started, volume: a.volume, error: a.error ? a.error.message : null };
+  });
+  check('the theme is loaded, looping, and was asked to play at the start', /audio\/theme\.mp3$/.test(theme.src) && theme.loop && theme.duration > 100 && theme.asked >= 1 && !theme.error && theme.volume <= 0.31,
+    `${theme.src.split('/').slice(-2).join('/')}, ${theme.duration.toFixed(0)} s, loop ${theme.loop}, asked to play ${theme.asked} time(s), playing ${theme.started} (the emulator's browser may hold sound back), volume ${theme.volume.toFixed(2)}`);
 }
 
 await h.head(SEAT, { x: LOOK.x, y: LOOK.y + 0.1, z: LOOK.z }, 400);

@@ -26,6 +26,8 @@ import { DRESSING, FLOOR_TOP_M, OPENING_LAYOUT, type Placement } from '../cafe/l
 import { dressGreyBox } from '../cafe/materials.js';
 import { batchStatic, type BatchReport } from '../cafe/static-batch.js';
 import { findSurfaceSpot, type DetectedSurface } from '../lib/desk-placement.js';
+import { CAFE_NAV } from '../nav/cafe-nav.js';
+import { NavGrid } from '../nav/nav-grid.js';
 
 /**
  * The café's size: 1 is the modelled size (a 92 x 62 cm garden base, a
@@ -58,6 +60,8 @@ export class CafeSystem extends createSystem({
   readonly pieces: Object3D[] = [];
   /** Every seat anchor in the café (`Seat-N` nodes), for the game to come. */
   readonly seats: Object3D[] = [];
+  /** The navigation grid, read from the café's geometry (see nav/nav-grid.ts). Call `nav.rebuild()` after changing the furniture. */
+  nav!: NavGrid;
   /** What the static batch folded together (see cafe/static-batch.ts). */
   batch: BatchReport = { merged: 0, batches: 0 };
   placed = false;
@@ -102,6 +106,8 @@ export class CafeSystem extends createSystem({
     }
     // The furniture stands still inside the café: draw it as one mesh per material.
     this.batch = batchStatic(this.cafe);
+    // From the café as built, the map the characters find their way by.
+    this.nav = new NavGrid(this.cafe, CAFE_NAV);
     this.world.createTransformEntity(this.cafe);
     this.showPreview();
   }

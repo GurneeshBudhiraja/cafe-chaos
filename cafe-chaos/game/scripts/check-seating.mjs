@@ -10,7 +10,8 @@
  *    goes out;
  * 4. a guest let go away from any seat hops back to its place in the line;
  * 5. when its time is up a seated guest hops off its chair, walks out of
- *    the door, and marches away in front of the café; its seat is free;
+ *    the door, down the side and along the front path, fading at its end
+ *    without leaving the plate; its seat is free;
  * 6. there are never more than ten on stage, and no console errors.
  * Saves headset-view screenshots along the way.
  *
@@ -159,7 +160,7 @@ await page.evaluate((id) => {
   const t = setInterval(() => {
     const g = guests.guests.find((x) => x.id === id);
     if (!g) { trail.gone = true; clearInterval(t); return; }
-    trail.points.push({ state: g.state, clip: g.actor.clip, x: g.actor.root.position.x, y: g.actor.root.position.y, z: g.actor.root.position.z, opacity: g.actor.opacity, side: g.side, lane: g.lane });
+    trail.points.push({ state: g.state, clip: g.actor.clip, x: g.actor.root.position.x, y: g.actor.root.position.y, z: g.actor.root.position.z, opacity: g.actor.opacity, lane: g.lane });
   }, 200);
 }, first.id);
 await frames(3);
@@ -197,7 +198,7 @@ await handTo('right', AWAY.right);
 
 // 5. The seated guest's time runs out: off the chair, out of the door, and away along the front.
 await h.head(SEAT, LOOK, 300);
-await page.waitForFunction(() => window.__trail.points.some((q) => q.state === 'leaving' && q.z > 0.36), null, { timeout: 420000 });
+await page.waitForFunction(() => window.__trail.points.some((q) => q.state === 'leaving' && q.z > 0.2 && q.x < 0.3), null, { timeout: 420000 });
 await h.screenshot('artifacts/seating-4-leaving.png');
 await page.waitForFunction(() => window.__trail.gone, null, { timeout: 420000 });
 const trail = await page.evaluate(() => window.__trail);
@@ -206,13 +207,14 @@ const trail = await page.evaluate(() => window.__trail);
   // The hop is under half a second: in the emulator's slow frames it can pass between two samples, so the system's own count is read.
   const hopped = (await page.evaluate(() => window.__cafe.guests.hoppedOff)) >= 1;
   const walkedOut = p.filter((q) => q.state === 'leaving');
-  const throughDoor = walkedOut.some((q) => q.x > 0.34 && q.x < 0.46 && q.z > 0.05 && q.z < 0.11);
-  const marched = walkedOut.filter((q) => q.z > 0.37 && Math.abs(q.y) < 0.002);
+  const throughDoor = walkedOut.some((q) => q.x > 0.33 && q.x < 0.46 && q.z > -0.005 && q.z < 0.115);
+  // Along the garden path at the front of the plate, never off it.
+  const onPath = walkedOut.filter((q) => q.z > 0.2 && q.y > 0.015);
+  const offPlate = walkedOut.some((q) => q.y < 0.015 || Math.abs(q.x) > 0.46 || q.z > 0.31);
   const faded = walkedOut.length > 0 && walkedOut[walkedOut.length - 1].opacity < 0.5;
-  const side = walkedOut.length ? walkedOut[0].side : '?';
-  const endX = marched.length ? marched[marched.length - 1].x : NaN;
-  check('its time up, it hops off the chair, goes out of the door and marches away in front', hopped && throughDoor && marched.length > 2 && faded && trail.gone && (side === 'left' ? endX < -0.3 : endX > 0.7),
-    `hopped ${hopped}, through the door ${throughDoor}, marched ${side} to x ${endX.toFixed(2)} (${marched.length} samples on the table), faded ${faded}, gone ${trail.gone}`);
+  const endX = onPath.length ? onPath[onPath.length - 1].x : NaN;
+  check('its time up, it hops off the chair, goes out of the door and away along the front path', hopped && throughDoor && onPath.length > 2 && !offPlate && faded && trail.gone && endX < -0.1,
+    `hopped ${hopped}, through the door ${throughDoor}, along the front path to x ${endX.toFixed(2)} (${onPath.length} samples), off the plate ${offPlate}, faded ${faded}, gone ${trail.gone}`);
 }
 const end = await state();
 check('its seat is free again, and there were never more than ten on stage', end.seats[seat.index].occupant === 0 && end.peak <= 10 && end.left >= 1, `seat ${seat.index} occupant ${end.seats[seat.index].occupant}, peak ${end.peak}, left ${end.left}`);

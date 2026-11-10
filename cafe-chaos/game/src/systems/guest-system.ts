@@ -14,16 +14,18 @@
  *   fingers, kicking, turned to face the player, and acts out how it
  *   feels (guests/expressions.ts): startled, then wondering what is
  *   happening, and, held up to the player's face, a run of feelings from
- *   curious to sad to won over. The seat it would land on glows blue
+ *   curious to sad to won over. The seat it would land on glows violet
  *   (guests/seat-glow.ts); letting go over that seat sits it down,
  *   letting go anywhere else sends it back where it came from.
  * - Watching: a guest on its feet or in a seat follows a hand that comes
  *   close with wide eyes, so it is plain they can be picked up.
  * - Sitting: happy at first, then eating, then idle; after a minute it
  *   hops off its chair and leaves.
- * - Leaving: every guest who leaves goes out toward the front, then
- *   marches off left or right (at random) along the table in front of
- *   the café, in lanes so they do not bunch, and fades out at the end.
+ * - Leaving: every guest who leaves goes out of the door, down the deck
+ *   at the side and along the garden path at the front of the plate, and
+ *   fades out as it reaches the path's end, never stepping off the
+ *   platform. Nobody is told the way: each finds it on the navigation
+ *   grid (nav/nav-grid.ts), which is read from the café's geometry.
  *
  * Guests are children of the café group, so they move, turn and scale
  * with it.
@@ -34,13 +36,13 @@ import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/ac
 import { Blobs } from '../guests/blobs.js';
 import { randomLook, type Look } from '../guests/cast.js';
 import { HeldAct, watchingFace } from '../guests/expressions.js';
-import { ARRIVAL_POINT, MARCH_LANES_Z, pathFromInside, pathFromQueue, pathOffSeat, QUEUE_SPOTS, QUEUE_YAW, type Side } from '../guests/paths.js';
+import { ARRIVAL_POINT, EXIT_ENDS, FRONT_PATH_Z, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
   PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, SEAT_REACH_M, SEATED_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, WATCH_RADIUS_M,
 } from '../guests/rules.js';
 import { SeatGlow } from '../guests/seat-glow.js';
-import { collectSeats, seatUnder, type Seat } from '../guests/seats.js';
+import { collectSeats, LANDING_REACH_M, seatUnder, type Seat } from '../guests/seats.js';
 import { Walk, yawDelta } from '../guests/walker.js';
 import { CafeSystem } from './cafe-system.js';
 import { HandleSystem } from './handle-system.js';
@@ -81,8 +83,7 @@ export interface Guest {
   /** Seconds of patience left in the line, and what it started with. */
   patience: number;
   patienceFull: number;
-  /** Leaving: the side it marches off to, and its lane. */
-  side: Side;
+  /** Leaving: which end of the front path it is making for. */
   lane: number;
   /** The ground under it (café space), for its blob. */
   ground: number;
@@ -102,8 +103,6 @@ export interface Guest {
   watching: boolean;
 }
 
-/** Leavers march once they are out on the table in front of the plate (z beyond this, café space). */
-const MARCH_FROM_Z = 0.33;
 /** A step down or up of more than this is hopped, not walked (metres). */
 const HOP_STEP_M = 0.01;
 const HOP_HEIGHT_M = 0.014;
@@ -151,7 +150,7 @@ export class GuestSystem extends createSystem({}) {
     this.handles = this.world.getSystem(HandleSystem);
     const cafe = this.cafeSystem.cafe;
     cafe.add(this.blobs.mesh);
-    this.seats = collectSeats(cafe, this.cafeSystem.seats);
+    this.seats = collectSeats(cafe, this.cafeSystem.seats, this.cafeSystem.nav);
     this.glow = new SeatGlow(cafe, this.seats.length);
     // A pinch on or just around a guest is the guests' business, never the café's.
     this.holdSystem?.claims.push((point) => this.nearestGuest(point, CLAIM_RADII) !== null);
@@ -241,7 +240,6 @@ export class GuestSystem extends createSystem({}) {
       targetYaw: -Math.PI / 2,
       patience,
       patienceFull: patience,
-      side: 'left',
       lane: 0,
       ground: ARRIVAL_POINT.y,
       hand: null,
@@ -291,16 +289,22 @@ export class GuestSystem extends createSystem({}) {
   private leaveFromLine(guest: Guest): void {
     this.line.splice(this.line.indexOf(guest), 1);
     guest.spot = -1;
-    this.startLeaving(guest, (side, lane) => pathFromQueue(guest.actor.root.position, side, lane));
+    this.startLeaving(guest);
   }
 
-  /** Send a guest away along a path built for its side and lane. */
-  private startLeaving(guest: Guest, path: (side: Side, lane: number) => Vector3[]): void {
+  /**
+   * Send a guest away: out of the door, down the side and along the
+   * front path to one of its ends, by whatever way the navigation grid
+   * finds from where the guest is.
+   */
+  private startLeaving(guest: Guest): void {
     guest.state = 'leaving';
-    guest.side = Math.random() < 0.5 ? 'left' : 'right';
-    // Lanes are dealt in turn, so two guests leaving together walk side by side, not through each other.
-    guest.lane = this.nextLane++ % MARCH_LANES_Z.length;
-    guest.walk = new Walk(path(guest.side, guest.lane));
+    // Ends are dealt in turn, so two guests leaving together walk abreast, not through each other.
+    guest.lane = this.nextLane++ % EXIT_ENDS.length;
+    const from = guest.actor.root.position;
+    const path = this.cafeSystem.nav.findPath(from, EXIT_ENDS[guest.lane]);
+    // With no way out (it should not happen) the guest simply fades where it stands.
+    guest.walk = new Walk(path ?? [from, from.clone().setX(from.x + FADE_OUT_M)]);
     guest.speed = SPEED.leave;
   }
 
@@ -481,14 +485,12 @@ export class GuestSystem extends createSystem({}) {
     seat.occupant = 0;
     guest.seat = null;
     this.hoppedOff++;
-    const down = pathOffSeat(seat.position, seat.yaw);
-    const landing = down[0];
-    const next = down[1] ?? landing;
+    // Down to the nearest place there is room to stand, facing away from the chair.
+    const nav = this.cafeSystem.nav;
+    const landing = nav.nearest(seat.position.x, seat.position.z, LANDING_REACH_M) ?? seat.position.clone();
     // In the air it kicks its legs (the Lifted clip), as when carried.
     guest.actor.play('Lifted');
-    this.startHop(guest, landing, Math.atan2(next.x - landing.x, next.z - landing.z), HOP.off, () => {
-      this.startLeaving(guest, (side, lane) => [...down, ...pathFromInside(down[down.length - 1], side, lane).slice(1)]);
-    });
+    this.startHop(guest, landing, Math.atan2(landing.x - seat.position.x, landing.z - seat.position.z), HOP.off, () => this.startLeaving(guest));
   }
 
   // ------------------------------------------------------------------- hops
@@ -527,8 +529,8 @@ export class GuestSystem extends createSystem({}) {
     if (walk) {
       let speed = guest.speed;
       if (guest.state === 'leaving') {
-        // Out on the open table in front the walk becomes a march; and nobody treads on the heels of the one ahead.
-        if (root.position.z > MARCH_FROM_Z) speed = SPEED.march;
+        // On the front path the walk becomes a march; and nobody treads on the heels of the one ahead.
+        if (root.position.z > FRONT_PATH_Z) speed = SPEED.march;
         if (this.crowded(guest)) speed *= 0.35;
       }
       const done = walk.advance(speed * delta);
@@ -565,11 +567,11 @@ export class GuestSystem extends createSystem({}) {
     guest.actor.play('Idle');
   }
 
-  /** True if another leaver in the same lane and on the same side is just ahead. */
+  /** True if another leaver making for the same end is just ahead. */
   private crowded(guest: Guest): boolean {
     const mine = guest.walk!.remaining;
     for (const other of this.guests) {
-      if (other === guest || other.state !== 'leaving' || !other.walk || other.side !== guest.side || other.lane !== guest.lane) continue;
+      if (other === guest || other.state !== 'leaving' || !other.walk || other.lane !== guest.lane) continue;
       const ahead = mine - other.walk.remaining;
       if (ahead > 0 && ahead < FOLLOW_GAP_M) return true;
     }

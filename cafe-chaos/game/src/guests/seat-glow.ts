@@ -1,16 +1,17 @@
 /**
  * The seat glow: while a guest is carried, the seat it would land on if
- * let go lights up in a clear sky blue, pulsing gently, and every other
- * free seat shows a small blue dot, so it is plain where guests can go
- * and where this one is about to.
+ * let go lights up in a soft violet, pulsing gently, and every other free
+ * seat shows a small violet dot, so it is plain where guests can go and
+ * where this one is about to.
  *
- * Blue because nothing else in the café is: the café is all warm timber
- * and lamp light, so the glow cannot be mistaken for part of the scene.
- * The landing glow is three layers, so it reads from the player's seat
- * as well as from above:
- * - a pad: a solid blue disc on the cushion itself (the "seat cover");
+ * Violet because nothing else in the café is: the café is all warm
+ * timber and lamp light, and a cool lo-fi violet sits with the night
+ * around it without being mistaken for part of the scene. It is kept
+ * subtle (a wash, not a beacon) but in three layers so it still reads
+ * from the player's seat as well as from above:
+ * - a pad: a violet wash on the cushion itself (the "seat cover");
  * - a halo: a wider soft ring around it, added to what is behind;
- * - a column: a faint shaft of blue light rising from the seat, which is
+ * - a column: a faint shaft of light rising from the seat, which is
  *   what shows when the seat is seen from the side or is behind a table.
  * One set per hand; the dots are one instanced mesh.
  */
@@ -21,10 +22,11 @@ import {
 import type { Seat } from './seats.js';
 
 /** The glow's colour and sizes (metres, café space): the pad on the cushion, the halo round it, the column above, the dots. */
-export const GLOW = { color: 0x38b6ff, pad: 0.034, halo: 0.075, column: { radius: 0.017, height: 0.075 }, dot: 0.016, lift: 0.0025 };
-/** The landing glow's brightness swings between these, this many times a second. */
-const PULSE = { low: 0.7, high: 1, rate: 1.5 };
-const OPACITY = { pad: 0.9, halo: 0.85, column: 0.55, dot: 0.8 };
+export const GLOW = { color: 0x9a86ff, pad: 0.034, halo: 0.07, column: { radius: 0.016, height: 0.065 }, dot: 0.014, lift: 0.0025 };
+/** The landing glow breathes between these, this many times a second: slow, like the lanterns. */
+const PULSE = { low: 0.72, high: 1, rate: 0.9 };
+/** How strong each layer is (0 to 1): enough to find at a glance, no more. */
+const OPACITY = { pad: 0.62, halo: 0.55, column: 0.32, dot: 0.5 };
 
 function canvasTexture(size: number, paint: (ctx: CanvasRenderingContext2D, size: number) => void): CanvasTexture {
   const canvas = document.createElement('canvas');
@@ -64,7 +66,7 @@ function light(map: CanvasTexture, opacity: number): MeshBasicMaterial {
   });
 }
 
-/** Painted over what is behind: for the solid blue of the pad and the dots. */
+/** Painted over what is behind: for the violet of the pad and the dots. */
 function paint(map: CanvasTexture, opacity: number): MeshBasicMaterial {
   return new MeshBasicMaterial({ color: new Color(GLOW.color), map, transparent: true, opacity, depthWrite: false, toneMapped: false });
 }

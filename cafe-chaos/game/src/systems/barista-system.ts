@@ -8,10 +8,12 @@
  *   to the back bar for the kettle or the tins, look about, or wave when
  *   a guest joins the line.
  * - Every few seconds one of them, picked at random, takes a tray (tea or
- *   coffee), slips along the lane behind the others, comes round the end
- *   of the counter, and carries it out to a table (picked at random,
- *   likelier one with a guest at it). It serves with a lean, leaves the
- *   tray on the table, bows, and walks back to its station.
+ *   coffee) and carries it out to a table (picked at random, likelier
+ *   one with a guest at it). It serves with a lean, leaves the tray on
+ *   the table, bows, and walks back to its station. Nobody is told the
+ *   way round the counter or between the tables: each finds it on the
+ *   navigation grid (nav/nav-grid.ts), and where to stand at each table
+ *   too.
  * - A tray stays on its table for a while and is then cleared away.
  *
  * Baristas and trays are children of the café group, so they move, turn
@@ -20,9 +22,8 @@
 
 import { AssetManager, createSystem, Vector3, type Material, type Mesh, type Object3D } from '@iwsdk/core';
 import { Barista, BARISTA_NAMES, baristaLoaded, type BaristaName } from '../baristas/barista.js';
-import { BACK_BAR_YAW, pathBack, pathOut, SERVE_POINTS, SHUFFLE_M, STATION_YAW, stationPoint, type ServePoint } from '../baristas/routes.js';
+import { BACK_BAR_YAW, servePointFor, SHUFFLE_M, STATION_YAW, stationPoint, type ServePoint } from '../baristas/routes.js';
 import { BACK_BAR_SECONDS, FIDGET_SECONDS, FIRST_TRIP_SECONDS, GUEST_TABLE_WEIGHT, MAX_OUT, SET_DOWN_AT, SPEED, TRAY_FADE_SECONDS, TRAY_STAYS_SECONDS, TRIP_SECONDS, TURN_SPEED, WAVE_CHANCE } from '../baristas/rules.js';
-import { FLOOR_TOP_M } from '../cafe/layout.js';
 import { Walk, yawDelta } from '../guests/walker.js';
 import { CafeSystem } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
@@ -79,8 +80,8 @@ export class BaristaSystem extends createSystem({}) {
   private nextTripIn = FIRST_TRIP_SECONDS;
   private placement = -1;
   private guestsSeen = 0;
-  /** The table tops' heights, by layout index. */
-  private readonly tableTop = new Map<number, number>();
+  /** Where to stand to serve each table (see `findTables`). */
+  servePoints: ServePoint[] = [];
   /** The shell's own copy of the bar palette, shared by the trays. */
   private palette: Material | null = null;
   private readonly at = new Vector3();
@@ -90,14 +91,30 @@ export class BaristaSystem extends createSystem({}) {
     this.guests = this.world.getSystem(GuestSystem);
     const cafe = this.cafeSystem.cafe;
     cafe.updateMatrixWorld(true);
-    // A table's top is where its meal anchors are.
-    for (const point of SERVE_POINTS) {
-      const anchor = this.cafeSystem.pieces[point.table]?.getObjectByName('Meal-1');
-      this.tableTop.set(point.table, anchor ? cafe.worldToLocal(anchor.getWorldPosition(this.at)).y : FLOOR_TOP_M + 0.022);
-    }
+    this.findTables();
     cafe.traverse((node) => {
       const material = (node as Mesh).material as Material | undefined;
       if (!this.palette && material && !Array.isArray(material) && material.name === 'CafeBarPalette') this.palette = material;
+    });
+  }
+
+  /**
+   * Find the tables and where to stand at each: any piece of the café
+   * with a meal anchor is a table, its top is at that anchor's height,
+   * and the navigation grid says where there is room to stand by it.
+   * Call again after the furniture changes (and after `nav.rebuild()`).
+   */
+  findTables(): void {
+    const cafe = this.cafeSystem.cafe;
+    cafe.updateMatrixWorld(true);
+    this.servePoints = [];
+    this.cafeSystem.pieces.forEach((piece, table) => {
+      const anchor = piece.getObjectByName('Meal-1');
+      if (!anchor) return;
+      const top = cafe.worldToLocal(anchor.getWorldPosition(this.at)).y;
+      const centre = cafe.worldToLocal(piece.getWorldPosition(new Vector3()));
+      const point = servePointFor(this.cafeSystem.nav, table, centre, top);
+      if (point) this.servePoints.push(point);
     });
   }
 
@@ -182,10 +199,13 @@ export class BaristaSystem extends createSystem({}) {
     const table = this.pickTable();
     if (free.length === 0 || !table) return;
     const member = free[Math.floor(Math.random() * free.length)];
+    // The way there, found on the navigation grid from where the barista stands.
+    const way = this.cafeSystem.nav.findPath(member.barista.root.position, table.stand);
+    if (!way) return;
     member.barista.hold(this.makeTray(trayModel));
     member.serving = table;
     member.state = 'out';
-    member.walk = new Walk(pathOut(member.station, member.shift, table));
+    member.walk = new Walk(way);
     member.speed = SPEED.carry;
     member.trips++;
     this.nextTripIn = between(this.tripSeconds);
@@ -194,7 +214,7 @@ export class BaristaSystem extends createSystem({}) {
   /** A table nobody is heading for and with no tray on it, at random; likelier one with a guest seated at it. */
   private pickTable(): ServePoint | null {
     const busy = new Set<number>([...this.served.map((s) => s.table), ...this.staff.filter((m) => m.serving).map((m) => m.serving!.table)]);
-    const options = SERVE_POINTS.filter((point) => !busy.has(point.table));
+    const options = this.servePoints.filter((point) => !busy.has(point.table));
     if (options.length === 0) return null;
     const weights = options.map((point) => (this.guestAt(point) ? GUEST_TABLE_WEIGHT : 1));
     let roll = Math.random() * weights.reduce((sum, w) => sum + w, 0);
@@ -233,7 +253,7 @@ export class BaristaSystem extends createSystem({}) {
     if (!tray || !point) return;
     member.barista.tray = null;
     this.cafeSystem.cafe.add(tray);
-    tray.position.set(point.tray.x, this.tableTop.get(point.table) ?? FLOOR_TOP_M + 0.022, point.tray.z);
+    tray.position.copy(point.tray);
     tray.rotation.set(0, member.yaw, 0);
     tray.scale.setScalar(1);
     this.served.push({ tray, table: point.table, age: 0 });
@@ -293,7 +313,10 @@ export class BaristaSystem extends createSystem({}) {
       case 'bowing':
         if (member.t >= member.lasts) {
           member.state = 'back';
-          member.walk = new Walk(pathBack(member.serving!, member.station));
+          // Home: the grid's way back to the bar, then the last step onto the station itself.
+          const home = stationPoint(member.station);
+          const way = this.cafeSystem.nav.findPath(member.barista.root.position, home) ?? [member.barista.root.position.clone()];
+          member.walk = new Walk([...way, home]);
           member.speed = SPEED.walk;
           member.shift = 0;
           member.serving = null;

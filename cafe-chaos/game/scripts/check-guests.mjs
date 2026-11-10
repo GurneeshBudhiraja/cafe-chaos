@@ -7,8 +7,8 @@
  * 2. they are a mix: more than one species, colour and outfit;
  * 3. a guest who waits too long first shows it (the Impatient clip), then
  *    gives up, and everyone behind steps up a place;
- * 4. a leaver goes to the front and marches off left or right along a
- *    lane on the table, fading at the end;
+ * 4. a leaver goes along the garden path at the front of the plate and
+ *    fades at its end, without stepping off the plate;
  * 5. there are never more than ten on stage, and no console errors.
  * Saves headset-view screenshots along the way.
  *
@@ -55,7 +55,7 @@ const state = () => page.evaluate(() => {
     id: x.id, state: x.state, clip: x.actor.clip, spot: x.spot, walking: !!x.walk, yaw: +x.yaw.toFixed(2),
     at: x.actor.root.position.toArray().map((v) => +v.toFixed(3)), opacity: +x.actor.opacity.toFixed(2),
     look: `${x.actor.look.species}/${x.actor.look.tintName}/${x.actor.look.outfit.join('+') || 'bare'}`, species: x.actor.look.species, tint: x.actor.look.tintName,
-    outfit: x.actor.look.outfit, patience: +x.patience.toFixed(1), side: x.side, lane: x.lane,
+    outfit: x.actor.look.outfit, patience: +x.patience.toFixed(1), lane: x.lane,
     drawn: (() => { let n = 0; x.actor.root.traverse((o) => { let v = o.isMesh && o.layers.mask !== 0; for (let p = o; p && v; p = p.parent) v = p.visible; if (v) n++; }); return n; })(),
   });
   return { all: guests.guests.map(g), line: guests.line.map((x) => x.id), arrived: guests.arrived, gaveUp: guests.gaveUp, left: guests.left, peak: guests.peak };
@@ -107,17 +107,32 @@ const stepped = await page.waitForFunction((id) => {
   check('it gives up and the line steps up a place', stepped.gaveUp >= 1 && inOrder && (stepped.leaver === 'leaving' || stepped.leaver === 'gone'), `gave up ${stepped.gaveUp}, line now ${stepped.line.join(',')} on spots ${stepped.spots.join(',')}, the one who left is ${stepped.leaver}`);
 }
 
-// 3. The leaver marches off along the front and fades.
-await h.head(SEAT, await toWorld([0.25, 0.02, 0.36]), 500);
+// 3. The leaver goes along the front path, on the plate, and fades at its end.
+await h.head(SEAT, await toWorld([0.1, 0.02, 0.3]), 500);
 const marching = await page.waitForFunction(() => {
-  const g = window.__cafe.guests.guests.find((x) => x.state === 'leaving' && x.actor.root.position.z > 0.37 && x.actor.opacity === 1);
-  return g ? { z: g.actor.root.position.z, x: g.actor.root.position.x, y: g.actor.root.position.y, side: g.side, lane: g.lane, clip: g.actor.clip } : null;
+  const g = window.__cafe.guests.guests.find((x) => x.state === 'leaving' && x.actor.root.position.z > 0.2 && x.actor.root.position.x < 0.3 && x.actor.opacity === 1);
+  return g ? { z: g.actor.root.position.z, x: g.actor.root.position.x, y: g.actor.root.position.y, lane: g.lane, clip: g.actor.clip } : null;
 }, null, { timeout: 240000 }).then((r) => r.jsonValue());
 await h.screenshot('artifacts/guests-4-march.png');
-check('a leaver marches off along a lane in front of the café', marching.clip === 'Walk' && Math.abs(marching.y) < 0.002 && marching.z > 0.37 && marching.z < 0.5, `side ${marching.side}, lane ${marching.lane}, at x ${marching.x.toFixed(2)} z ${marching.z.toFixed(3)} on the table (y ${marching.y.toFixed(3)}), clip ${marching.clip}`);
+check('a leaver goes along the front path, still on the plate', marching.clip === 'Walk' && marching.y > 0.015 && marching.y < 0.03 && marching.z > 0.19 && marching.z < 0.31 && Math.abs(marching.x) < 0.46, `making for end ${marching.lane}, at x ${marching.x.toFixed(2)} z ${marching.z.toFixed(3)} on the plate (y ${marching.y.toFixed(3)}), clip ${marching.clip}`);
+// From now on, note whether any leaver steps off the plate.
+await page.evaluate(() => {
+  const { guests } = window.__cafe;
+  window.__off = 0;
+  setInterval(() => {
+    for (const g of guests.guests) {
+      const p = g.actor.root.position;
+      // Leavers who began in the line start out on the player's table: count only those who have been on the plate.
+      if (g.state !== 'leaving') continue;
+      if (p.y > 0.015) g.__onPlate = true;
+      else if (g.__onPlate) window.__off++;
+    }
+  }, 100);
+});
 await page.waitForFunction(() => window.__cafe.guests.left >= 1, null, { timeout: 300000 });
 const end = await state();
-check('it fades out at the end, and there were never more than ten on stage', end.left >= 1 && end.peak <= 10, `left ${end.left}, peak ${end.peak}, on stage now ${end.all.length}`);
+const off = await page.evaluate(() => window.__off);
+check('it fades out at the end without stepping off the plate, and there were never more than ten on stage', end.left >= 1 && end.peak <= 10 && off === 0, `left ${end.left}, stepped off the plate ${off} times, peak ${end.peak}, on stage now ${end.all.length}`);
 
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');

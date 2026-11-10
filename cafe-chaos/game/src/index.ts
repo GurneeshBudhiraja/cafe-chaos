@@ -12,7 +12,8 @@
  * The café has a grab pill on the side facing the player (pinch and
  * drag to move it) and a bracket at each corner (pinch and pull to
  * resize, swing to turn), as a Horizon OS window does. The player's
- * hands are the café's own cream hands.
+ * hands are the café's own cream hands. A soft lo-fi theme plays
+ * underneath from the moment the session starts.
  *
  * `virtual:iwsdk-project` (from iwsdk.config.json) brings the scene, the
  * model manifest, components and XR features (AR with hand tracking and
@@ -21,6 +22,7 @@
 
 import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
+import { playTheme } from './audio/theme.js';
 import { themeHands } from './hands/cafe-hand.js';
 import { findSurfaceSpot } from './lib/desk-placement.js';
 import { setUpLighting } from './lighting.js';
@@ -46,7 +48,8 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   const ambience = world.getSystem(AmbienceSystem)!;
   mood.lights = lights;
   themeHands(world);
+  const theme = playTheme(world);
 
   // Dev only: lets the check and recording scripts find the world, the café, its lights, the mood, the hold, the handles and the surface finder.
-  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, budget, guests, baristas, ambience, findSurfaceSpot };
+  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, budget, guests, baristas, ambience, theme, findSurfaceSpot };
 });

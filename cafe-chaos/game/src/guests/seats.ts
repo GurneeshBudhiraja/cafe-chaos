@@ -5,7 +5,7 @@
  */
 
 import { Vector3, type Group, type Object3D } from '@iwsdk/core';
-import { seatIsBlocked } from './paths.js';
+import type { NavGrid } from '../nav/nav-grid.js';
 
 export interface Seat {
   index: number;
@@ -17,14 +17,24 @@ export interface Seat {
   occupant: number;
 }
 
-/** Read the usable seats from the café's anchors. */
-export function collectSeats(cafe: Group, anchors: Object3D[]): Seat[] {
+/** A seat with something standing this far above it (metres) is buried in furniture: nobody can sit there. */
+const BURIED_M = 0.02;
+/** A guest getting down from a seat needs somewhere to stand within this of it (metres). */
+export const LANDING_REACH_M = 0.09;
+
+/**
+ * Read the usable seats from the café's anchors. A seat is left out if
+ * the navigation grid shows it is buried (as the far seats of the back
+ * row's four-seaters are, inside the counter) or has nowhere to stand
+ * beside it.
+ */
+export function collectSeats(cafe: Group, anchors: Object3D[], nav: NavGrid): Seat[] {
   cafe.updateMatrixWorld(true);
   const seats: Seat[] = [];
   const ahead = new Vector3();
   for (const anchor of anchors) {
     const position = cafe.worldToLocal(anchor.getWorldPosition(new Vector3()));
-    if (seatIsBlocked(position)) continue;
+    if (nav.heightAt(position.x, position.z) > position.y + BURIED_M || !nav.nearest(position.x, position.z, LANDING_REACH_M)) continue;
     // The anchor's +Z, brought into café space: the way the sitter faces.
     cafe.worldToLocal(anchor.localToWorld(ahead.set(0, 0, 1))).sub(position);
     seats.push({ index: seats.length, position, yaw: Math.atan2(ahead.x, ahead.z), occupant: 0 });

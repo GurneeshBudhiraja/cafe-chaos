@@ -1,25 +1,28 @@
 /**
- * Where guests walk, in the café's own space (metres; +Y up; the player
- * toward +Z; the door on the right, +X). Pure maths: the system turns
- * these into walks. The numbers come from a height map of the café (the
- * aisles between the furniture, the door opening, the gap in the fence).
+ * Where guests are headed, in the café's own space (metres; +Y up; the
+ * player toward +Z; the door on the right, +X). Only the places are
+ * written here: the line outside the door, where newcomers appear, and
+ * where leavers are going. How to get from one place to another the
+ * guests work out for themselves, from the navigation grid
+ * (nav/nav-grid.ts).
  *
  *            back wall and counter
  *   +---------------------------------------+ . . fence . .
  *   |  T4   T4   T4    T2   T2      (quiet)  |rail
- *   |- - - - - - middle aisle - - - - - - - >|      deck
+ *   |                                        |      deck
  *   |  T2   T2   T2    T2   T2               = door = = gap =  Q Q Q Q Q  < arrivals
- *   |bar - - - - front aisle - - - - - - - ->|       \
- *   |                 [waiting bench]        |rail    \  exit lane
- *   +---------------------------------------+ . . .    |
- *      gravel garden (front)                           v
- *   <- - - - - - - - - - march left - - - - - - - - - -+- - march right - ->
+ *   |                                        |        |
+ *   |                 [waiting bench]        |rail    |  down the side
+ *   + - - - - - (open front: a barrier) - - -+        |
+ *   X <- - - - - - - along the front path - - - - - - +
+ *   ^ leavers fade out here, at the end of the path, still on the plate
  *                        (player)
  *
  * - Arrivals come along the table from the right and join the back of
  *   the line; the line stands outside the door, its head on the deck.
- * - Everyone who leaves goes out toward the front, then marches off left
- *   or right along the table in front of the café and fades at the end.
+ * - Everyone who leaves goes out of the door, down the deck at the side
+ *   and along the garden path at the front, and fades out as it reaches
+ *   the path's far end. Nobody steps off the plate to leave.
  */
 
 import { Vector3 } from '@iwsdk/core';
@@ -67,70 +70,12 @@ export const ARRIVAL_POINT = at(QUEUE_NEXT_X + (MAX_QUEUE - 1) * QUEUE_SPACING +
 
 // ------------------------------------------------------------------ leaving
 
-/** Leavers go out through the half of the door opening nearer the player. */
-const EXIT_Z = 0.082;
-/** Then down the table outside the fence, along this x, to the front. */
-const EXIT_DOWN_X = 0.515;
-/** The lanes along the front of the café (z), clear of the grab pill. Leavers are dealt lanes in turn so they do not bunch. */
-export const MARCH_LANES_Z = [0.41, 0.445, 0.48];
-/** Where a march ends (x): the left end of the plate, or out to the right. */
-const MARCH_END_X = { left: -0.5, right: 0.9 };
-
-export type Side = 'left' | 'right';
-
-/** From the foot of the exit lane down to the front and away along a lane. */
-function march(side: Side, lane: number): Vector3[] {
-  const z = MARCH_LANES_Z[lane % MARCH_LANES_Z.length];
-  // Cut the corner a little so the turn is a curve, not a pivot.
-  const turn = side === 'left' ? -0.03 : 0.03;
-  return [at(EXIT_DOWN_X, 0.13), at(EXIT_DOWN_X, z - 0.03), at(EXIT_DOWN_X + turn, z), at(MARCH_END_X[side], z)];
-}
-
-/** Out of the line (a guest who gave up): a step toward the player, then to the front and away. */
-export function pathFromQueue(from: Vector3, side: Side, lane: number): Vector3[] {
-  const onDeck = from.x < PLATE_EDGE_X;
-  const start = onDeck ? [from.clone(), at(0.45, EXIT_Z), at(0.5, EXIT_Z + 0.01)] : [from.clone(), at(Math.max(from.x, EXIT_DOWN_X), 0.1)];
-  return [...start, ...march(side, lane)];
-}
-
-/** Out of the café from a point inside it (already in an aisle): to the door, through it, to the front and away. */
-export function pathFromInside(from: Vector3, side: Side, lane: number): Vector3[] {
-  const points = [from.clone()];
-  // From the middle aisle the way to the door bends round the last chair of the front row.
-  if (from.z < 0.04) points.push(at(0.315, Math.min(from.z, -0.035)), at(0.325, 0.045));
-  points.push(at(0.34, EXIT_Z), at(0.45, EXIT_Z), at(0.5, EXIT_Z + 0.01), ...march(side, lane));
-  return points;
-}
-
-// -------------------------------------------------------------------- aisles
-
-/** The two aisles (z): between the rows of tables, and between the front row and the bench. */
-export const MIDDLE_AISLE_Z = -0.04;
-export const FRONT_AISLE_Z = 0.095;
-
 /**
- * From a seat down to the nearest aisle: where a guest lands when it hops
- * off its chair, then the walk to the aisle. `seat` is the seat anchor's
- * position and `yaw` the way a guest sits there (both café space).
+ * Where leavers are going: the far (left) end of the garden path along
+ * the front of the plate. There are a few ends, side by side and a little
+ * apart along the path, and leavers are dealt them in turn, so two
+ * leaving together walk abreast and do not vanish on the same spot.
  */
-export function pathOffSeat(seat: Vector3, yaw: number): Vector3[] {
-  const floor = (x: number, z: number): Vector3 => new Vector3(x, FLOOR_TOP_M, z);
-  // The bar: stools face the wall; step back into the room.
-  if (seat.x < -0.27 && seat.z > 0.06) return [floor(seat.x + 0.05, seat.z), floor(seat.x + 0.06, FRONT_AISLE_Z)];
-  // The quiet corner: out past the plant, down the gap between the two back tables.
-  if (seat.z < -0.19) return [floor(seat.x, seat.z + 0.045), floor(0.195, -0.165), floor(0.195, MIDDLE_AISLE_Z)];
-  // A chair facing along the row (the two-seaters): step out in front of it, toward the nearer aisle.
-  const facesAlongRow = Math.abs(Math.sin(yaw)) > 0.7;
-  if (facesAlongRow) {
-    const frontRow = seat.z > -0.05;
-    const aisle = frontRow ? FRONT_AISLE_Z : MIDDLE_AISLE_Z;
-    return [floor(seat.x, seat.z + (aisle > seat.z ? 0.05 : -0.05)), floor(seat.x, aisle)];
-  }
-  // A chair facing a table across the row (the four-seaters' near side): step back from the table into the aisle.
-  return [floor(seat.x, seat.z - Math.cos(yaw) * 0.045), floor(seat.x, MIDDLE_AISLE_Z)];
-}
-
-/** Seats swallowed by the shell's counter (the far side of the back row's four-seaters): nobody can sit there. */
-export function seatIsBlocked(seat: Vector3): boolean {
-  return seat.z < -0.15 && seat.x < 0.1;
-}
+export const EXIT_ENDS: Vector3[] = [at(-0.275, 0.218), at(-0.25, 0.247), at(-0.285, 0.276)];
+/** Leavers march once they are on the front path (z beyond this, café space). */
+export const FRONT_PATH_Z = 0.195;

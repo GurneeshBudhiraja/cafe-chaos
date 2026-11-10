@@ -9,9 +9,11 @@
  * brought up to the viewer's face, where it goes through its feelings
  * from curious to won over; it is carried over the café, the seat under
  * it glowing blue, and let go to sit down; a second guest is seated;
- * someone in the line loses patience and marches off along the front;
+ * someone in the line loses patience and leaves along the front path;
  * and the first guest, its meal over, hops off its chair, walks out of
- * the door and away, while the baristas go on serving the tables.
+ * the door, down the side and along the front path, fading at its end,
+ * while the baristas go on serving the tables. The theme plays under it
+ * all, mixed into the video at the level the game plays it.
  *
  * So the whole story fits in one video, guests give up after about half
  * a minute in the line here and stay seated for half a minute (in play:
@@ -21,6 +23,8 @@
  * Output: artifacts/guests.mp4
  */
 
+import { execFileSync } from 'node:child_process';
+import { renameSync } from 'node:fs';
 import { startHeadset } from './lib/headset.mjs';
 
 const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
@@ -178,11 +182,11 @@ await pinch(0);
 await pause(700);
 await reach(1300, LAP.right);
 
-// 7. Someone in the line has had enough: it leaves toward the front and marches off.
-await h.head(SEAT, P(await toWorld([0.5, 0.03, 0.2])), 1500);
-await until(() => window.__cafe.guests.guests.some((g) => g.state === 'leaving' && g.actor.root.position.z > 0.2 && g.actor.opacity === 1));
-await h.head(SEAT, P(await toWorld([0.3, 0.02, 0.4])), 1800);
-await pause(4200);
+// 7. Someone in the line has had enough: it comes onto the plate, goes down the side and away along the front path.
+await h.head(SEAT, P(await toWorld([0.42, 0.03, 0.18])), 1500);
+await until(() => window.__cafe.guests.guests.some((g) => g.state === 'leaving' && g.actor.root.position.z > 0.14 && g.actor.opacity === 1));
+await h.head(SEAT, P(await toWorld([0.15, 0.02, 0.28])), 2200);
+await pause(5200);
 
 // 8. The first guest's meal is over: a closer look as it hops off its chair, then watch it out of the door and away.
 const seatView = await toWorld([0.26, 0.2, 0.3]);
@@ -192,12 +196,12 @@ await until((id) => {
   return !g || g.state === 'leaving';
 }, first.id);
 await pause(1800);
-await h.head(SEAT, P(await toWorld([0.36, 0.03, 0.2])), 2000);
+await h.head(SEAT, P(await toWorld([0.38, 0.03, 0.16])), 2000);
 await until((id) => {
   const g = window.__cafe.guests.guests.find((x) => x.id === id);
-  return !g || g.actor.root.position.z > 0.37;
+  return !g || (g.actor.root.position.z > 0.2 && g.actor.root.position.x < 0.34);
 }, first.id);
-await h.head(SEAT, P(await toWorld([0.1, 0.02, 0.42])), 2200);
+await h.head(SEAT, P(await toWorld([0.0, 0.02, 0.27])), 2400);
 await until((id) => !window.__cafe.guests.guests.find((x) => x.id === id), first.id);
 await h.head(SEAT, { x: TABLE.x, y: TABLE.y + 0.1, z: TABLE.z }, 1500);
 await pause(2500);
@@ -207,6 +211,23 @@ const stats = await page.evaluate(() => {
   return { arrived: guests.arrived, seated: guests.seated, gaveUp: guests.gaveUp, left: guests.left, peak: guests.peak, traysServed: window.__cafe.baristas.servedCount };
 });
 const errors = await h.finish();
+addTheme('artifacts/guests.mp4');
 console.log(JSON.stringify(stats));
 console.log(errors.length ? `console errors:\n${errors.slice(0, 5).join('\n')}` : 'no console errors');
 console.log('artifacts/guests.mp4');
+
+/**
+ * Put the game's theme under the video, as the headset would play it: the
+ * same track (looped if the video is longer), coming in over four
+ * seconds as it does in the game, and fading out at the end.
+ */
+function addTheme(video) {
+  const seconds = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', video]).toString());
+  const mixed = video.replace(/\.mp4$/, '.music.mp4');
+  execFileSync('ffmpeg', [
+    '-y', '-loglevel', 'error', '-i', video, '-stream_loop', '-1', '-i', 'public/audio/theme.mp3',
+    '-filter_complex', `[1:a]volume=0.55,afade=t=in:d=4,afade=t=out:st=${(seconds - 2.5).toFixed(2)}:d=2.5[a]`,
+    '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-t', seconds.toFixed(2), '-movflags', '+faststart', mixed,
+  ]);
+  renameSync(mixed, video);
+}
