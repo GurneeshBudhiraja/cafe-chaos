@@ -254,8 +254,13 @@ const trail = await page.evaluate(() => window.__trail);
   const faded = walkedOut.length > 0 && walkedOut[walkedOut.length - 1].opacity < 0.97;
   const side = walkedOut.length ? walkedOut[0].side : '?';
   const endX = onPath.length ? onPath[onPath.length - 1].x : NaN;
-  check('its time up, it hops off the chair, comes out by the Meta stone and goes left or right along the front path', hopped && !byDoor && byTheStone && onPath.length > 2 && !offPlate && faded && trail.gone && (side === 'left' ? endX < -0.1 : endX > 0.2),
-    `hopped ${hopped}, by the door ${byDoor}, out by the Meta stone ${byTheStone} (crossing the room's front at x ${crossing.map((x) => x.toFixed(3)).join(', ')}), went ${side} to x ${endX.toFixed(2)}, off the plate ${offPlate}, faded ${faded}, gone ${trail.gone}`);
+  // Where the way it planned ends: at the far end of the front path on its side. (At the emulator's frame rate only a
+  // sample or two lands on the path itself, so the route is judged from the plan and the samples only confirm it.)
+  const planEnd = way.length ? way[way.length - 1] : [NaN, NaN, NaN];
+  const toAnEnd = planEnd[2] > 0.2 && (side === 'left' ? planEnd[0] < -0.2 : planEnd[0] > 0.3);
+  const wentThatWay = onPath.length >= 1 && (side === 'left' ? endX < 0.065 : endX > 0.065);
+  check('its time up, it hops off the chair, comes out by the Meta stone and goes left or right along the front path', hopped && !byDoor && byTheStone && toAnEnd && wentThatWay && !offPlate && faded && trail.gone,
+    `hopped ${hopped}, by the door ${byDoor}, out by the Meta stone ${byTheStone} (crossing the room's front at x ${crossing.map((x) => x.toFixed(3)).join(', ')}), went ${side} (seen ${onPath.length} times on the path, last at x ${endX.toFixed(2)}; its way ends at x ${planEnd[0].toFixed(2)}), off the plate ${offPlate}, faded ${faded}, gone ${trail.gone}`);
 }
 const end = await state();
 check('its seat is free again, and there were never more than ten on stage', end.seats[seat.index].occupant === 0 && end.peak <= 10 && end.left >= 1, `seat ${seat.index} occupant ${end.seats[seat.index].occupant}, peak ${end.peak}, left ${end.left}`);
