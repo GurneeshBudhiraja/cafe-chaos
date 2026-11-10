@@ -103,6 +103,11 @@ export function makePill(): Handle {
 /**
  * A corner bracket with its vertex at the origin and its arms along +X and
  * +Z (turned into place by the system): an L of two arms.
+ *
+ * The shape is drawn in XY and then laid flat by a quarter turn about X,
+ * which maps the shape's -Y onto +Z; so the second arm is drawn along -Y
+ * here to end up along +Z. (Drawn along +Y it would point the other way,
+ * out from the corner instead of back along the edge.)
  */
 export function makeBracket(): Handle {
   const a = BRACKET.arm;
@@ -110,10 +115,10 @@ export function makeBracket(): Handle {
   const s = new Shape();
   s.moveTo(0, 0);
   s.lineTo(a, 0);
-  s.lineTo(a, t);
-  s.lineTo(t, t);
-  s.lineTo(t, a);
-  s.lineTo(0, a);
+  s.lineTo(a, -t);
+  s.lineTo(t, -t);
+  s.lineTo(t, -a);
+  s.lineTo(0, -a);
   s.closePath();
   return standingHandle(s, BRACKET.height, 1.6, 'CornerBracket');
 }

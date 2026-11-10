@@ -74,6 +74,15 @@ const state = () =>
       pillShow: handles.pill.show,
       pillVisible: handles.pill.group.visible,
       brackets: handles.brackets.map((b) => at(b.group)),
+      // Where each bracket's two arms end, in café space: the far ends of the body's bounding box along X and Z.
+      arms: handles.brackets.map((b) => {
+        const body = b.group.children[1];
+        body.geometry.computeBoundingBox();
+        const bb = body.geometry.boundingBox;
+        const far = (lo, hi) => (Math.abs(hi) > Math.abs(lo) ? hi : lo);
+        const tip = (x, z) => c.worldToLocal(b.group.localToWorld(new V(x, 0, z))).toArray();
+        return [tip(far(bb.min.x, bb.max.x), 0), tip(0, far(bb.min.z, bb.max.z))];
+      }),
       bracketShow: handles.brackets.map((b) => b.show),
       pillScale: handles.pill.group.scale.x,
       pinch: hold.pinch.right.point.toArray(),
@@ -121,6 +130,20 @@ const start = await state();
   const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => toWorld(start, [sx > 0 ? b.max[0] : b.min[0], 0, sz > 0 ? b.max[2] : b.min[2]]));
   const gaps = start.brackets.map((p, i) => dist(p, corners[i]));
   check('a bracket wraps each corner', gaps.every((g) => g > 0.012 && g < 0.025), `vertex gaps ${gaps.map((g) => (g * 100).toFixed(1)).join(', ')} cm`);
+  // Both arms of every bracket run back along the edges toward the base: one tip is back along the X edge
+  // (nearer the centre in x, level with the corner in z) and the other back along the Z edge.
+  const inward = start.arms.every((tips, i) => {
+    const [sx, sz] = [[1, 1], [-1, 1], [-1, -1], [1, -1]][i];
+    const cx = sx > 0 ? b.max[0] : b.min[0];
+    const cz = sz > 0 ? b.max[2] : b.min[2];
+    const kinds = tips.map((tip) => {
+      const dx = sx * (cx - tip[0]);
+      const dz = sz * (cz - tip[2]);
+      return dx > 0.02 && Math.abs(dz) < 0.03 ? 'x' : dz > 0.02 && Math.abs(dx) < 0.03 ? 'z' : 'out';
+    });
+    return kinds.includes('x') && kinds.includes('z');
+  });
+  check('the arms of each bracket run back along the edges', inward, start.arms.map((t) => t.map((p) => `[${p[0].toFixed(2)}, ${p[2].toFixed(2)}]`).join(' & ')).join(' | '));
   check('the handles rest well lit', start.pillShow > 0.7 && start.pillShow < 0.9 && start.bracketShow.every((s) => s > 0.7 && s < 0.9), `pill ${start.pillShow.toFixed(2)}, brackets ${start.bracketShow.map((s) => s.toFixed(2)).join(', ')}`);
   await page.screenshot({ path: 'artifacts/handles-1-seated.png' });
   // Move round to the café's right side (its +x), looking at it.
