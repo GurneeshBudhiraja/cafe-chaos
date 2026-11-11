@@ -194,12 +194,12 @@ await until((id) => {
   return !g || g.state === 'leaving';
 }, first.id);
 await pause(1800);
-await h.head(SEAT, P(await toWorld([0.38, 0.03, 0.16])), 2000);
+await h.head(SEAT, P(await toWorld([-0.2, 0.03, 0.0])), 2000);
 await until((id) => {
   const g = window.__cafe.guests.guests.find((x) => x.id === id);
-  return !g || (g.actor.root.position.z > 0.2 && g.actor.root.position.x < 0.34);
+  return !g || g.actor.root.position.x < -0.3;
 }, first.id);
-await h.head(SEAT, P(await toWorld([0.0, 0.02, 0.27])), 2400);
+await h.head(SEAT, P(await toWorld([-0.4, 0.02, 0.0])), 2400);
 await until((id) => !window.__cafe.guests.guests.find((x) => x.id === id), first.id);
 await h.head(SEAT, { x: TABLE.x, y: TABLE.y + 0.1, z: TABLE.z }, 1500);
 await pause(2500);

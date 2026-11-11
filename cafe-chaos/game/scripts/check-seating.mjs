@@ -232,7 +232,7 @@ await handTo('right', AWAY.right);
 
 // 5. The seated guest's time runs out: off the chair, out of the door, and away along the front.
 await h.head(SEAT, LOOK, 300);
-await page.waitForFunction(() => window.__trail.points.some((q) => q.state === 'leaving' && q.z > 0.2), null, { timeout: 420000 });
+await page.waitForFunction(() => window.__trail.points.some((q) => q.state === 'leaving' && q.x < -0.2), null, { timeout: 420000 });
 await h.screenshot('artifacts/seating-4-leaving.png');
 await page.waitForFunction(() => window.__trail.gone, null, { timeout: 420000 });
 const trail = await page.evaluate(() => window.__trail);
