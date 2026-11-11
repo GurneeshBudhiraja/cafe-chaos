@@ -34,10 +34,12 @@ const add = (a, b, k = 1) => a.map((v, i) => v + b[i] * k);
 const P = (a) => ({ x: a[0], y: a[1], z: a[2] });
 /** The pinch point relative to the right hand's pose (measured in prepare). */
 let pinchOffset = [0, 0, 0];
+/** The same for the open hand (the emulator spreads thumb and index wide, so its midpoint is elsewhere). */
+let openOffset = [0, 0, 0];
 let page;
 
 const h = await startHeadset({
-  record: 'extend',
+  record: process.env.NORECORD ? null : 'extend',
   maxSpeedUp: 30,
   async prepare(h) {
     page = h.page;
@@ -50,6 +52,8 @@ const h = await startHeadset({
     await frames(3);
     pinchOffset = add(await page.evaluate(() => window.__cafe.hold.pinch.right.point.toArray()), LAP.right, -1);
     await pinch(0);
+    await frames(3);
+    openOffset = add(await page.evaluate(() => window.__cafe.hold.pinch.right.point.toArray()), LAP.right, -1);
     await page.evaluate((timeScale) => {
       const { system, guests } = window.__cafe;
       system.timeScale = timeScale;
@@ -78,20 +82,26 @@ function handTo(hand, p) {
 function pinch(value) {
   return send('set_select_value', { device: 'hand-right', value });
 }
-/** Where the right hand's pinch point is now. */
-let at = LAP.right;
-/** Move the right hand so its pinch point travels to `to` over `ms`, eased, a pose per frame. */
-async function reach(ms, to) {
-  const from = at;
+/** Where the right hand is now (its pose, not its pinch point). */
+let handAt = null;
+/**
+ * Move the right hand so its pinch point (the open hand's, with `open`)
+ * travels to `to` over `ms`, eased, a pose per frame. The hand itself is
+ * what moves smoothly, so switching between the open and the pinched
+ * point never makes it jump.
+ */
+async function reach(ms, to, open = false) {
+  const from = handAt ?? LAP.right;
+  const goal = add(to, open ? openOffset : pinchOffset, -1);
   const real = ms * h.speedUp;
   const t0 = performance.now();
   for (;;) {
     const t = Math.min(1, (performance.now() - t0) / real);
-    await handTo('right', add(lerp(from, to, ease(t)), pinchOffset, -1));
+    await handTo('right', lerp(from, goal, ease(t)));
     if (t >= 1) break;
     await frames(1);
   }
-  at = to;
+  handAt = goal;
 }
 /** A café-space point in the world. */
 const toWorld = (local) => page.evaluate((l) => { const { system } = window.__cafe; return system.cafe.localToWorld(new system.cafe.position.constructor(...l)).toArray(); }, local);
@@ -167,8 +177,20 @@ await pause(1500);
     const g = guests.line.find((x) => x.state === 'queued' && !x.walk);
     return g ? { id: g.id, grip: g.actor.grip.getWorldPosition(new V()).toArray() } : null;
   });
-  await reach(1300, add(guest.grip, [0.015, 0.035, 0.03]));
-  await until((id) => window.__cafe.guests.hovered.some((g) => g && g.id === id), guest.id);
+  // The open hand comes close (its open pinch point near the guest), and the guest lights up.
+  await reach(1300, add(guest.grip, [0.015, 0.035, 0.03]), true);
+  const lit = await page.waitForFunction((id) => window.__cafe.guests.hovered.some((g) => g && g.id === id), guest.id, { timeout: 120000, polling: 100 }).then(() => true, () => false);
+  if (!lit) {
+    console.log('not lit:', JSON.stringify(await page.evaluate((id) => {
+      const { guests, hold, handles, system } = window.__cafe;
+      const p = hold.pinch.right;
+      const g = guests.guests.find((x) => x.id === id);
+      const V = p.point.constructor;
+      return { pinch: p.point.toArray(), gap: p.gap, closed: p.closed, found: p.found, ghost: p.ghost, holding: hold.holding, nearHandle: handles.near(p.point), hovered: guests.hovered.map((x) => x?.id ?? null),
+        guest: g ? { state: g.state, opacity: g.actor.opacity, dist: g.actor.grip.getWorldPosition(new V()).distanceTo(p.point) } : null, placed: system.placed, arriving: system.arriving, presenting: window.__cafe.world.renderer.xr.isPresenting };
+    }, guest.id)));
+    if (process.env.NORECORD) process.exit(1);
+  }
   await pause(1800);
   await reach(450, guest.grip);
   await pause(150);
@@ -176,14 +198,14 @@ await pause(1500);
   await pause(500);
   await h.head(SEAT, { x: TABLE.x, y: TABLE.y + 0.1, z: TABLE.z }, 1300);
   await seatAt(0.167, 0.025, 900);
-  await reach(900, LAP.right);
+  await reach(900, add(LAP.right, pinchOffset));
 }
 
 // 4. The plaque in front: it lights up as the hand comes close; a pinch on it, and the café grows.
 {
   const grip = await page.evaluate(() => window.__cafe.unlocks.annexPlaque.grip.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
   await h.head(SEAT, P(add(grip, [0.05, 0, -0.08])), 1500);
-  await reach(1300, add(grip, [0.01, 0.03, 0.02]));
+  await reach(1300, add(grip, [0.01, 0.03, 0.02]), true);
   await until(() => !!window.__cafe.unlocks.hovered);
   await pause(1600);
   await reach(400, grip);
@@ -191,7 +213,7 @@ await pause(1500);
   await pinch(1);
   await pause(600);
   await pinch(0);
-  await Promise.all([reach(1000, LAP.right), h.head(SEAT, P(await toWorld([-0.42, 0.03, -0.02])), 1600)]);
+  await Promise.all([reach(1000, add(LAP.right, pinchOffset)), h.head(SEAT, P(await toWorld([-0.42, 0.03, -0.02])), 1600)]);
   await until(() => window.__cafe.system.annexOpen);
   await pause(2600);
 }

@@ -92,8 +92,11 @@ await pinch(1);
 await frames(3);
 const pinchOffset = add((await guestState(-1))?.pinch ?? (await page.evaluate(() => window.__cafe.hold.pinch.right.point.toArray())), AWAY.right, -1);
 await pinch(0);
-await frames(2);
+await frames(3);
+// The open hand's pinch point (the midpoint of thumb and index, spread wide in the emulator) is elsewhere: measured too.
+const openOffset = add(await page.evaluate(() => window.__cafe.hold.pinch.right.point.toArray()), AWAY.right, -1);
 const pinchTo = (p) => handTo('right', add(p, pinchOffset, -1));
+const openTo = (p) => handTo('right', add(p, openOffset, -1));
 async function drag(from, to, steps = 6) {
   for (let i = 1; i <= steps; i++) {
     await pinchTo(add(from, add(to, from, -1), i / steps));
@@ -112,7 +115,7 @@ const rest = await guestState(id);
   // Look at the head of the line from close, then bring the open hand up beside it.
   const eye = add(rest.grip, [0.16, 0.08, 0.02]);
   await h.head({ x: eye[0], y: eye[1], z: eye[2] }, { x: rest.grip[0], y: rest.grip[1], z: rest.grip[2] }, 300);
-  await pinchTo(add(rest.grip, [0.01, 0.035, 0.025]));
+  await openTo(add(rest.grip, [0.01, 0.035, 0.025]));
   await frames(3);
   const near = await guestState(id);
   const lit = await page.evaluate((id) => window.__cafe.guests.hovered.some((g) => g && g.id === id), id);
