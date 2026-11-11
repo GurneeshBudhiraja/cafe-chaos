@@ -110,6 +110,22 @@ export const GLOW: Record<string, { strength: number; color?: number }> = {
   CafeShoji: { strength: 1.1, color: 0xffb46a },
 };
 
+/**
+ * When the café grows (the annex), the light grows with it: the room's
+ * own warm light moves to the middle of the wider room and reaches
+ * further, and the house light shifts left a little, so the new tables
+ * sit in the same cosy wash as the old ones. It follows the annex as it
+ * rises. (No light is added: the same five carry the bigger room.)
+ */
+export const ANNEX_LIGHT = {
+  /** The room light (LAMPS[ROOM_LAMP]): where it goes, how far it reaches, and how much stronger it gets. */
+  room: { position: [-0.17, 0.15, -0.05] as const, distance: 0.9, strength: 1.6 },
+  /** The house light's position and aim, shifted toward the middle of the wider room. */
+  house: { position: [-0.1, 0.17, -0.11] as const, target: [-0.1, 0, 0.16] as const },
+};
+/** Which lamp is the room's own unseen light. */
+export const ROOM_LAMP = 4;
+
 /** The light spill on the player's table: a disc under the café, this radius (metres, café space). */
 export const SPILL_RADIUS = 0.85;
 /**

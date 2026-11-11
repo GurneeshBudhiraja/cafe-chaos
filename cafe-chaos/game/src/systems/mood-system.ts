@@ -8,9 +8,9 @@
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
-import type { CafeLights } from '../light/cafe-lights.js';
+import { lightAddition, type CafeLights } from '../light/cafe-lights.js';
 import { PassthroughDimmer } from '../light/dimmer.js';
-import { BREATH, DIM_FADE_SECONDS, DIM_LEVEL, HALOS, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS } from '../light/mood.js';
+import { ANNEX_LIGHT, BREATH, DIM_FADE_SECONDS, DIM_LEVEL, HALOS, HOUSE, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS, ROOM_LAMP } from '../light/mood.js';
 import { CafeSystem } from './cafe-system.js';
 
 export class MoodSystem extends createSystem({}) {
@@ -23,6 +23,10 @@ export class MoodSystem extends createSystem({}) {
   private time = 0;
   private placement = 0;
   private readonly head = new Vector3();
+  /** The annex whose furniture has been lit (see `growLight`). */
+  private litAnnex: object | null = null;
+  /** How far the light has grown with the annex, 0 to 1. */
+  private grown = 0;
 
   init(): void {
     this.world.createTransformEntity(this.dimmer.mesh);
@@ -58,7 +62,30 @@ export class MoodSystem extends createSystem({}) {
       this.sinceDusk = -1;
       this.lampsUp = presenting ? 0 : 1;
     }
+    this.growLight(cafe);
     this.light();
+  }
+
+  /** The light follows the café as it grows: the annex lit like the rest, and the room light and house light moved over it. */
+  private growLight(cafe: CafeSystem | undefined): void {
+    const lights = this.lights;
+    const annex = cafe?.annex ?? null;
+    if (!lights) return;
+    if (annex && this.litAnnex !== annex) {
+      this.litAnnex = annex;
+      lightAddition(annex.root);
+    }
+    const grown = annex ? ease(Math.min(1, annex.rising)) : 0;
+    if (grown === this.grown) return;
+    this.grown = grown;
+    const room = lights.lamps[ROOM_LAMP];
+    const from = LAMPS[ROOM_LAMP];
+    const to = ANNEX_LIGHT.room;
+    room.position.set(...mix(from.position, to.position, grown));
+    room.distance = from.distance + (to.distance - from.distance) * grown;
+    lights.house.position.set(...mix(HOUSE.position, ANNEX_LIGHT.house.position, grown));
+    lights.house.target.position.set(...mix(HOUSE.target, ANNEX_LIGHT.house.target, grown));
+    lights.house.target.updateMatrixWorld();
   }
 
   /** Apply the lamps' level and the lanterns' breath to the lights and halos. */
@@ -68,12 +95,18 @@ export class MoodSystem extends createSystem({}) {
     // Each lantern breathes on its own phase; the gate lamps and the room light hold steady.
     const breath = (breathes: boolean, phase: number): number => (breathes ? 1 + BREATH.depth * Math.sin(this.time * BREATH.rate * Math.PI * 2 + phase * 1.7) : 1);
     lamps.forEach((lamp, i) => {
-      lamp.intensity = LAMPS[i].intensity * this.lampsUp * breath(LAMPS[i].breathes, i);
+      const grow = i === ROOM_LAMP ? 1 + (ANNEX_LIGHT.room.strength - 1) * this.grown : 1;
+      lamp.intensity = LAMPS[i].intensity * grow * this.lampsUp * breath(LAMPS[i].breathes, i);
     });
     halos.forEach((halo, i) => {
       halo.material.opacity = HALOS[i].opacity * this.lampsUp * breath(HALOS[i].breathes, i);
     });
   }
+}
+
+/** Between two points, `t` of the way. */
+function mix(a: readonly [number, number, number], b: readonly [number, number, number], t: number): [number, number, number] {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
 
 /** Ease in and out (smoothstep). */

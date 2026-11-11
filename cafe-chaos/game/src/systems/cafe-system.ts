@@ -33,10 +33,11 @@
  * tables.
  */
 
-import { AssetManager, createSystem, Euler, Group, Quaternion, Vector3, XRPlane as DetectedPlane, type Object3D } from '@iwsdk/core';
+import { AssetManager, createSystem, Euler, Group, Mesh, Quaternion, Vector3, XRPlane as DetectedPlane, type Object3D } from '@iwsdk/core';
 import type { ModelName } from '../assets.js';
 import { DRESSING, FLOOR_TOP_M, OPENING_LAYOUT, type Placement } from '../cafe/layout.js';
 import { dressGreyBox } from '../cafe/materials.js';
+import { splitOff, type Box } from '../cafe/split-mesh.js';
 import { batchStatic, type BatchReport } from '../cafe/static-batch.js';
 import { findSurfaceSpot, type DetectedSurface } from '../lib/desk-placement.js';
 import { CAFE_NAV } from '../nav/cafe-nav.js';
@@ -57,6 +58,10 @@ const ANNEX_TABLES: { model: ModelName; x: number; z: number }[] = [
 const ANNEX_RISE_SECONDS = 0.9;
 /** The annex's outer edge (café space, metres): the café reaches this far to the left once it is open. */
 export const ANNEX_MIN_X = -0.68;
+/** The old room's front-left corner post and the beam over it, split out of the shell's timberwork so they can go when the annex opens. */
+const JOIN_TIMBER = 'TimberWork-Join';
+/** Where they are (café space): x round the left wall, in front of the back corner post, below the roof's ridge. */
+const JOIN_BOX: Box = { min: [-0.375, -0.01, -0.235], max: [-0.3, 0.215, 0.23] };
 
 /**
  * The café's size: 1 is the modelled size (a 92 x 62 cm garden base, a
@@ -202,6 +207,8 @@ export class CafeSystem extends createSystem({
     this.setShown('WallLeft-Closed', false);
     this.setShown('WallLeft-Open', false);
     this.setShown('GardenLeft', false);
+    // The old room's front-left corner post and the beam over it would stand in the middle of the one room: they go too.
+    this.setShown(JOIN_TIMBER, false);
     return true;
   }
 
@@ -222,7 +229,10 @@ export class CafeSystem extends createSystem({
 
   /** Show the exit in the left wall (and not the closed wall). These parts stay out of the static batch, so they can be switched. */
   private openExit(): void {
-    for (const name of ['WallLeft-Closed', 'WallLeft-Open', 'GardenLeft']) {
+    // The corner post and beam where the annex joins on are baked into the shell's timberwork: split them off so they can go.
+    const timber = this.cafe.getObjectByName('TimberWork');
+    if (timber instanceof Mesh) splitOff(timber, this.cafe, JOIN_BOX, JOIN_TIMBER);
+    for (const name of ['WallLeft-Closed', 'WallLeft-Open', 'GardenLeft', JOIN_TIMBER]) {
       const node = this.cafe.getObjectByName(name);
       if (node) node.userData.keepApart = true;
     }

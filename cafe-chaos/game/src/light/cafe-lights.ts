@@ -52,6 +52,16 @@ export function lightTheCafe(cafe: Group): CafeLights {
   return { lamps, halos, moon, house, spill };
 }
 
+/**
+ * Light furniture added later (the annex) as the café was lit: its glowing
+ * papers turned up for the night, and its opaque meshes casting and taking
+ * shadows.
+ */
+export function lightAddition(root: Object3D): void {
+  brightenGlow(root);
+  setShadowFlags(root);
+}
+
 /** The one shadow-casting light: the warm spot over the counter, shining down and out the front. */
 function makeHouseLight(): SpotLight {
   const house = new SpotLight(HOUSE.color, HOUSE.intensity, HOUSE.distance, HOUSE.angle, HOUSE.penumbra, 2);
