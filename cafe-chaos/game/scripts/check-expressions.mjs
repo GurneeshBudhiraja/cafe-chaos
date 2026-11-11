@@ -3,12 +3,16 @@
  * emulated table and guests in the line, checks that:
  * 1. a guest in the line watches a hand that comes close (wide eyes that
  *    follow it), and stops when the hand goes away;
- * 2. picked up, it is startled, then, held at arm's length, wonders what
- *    is happening, its eyes moving;
- * 3. brought up to the player's face it goes through curious, confused,
- *    searching and worried, in that order, each with the face parts and
- *    the lean that belong to it, and never a pleased face;
- * 4. put back, its face is its own again; and no console errors.
+ * 2. picked up, it is surprised for a moment, then calm, and it stays
+ *    calm: nothing cycles;
+ * 3. carried, its eyes are on the seat it is held over (straight down
+ *    when there is none);
+ * 4. its face follows its patience dial: uneasy on amber, worried and
+ *    drooping on coral;
+ * 5. brought right up to the player's face it is puzzled, head on one
+ *    side, looking straight at the player, until it is taken away;
+ * 6. it only ever shows one face at a time, in that order; put back, its
+ *    face is its own again; and no console errors.
  * Saves a close-up of each expression.
  *
  * Usage: dev server running, then `node scripts/check-expressions.mjs`.
@@ -70,6 +74,8 @@ const guestState = (id) => page.evaluate((id) => {
     id: x.id, state: x.state, clip: x.actor.clip, watching: x.watching, mood: x.act ? x.act.acting.mood : null, seen: x.act ? [...x.act.seen] : [],
     eyes: shown.find((n) => n.startsWith('Eyes')), mouth: shown.find((n) => n.startsWith('Mouth')), parts: shown,
     pupils: pupils ? [pupils.position.x, pupils.position.y] : null, pupilsShown: !!pupils?.visible,
+    look: pupils ? [pupils.position.x - x.actor.pupilHome.standing.x, pupils.position.y - x.actor.pupilHome.standing.y] : null,
+    target: x.target ? x.target.index : null, left: x.patience / x.patienceFull,
     roll: x.roll, pitch: x.pitch, grip: x.actor.grip.getWorldPosition(new V()).toArray(),
     distance: x.actor.grip.getWorldPosition(new V()).distanceTo(world.camera.getWorldPosition(new V())),
     pinch: hold.pinch.right.point.toArray(), line: guests.line.map((g) => g.id),
@@ -121,7 +127,7 @@ const rest = await guestState(id);
     `${(Math.hypot(near.pinch[0] - near.grip[0], near.pinch[1] - near.grip[1], near.pinch[2] - near.grip[2]) * 100).toFixed(1)} cm away: watching ${near.watching} with ${near.eyes}/${near.mouth}, pupils followed the hand ${followed}; hand away: watching ${gone.watching}, ${gone.eyes}/${gone.mouth}`);
 }
 
-// 2. Picked up: startled, then wondering at arm's length.
+// 2. Picked up: surprised for a second, then calm, and it stays calm (nothing cycles).
 await h.head(SEAT, { x: rest.grip[0], y: rest.grip[1], z: rest.grip[2] }, 300);
 await pinchTo(add(rest.grip, [0, 0.05, 0]));
 await frames(2);
@@ -129,70 +135,81 @@ await pinchTo(rest.grip);
 await frames(2);
 await pinch(1);
 await frames(2);
-const startled = await guestState(id);
+const surprised = await guestState(id);
 const up = add(rest.grip, [0.05, 0.14, 0.1]);
 await drag(rest.grip, up, 4);
-const wondering = await page.waitForFunction((id) => {
-  const g = window.__cafe.guests.guests.find((x) => x.id === id);
-  return g?.act?.acting.mood === 'wondering' ? true : null;
-}, id, { timeout: 60000 }).then(() => guestState(id));
-{
-  const a = wondering.pupils;
-  await frames(2);
-  const b = (await guestState(id)).pupils;
-  const eyesMove = Math.hypot(a[0] - b[0], a[1] - b[1]) > 0.0001;
-  check('picked up it is startled, then wonders what is happening', startled.state === 'held' && startled.seen[0] === 'startled' && (wondering.eyes === 'EyesWide' || wondering.eyes === 'EyesClosed') && wondering.distance > 0.42 && eyesMove,
-    `first mood ${startled.seen[0]}, then ${wondering.mood} with ${wondering.eyes}/${wondering.mouth} at ${(wondering.distance * 100).toFixed(0)} cm from the head, eyes moving ${eyesMove}`);
-}
-await h.screenshot('artifacts/expr-1-wondering.png');
+const moodIs = (mood) => page.waitForFunction(([id, mood]) => window.__cafe.guests.guests.find((x) => x.id === id)?.act?.acting.mood === mood || null, [id, mood], { timeout: 60000 }).then(() => frames(2)).then(() => guestState(id));
+const calm = await moodIs('calm');
+await h.screenshot('artifacts/expr-1-calm.png');
+await page.waitForTimeout(7000);
+await frames(2);
+const later = await guestState(id);
+check('picked up it is surprised for a moment, then calm, and stays so', surprised.state === 'held' && surprised.seen[0] === 'surprised' && calm.mouth === 'MouthSmile' && calm.distance > 0.33 && later.mood === 'calm' && later.seen.join() === 'surprised,calm',
+  `first ${surprised.seen[0]} (${surprised.eyes}/${surprised.mouth}), then ${calm.mood} with ${calm.eyes}/${calm.mouth} at ${(calm.distance * 100).toFixed(0)} cm from the head; seven seconds on: ${later.seen.join(' > ')}`);
 
-// 3. Up to the face: the run of feelings, a close-up of each.
+// 3. Held over a free seat, its eyes are on that seat; away from any seat it looks straight down.
+let overSeat;
+{
+  const noSeat = await guestState(id);
+  const spot = await page.evaluate(() => {
+    const { guests, system } = window.__cafe;
+    const V = system.cafe.position.constructor;
+    // A free seat in the front row, and a point to hold the guest's grip at: above it and a little to one side.
+    const seat = guests.seats.filter((s) => s.occupant === 0 && s.position.z > -0.02).sort((a, b) => Math.abs(a.position.x - 0.2) - Math.abs(b.position.x - 0.2))[0];
+    const at = system.cafe.localToWorld(new V(seat.position.x + 0.03, seat.position.y + 0.07 + 0.042, seat.position.z));
+    return { index: seat.index, at: at.toArray() };
+  });
+  await drag(up, spot.at, 5);
+  await page.waitForFunction((id) => window.__cafe.guests.guests.find((x) => x.id === id)?.target != null || null, id, { timeout: 60000 });
+  await frames(4);
+  overSeat = { at: spot.at, ...(await guestState(id)) };
+  await h.screenshot('artifacts/expr-2-eyes-on-the-seat.png');
+  check('carried, it looks at the seat below it', noSeat.target === null && noSeat.look[1] < -0.0006 && Math.abs(noSeat.look[0]) < 0.0002 && overSeat.target === spot.index && overSeat.look[1] < -0.0004 && Math.abs(overSeat.look[0]) > 0.0002 && overSeat.mood === 'calm',
+    `over no seat: eyes ${(noSeat.look[0] * 1000).toFixed(2)}, ${(noSeat.look[1] * 1000).toFixed(2)} mm from centre (straight down); over seat ${spot.index}, held 3 cm to one side: eyes ${(overSeat.look[0] * 1000).toFixed(2)}, ${(overSeat.look[1] * 1000).toFixed(2)} mm (down and across to it), aimed at seat ${overSeat.target}`);
+}
+
+// 4. Its face follows its dial: uneasy on amber, worried on coral, each steady.
+const setPatience = (left) => page.evaluate(([id, left]) => { const g = window.__cafe.guests.guests.find((x) => x.id === id); g.patience = g.patienceFull * left; }, [id, left]);
+await drag(overSeat.at, up, 4);
+await setPatience(0.45);
+const uneasy = await moodIs('uneasy');
+await h.screenshot('artifacts/expr-3-uneasy.png');
+await setPatience(0.2);
+const worried = await moodIs('worried');
+await page.waitForFunction((id) => window.__cafe.guests.guests.find((x) => x.id === id)?.pitch > 0.15 || null, id, { timeout: 60000 });
+const drooped = await guestState(id);
+await h.screenshot('artifacts/expr-4-worried.png');
+check('its face follows its patience dial: uneasy on amber, worried and drooping on coral', uneasy.mouth === 'MouthO' && uneasy.left < 0.5 && worried.mouth === 'MouthFrown' && drooped.pitch > 0.15 && drooped.seen.join() === 'surprised,calm,uneasy,worried',
+  `at ${(uneasy.left * 100).toFixed(0)}%: ${uneasy.mood}, ${uneasy.eyes}/${uneasy.mouth}; at ${(worried.left * 100).toFixed(0)}%: ${worried.mood}, ${worried.eyes}/${worried.mouth}, drooping ${drooped.pitch.toFixed(2)} rad; seen ${drooped.seen.join(' > ')}`);
+
+// 5. Right up at the player's face: puzzled, head on one side, looking straight at the player, for as long as it is held there.
+await setPatience(1);
+await moodIs('calm');
 const head = [SEAT.x, SEAT.y, SEAT.z];
 const close = add(head, [-0.15, -0.035, 0.0]);
 await drag(up, close, 6);
 await h.head(SEAT, { x: close[0], y: close[1] - 0.012, z: close[2] }, 300);
-const WANT = ['curious', 'confused', 'searching', 'worried'];
-const shots = {};
-for (const mood of WANT) {
-  // The emulator's frames are slow: stop the game clock the moment the guest is well into this mood, so the
-  // reading and the picture are of the same instant, then let it run on.
-  await page.evaluate(([id, mood]) => {
-    window.__frozen = null;
-    const { guests, system } = window.__cafe;
-    const t = setInterval(() => {
-      const act = guests.guests.find((x) => x.id === id)?.act;
-      if (!act || act.acting.mood !== mood || act.t < 0.7) return;
-      system.timeScale = 0;
-      window.__frozen = mood;
-      clearInterval(t);
-    }, 15);
-  }, [id, mood]);
-  await page.waitForFunction((mood) => window.__frozen === mood, mood, { timeout: 180000 });
-  await frames(2);
-  shots[mood] = await guestState(id);
-  await h.screenshot(`artifacts/expr-${2 + WANT.indexOf(mood)}-${mood}.png`);
-  await page.evaluate(() => (window.__cafe.system.timeScale = 1));
-}
+const puzzled = await moodIs('puzzled');
+await page.waitForFunction((id) => Math.abs(window.__cafe.guests.guests.find((x) => x.id === id)?.roll) > 0.2 || null, id, { timeout: 60000 });
+await page.waitForTimeout(6000);
+await frames(2);
+const still = await guestState(id);
+await h.screenshot('artifacts/expr-5-puzzled.png');
+await h.head(SEAT, { x: rest.grip[0], y: rest.grip[1], z: rest.grip[2] }, 300);
+await drag(close, up, 5);
+const away = await moodIs('calm');
 {
-  const seen = shots.worried.seen;
-  const order = WANT.every((m, i) => seen.indexOf(m) >= 0 && (i === 0 || seen.indexOf(m) > seen.indexOf(WANT[i - 1])));
-  const faces = {
-    curious: shots.curious.eyes === 'EyesWide' || shots.curious.eyes === 'EyesClosed',
-    confused: shots.confused.mouth === 'MouthFrown',
-    searching: shots.searching.eyes === 'EyesWide' && shots.searching.mouth === 'MouthO',
-    worried: shots.worried.mouth === 'MouthFrown' && (shots.worried.eyes === 'EyesOpen' || shots.worried.eyes === 'EyesClosed'),
-  };
-  const oneFace = WANT.every((m) => shots[m].parts.filter((p) => p.startsWith('Eyes')).length === 1 && shots[m].parts.filter((p) => p.startsWith('Mouth')).length === 1);
-  // Everything shown while held belongs to being held: never the pleased faces.
-  const pleased = [...WANT.map((m) => shots[m]), startled, wondering].some((g) => g.parts.includes('EyesHappy') || g.parts.includes('MouthSmile'));
-  check('up at the face it goes through its feelings in order', order && shots.curious.distance < 0.4, `seen: ${seen.slice(0, 7).join(' > ')}; ${(shots.curious.distance * 100).toFixed(0)} cm from the head`);
-  check('each shows its own face, one pair of eyes and one mouth at a time, and none of them pleased', Object.values(faces).every(Boolean) && oneFace && !pleased && !seen.includes('happy'), WANT.map((m) => `${m}: ${shots[m].eyes}/${shots[m].mouth}${faces[m] ? '' : ' (wrong)'}`).join(', ') + `; a pleased face shown ${pleased}`);
-  check('it leans with its feelings: droops when worried, tilts its head when confused', shots.worried.pitch > 0.1 && Math.abs(shots.curious.pitch) < 0.16 && Math.abs(shots.confused.roll) > 0.03, `pitch worried ${shots.worried.pitch.toFixed(2)}, curious ${shots.curious.pitch.toFixed(2)}; roll confused ${shots.confused.roll.toFixed(2)}`);
+  const all = [surprised, calm, later, overSeat, uneasy, worried, drooped, puzzled, still, away];
+  // Everything shown while held: the wide eyes (closed for a blink) and one mouth; never the pleased eyes.
+  const faces = all.every((g) => (g.eyes === 'EyesWide' || g.eyes === 'EyesClosed') && g.parts.filter((p) => p.startsWith('Mouth')).length === 1 && !g.parts.includes('EyesHappy') && !g.parts.includes('EyesCross'));
+  check('up at the face it is puzzled, head on one side, eyes on the player, until it is taken away', puzzled.distance < 0.25 && still.mood === 'puzzled' && Math.abs(still.roll) > 0.2 && still.mouth === 'MouthO' && Math.hypot(still.look[0], still.look[1]) < 0.0003 && away.mood === 'calm' && Math.abs(away.roll) < 0.2,
+    `${(puzzled.distance * 100).toFixed(0)} cm from the head: ${still.mood} six seconds on, ${still.eyes}/${still.mouth}, head tilted ${still.roll.toFixed(2)} rad, eyes ${(Math.hypot(still.look[0], still.look[1]) * 1000).toFixed(2)} mm off centre; taken away: ${away.mood}`);
+  check('one face at a time, in order, none of them at random', faces && away.seen.join() === 'surprised,calm,uneasy,worried,calm,puzzled,calm', `seen: ${away.seen.join(' > ')}; wide eyes and one mouth throughout ${faces}`);
 }
 
-// 4. Put back: its own face again.
+// 6. Put back: its own face again.
 await h.head(SEAT, LOOK, 300);
-await drag(close, add(rest.grip, [0.1, 0.2, 0.25]), 5);
+await drag(up, add(rest.grip, [0.1, 0.2, 0.25]), 5);
 await pinch(0);
 await page.waitForFunction((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.state === 'queued', id, { timeout: 60000 });
 await handTo('right', AWAY.right);

@@ -4,10 +4,10 @@
  * blossom falling from the tree; a lean in to the counter, where the
  * servers are at work under the rising steam; guests of all three kinds walk up and line up
  * outside the door, and the viewer leans over for a look at the line; a
- * hand comes close and a guest watches it, is pinched up, startled, and
- * brought up to the viewer's face, where it goes through its feelings
- * from curious to won over; it is carried over the café, the seat under
- * it glowing blue, and let go to sit down; a second guest is seated;
+ * hand comes close and a guest watches it, is pinched up, surprised, and
+ * brought up to the viewer's face, where it is puzzled, still, its head
+ * on one side; it is carried over the café, its eyes on the seat under
+ * it, which glows violet, and let go to sit down; a second guest is seated;
  * someone in the line loses patience and leaves along the front path;
  * and the first guest, its meal over, hops off its chair, walks out of
  * the door, down the side and along the front path, fading at its end,
@@ -138,12 +138,12 @@ const lifted = add(first.grip, [0.02, 0.13, 0.06]);
 await reach(900, lifted);
 await pause(1200);
 
-// 4. Up to the face: back in the seat, the guest held a hand's breadth away, going through its feelings.
+// 4. Up to the face: back in the seat, the guest held a hand's breadth away, puzzled, its head on one side.
 const face = [SEAT.x - 0.125, SEAT.y - 0.03, SEAT.z + 0.004];
 await Promise.all([h.head(SEAT, P(add(face, [0, -0.012, 0])), 1700), reach(1700, face)]);
 await until((id) => {
   const act = window.__cafe.guests.guests.find((g) => g.id === id)?.act;
-  return !!act && act.acting.mood === 'happy' && act.seen.includes('sulking');
+  return !!act && act.acting.mood === 'puzzled';
 }, first.id);
 await pause(2700);
 

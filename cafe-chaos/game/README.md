@@ -26,7 +26,7 @@ café's own style. The player's hands are the café's own cream hands.
 
 - **The models** (`src/assets.ts`, from `public/models/`): the Japanese
   garden café shell (open right side, timber door frame, post lamps), the
-  waiting bench by the gate, the opening layout's ten tables (three
+  opening layout's ten tables (three
   four-seaters and two two-seaters in the back row, five two-seaters in
   the front row), a two-stool bar along the left wall, the quiet armchair
   corner at the back right (`src/cafe/layout.ts`). The shell is the dressed-counter
@@ -110,13 +110,17 @@ snack-spirit cast from `public/models/guest-*.glb`.
   in a seat watches a free hand that comes close with wide eyes, so it is
   plain they can be picked up.
 - **Expressions** (`guests/expressions.ts`), from the models' own face parts
-  (five pairs of eyes, five mouths, pupils that look about). Everything a
-  held guest shows belongs to the one feeling of being picked up, surprise
-  and then unease, never pleasure: startled when picked up; wondering what
-  is happening at arm's length, eyes sweeping round; and, held up to the
-  player's face (within 40 cm), curious, confused with its head on one
-  side, looking left, right and down for a way out, and worried, drooping
-  with a small frown; then round again. Being pleased is for the seat.
+  (wide eyes whose pupils look about, five mouths). A held guest shows one
+  steady face at a time, and it only changes when something the player can
+  see changes: surprised for a second when picked up; then, carried, its
+  eyes on the seat it is held over (straight down when there is none) and
+  its mouth following its patience dial, calm with a small smile while the
+  ring is mint, uneasy with an "o" on amber, worried, frowning and
+  drooping, on coral; and, held right up to the player's face (within
+  25 cm, nearer than carrying ever brings it), puzzled, still, its head on
+  one side, looking straight at the player until it is taken away. Nothing
+  cycles and nothing is random. `node scripts/look-faces.mjs` draws every
+  face the models can make.
 - **The seat glow** (`guests/seat-glow.ts`): while a guest is carried,
   every free seat shows a small violet dot, and the seat it would land on
   glows a soft, cool violet: a wash on the cushion, a halo, and a faint
@@ -368,10 +372,12 @@ room has a desk-height table), from a running dev server:
   off, comes out by the Meta stone and goes left or right along the front
   path, its seat free (8 checks), with screenshots.
 - `node scripts/check-expressions.mjs`: a guest watches a hand that comes
-  close; picked up it is startled, then wonders; up at the face it goes
-  through curious, confused, searching and worried in order, each with its
-  own face and lean and none of them pleased; put back its face is its own
-  again (7 checks), with a close-up of each expression.
+  close; picked up it is surprised, then calm, and stays calm; carried, its
+  eyes are on the seat below it; its face follows its dial (uneasy on
+  amber, worried and drooping on coral); right up at the face it is
+  puzzled, head on one side, until taken away; one face at a time, in
+  order; put back its face is its own again (8 checks), with a picture of
+  each.
 - `node scripts/check-nav.mjs`: the navigation grid is built from the
   café's meshes, quickly; it has the café right (where one can and cannot
   stand); a guest's way out is the front opening by the Meta stone and
@@ -389,14 +395,20 @@ room has a desk-height table), from a running dev server:
   screenshots.
 - `node scripts/look-hands.mjs`: pictures of the hands, open, pinching and
   close up. `node scripts/look-top.mjs`: a plan view of the café with a
-  grid, for laying out paths.
+  grid, for laying out paths. `node scripts/look-faces.mjs`: a sheet of
+  every face the guest models can make, and one of the faces a held guest
+  shows.
 - `npm run record:guests`: the whole story as the headset shows it (the
   line forming, a guest picked up and brought to the face, seated on the
   glowing seat, another giving up, the first leaving after its meal), with
   the theme mixed in, to `artifacts/guests.mp4`. Timers are shortened there
   so it fits one video.
+- `npm run record:faces`: a short, close clip of how a held guest takes
+  it: surprised, calm, its eyes on the seat below, puzzled up at the face,
+  pleased once seated; and a second one going from calm to uneasy to
+  worried as its dial runs down, to `artifacts/faces.mp4`.
 - `npm run record:exits`: a short clip of the line with its dials, a guest
-  lifted and fretting, servers bringing the seated guests their trays, a
+  lifted and puzzled at the viewer's face, servers bringing the seated guests their trays, a
   give-up turning back, one fading from the hand as its dial runs out, and
   seated guests leaving by the Meta stone to the left and right, to
   `artifacts/exits.mp4`.

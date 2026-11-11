@@ -1,6 +1,6 @@
 /**
  * CafeSystem: builds the café from its models the moment the game starts
- * (the garden café shell, the waiting bench by the gate, the ten tables
+ * (the garden café shell, the ten tables
  * of the opening layout, the bar and the quiet corner) and
  * puts it on the player's real table.
  *

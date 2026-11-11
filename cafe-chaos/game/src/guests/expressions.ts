@@ -1,21 +1,25 @@
 /**
- * How a guest acts while it is held: a little performance made from the
- * models' own face parts (five pairs of eyes, five mouths, pupils that
- * can look about) over the kicking-legs Lifted clip.
+ * How a guest acts while it is held: one steady face at a time, made
+ * from the models' own face parts (wide eyes whose pupils can look
+ * about, five mouths) over the kicking-legs Lifted clip.
  *
- * Being picked up by a giant hand is alarming, and everything a held
- * guest shows belongs to that one feeling: surprise, then unease. It is
- * never pleased about it; being pleased is for when it is put down on a
- * seat (the SitHappy clip).
+ * A face only changes when something the player can see changes, so
+ * nothing about it reads as random:
  *
- * - The moment it is picked up it is startled: wide eyes darting, an "o"
- *   mouth, legs going fast.
- * - Held out at arm's length it wonders what is happening: wide eyes
- *   sweeping slowly round, blinking now and then.
- * - Brought up to the player's face it studies the player and frets, in
- *   turn: it looks straight at the player, curious; tilts its head,
- *   confused; looks left, right and down for a way out; and droops,
- *   worried, with a small frown. Then round again.
+ * - The moment it is picked up it is surprised: wide eyes, an "o"
+ *   mouth, legs going fast. That lasts a second.
+ * - Carried, it looks down at the seat it is being held over (straight
+ *   down at the café when there is none), and its mouth follows its
+ *   patience dial, band for band with the dial's colours: calm (a small
+ *   smile) while the ring is mint, uneasy (an "o") on amber, worried (a
+ *   frown, drooping, legs barely moving) on coral. Patience only runs
+ *   down, so it goes through these once, in that order. A guest with no
+ *   timer running (picked up from a seat) stays calm.
+ * - Held right up to the player's face it is puzzled: it stops kicking,
+ *   looks straight at the player with its head on one side, and stays
+ *   like that until it is taken away again. This is only for a guest
+ *   brought up close on purpose, nearer than carrying one about the
+ *   café ever brings it.
  *
  * Pure timing and data: the system reads `HeldAct.update()` each frame
  * and applies the face (GuestActor.setFace), the pace of the kicking and
@@ -27,7 +31,7 @@ import type { Face } from './actor.js';
 /** How far the wide eyes' pupils can look from centre (metres on the face). */
 const LOOK_M = 0.001;
 
-export type MoodName = 'startled' | 'wondering' | 'curious' | 'confused' | 'searching' | 'worried';
+export type MoodName = 'surprised' | 'calm' | 'uneasy' | 'worried' | 'puzzled';
 
 /** What the guest is doing this frame. */
 export interface Acting {
@@ -38,113 +42,59 @@ export interface Acting {
   /** Lean of the whole body (radians): roll is a head tilt to the side, pitch a droop forward. */
   roll: number;
   pitch: number;
-  /** A quick shake of the head (radians of yaw, added to its facing). */
-  shake: number;
+}
+
+/** What the system tells a held guest each frame. */
+export interface Held {
+  /** How far it is from the player's head (metres). */
+  distance: number;
+  /** How much of its patience is left, 1 to 0 (1 for a guest with no timer running). */
+  patience: number;
+  /** Where the thing it should look at is, from its own eyes: -1 to 1 to its left, -1 to 1 upward. */
+  lookX: number;
+  lookY: number;
 }
 
 interface Mood {
   name: MoodName;
-  seconds: number;
-  /** Open-eyed moods blink. */
-  blinks: boolean;
-  act: (t: number, out: Acting) => void;
+  mouth: Face['mouth'];
+  kick: number;
+  roll: number;
+  pitch: number;
 }
 
-const wide = (out: Acting, x: number, y: number, mouth: Face['mouth']): void => {
-  out.face.eyes = 'EyesWide';
-  out.face.mouth = mouth;
-  out.face.lookX = x * LOOK_M;
-  out.face.lookY = y * LOOK_M;
-};
+const SURPRISED: Mood = { name: 'surprised', mouth: 'MouthO', kick: 1.4, roll: 0, pitch: 0 };
+const CALM: Mood = { name: 'calm', mouth: 'MouthSmile', kick: 0.55, roll: 0, pitch: 0 };
+const UNEASY: Mood = { name: 'uneasy', mouth: 'MouthO', kick: 0.85, roll: 0, pitch: 0.05 };
+const WORRIED: Mood = { name: 'worried', mouth: 'MouthFrown', kick: 0.3, roll: 0, pitch: 0.2 };
+const PUZZLED: Mood = { name: 'puzzled', mouth: 'MouthO', kick: 0.12, roll: 0.26, pitch: 0.04 };
 
-const STARTLED: Mood = {
-  name: 'startled',
-  seconds: 1.3,
-  blinks: false,
-  act: (t, out) => {
-    wide(out, 0.9 * Math.sin(t * 15), 0.6 * Math.sin(t * 11 + 1), 'MouthO');
-    out.kick = 1.5;
-  },
-};
-
-const WONDERING: Mood = {
-  name: 'wondering',
-  seconds: Infinity,
-  blinks: true,
-  act: (t, out) => {
-    // A slow look round: side to side, with a glance down at the drop.
-    wide(out, Math.sin(t * 1.7), -0.45 + 0.55 * Math.sin(t * 0.9 + 0.5), 'MouthO');
-    out.kick = 0.85;
-    out.roll = 0.06 * Math.sin(t * 1.1);
-  },
-};
-
-/** What it goes through when held up to the player's face, in order: all of a piece with being held (none of them pleased). */
-const NEAR: Mood[] = [
-  {
-    name: 'curious',
-    seconds: 2.4,
-    blinks: true,
-    // Straight at the player, mouth a little open, leaning in.
-    act: (t, out) => {
-      wide(out, 0.12 * Math.sin(t * 2.2), 0.1, t % 1.2 < 0.6 ? 'MouthO' : 'MouthOpen');
-      out.kick = 0.45;
-      out.pitch = 0.1;
-    },
-  },
-  {
-    name: 'confused',
-    seconds: 2.6,
-    blinks: true,
-    // Head on one side, then the other, eyes up in thought, a small frown.
-    act: (t, out) => {
-      const side = Math.sin(t * 2.1);
-      wide(out, 0.6 * side, 0.75, 'MouthFrown');
-      out.kick = 0.3;
-      out.roll = 0.3 * side;
-    },
-  },
-  {
-    name: 'searching',
-    seconds: 3,
-    blinks: false,
-    // Left... right... down: is there a way out?
-    act: (t, out) => {
-      const step = Math.floor(t / 0.75) % 4;
-      const [x, y] = [[-1, 0.1], [1, 0.1], [0, -1], [0, 0.2]][step];
-      wide(out, x, y, 'MouthO');
-      out.kick = 0.7;
-      out.shake = step < 2 ? (step === 0 ? -0.25 : 0.25) : 0;
-    },
-  },
-  {
-    name: 'worried',
-    seconds: 2.8,
-    blinks: false,
-    // Plain eyes that close for a moment now and then, a small frown, drooping a little, legs barely moving.
-    act: (t, out) => {
-      out.face.eyes = t % 1.6 > 1.35 ? 'EyesClosed' : 'EyesOpen';
-      out.face.mouth = 'MouthFrown';
-      out.kick = 0.22;
-      out.pitch = 0.2 + 0.03 * Math.sin(t * 2.4);
-    },
-  },
-];
-
-/** Held nearer the player's head than this, a guest plays to the player; it stops once farther than `far` (metres). */
-export const FACE_RANGE = { near: 0.4, far: 0.48 };
+/** How long the surprise of being picked up lasts (seconds). */
+export const SURPRISE_SECONDS = 1;
+/** The patience left at which a carried guest turns uneasy, then worried: the dial's amber and coral bands. */
+export const PATIENCE_BANDS = { uneasy: 0.5, worried: 0.25 };
+/**
+ * Held nearer the player's head than `near` a guest is puzzled by the
+ * player; it stops once farther than `far` (metres). Carrying a guest
+ * about the café keeps it 35 cm or more from the head, so this only
+ * happens when it is brought up close on purpose.
+ */
+export const FACE_RANGE = { near: 0.25, far: 0.31 };
+/** How fast the eyes turn to what they look at (per second). */
+const LOOK_FOLLOW = 7;
 /** Blinks: every so often (seconds, at random within the range), this long. */
-const BLINK = { every: [2.2, 4] as const, seconds: 0.13 };
+const BLINK = { every: [2.6, 4.4] as const, seconds: 0.13 };
 
 export class HeldAct {
   /** What the guest is doing now (updated in place). */
-  readonly acting: Acting = { mood: 'startled', face: { eyes: 'EyesWide', mouth: 'MouthO', lookX: 0, lookY: 0 }, kick: 1, roll: 0, pitch: 0, shake: 0 };
+  readonly acting: Acting = { mood: 'surprised', face: { eyes: 'EyesWide', mouth: 'MouthO', lookX: 0, lookY: 0 }, kick: 1, roll: 0, pitch: 0 };
   /** Every mood shown so far, in order (for the checks). */
-  readonly seen: MoodName[] = ['startled'];
-  private mood: Mood = STARTLED;
+  readonly seen: MoodName[] = ['surprised'];
+  private mood: Mood = SURPRISED;
   private t = 0;
-  private nearIndex = 0;
   private near = false;
+  private lookX = 0;
+  private lookY = 0;
   private nextBlink: number;
   private readonly random: () => number;
 
@@ -153,41 +103,37 @@ export class HeldAct {
     this.nextBlink = this.blinkGap();
   }
 
-  /** Advance by `delta` seconds; `distance` is how far the guest is from the player's head (metres). */
-  update(delta: number, distance: number): Acting {
+  /** Advance by `delta` seconds. */
+  update(delta: number, held: Held): Acting {
     this.t += delta;
-    this.near = distance < (this.near ? FACE_RANGE.far : FACE_RANGE.near);
-    if (this.mood === STARTLED) {
-      if (this.t >= STARTLED.seconds) this.enter(this.near ? NEAR[this.nearIndex] : WONDERING);
-    } else if (!this.near) {
-      if (this.mood !== WONDERING) this.enter(WONDERING);
-    } else if (this.mood === WONDERING) {
-      this.enter(NEAR[this.nearIndex]);
-    } else if (this.t >= this.mood.seconds) {
-      this.nearIndex = (this.nearIndex + 1) % NEAR.length;
-      this.enter(NEAR[this.nearIndex]);
+    this.near = held.distance < (this.near ? FACE_RANGE.far : FACE_RANGE.near);
+    const mood = this.t < SURPRISE_SECONDS ? SURPRISED : this.near ? PUZZLED : held.patience <= PATIENCE_BANDS.worried ? WORRIED : held.patience <= PATIENCE_BANDS.uneasy ? UNEASY : CALM;
+    if (mood !== this.mood) {
+      this.mood = mood;
+      this.seen.push(mood.name);
     }
+    // Surprised, it stares at the hand that took it (up); puzzled, straight at the player; otherwise at the seat below.
+    const wantX = mood === SURPRISED || mood === PUZZLED ? 0 : held.lookX;
+    const wantY = mood === SURPRISED ? 0.5 : mood === PUZZLED ? 0.1 : held.lookY;
+    const k = 1 - Math.exp(-LOOK_FOLLOW * delta);
+    this.lookX += (wantX - this.lookX) * k;
+    this.lookY += (wantY - this.lookY) * k;
     const out = this.acting;
-    out.mood = this.mood.name;
-    out.kick = 1;
-    out.roll = 0;
-    out.pitch = 0;
-    out.shake = 0;
-    out.face.lookX = 0;
-    out.face.lookY = 0;
-    this.mood.act(this.t, out);
-    if (this.mood.blinks) {
+    out.mood = mood.name;
+    out.kick = mood.kick;
+    out.roll = mood.roll;
+    out.pitch = mood.pitch;
+    out.face.eyes = 'EyesWide';
+    out.face.mouth = mood.mouth;
+    out.face.lookX = this.lookX * LOOK_M;
+    out.face.lookY = this.lookY * LOOK_M;
+    // It blinks now and then, except in its first surprise.
+    if (mood !== SURPRISED) {
       this.nextBlink -= delta;
       if (this.nextBlink <= 0) out.face.eyes = 'EyesClosed';
       if (this.nextBlink <= -BLINK.seconds) this.nextBlink = this.blinkGap();
     }
     return out;
-  }
-
-  private enter(mood: Mood): void {
-    this.mood = mood;
-    this.t = 0;
-    this.seen.push(mood.name);
   }
 
   private blinkGap(): number {

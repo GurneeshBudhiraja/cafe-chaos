@@ -22,8 +22,7 @@ export const CAFE_NAV: NavOptions = {
   radius: 0.014,
   barriers: [
     // The room is open along its front (a low step down to the garden path). Nobody steps out just
-    // anywhere along it: the way out is the opening by the Meta stone, between these two lines
-    // (to the left of the waiting bench).
+    // anywhere along it: the way out is the opening by the Meta stone, between these two lines.
     [-0.36, 0.184, 0.0, 0.184],
     [0.135, 0.184, 0.365, 0.184],
   ],

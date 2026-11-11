@@ -75,6 +75,8 @@ export const HOP = { sit: { seconds: 0.28, height: 0.012 }, back: { seconds: 0.4
 
 /** A guest on its feet or in a seat watches a free hand that comes within this of it (metres, world; grows with the café). */
 export const WATCH_RADIUS_M = 0.14;
+/** How high a guest's eyes are above its feet (metres): what it looks at is judged from there. */
+export const EYE_HEIGHT_M = 0.045;
 /** How quickly a held guest's lean follows its acting (per second). */
 export const LEAN_FOLLOW = 9;
 

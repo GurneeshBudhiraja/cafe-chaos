@@ -12,7 +12,7 @@
  *   |                                        |      deck
  *   |  T2   T2   T2    T2   T2               = door = = gap =  Q Q Q Q Q  < arrivals
  *   |                                        |                 > > > > >  those who give up
- *   |                        [waiting bench] |rail
+ *   |                                        |rail
  *   + - - - - - - - - - +    +- - - - - - - -+
  *   X <- - - left - - - - (  ) [Meta stone] - - right - -> X
  *   ^ leavers fade out at either end of the front path

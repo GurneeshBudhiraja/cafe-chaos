@@ -2,8 +2,8 @@
  * A short look at how guests wait, are lifted and leave, recorded as the
  * headset shows it (Quest 3 field of view, no captions): the line forms
  * outside the door, a patience dial over each head; a guest is pinched
- * up and brought to the viewer's face, where it is startled, curious,
- * confused, looks for a way out and frets (never pleased); it and two
+ * up, surprised, then calm, and brought to the viewer's face, where it is
+ * puzzled, still, its head on one side; it and two
  * more are seated on the violet glow; someone in the line runs out of
  * patience, turns round and walks back the way it came; one picked up
  * too late fades away in the hand as its dial runs out; servers bring
@@ -156,7 +156,7 @@ async function seatAt(x, z, linger = 700) {
   return seat;
 }
 
-// 3. Pick one up; at arm's length it is startled, then wonders; up at the face it is curious, confused, looks for a way out, and frets.
+// 3. Pick one up: surprised, then calm at arm's length; up at the face it is puzzled, still, its head on one side.
 const first = await pickHead();
 await reach(800, add(first.grip, [0.02, 0.13, 0.06]));
 await pause(900);
@@ -164,7 +164,7 @@ const face = [SEAT.x - 0.125, SEAT.y - 0.03, SEAT.z + 0.004];
 await Promise.all([h.head(SEAT, P(add(face, [0, -0.012, 0])), 1500), reach(1500, face)]);
 await until((id) => {
   const act = window.__cafe.guests.guests.find((g) => g.id === id)?.act;
-  return !!act && act.acting.mood === 'worried';
+  return !!act && act.acting.mood === 'puzzled';
 }, first.id);
 await pause(2600);
 

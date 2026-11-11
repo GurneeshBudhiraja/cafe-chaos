@@ -4,9 +4,11 @@
  * at the centre of the garden base's underside).
  *
  * This is the opening layout, the one the models were sized and tested
- * with (see ../../START-HERE.md): the Japanese garden café shell with the
- * waiting bench by the gate and all ten tables: three four-seaters and
- * two two-seaters in the back row, five two-seaters in the front row.
+ * with (see ../../START-HERE.md): the Japanese garden café shell with
+ * all ten tables: three four-seaters and two two-seaters in the back
+ * row, five two-seaters in the front row. (Guests wait in a line outside
+ * the door, so the front-right corner by the gate is left clear: there
+ * is no waiting bench.)
  * Columns are 13 cm apart, the rows 16 cm. Dressing the room further: a
  * two-stool bar along the left wall, a quiet armchair corner at the back
  * right. The tables start bare; the baristas bring the food.
@@ -36,9 +38,6 @@ const FRONT_Z = 0.025;
 
 export const OPENING_LAYOUT: Placement[] = [
   { model: 'cafe-shell', x: 0, z: 0, y: 0 },
-  // The waiting bench inside the front-right corner, by the gate (the
-  // shell's BenchSpot); waiting guests face into the café.
-  { model: 'waiting-bench', x: 0.235, z: 0.165, yawDeg: 180 },
   // Back row: three four-seaters, two two-seaters.
   ...[0, 1, 2].map((i) => ({ model: 'table-4' as const, x: COLS[i], z: BACK_Z })),
   ...[3, 4].map((i) => ({ model: 'table-2' as const, x: COLS[i], z: BACK_Z })),
