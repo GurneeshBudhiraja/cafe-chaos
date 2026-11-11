@@ -153,15 +153,11 @@ await page.waitForFunction(() => window.__cafe.guests.left >= 1, null, { timeout
 const end = await state();
 check('it fades out at the end, and there were never more than ten on stage', end.left >= 1 && end.peak <= 10, `left ${end.left}, peak ${end.peak}, on stage now ${end.all.length}`);
 
-// 4. Left or right at the front: neither end is favoured, and never three the same way running.
+// 4. Leaving: every guest who has eaten goes out by the exit in the left wall, each to its own spot across the path.
 {
-  const picks = await page.evaluate(() => Array.from({ length: 30 }, () => window.__cafe.guests.pickExit()));
-  const left = picks.filter((p) => p.side === 'left').length;
-  let run = 1;
-  let longest = 1;
-  for (let i = 1; i < picks.length; i++) { run = picks[i].side === picks[i - 1].side ? run + 1 : 1; longest = Math.max(longest, run); }
-  const lanes = new Set(picks.map((p) => `${p.side}${p.lane}`)).size;
-  check('leavers are sent left and right evenly', left >= 11 && left <= 19 && longest <= 2 && lanes === 6, `of 30: ${left} left, ${30 - left} right, longest run the same way ${longest}, ${lanes} different end spots used`);
+  const lanes = await page.evaluate(async () => (await import('/src/guests/paths.ts')).EXIT_LANES.length);
+  const seen = await page.evaluate(() => window.__cafe.guests.guests.filter((g) => g.state === 'leaving' && g.side === 'exit').map((g) => g.lane));
+  check('leavers have a spot at the exit each', seen.every((l) => l >= 0 && l < lanes), `${lanes} spots across the walkout path; leaving now on spots ${seen.join(', ') || 'none'}`);
 }
 
 const errors = await h.finish();

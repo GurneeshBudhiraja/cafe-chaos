@@ -14,9 +14,13 @@ spilling out over the real table. Six baristas work behind the counter
 and carry trays out to the tables, steam rises over the kettle and
 blossom falls from the cherry tree. Guests walk up and line up outside the
 door; the player pinches one up, carries it over the café and lets go
-over the seat that glows a soft violet; after its meal the guest hops
-down, comes out by the Meta stone at the front and goes left or right
-along the garden path. A very quiet lo-fi theme plays under it all from
+over the seat that glows a soft violet (a free hand near a guest lights
+it up with a warm ring: pinch now and it is yours); after its meal the
+guest hops down and leaves by the one exit, in the café's left wall
+under the 出口 sign. A stone plaque in the gravel in front extends the
+café: pinch it and the left wall goes, the floor grows to the left with
+four more tables in line with the rest, and the exit moves to the new
+outer wall. A very quiet lo-fi theme plays under it all from
 the moment the session starts. Like a Horizon OS window, the café has a grab pill on the side
 facing the player (pinch and drag to move it) and a bracket at each
 corner (pinch and pull to resize, swing to turn), always visible, in the
@@ -29,6 +33,10 @@ and index tips of each tracked hand (`src/hands/pinch-cursor.ts`): faint
 cream open, amber and larger pinched, gone when the headset loses the
 hand. A pinch is the headset's own pinch (the session's select events)
 or the two tips touching, whichever comes first (`src/hold/hold.ts`).
+Where the headset reports pinches, its pinch ending lets go at once. A
+hand the tracking has only just found counts as open, with no dot, for
+its first 0.2 s, while its joints settle, so it never grabs anything or
+shows a dot jumping about as it comes into view.
 
 **The café** (`src/systems/cafe-system.ts`):
 
@@ -48,8 +56,9 @@ or the two tips touching, whichever comes first (`src/hold/hold.ts`).
   headset's Space Setup: a table, desk, counter, couch seat, shelf or
   unlabelled box, anything horizontal at least 20 cm up, within 1.2 m and
   below the eyes; `src/lib/desk-placement.ts`), with the café's centre
-  about 45 cm out so the whole café sits below the gaze while the back row
-  stays within seated reach, or as far in as a small surface allows. If no
+  about 35 cm out, so the café sits below the gaze and nearly everything
+  the hands do (the back row, the whole line by the door, the plaques) is
+  within about 60 cm, a seated arm's reach, or as far in as a small surface allows. If no
   surface is found within two seconds the café floats 60 cm ahead and
   55 cm below the eyes, and still moves onto a surface found in the next
   few seconds (unless the player has already moved it). It turns to face
@@ -83,8 +92,9 @@ reach a table and get home. The same grid says which seats are buried in
 furniture and where there is room to stand to serve a table. Put a new
 table anywhere, call `system.nav.rebuild()` (and `baristas.findTables()`),
 and it is walked round and served with nothing else changed. The one thing
-the grid is told: the room's open front is a barrier except for the
-opening by the Meta stone, which is the way out.
+the grid is told: the room's open front is a barrier, so the one way out
+is the exit in the left wall (the outer wall, once the café is
+extended).
 
 **The guests** (`src/systems/guest-system.ts`, `src/guests/`): the
 snack-spirit cast from `public/models/guest-*.glb`.
@@ -97,8 +107,10 @@ snack-spirit cast from `public/models/guest-*.glb`.
   everyone, and five in the line. Arrivals come every 3.5 to 6.5 seconds
   when the café is empty and slow as it fills, so it fills briskly and
   then settles.
-- **The line**: single file outside the door, its head on the deck, turned
-  partly to the player so faces show. Each guest has its own patience, 32
+- **The line**: its head on the deck just outside the door, the rest on
+  the table beyond the plate, running down toward the player (not out to
+  the right) so the whole line is within reach; everyone faces the door,
+  turned partly to the player so faces show. Each guest has its own patience, 32
   seconds give or take 15%, shown by a little dial over its head
   (`guests/patience-dial.ts`): a cream badge whose ring empties clockwise,
   mint, then amber from half, then coral and throbbing for the last
@@ -113,10 +125,14 @@ snack-spirit cast from `public/models/guest-*.glb`.
   for ten seconds loses the guest at the back. Shorter, and the back of a
   full line cannot be saved at all; much longer, and the timers stop
   mattering.
-- **Picking up**: a pinch closing on a guest lifts it. It hangs from the
-  fingers, legs kicking, turned to face the player. A guest in the line or
-  in a seat watches a free hand that comes close with wide eyes, so it is
-  plain they can be picked up.
+- **Picking up**: a free hand close enough that a pinch would take a
+  guest lights that guest up: a soft warm ring round its feet, breathing,
+  and the guest itself glowing a little brighter (`guests/pick-ring.ts`).
+  It is exactly the guest a pinch takes (the nearest within reach of the
+  pinch point), however close the hand is. A pinch closing on it lifts it;
+  it hangs from the fingers, legs kicking, turned to face the player. A
+  guest in the line or in a seat also watches a free hand that comes
+  close with wide eyes.
 - **Expressions** (`guests/expressions.ts`), from the models' own face parts
   (wide eyes whose pupils look about, five mouths). A held guest shows one
   steady face at a time, and it only changes when something the player can
@@ -141,13 +157,12 @@ snack-spirit cast from `public/models/guest-*.glb`.
   the far side of the back row's four-seaters are inside the shell's
   counter, which the navigation grid sees, and are left out.
 - **Leaving**: after a minute seated, a guest hops off its chair to the
-  nearest place with room to stand, comes out of the room's front opening
-  by the Meta stone, and there turns left or right along the garden path,
-  fading out at that end. Nobody steps off the platform. The side is the
-  one with fewer guests already on their way to it, a coin toss when they
-  are level, and never the same side three times running, so neither end
-  crowds; at each end there are three spots dealt in turn. Only the
-  opening and the ends are given (`guests/paths.ts`); the ways between are
+  nearest place with room to stand and leaves by the café's one exit: the
+  exit in the left wall under the 出口 sign, down the walkout path through
+  the gap in the bamboo fence, fading out at the plate's edge (once the
+  café is extended, the exit in the new outer wall). Three spots across
+  the path are dealt in turn, so two leaving together walk abreast. Only
+  the spots at the end are given (`guests/paths.ts`); the ways there are
   found on the grid.
 - **Pace**: guests walk briskly (about 6 to 8 cm a second), with the Walk
   clip played faster to match.
@@ -170,7 +185,7 @@ game will later unlock them one by one.
   a tray (tea with dango, or a latte with dorayaki), comes round the
   counter's end, carries it to that guest, serves with a lean, sets the
   tray down at the guest's own place (the table's meal spot for that
-  seat), bows, and walks back. The guest waits, then eats once served; the
+  seat), and walks straight back. The guest waits, then eats once served; the
   tray is cleared when the guest leaves. Never more than three servers
   are out at once.
 - **Who serves whom** (the dispatcher):
@@ -437,7 +452,8 @@ src/
   assets.ts                  the model manifest (the café's pieces first)
   cafe/layout.ts             the floor plan and the dressing (meals)
   cafe/materials.ts          the café's materials on the grey-box pieces
-  systems/cafe-system.ts     building the café and placing it on the table
+  systems/cafe-system.ts     building the café and placing it on the table; the left exit; extending the café
+  systems/unlock-system.ts   the stone plaque in front that extends the café
   systems/hold-system.ts     reading the pinches; carrying, resizing and turning the café
   systems/guest-system.ts    the guests: arriving, the line, carrying, sitting, leaving
   systems/render-budget-system.ts  the resting shadow map, the refresh rate, the fps readout
@@ -456,7 +472,8 @@ src/
   guests/cast.ts             species, colours and outfits, at random
   guests/actor.ts            one guest: its model, clips, face, materials, folded skin
   guests/expressions.ts      how a held guest acts, and the face it makes at a hand
-  guests/paths.ts            the line outside the door, the way back for those who give up, the front opening and the path's ends
+  guests/paths.ts            the line by the door, the way back for those who give up, the exit's spots (and the extended café's)
+  guests/pick-ring.ts        the warm ring round the guest a pinch would pick up
   guests/patience-dial.ts    the little patience timer over each guest in the line
   guests/walker.ts           following a path
   guests/seats.ts            the usable seats and who is on them

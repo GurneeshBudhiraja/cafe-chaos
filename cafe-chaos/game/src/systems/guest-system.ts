@@ -196,6 +196,8 @@ export class GuestSystem extends createSystem({}) {
   update(frameDelta: number): void {
     const cafe = this.cafeSystem;
     const delta = Math.min(1, frameDelta) * cafe.timeScale;
+    // New furniture (the annex's) is taken in whether or not the café is down yet.
+    if (cafe.furniture !== this.furniture) this.takeInSeats();
     if (!cafe.placed || cafe.placements !== this.placement) {
       // No café, or it has just been put down afresh: everyone out, and the line starts again.
       if (this.guests.length) this.clear();
@@ -203,7 +205,6 @@ export class GuestSystem extends createSystem({}) {
       this.nextSpawnIn = FIRST_SPAWN_SECONDS;
       if (!cafe.placed) return;
     }
-    if (cafe.furniture !== this.furniture) this.takeInSeats();
     if (cafe.arriving) return;
     this.spawnTick(delta);
     this.hands(delta);
