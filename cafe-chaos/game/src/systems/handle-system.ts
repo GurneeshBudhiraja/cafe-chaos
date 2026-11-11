@@ -22,7 +22,7 @@ import { SCALE_MAX, SCALE_MIN } from '../hold/hold.js';
 import { BRACKET, CORNER_SIGNS, LIFT_M, NEAR_M, PILL, PILL_DOOR_SIDE_Z, REACH_M, SHOW, SIDE_HYSTERESIS, growFor, makeBracket, makePill, type Corner, type Handle, type Side } from '../handles/handles.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
 import { CafeSystem } from './cafe-system.js';
-import { HoldSystem } from './hold-system.js';
+import { HoldSystem, wrapAngle } from './hold-system.js';
 
 interface CornerDrag {
   hand: Hand;
@@ -212,7 +212,7 @@ export class HandleSystem extends createSystem({}) {
     const radius = Math.hypot(dx, dz);
     const scale = Math.min(SCALE_MAX, Math.max(SCALE_MIN, (drag.scale0 * radius) / drag.radius0));
     cafe.scale.setScalar(scale);
-    cafe.rotation.set(0, drag.yaw0 + (Math.atan2(dx, dz) - drag.angle0), 0);
+    cafe.rotation.set(0, drag.yaw0 + wrapAngle(Math.atan2(dx, dz) - drag.angle0), 0);
   }
 
   // ------------------------------------------------------------ brightness

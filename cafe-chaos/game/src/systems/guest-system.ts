@@ -48,7 +48,7 @@ import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ARRIVAL_POINT, EXIT_ENDS, FRONT_OPENING, FRONT_PATH_Z, pathBack, QUEUE_SPOTS, QUEUE_YAW, type Side } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
-  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, SEAT_REACH_M, SEATED_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
+  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, PICK_WINDOW_S, SEAT_REACH_M, SEATED_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { SeatGlow } from '../guests/seat-glow.js';
@@ -161,6 +161,8 @@ export class GuestSystem extends createSystem({}) {
   private holdSystem: HoldSystem | undefined;
   private handles: HandleSystem | undefined;
   private readonly pinched: Record<Hand, boolean> = { left: false, right: false };
+  /** How long each hand's pinch has been closed (seconds); Infinity while it is open. */
+  private readonly closedFor: Record<Hand, number> = { left: Infinity, right: Infinity };
   private readonly blobs = new Blobs(MAX_GUESTS + 2);
   private readonly at = new Vector3();
   private readonly head = new Vector3();
@@ -409,8 +411,10 @@ export class GuestSystem extends createSystem({}) {
     }
     HANDS.forEach((hand, i) => {
       const pinch = hold.pinch[hand];
-      const fresh = pinch.closed && !this.pinched[hand];
+      this.closedFor[hand] = pinch.closed ? (this.pinched[hand] ? this.closedFor[hand] + delta : 0) : Infinity;
       this.pinched[hand] = pinch.closed;
+      // A pinch that closed just now, or a moment ago on its way in (PICK_WINDOW_S).
+      const recent = this.closedFor[hand] <= PICK_WINDOW_S;
       const carried = this.carriedBy(hand);
       if (carried) {
         if (!pinch.closed) this.letGo(carried);
@@ -424,8 +428,8 @@ export class GuestSystem extends createSystem({}) {
         else fading.hand = null;
         return;
       }
-      // A pinch closing now, on a guest, with the hand free (not on the café's handles).
-      if (!fresh || hold.holding.includes(hand) || this.handles?.near(pinch.point)) return;
+      // A pinch closing now (or just before reaching it), on a guest, with the hand free (not on the café's handles).
+      if (!recent || hold.holding.includes(hand) || this.handles?.near(pinch.point)) return;
       const guest = this.nearestGuest(pinch.point, 1);
       if (guest) this.pickUp(guest, hand);
     });

@@ -59,9 +59,21 @@ export const FADE_OUT_M = 0.16;
 /** Leaving guests keep at least this far behind the one ahead in their lane (metres). */
 export const FOLLOW_GAP_M = 0.06;
 
-/** A pinch closing within this of a guest's grip picks it up (metres in the café's space, and never less than the world floor). */
-export const PICK_RADIUS_M = 0.04;
-export const PICK_RADIUS_WORLD_MIN_M = 0.03;
+/**
+ * A pinch closing within this of a guest's grip picks it up (metres in
+ * the café's space, and never less than the world floor). Generous: a
+ * guest is a few centimetres wide, hand tracking is a centimetre or two
+ * off, and depth over a table is misjudged by as much again; the nearest
+ * guest within reach is the one taken, so being generous costs nothing.
+ */
+export const PICK_RADIUS_M = 0.07;
+export const PICK_RADIUS_WORLD_MIN_M = 0.05;
+/**
+ * A pinch that closes a little before it reaches a guest still picks it
+ * up if it comes within reach this soon after closing (seconds): fingers
+ * tend to close on the way in, not at the spot.
+ */
+export const PICK_WINDOW_S = 0.4;
 /** A pinch within this many pick radii of a guest belongs to the guests: it never moves the café. */
 export const CLAIM_RADII = 1.7;
 /** A carried guest hangs from the pinch by its grip, this far up its body (café space, from the model). */

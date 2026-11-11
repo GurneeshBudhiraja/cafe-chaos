@@ -13,22 +13,37 @@
  * hold of the café by its body is behind `directGrab` (off while there
  * are guests to pick up); the handles always work.
  *
- * Pinches are read from the hands' joints (see ../lib/hand-pinch.ts), so
- * this needs no pointer rays. Nothing is allocated per frame.
+ * A pinch is the headset's own select event for that hand, or the thumb
+ * and index tips touching (see ../lib/hand-pinch.ts), whichever comes
+ * first; the pinch point is the midpoint of the two tips, so this needs
+ * no pointer rays. The pinch point is smoothed (a one-euro
+ * filter: steady at rest, no lag when moving), and a hand that drops out
+ * of tracking for a moment keeps its last pinch (TRACKING_GRACE_S), so a
+ * flicker never drops what it holds. Nothing is allocated per frame.
  */
 
 import { Box3, createSystem, Vector3 } from '@iwsdk/core';
-import { FLOOR_Y, HOLD_MARGIN_M, PINCH_M, RELEASE_M, SCALE_MAX, SCALE_MIN } from '../hold/hold.js';
+import { FLOOR_Y, HOLD_MARGIN_M, PINCH_M, RELEASE_M, SCALE_MAX, SCALE_MIN, SMOOTH, TRACKING_GRACE_S } from '../hold/hold.js';
+import { PinchCursor } from '../hands/pinch-cursor.js';
 import { HANDS, readPinchPoint, type Hand } from '../lib/hand-pinch.js';
 import { CafeSystem } from './cafe-system.js';
 
+/** An angle brought into (-π, π], so a line of hands crossing the seam at ±π never reads as a full turn. */
+export function wrapAngle(a: number): number {
+  return a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+}
+
 interface Pinch {
-  /** The pinch point this frame (world). */
+  /** The pinch point this frame (world), smoothed. */
   point: Vector3;
   /** Thumb to index tip gap (metres); Infinity when the hand is not tracked. */
   gap: number;
   /** Closed as of last frame (with hysteresis between PINCH_M and RELEASE_M). */
   closed: boolean;
+  /** How long the hand has been out of tracking (seconds); 0 while tracked. */
+  lost: number;
+  /** The headset's own pinch for this hand (its select event is active). */
+  native: boolean;
 }
 
 export class HoldSystem extends createSystem({}) {
@@ -36,8 +51,8 @@ export class HoldSystem extends createSystem({}) {
   readonly holding: Hand[] = [];
   /** Each hand's pinch, read every frame (the dev harness reads these too). */
   readonly pinch: Record<Hand, Pinch> = {
-    left: { point: new Vector3(), gap: Infinity, closed: false },
-    right: { point: new Vector3(), gap: Infinity, closed: false },
+    left: { point: new Vector3(), gap: Infinity, closed: false, lost: 0, native: false },
+    right: { point: new Vector3(), gap: Infinity, closed: false, lost: 0, native: false },
   };
   /** The café's bounds in its own space at scale 1 (set once it is built). */
   readonly bounds = new Box3();
@@ -50,7 +65,16 @@ export class HoldSystem extends createSystem({}) {
    * (HandleSystem) move, resize and turn it; they call `holdWith`.
    */
   directGrab = false;
+  /** The dot at each hand's pinch point (see ../hands/pinch-cursor.ts). */
+  readonly cursor = new PinchCursor();
   private cafe: CafeSystem | null = null;
+  private session: XRSession | null = null;
+  private readonly onSelect = (event: XRInputSourceEvent): void => {
+    const source = event.inputSource;
+    const hand = source.handedness;
+    if (!source.hand || (hand !== 'left' && hand !== 'right')) return;
+    this.pinch[hand].native = event.type === 'selectstart';
+  };
   // One hand: where the café's origin sits relative to the pinch (world).
   private readonly offset = new Vector3();
   // Two hands: the grip as it was when the second hand took hold.
@@ -62,11 +86,18 @@ export class HoldSystem extends createSystem({}) {
   private readonly mid = new Vector3();
   private readonly v = new Vector3();
   private readonly scratch = new Vector3();
+  private readonly raw = new Vector3();
   /** Each hand's `closed` as of last frame, so only a fresh pinch takes the café. */
   private readonly previous: Record<Hand, boolean> = { left: false, right: false };
 
   init(): void {
     this.cafe = this.world.getSystem(CafeSystem) ?? null;
+    this.world.createTransformEntity(this.cursor.group);
+    // The headset's own pinch: the session's select events for each hand.
+    const xr = this.world.renderer.xr;
+    xr.addEventListener('sessionstart', () => this.listen(xr.getSession()));
+    xr.addEventListener('sessionend', () => this.listen(null));
+    this.listen(xr.getSession());
     if (!this.cafe) return;
     const cafe = this.cafe.cafe;
     // The bounds of the furniture and shell (not the lights, halos or the wide spill), in café space.
@@ -76,13 +107,28 @@ export class HoldSystem extends createSystem({}) {
     this.bounds.max.sub(cafe.position).divideScalar(cafe.scale.x);
   }
 
-  update(): void {
+  private listen(session: XRSession | null): void {
+    if (this.session === session) return;
+    this.session?.removeEventListener('selectstart', this.onSelect);
+    this.session?.removeEventListener('selectend', this.onSelect);
+    this.session = session;
+    session?.addEventListener('selectstart', this.onSelect);
+    session?.addEventListener('selectend', this.onSelect);
+    for (const hand of HANDS) this.pinch[hand].native = false;
+  }
+
+  update(delta: number): void {
     const cafe = this.cafe;
     if (!cafe || !cafe.placed || cafe.arriving || !this.world.renderer.xr.isPresenting) {
       this.holding.length = 0;
+      this.cursor.hide();
       return;
     }
-    for (const hand of HANDS) this.read(hand);
+    for (const hand of HANDS) {
+      this.read(hand, delta);
+      const p = this.pinch[hand];
+      this.cursor.show(hand, p.point, p.gap < Infinity, p.closed, delta);
+    }
     this.release();
     this.takeByPinch();
     if (this.holding.length === 2) this.stretch();
@@ -91,12 +137,31 @@ export class HoldSystem extends createSystem({}) {
 
   // -------------------------------------------------------------- hands
 
-  private read(hand: Hand): void {
+  private read(hand: Hand, delta: number): void {
     const p = this.pinch[hand];
     const source = this.world.input.xr.getPrimaryInputSource(hand);
-    p.gap = readPinchPoint(source, this.xrFrame, this.xrManager.getReferenceSpace(), this.player.matrixWorld, p.point, this.scratch);
-    // Hysteresis: a pinch opens only once the fingers are clearly apart.
-    p.closed = p.gap < PINCH_M || (p.closed && p.gap <= RELEASE_M);
+    const gap = readPinchPoint(source, this.xrFrame, this.xrManager.getReferenceSpace(), this.player.matrixWorld, this.raw, this.scratch);
+    if (gap === Infinity) {
+      // Out of tracking: keep the last pinch for a moment, then count the hand as gone.
+      p.lost += delta;
+      if (p.lost > TRACKING_GRACE_S) {
+        p.gap = Infinity;
+        p.closed = false;
+        p.native = false;
+      }
+      return;
+    }
+    if (p.gap === Infinity) p.point.copy(this.raw);
+    else {
+      // The one-euro filter: steadier the slower the hand moves.
+      const speed = delta > 0 ? this.raw.distanceTo(p.point) / delta : 0;
+      const k = 1 - Math.exp(-2 * Math.PI * (SMOOTH.minHz + SMOOTH.beta * speed) * delta);
+      p.point.lerp(this.raw, k);
+    }
+    p.lost = 0;
+    p.gap = gap;
+    // The headset's pinch, or the tips touching; with hysteresis, a pinch by the tips opens only once they are clearly apart.
+    p.closed = p.native || p.gap < PINCH_M || (p.closed && p.gap <= RELEASE_M);
   }
 
   /** Is this hand's pinch point on or just around the café? */
@@ -178,7 +243,7 @@ export class HoldSystem extends createSystem({}) {
     const b = this.pinch[this.holding[1]].point;
     const span = Math.hypot(b.x - a.x, b.z - a.z);
     const scale = Math.min(SCALE_MAX, Math.max(SCALE_MIN, (this.scale0 * span) / this.span0));
-    const turn = Math.atan2(b.x - a.x, b.z - a.z) - this.angle0;
+    const turn = wrapAngle(Math.atan2(b.x - a.x, b.z - a.z) - this.angle0);
     const grow = scale / this.scale0;
     this.mid.addVectors(a, b).multiplyScalar(0.5);
     const cos = Math.cos(turn);

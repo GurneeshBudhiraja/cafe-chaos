@@ -20,7 +20,15 @@ along the garden path. A very quiet lo-fi theme plays under it all from
 the moment the session starts. Like a Horizon OS window, the café has a grab pill on the side
 facing the player (pinch and drag to move it) and a bracket at each
 corner (pinch and pull to resize, swing to turn), always visible, in the
-café's own style. The player's hands are the café's own cream hands.
+café's own style. The hands are IWSDK's own grey outline hands: in
+passthrough the player's real hands are in view, and the outline sits
+around them where a solid model would cover them and read as a second
+hand on top (`HAND.style` in `src/hands/cafe-hand.ts`: `'cream'` for the
+café's solid cream hands, `'real'` for no hand drawn). A small dot sits between the thumb
+and index tips of each tracked hand (`src/hands/pinch-cursor.ts`): faint
+cream open, amber and larger pinched, gone when the headset loses the
+hand. A pinch is the headset's own pinch (the session's select events)
+or the two tips touching, whichever comes first (`src/hold/hold.ts`).
 
 **The café** (`src/systems/cafe-system.ts`):
 
