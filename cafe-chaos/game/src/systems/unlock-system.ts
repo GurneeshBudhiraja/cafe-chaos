@@ -207,6 +207,8 @@ export class UnlockSystem extends createSystem({}) {
   private stock(): void {
     if (!AssetManager.getGLTF('unlock-plaque')) return;
     for (const item of SHOP) {
+      // Test mode keeps the café as it was before the shop: the annex's plaque only (all six servers already work).
+      if (TEST_MODE && item.id !== 'annex') continue;
       const wanted = this.onSale(item) || (item.id === 'annex' && this.owned.has('annex'));
       if (!wanted || this.plaques.has(item.id)) continue;
       const plaque = this.build(item);
