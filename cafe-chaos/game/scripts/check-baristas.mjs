@@ -142,7 +142,8 @@ await h.head(SEAT, LOOK, 300);
   check('the moment a guest is seated a server sets off with a tray for it', went.order === placed.guest && went.tray, `${went.name} is out with a tray for guest ${went.order} (seated: guest ${placed.guest})`);
   await until((name) => window.__cafe.baristas.staff.find((x) => x.barista.name === name).barista.root.position.z > -0.1, went.name);
   await h.screenshot('artifacts/baristas-2-carrying.png');
-  await until((name) => window.__cafe.baristas.staff.find((x) => x.barista.name === name).state === 'serving', went.name);
+  // With no bow the server is only a moment at the table, so wait for the tray to be down rather than for the 'serving' state.
+  await until((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.served === true, placed.guest);
   await h.screenshot('artifacts/baristas-3-serving.png');
   await until((name) => window.__cafe.baristas.staff.find((x) => x.barista.name === name).state === 'working', went.name);
   const after = await page.evaluate((id) => {
