@@ -192,7 +192,7 @@ await pause(1500);
     if (process.env.NORECORD) process.exit(1);
   }
   // Lean in to the lit guest, so the ring and the glow read.
-  await h.head(P(add(guest.grip, [0.1, 0.1, 0.12])), P(guest.grip), 1200);
+  await h.head(P(add(guest.grip, [0.17, 0.13, 0])), P(guest.grip), 1200);
   await pause(1600);
   await reach(450, guest.grip);
   await pause(150);
