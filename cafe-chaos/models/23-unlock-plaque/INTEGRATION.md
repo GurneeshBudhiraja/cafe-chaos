@@ -7,7 +7,7 @@ front of the café (the shell has `PlaqueSpot-1 … 6` along the front strip, 10
 to pinch.
 
 - File: `unlock-plaque.glb`, ~830 triangles, 3 materials (`CafeStone`, `CafeBarPalette`,
-  `PlaqueFace`), ~480 KB with textures packed (the game de-duplicates the shell's materials by name).
+  `PlaqueFace` with its own 256 px granite texture), ~420 KB with textures packed (the game de-duplicates the shell's materials by name).
 - Size: 6.2 cm wide × 4.8 cm deep × 1.1 cm tall (1.6 cm to the top of the padlock); origin at the
   stone's underside centre; **front faces +Z** (toward the player). Set it on a `PlaqueSpot` with
   no further transform.
@@ -18,8 +18,8 @@ to pinch.
 |---|---|
 | `Plaque` | the stone and everything on it; the `Unlock` hop moves this |
 | `PlaqueStone` | the flat stone |
-| `FaceRim` | a thin dark border around the face |
-| `PlaqueFace` | a cream quad lying on the stone's flat top, 3.1 × 2.3 cm, **UV 0..1 across it** (u left→right, v from the player's side to the back): draw the icon and price here (a 256 px canvas texture on a cloned `PlaqueFace` material). Keep the back fifth clear while locked: the padlock lies there |
+| `FaceRim` | a carved border in darker granite around the face |
+| `PlaqueFace` | a honed light-granite panel lying on the stone's flat top, 3.1 × 2.3 cm, **UV 0..1 across it** (u left→right, v from the player's side to the back). Its 256 px texture (`plaque-face.png`, flecks, a faint vein, worn edges) is light and low-contrast: draw the icon and price on a canvas that starts from this image (or with a transparent canvas as a second map) so the stone shows through. Keep the back fifth clear while locked: the padlock lies there |
 | `Staple` | the brass staple at the back edge |
 | `Padlock` → `PadlockBody`, `Shackle` | the padlock lying on the face's back edge; `Shackle` pivots |
 | `Grip` | the pinch point, just above the stone's centre (0, 0.013, 0.003) |
