@@ -6,25 +6,25 @@
  * the café the guests work out for themselves, from the navigation grid
  * (nav/nav-grid.ts).
  *
- *            back wall and counter
- *   +---------------------------------------+ . . fence . .
- *   |  T4   T4   T4    T2   T2      (quiet)  |rail
- *   |                                        |      deck
- *   |  T2   T2   T2    T2   T2               = door = = gap =  Q Q Q Q Q  < arrivals
- *   |                                        |                 > > > > >  those who give up
- *   |                                        |rail
- *   + - - - - - - - - - +    +- - - - - - - -+
- *   X <- - - left - - - - (  ) [Meta stone] - - right - -> X
- *   ^ leavers fade out at either end of the front path
+ *              back wall and counter
+ *        +---------------------------------------+ . . fence . .
+ *        |  T4   T4   T4    T2   T2      (quiet)  |rail
+ *  fence |                                        |      deck
+ *  < < <  EXIT  T2   T2   T2    T2   T2           = door = = gap =  Q Q Q Q Q  < arrivals
+ *  ^ fade |                                        |                 > > > > >  those who give up
+ *        |                                        |rail
+ *        + - - - - - - - - - - - - - - - - - - - -+
+ *          (the front is open, but nobody leaves that way)
  *                        (player)
  *
  * - Arrivals come along the table from the right and join the back of
  *   the line; the line stands outside the door, its head on the deck.
  * - A guest who gives up waiting turns round and walks back the way it
  *   came, beside the line, and fades out where newcomers appear.
- * - A guest who has eaten comes out of the room's front opening, by the
- *   Meta stone, and there turns left or right along the garden path,
- *   fading out at that end. Nobody steps off the plate to leave.
+ * - A guest who has eaten leaves by the exit in the room's left wall
+ *   (under the 出口 sign) and down the walkout path to the plate's edge,
+ *   fading out there; with the annex open, on through the annex and out
+ *   of its own exit.
  */
 
 import { Vector3 } from '@iwsdk/core';
@@ -89,20 +89,27 @@ export function pathBack(from: Vector3): Vector3[] {
   return points;
 }
 
-export type Side = 'left' | 'right';
-
-/** Just outside the room's front opening, beside the Meta stone: every guest who has eaten comes out through here. */
-export const FRONT_OPENING = at(0.065, 0.204);
-
 /**
- * Where those leavers are going: the two ends of the garden path along
- * the front of the plate. Each end has a few spots, side by side and a
- * little apart along the path, dealt in turn, so two guests going the
- * same way walk abreast and do not vanish on the same spot.
+ * The way out, for every guest who has eaten: the exit in the room's left
+ * wall, under the 出口 sign, then the walkout path through the gap in the
+ * bamboo fence to the plate's edge, where it fades. Once the annex is
+ * open the way runs on through the annex to its own exit in its outer
+ * wall. Each exit has a few spots side by side across the path, dealt in
+ * turn, so two guests leaving together walk abreast and do not vanish on
+ * the same spot. Heights come from the navigation grid (café space,
+ * metres).
  */
-export const EXIT_ENDS: Record<Side, Vector3[]> = {
-  left: [at(-0.275, 0.218), at(-0.25, 0.247), at(-0.285, 0.276)],
-  right: [at(0.335, 0.218), at(0.355, 0.247), at(0.33, 0.276)],
-};
-/** Leavers march once they are on the front path (z beyond this, café space). */
-export const FRONT_PATH_Z = 0.195;
+export const EXIT_LANES: { x: number; z: number }[] = [
+  { x: -0.448, z: -0.04 },
+  { x: -0.452, z: 0.004 },
+  { x: -0.448, z: 0.046 },
+];
+export const ANNEX_EXIT_LANES: { x: number; z: number }[] = [
+  { x: -0.668, z: 0.08 },
+  { x: -0.672, z: 0.115 },
+  { x: -0.668, z: 0.15 },
+];
+/** Leavers march once they are through the exit, out of the room (x below this, café space). */
+export const OUTSIDE_X = -0.345;
+/** With the annex open, they march once through its exit. */
+export const ANNEX_OUTSIDE_X = -0.645;

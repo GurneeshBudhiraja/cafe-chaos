@@ -53,7 +53,10 @@ export class RenderBudgetSystem extends createSystem({}) {
   }
 
   update(delta: number): void {
-    const cafe = this.world.getSystem(CafeSystem)?.cafe;
+    const system = this.world.getSystem(CafeSystem);
+    const cafe = system?.cafe;
+    // The annex rising out of the plate casts a changing shadow.
+    if (system?.annex && system.annex.rising < 1) this.touchShadows();
     this.keepShadows(cafe?.matrixWorld);
     this.keepRate();
     this.measure(delta, cafe?.position);

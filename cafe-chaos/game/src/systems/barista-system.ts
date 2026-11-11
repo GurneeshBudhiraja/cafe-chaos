@@ -10,7 +10,7 @@
  * - Orders. The moment a guest is seated it has an order. A server takes
  *   a tray (tea or coffee), comes round the end of the counter, carries
  *   it to that guest, serves with a lean, sets the tray down at the
- *   guest's own place, bows, and walks back. The guest eats from then on;
+ *   guest's own place, and walks straight back. The guest eats from then on;
  *   the tray is cleared when the guest leaves.
  * - Who serves whom (the dispatcher, `plan`):
  *   1. From the bar it is first come, first served: the oldest waiting
@@ -48,9 +48,9 @@ import { GuestSystem } from './guest-system.js';
 /**
  * working: at its station. shuffling: a step along the bar. backBar:
  * turned to the back bar. waving. out: carrying a tray to a guest.
- * serving: the lean at the table. bowing. back: walking home.
+ * serving: the lean at the table, until the order is down. back: walking home.
  */
-export type BaristaState = 'working' | 'shuffling' | 'backBar' | 'waving' | 'out' | 'serving' | 'bowing' | 'back';
+export type BaristaState = 'working' | 'shuffling' | 'backBar' | 'waving' | 'out' | 'serving' | 'back';
 
 /** A guest's order, from the moment it is seated until it leaves the seat. */
 export interface Order {
@@ -148,6 +148,9 @@ export class BaristaSystem extends createSystem({}) {
     });
   }
 
+  /** The café's furniture count when the tables were last found. */
+  private furniture = 0;
+
   /**
    * Find the tables and where to stand at each: any piece of the café
    * with a meal anchor is a table, its top is at that anchor's height,
@@ -174,6 +177,12 @@ export class BaristaSystem extends createSystem({}) {
     const delta = Math.min(1, frameDelta) * cafe.timeScale;
     this.clock += delta;
     this.hire();
+    // New furniture (the annex's tables): find where to stand at them too.
+    if (cafe.furniture !== this.furniture) {
+      this.furniture = cafe.furniture;
+      this.findTables();
+      this.dirty = true;
+    }
     if (cafe.placed && cafe.placements !== this.placement) {
       // The café has been put down afresh: everyone back to their station, the tables cleared.
       this.placement = cafe.placements;
@@ -302,7 +311,7 @@ export class BaristaSystem extends createSystem({}) {
     this.sinceplan = 0;
     const enRoute = this.staff.filter((m) => m.state === 'out');
     const free = this.staff.filter(atBar);
-    const busy = this.staff.filter((m) => m.state === 'serving' || m.state === 'bowing' || m.state === 'back').length;
+    const busy = this.staff.filter((m) => m.state === 'serving' || m.state === 'back').length;
 
     // The walking distance from a server to an order, worked out when asked for and remembered for this plan
     // (a free server's is from its station, which the grid remembers between plans too).
@@ -514,17 +523,11 @@ export class BaristaSystem extends createSystem({}) {
         break;
       case 'serving':
         if (barista.tray && member.order && member.t >= SET_DOWN_AT) this.setDown(member);
-        if (member.t >= member.lasts) {
-          member.state = 'bowing';
-          member.t = 0;
-          member.lasts = barista.seconds('Bow');
-          barista.play('Bow', true);
-          // It will be free again shortly: the next order can be planned for.
+        // The order is down: straight back to the counter, no bow. It is free for the next order from here.
+        if (!barista.tray && member.t >= SET_DOWN_AT) {
           this.dirty = true;
+          this.sendHome(member);
         }
-        break;
-      case 'bowing':
-        if (member.t >= member.lasts) this.sendHome(member);
         break;
       default:
         break;

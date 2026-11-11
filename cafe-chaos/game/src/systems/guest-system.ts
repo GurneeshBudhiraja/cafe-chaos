@@ -29,10 +29,10 @@
  *   hops off its chair and leaves.
  * - Giving up: a guest whose patience runs out turns round and walks
  *   back the way it came, beside the line, and fades out.
- * - Leaving: a guest who has eaten comes out of the room's front
- *   opening, by the Meta stone, and turns left or right along the garden
- *   path (the quieter side, a coin toss when level), fading out at that
- *   end, never stepping off the platform. Nobody is told the way: each
+ * - Leaving: a guest who has eaten walks out through the exit in the
+ *   room's left wall (under the 出口 sign) and down the walkout path,
+ *   fading out at the plate's edge; once the annex is open, on through
+ *   the annex and out of its own exit. Nobody is told the way: each
  *   finds it on the navigation grid (nav/nav-grid.ts), which is read
  *   from the café's geometry.
  *
@@ -45,7 +45,7 @@ import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/ac
 import { Blobs } from '../guests/blobs.js';
 import { randomLook, type Look } from '../guests/cast.js';
 import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
-import { ARRIVAL_POINT, EXIT_ENDS, FRONT_OPENING, FRONT_PATH_Z, pathBack, QUEUE_SPOTS, QUEUE_YAW, type Side } from '../guests/paths.js';
+import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_POINT, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
   PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, PICK_WINDOW_S, SEAT_REACH_M, SEATED_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
@@ -97,8 +97,8 @@ export interface Guest {
   patience: number;
   patienceFull: number;
   dial: PatienceDial;
-  /** Leaving by the front: which end of the path it is making for, and which spot there (null and -1 for one walking back from the line). */
-  side: Side | null;
+  /** Leaving by the exit: 'exit', and which spot across the path it is making for (null and -1 for one walking back from the line). */
+  side: 'exit' | null;
   lane: number;
   /** The ground under it (café space), for its blob. */
   ground: number;
@@ -127,6 +127,8 @@ const HOP_STEP_M = 0.01;
 const HOP_HEIGHT_M = 0.014;
 
 /** Was this guest taken from the line (and so is still waiting to be seated)? */
+/** Seats that may be added after the start (the annex has ten), for the seat dots' room. */
+const SEAT_HEADROOM = 24;
 const fromLine = (guest: Guest): boolean => !!guest.home && 'line' in guest.home;
 
 export class GuestSystem extends createSystem({}) {
@@ -156,8 +158,8 @@ export class GuestSystem extends createSystem({}) {
   private placement = -1;
   private nextSpawnIn = FIRST_SPAWN_SECONDS;
   private lastLook: Look | undefined;
-  private readonly nextLane: Record<Side, number> = { left: 0, right: 0 };
-  private lastSides: [Side | null, Side | null] = [null, null];
+  /** The exit's spots across the path are dealt in turn. */
+  private nextLane = 0;
   private holdSystem: HoldSystem | undefined;
   private handles: HandleSystem | undefined;
   private readonly pinched: Record<Hand, boolean> = { left: false, right: false };
@@ -168,6 +170,10 @@ export class GuestSystem extends createSystem({}) {
   private readonly head = new Vector3();
   private readonly targets: (Seat | null)[] = [null, null];
   private readonly watchFace: Face = { eyes: 'EyesWide', mouth: 'MouthO', lookX: 0, lookY: 0 };
+  /** How many seat anchors the café had when the seats were last taken in, and the furniture count then. */
+  private seatAnchors = 0;
+  private furniture = 0;
+  private firstSeatCount = 0;
   /** What a held guest is told each frame (reused). */
   private readonly held: Held = { distance: 1, patience: 1, lookX: 0, lookY: -1 };
 
@@ -178,7 +184,11 @@ export class GuestSystem extends createSystem({}) {
     const cafe = this.cafeSystem.cafe;
     cafe.add(this.blobs.mesh);
     this.seats = collectSeats(cafe, this.cafeSystem.seats, this.cafeSystem.nav, this.cafeSystem.pieces);
-    this.glow = new SeatGlow(cafe, this.seats.length);
+    this.seatAnchors = this.cafeSystem.seats.length;
+    this.firstSeatCount = this.seats.length;
+    this.furniture = this.cafeSystem.furniture;
+    // Room for the dots of seats that come later (the annex's).
+    this.glow = new SeatGlow(cafe, this.seats.length + SEAT_HEADROOM);
     // A pinch on or just around a guest is the guests' business, never the café's.
     this.holdSystem?.claims.push((point) => this.nearestGuest(point, CLAIM_RADII) !== null);
   }
@@ -193,6 +203,7 @@ export class GuestSystem extends createSystem({}) {
       this.nextSpawnIn = FIRST_SPAWN_SECONDS;
       if (!cafe.placed) return;
     }
+    if (cafe.furniture !== this.furniture) this.takeInSeats();
     if (cafe.arriving) return;
     this.spawnTick(delta);
     this.hands(delta);
@@ -211,6 +222,18 @@ export class GuestSystem extends createSystem({}) {
     this.blobs.end();
     this.glow.show(this.seats, this.targets, this.targets.some((t, i) => t !== null || this.carriedBy(HANDS[i]) !== undefined), delta);
     this.peak = Math.max(this.peak, this.guests.length);
+  }
+
+  /** New furniture (the annex's): its seats join the others, numbered on from them; the seats already in use are untouched. */
+  private takeInSeats(): void {
+    const cafe = this.cafeSystem;
+    this.furniture = cafe.furniture;
+    const fresh = collectSeats(cafe.cafe, cafe.seats.slice(this.seatAnchors), cafe.nav, cafe.pieces);
+    this.seatAnchors = cafe.seats.length;
+    for (const seat of fresh.slice(0, SEAT_HEADROOM - (this.seats.length - this.firstSeatCount))) {
+      seat.index = this.seats.length;
+      this.seats.push(seat);
+    }
   }
 
   /** Take every guest away (a new session, or the café placed afresh). */
@@ -361,42 +384,24 @@ export class GuestSystem extends createSystem({}) {
   }
 
   /**
-   * Send a guest who has eaten away: out of the room's front opening by
-   * the Meta stone, then left or right along the garden path to its end.
-   * The way to the opening, and from there to the end, is whatever the
-   * navigation grid finds from where the guest is.
+   * Send a guest who has eaten away: out through the exit in the left
+   * wall and down the walkout path to the plate's edge (on through the
+   * annex and out of its exit, once it is open). The way there is
+   * whatever the navigation grid finds from where the guest is.
    */
   private startLeaving(guest: Guest): void {
     guest.state = 'leaving';
-    const { side, lane } = this.pickExit();
-    guest.side = side;
+    const lanes = this.cafeSystem.annexOpen ? ANNEX_EXIT_LANES : EXIT_LANES;
+    const lane = this.nextLane++ % lanes.length;
+    guest.side = 'exit';
     guest.lane = lane;
     const nav = this.cafeSystem.nav;
     const from = guest.actor.root.position;
-    const out = nav.findPath(from, FRONT_OPENING);
-    const along = nav.findPath(FRONT_OPENING, EXIT_ENDS[side][lane]);
+    const end = lanes[lane];
+    const way = nav.findPath(from, new Vector3(end.x, nav.heightAt(end.x, end.z), end.z));
     // With no way out (it should not happen) the guest simply fades where it stands.
-    guest.walk = new Walk(out && along ? [...out, ...along.slice(2)] : [from, from.clone().setX(from.x + FADE_OUT_M)]);
+    guest.walk = new Walk(way ?? [from, from.clone().setX(from.x - FADE_OUT_M)]);
     guest.speed = SPEED.leave;
-  }
-
-  /**
-   * Left or right at the front, so that neither end crowds: the side
-   * with fewer guests on their way to it; a coin toss when they are
-   * level; and never the same side three times running, so a run of
-   * tosses cannot send a little crowd one way. At that end, the spots
-   * are dealt in turn.
-   */
-  pickExit(): { side: Side; lane: number } {
-    const going = (side: Side): number => this.guests.filter((g) => g.state === 'leaving' && g.side === side).length;
-    const left = going('left');
-    const right = going('right');
-    let side: Side = left < right ? 'left' : right < left ? 'right' : Math.random() < 0.5 ? 'left' : 'right';
-    const [last, before] = this.lastSides;
-    if (last === before && last === side) side = side === 'left' ? 'right' : 'left';
-    this.lastSides = [side, last];
-    const lane = this.nextLane[side]++ % EXIT_ENDS[side].length;
-    return { side, lane };
   }
 
   // ------------------------------------------------------------- the hands
@@ -673,8 +678,8 @@ export class GuestSystem extends createSystem({}) {
     if (walk) {
       let speed = guest.speed;
       if (guest.state === 'leaving') {
-        // On the front path the walk becomes a march; and nobody treads on the heels of the one ahead.
-        if (root.position.z > FRONT_PATH_Z) speed = SPEED.march;
+        // Once through the exit the walk becomes a march; and nobody treads on the heels of the one ahead.
+        if (root.position.x < (this.cafeSystem.annexOpen ? ANNEX_OUTSIDE_X : OUTSIDE_X)) speed = SPEED.march;
         if (this.crowded(guest)) speed *= 0.35;
       }
       const done = walk.advance(speed * delta);

@@ -26,7 +26,7 @@ import { Box3, createSystem, Vector3 } from '@iwsdk/core';
 import { FLOOR_Y, HOLD_MARGIN_M, PINCH_M, RELEASE_M, SCALE_MAX, SCALE_MIN, SMOOTH, TRACKING_GRACE_S } from '../hold/hold.js';
 import { PinchCursor } from '../hands/pinch-cursor.js';
 import { HANDS, readPinchPoint, type Hand } from '../lib/hand-pinch.js';
-import { CafeSystem } from './cafe-system.js';
+import { ANNEX_MIN_X, CafeSystem } from './cafe-system.js';
 
 /** An angle brought into (-π, π], so a line of hands crossing the seam at ±π never reads as a full turn. */
 export function wrapAngle(a: number): number {
@@ -124,6 +124,8 @@ export class HoldSystem extends createSystem({}) {
       this.cursor.hide();
       return;
     }
+    // The annex widens the café to the left: the handles go round it too.
+    if (cafe.annexOpen && this.bounds.min.x > ANNEX_MIN_X) this.bounds.min.x = ANNEX_MIN_X;
     for (const hand of HANDS) {
       this.read(hand, delta);
       const p = this.pinch[hand];

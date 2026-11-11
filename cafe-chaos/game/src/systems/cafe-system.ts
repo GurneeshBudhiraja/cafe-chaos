@@ -18,6 +18,15 @@
  *
  * The whole café hangs from one parent, so scaling it up (CAFE_SCALE)
  * keeps the shell, tables and anchors in proportion.
+ *
+ * The left side: the shell's left wall comes in two versions, closed and
+ * with an exit (under the 出口 sign); the exit is shown, and it is the
+ * guests' way out. `openAnnex()` grows the garden annex off that side
+ * without rebuilding anything else: the wing (with a window booth and a
+ * big table in it) rises out of the plate, the left garden strip it
+ * covers is hidden, and once it is up the navigation grid is read again
+ * and `furniture` goes up by one, which tells the guests and servers to
+ * take in the new seats and tables.
  */
 
 import { AssetManager, createSystem, Euler, Group, Quaternion, Vector3, XRPlane as DetectedPlane, type Object3D } from '@iwsdk/core';
@@ -28,6 +37,16 @@ import { batchStatic, type BatchReport } from '../cafe/static-batch.js';
 import { findSurfaceSpot, type DetectedSurface } from '../lib/desk-placement.js';
 import { CAFE_NAV } from '../nav/cafe-nav.js';
 import { NavGrid } from '../nav/nav-grid.js';
+
+/** The annex's furniture: which model stands on which of its spots. */
+const ANNEX_FURNITURE: { model: ModelName; spot: string }[] = [
+  { model: 'window-booth', spot: 'AnnexSpot-1' },
+  { model: 'table-big', spot: 'AnnexSpot-2' },
+];
+/** How long the annex takes to rise out of the plate (seconds). */
+const ANNEX_RISE_SECONDS = 0.9;
+/** The annex's outer edge (café space, metres): the café reaches this far to the left once it is open. */
+export const ANNEX_MIN_X = -0.68;
 
 /**
  * The café's size: 1 is the modelled size (a 92 x 62 cm garden base, a
@@ -76,6 +95,10 @@ export class CafeSystem extends createSystem({
   timeScale = 1;
   /** Counts the times the café has been put down; other systems start over when it changes. */
   placements = 0;
+  /** Goes up by one whenever furniture is added (the annex): guests and servers then take in the new seats and tables. */
+  furniture = 0;
+  /** The annex: null until opened; `rising` from 0 to 1 while it comes up. */
+  annex: { root: Group; rising: number } | null = null;
   private arrival = -1;
   private sessionWas = false;
   private sessionStartedAt = 0;
@@ -93,6 +116,7 @@ export class CafeSystem extends createSystem({
   init(): void {
     this.cafe.name = 'Cafe';
     for (const placement of OPENING_LAYOUT) this.cafe.add(this.build(placement));
+    this.openExit();
     for (const dressing of DRESSING) this.dress(dressing.model, this.pieces[dressing.on], dressing.anchor);
     this.cafe.traverse((node) => {
       if (/^Seat-\d+$/.test(node.name)) this.seats.push(node);
@@ -127,6 +151,75 @@ export class CafeSystem extends createSystem({
     if (presenting && !this.placed) this.place(waited > DESK_WAIT_MS);
     else if (presenting && !this.onDesk && !this.movedByHand && waited < DESK_RETRY_MS) this.place(false);
     this.arrive(delta * this.timeScale);
+    this.raiseAnnex(delta);
+  }
+
+  /** True once the annex is fully open (risen, and the grid read again). */
+  get annexOpen(): boolean {
+    return !!this.annex && this.annex.rising >= 1;
+  }
+
+  /**
+   * Grow the garden annex off the café's left side. Returns false if it is
+   * already open or its models have not loaded yet.
+   */
+  openAnnex(): boolean {
+    if (this.annex || !AssetManager.getGLTF('cafe-annex') || ANNEX_FURNITURE.some((f) => !AssetManager.getGLTF(f.model))) return false;
+    const root = new Group();
+    root.name = 'Annex';
+    const wing = copyModel('cafe-annex');
+    root.add(wing);
+    this.pieces.push(wing);
+    // Its furniture, stood on its spots (the spot carries the position and facing).
+    for (const { model, spot } of ANNEX_FURNITURE) {
+      const anchor = wing.getObjectByName(spot);
+      if (!anchor) continue;
+      const piece = copyModel(model);
+      anchor.add(piece);
+      this.pieces.push(piece);
+      piece.traverse((node) => {
+        if (/^Seat-\d+$/.test(node.name)) this.seats.push(node);
+      });
+    }
+    this.cafe.add(root);
+    // One mesh per material for the wing too.
+    batchStatic(root);
+    root.scale.set(1, 0.001, 1);
+    this.annex = { root, rising: 0 };
+    // The annex's floor covers the left garden strip, and its way in is the exit in the left wall.
+    this.setShown('GardenLeft', false);
+    this.openExit();
+    return true;
+  }
+
+  /** The annex rises out of the plate with a small overshoot; once it is up, the grid is read again. */
+  private raiseAnnex(delta: number): void {
+    const annex = this.annex;
+    if (!annex || annex.rising >= 1) return;
+    annex.rising = Math.min(1, annex.rising + delta / ANNEX_RISE_SECONDS);
+    const t = annex.rising;
+    const c = 1.2;
+    annex.root.scale.y = Math.max(0.001, 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2);
+    if (t < 1) return;
+    annex.root.scale.y = 1;
+    this.cafe.updateMatrixWorld(true);
+    this.nav.rebuild();
+    this.furniture++;
+  }
+
+  /** Show the exit in the left wall (and not the closed wall). These parts stay out of the static batch, so they can be switched. */
+  private openExit(): void {
+    for (const name of ['WallLeft-Closed', 'WallLeft-Open', 'GardenLeft']) {
+      const node = this.cafe.getObjectByName(name);
+      if (node) node.userData.keepApart = true;
+    }
+    this.setShown('WallLeft-Closed', false);
+    this.setShown('WallLeft-Open', true);
+  }
+
+  private setShown(name: string, shown: boolean): void {
+    const node = this.cafe.getObjectByName(name);
+    if (node) node.visible = shown;
   }
 
   /** Place again, as at a session's start (for when the viewer has moved to a table). */

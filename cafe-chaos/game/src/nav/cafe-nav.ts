@@ -7,7 +7,7 @@ import type { NavOptions } from './nav-grid.js';
 
 export const CAFE_NAV: NavOptions = {
   // The plate (92 x 62 cm about the origin) and the player's table round it, out past the end of the line.
-  min: { x: -0.56, z: -0.4 },
+  min: { x: -0.74, z: -0.4 },
   max: { x: 0.8, z: 0.52 },
   cell: 0.005,
   // A barista on the duckboard stands 11 cm tall from the café's origin; lanterns and lintels above that are overhead.
@@ -21,10 +21,9 @@ export const CAFE_NAV: NavOptions = {
   hop: 0.03,
   radius: 0.014,
   barriers: [
-    // The room is open along its front (a low step down to the garden path). Nobody steps out just
-    // anywhere along it: the way out is the opening by the Meta stone, between these two lines.
-    [-0.36, 0.184, 0.0, 0.184],
-    [0.135, 0.184, 0.365, 0.184],
+    // The room (and the annex, once it is open) is open along its front, a low step down to the
+    // garden path. Nobody leaves that way: the way out is the exit in the left wall (or the annex's).
+    [-0.7, 0.184, 0.365, 0.184],
   ],
   // The middle of the café floor (the shell's `FloorTop` anchor).
   seed: { x: 0, z: -0.04 },
