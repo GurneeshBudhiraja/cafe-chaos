@@ -11,7 +11,7 @@ Three adult guest species, one file each, plus a shared accessories file:
 
 `guest.glb` is a copy of `guest-mochi.glb`, kept so older code that loads `guest` still works.
 
-**Every species has the same rig, node names, attach points and 8 animation clips**, so game code
+**Every species has the same rig, node names, attach points and 10 animation clips**, so game code
 written against one works for all three. The species are "shapes"; the game gives each guest its own
 name. The root's extras carry `guest_type` (`"mochi"`, `"onigiri"` or `"tofu"`).
 
@@ -78,6 +78,7 @@ needs a matching hairpin or leaf. The test app colours the bench guests sakura, 
 | `St-Face` / `Se-Face` | On the face at eye height, just in front of the skin: glasses. |
 | `St-Neck` / `Se-Neck` | Under the mouth: bows, scarves. |
 | `St-Chest` / `Se-Chest` | Mid-body: aprons, vests. |
+| `St-Guitar` / `Se-Guitar` | On the chest, already tilted: parent `guitar` (25-music) here with no transform for `Strum` / `SitStrum`. |
 
 Attach points are empty nodes under each pose's torso, so whatever hangs on them squashes, bounces,
 sways and turns with the body in every clip. There is one per pose (`St-` standing, `Se-` seated):
@@ -131,6 +132,8 @@ can show at once.
 | `SitIdle` | Seated | 2 s | Seated, nothing special | Breathing, small sway, blink |
 | `SitHappy` | Seated | 1 s | Right after a good seat | Happy squint eyes, open smile, rosy cheeks, bouncing, arms up |
 | `SitEating` | Seated | 1 s | While the meal is eaten | Closed content eyes, "w" nibbling mouth, hands up in turn |
+| `Strum` | Standing | 1 s | Busking with the `guitar` on `St-Guitar` | Happy eyes, open singing mouth, left hand up the neck, right hand strumming, a bob and sway |
+| `SitStrum` | Seated | 1 s | The same, seated | As `Strum`, from the seat |
 | `SitUnhappy` | Seated | 2 s | A bad seat, or a bad neighbour | `> <` eyes, frown, a huff, then a sulky half-turn away |
 
 ```ts
