@@ -1,32 +1,35 @@
 # `unlock-plaque` — the unlock plaque, and `unlock-icons.png`
 
-A small ema-style wooden plaque hanging by a red cord from a little walnut stand, with a brass
-padlock on its front. It stands on the player's real table in front of the café (the shell has
-`PlaqueSpot-1 … 6` along the front gravel, 10 cm apart) and is easy to pinch.
+A small standing **stone tablet** — a rounded granite slab set in a low ring of gravel with a few
+pebbles, like a garden marker — with a flat face the game draws on and a brass padlock hanging
+from a ring at its top. It stands in the gravel in front of the café (the shell has
+`PlaqueSpot-1 … 6` along the front strip, 10 cm apart) and is easy to pinch.
 
-- File: `unlock-plaque.glb`, ~900 triangles, 3 materials (`CafeWalnut`, `CafeBarPalette`,
-  `PlaqueFace`), 580 KB with textures packed.
-- Size: 4.6 cm wide × 4.6 cm tall × 2.0 cm deep; origin at the stand's base centre; front −Z… no:
-  **front faces +Z** (toward the player), as every model here.
+- File: `unlock-plaque.glb`, ~840 triangles, 4 materials (`CafeStone`, `CafeGravel`,
+  `CafeBarPalette`, `PlaqueFace`), ~480 KB with textures packed (the game de-duplicates the
+  shell's materials by name).
+- Size: 5.2 cm wide × 4.65 cm tall × 4.1 cm deep (the gravel ring); the tablet itself 4.0 × 4.4 ×
+  1.1 cm; origin at the base's underside centre; **front faces +Z** (toward the player).
 
 ## Nodes
 
 | Node | What |
 |---|---|
-| `Stand` | base plate, two uprights, crossbar |
-| `Plaque` | pivot at the crossbar; the board swings from here |
-| `PlaqueBoard` | the walnut ema board (3.6 × 3.0 cm, peaked top) |
-| `PlaqueFace` | a cream quad inset on the front, **UV 0..1 across it** (u left→right, v bottom→top): draw the icon and price here (a 256 px canvas texture on a cloned `PlaqueFace` material) |
-| `Cord` | the red hanging loop |
-| `Padlock` → `PadlockBody`, `Shackle` | the lock on the board's bottom edge; `Shackle` pivots |
-| `Grip` | the pinch point, the board's centre (0, 0.025, 0.006) |
+| `Base`, `Pebbles` | the gravel ring and pebbles |
+| `Plaque` | pivot at the tablet's foot; the `Unlock` hop moves this |
+| `PlaqueStone` | the granite slab |
+| `FaceRim` | a thin dark border around the face |
+| `PlaqueFace` | a light stone-cream quad on the front, 2.6 × 2.65 cm, **UV 0..1 across it** (u left→right, v bottom→top): draw the icon and price here (a 256 px canvas texture on a cloned `PlaqueFace` material) |
+| `Ring` | the brass ring at the top |
+| `Padlock` → `PadlockBody`, `Shackle` | the lock hanging from the ring; `Shackle` pivots |
+| `Grip` | the pinch point on the tablet's front (0, 0.025, 0.006) |
 
 ## Clips
 
 | Clip | Length | Use |
 |---|---|---|
-| `Locked` | 3 s loop | the plaque sways a little on its cord, the padlock swings |
-| `Unlock` | 0.8 s, play once | the shackle pops open, the padlock drops and shrinks away, the plaque gives a happy bounce |
+| `Locked` | 3 s loop | the stone is still; the padlock swings a little on its ring |
+| `Unlock` | 0.8 s, play once | the shackle pops open, the padlock drops and shrinks away, the stone gives a little hop |
 | `Owned` | still | padlock gone, plaque at rest — play this (or set `Padlock` scale 0) for bought items |
 
 Play `Unlock` once with `clampWhenFinished`, then switch to `Owned`.
