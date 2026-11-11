@@ -15,7 +15,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
-export const APP_URL = process.env.APP_URL ?? 'https://localhost:8082/';
+/** The checks and recordings open the café in test mode (`?test`): no title card or walkthrough, all six servers, a free shop. */
+export const APP_URL = process.env.APP_URL ?? 'https://localhost:8082/?test';
 export const OUT_DIR = 'artifacts';
 
 /**

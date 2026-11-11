@@ -115,6 +115,12 @@ export class BaristaSystem extends createSystem({}) {
   maxOut = MAX_OUT;
   /** Set false to keep everyone behind the counter. */
   serving = true;
+  /**
+   * How many servers are on the staff: the first this many baristas. The
+   * game starts the café with one and hires more from the shop; the checks
+   * and recordings (test mode) keep all six.
+   */
+  staffSize: number = BARISTA_NAMES.length;
   /** Counts, for the checks. */
   servedCount = 0;
   switches = 0;
@@ -211,17 +217,20 @@ export class BaristaSystem extends createSystem({}) {
 
   // ------------------------------------------------------------- the staff
 
-  /** Bring on every barista whose model has loaded (they load in the background). */
+  /** Bring on every barista on the staff whose model has loaded (they load in the background); a new hire waves hello. */
   private hire(): void {
-    if (this.staff.length === BARISTA_NAMES.length) return;
-    BARISTA_NAMES.forEach((name: BaristaName, station) => {
+    if (this.staff.length >= this.staffSize) return;
+    BARISTA_NAMES.slice(0, this.staffSize).forEach((name: BaristaName, station) => {
       if (this.staff.some((m) => m.barista.name === name) || !baristaLoaded(name)) return;
       const barista = new Barista(name);
       barista.root.position.copy(stationPoint(station));
       barista.root.rotation.y = STATION_YAW;
       this.cafeSystem.cafe.add(barista.root);
       barista.play('Work');
+      const fresh = this.cafeSystem.placed && this.staff.length > 0;
       this.staff.push({ barista, station, state: 'working', t: Math.random() * 2, lasts: between(FIDGET_SECONDS), walk: null, speed: SPEED.walk, yaw: STATION_YAW, targetYaw: STATION_YAW, shift: 0, order: null, trips: 0 });
+      // One hired in the middle of the evening says hello to the player.
+      if (fresh) this.greetPlayer(this.staff[this.staff.length - 1]);
       this.dirty = true;
     });
   }
@@ -260,14 +269,14 @@ export class BaristaSystem extends createSystem({}) {
     for (let i = this.orders.length - 1; i >= 0; i--) {
       const order = this.orders[i];
       const guest = guests.guests.find((g) => g.id === order.guest);
-      if (guest && guest.state === 'seated' && guest.seat === order.seat) continue;
+      if (guest && guest.state === 'seated' && guest.seat === order.seat && guest.fuming < 0) continue;
       // Gone (or moved to another seat): the order is off, and a server on its way to it is free to be sent elsewhere.
       if (order.server) order.server.order = null;
       this.orders.splice(i, 1);
       this.dirty = true;
     }
     for (const guest of guests.guests) {
-      if (guest.state !== 'seated' || !guest.seat || guest.served || this.orders.some((o) => o.guest === guest.id)) continue;
+      if (guest.state !== 'seated' || !guest.seat || guest.served || guest.fuming >= 0 || this.orders.some((o) => o.guest === guest.id)) continue;
       const points = this.pointsFor(guest.seat);
       if (points.length === 0) continue;
       this.orders.push({ id: this.nextOrder++, guest: guest.id, seat: guest.seat, points, point: points[0], placedAt: this.clock, server: null, served: false, bumped: 0 });
@@ -502,7 +511,11 @@ export class BaristaSystem extends createSystem({}) {
     if (Math.random() > WAVE_CHANCE) return;
     const free = this.staff.filter((m) => m.state === 'working');
     if (free.length === 0) return;
-    const member = free[Math.floor(Math.random() * free.length)];
+    this.greetPlayer(free[Math.floor(Math.random() * free.length)]);
+  }
+
+  /** A server at the bar waves. */
+  private greetPlayer(member: Staff): void {
     member.state = 'waving';
     member.t = 0;
     member.lasts = member.barista.seconds('Wave');

@@ -40,7 +40,7 @@
  * with it.
  */
 
-import { createSystem, Vector3 } from '@iwsdk/core';
+import { createSystem, Vector3, type Sprite } from '@iwsdk/core';
 import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/actor.js';
 import { Blobs } from '../guests/blobs.js';
 import { randomLook, type Look } from '../guests/cast.js';
@@ -48,10 +48,11 @@ import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_POINT, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
-  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, PICK_WINDOW_S, SEAT_REACH_M, SEATED_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
+  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, PICK_WINDOW_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
+import { Popups } from '../guests/popups.js';
 import { SeatGlow } from '../guests/seat-glow.js';
 import { DIAL, PatienceDial } from '../guests/patience-dial.js';
 import { collectSeats, LANDING_REACH_M, seatUnder, type Seat } from '../guests/seats.js';
@@ -114,6 +115,14 @@ export interface Guest {
   seatedFor: number;
   /** True once a server has brought its order (it eats from then on). */
   served: boolean;
+  /** Seconds it has been eating. */
+  eaten: number;
+  /** How much of its patience it had used when it was seated (0 quick to 1 at the last moment); -1 until seated. */
+  seatShare: number;
+  /** Seconds it has been fuming at the table, its patience gone before its food came (-1: not fuming). */
+  fuming: number;
+  /** The vein mark over its head while it fumes. */
+  anger: Sprite | null;
   /** Vanishing: how long it has been fading (seconds). */
   vanishing: number;
   hop: Hop | null;
@@ -125,6 +134,9 @@ export interface Guest {
   watching: boolean;
 }
 
+/** The face of a guest losing its temper at the table. */
+const ANGRY_FACE: Face = { eyes: 'EyesCross', mouth: 'MouthFrown', lookX: 0, lookY: 0 };
+
 /** A step down or up of more than this is hopped, not walked (metres). */
 const HOP_STEP_M = 0.01;
 const HOP_HEIGHT_M = 0.014;
@@ -133,6 +145,20 @@ const HOP_HEIGHT_M = 0.014;
 /** Seats that may be added after the start (the annex has ten), for the seat dots' room. */
 const SEAT_HEADROOM = 24;
 const fromLine = (guest: Guest): boolean => !!guest.home && 'line' in guest.home;
+
+/**
+ * How a visit ended, for the score (systems/score-system.ts). `paid`: it
+ * ate and left; `gaveUp`: its patience ran out before it was seated;
+ * `stormedOff`: it ran out at the table, before its food came. `share` is
+ * how much of its patience it had used when seated (-1 if never seated);
+ * `at` is over its head, in café space.
+ */
+export interface Outcome {
+  kind: 'paid' | 'gaveUp' | 'stormedOff';
+  guest: number;
+  share: number;
+  at: Vector3;
+}
 
 export class GuestSystem extends createSystem({}) {
   /** Everyone on stage. */
@@ -145,6 +171,14 @@ export class GuestSystem extends createSystem({}) {
   spawnSeconds: [number, number] = [...SPAWN_SECONDS];
   /** Set false to stop new arrivals. */
   arrivals = true;
+  /** Set true to hold every guest's patience where it is (the walkthrough). */
+  patienceFrozen = false;
+  /** Told how each visit ends (the score listens). */
+  readonly outcomes: ((outcome: Outcome) => void)[] = [];
+  /** Thumbs, coins and vein marks over the guests' heads. */
+  readonly popups = new Popups();
+  /** Guests who stormed out of their seats before their food came (for the checks). */
+  stormedOff = 0;
   /** The seats guests can use, and the glow that marks where a carried guest would land. */
   seats: Seat[] = [];
   glow!: SeatGlow;
@@ -190,6 +224,7 @@ export class GuestSystem extends createSystem({}) {
     const cafe = this.cafeSystem.cafe;
     cafe.add(this.blobs.mesh);
     cafe.add(this.rings.group);
+    cafe.add(this.popups.group);
     this.seats = collectSeats(cafe, this.cafeSystem.seats, this.cafeSystem.nav, this.cafeSystem.pieces);
     this.seatAnchors = this.cafeSystem.seats.length;
     this.firstSeatCount = this.seats.length;
@@ -228,6 +263,7 @@ export class GuestSystem extends createSystem({}) {
       this.show(guest, delta);
     }
     this.blobs.end();
+    this.popups.update(delta);
     for (let i = 0; i < 2; i++) this.rings.show(i, this.hovered[i]?.actor.root.position ?? null, delta);
     this.glow.show(this.seats, this.targets, this.targets.some((t, i) => t !== null || this.carriedBy(HANDS[i]) !== undefined), delta);
     this.peak = Math.max(this.peak, this.guests.length);
@@ -253,6 +289,7 @@ export class GuestSystem extends createSystem({}) {
     }
     this.guests.length = 0;
     this.line.length = 0;
+    this.popups.clear();
     for (const seat of this.seats) seat.occupant = 0;
     this.targets.fill(null);
     this.blobs.begin();
@@ -318,6 +355,10 @@ export class GuestSystem extends createSystem({}) {
       seat: null,
       seatedFor: 0,
       served: false,
+      eaten: 0,
+      seatShare: -1,
+      fuming: -1,
+      anger: null,
       vanishing: 0,
       hop: null,
       act: null,
@@ -346,9 +387,10 @@ export class GuestSystem extends createSystem({}) {
 
   /** A guest standing in the line: its patience runs down, shows, and runs out. */
   private wait(guest: Guest, delta: number): void {
-    guest.patience -= delta;
+    if (!this.patienceFrozen) guest.patience -= delta;
     if (guest.patience <= 0) {
       this.gaveUp++;
+      this.tell('gaveUp', guest);
       this.leaveFromLine(guest);
       return;
     }
@@ -364,9 +406,10 @@ export class GuestSystem extends createSystem({}) {
    */
   private waitInHand(guest: Guest, delta: number): void {
     if (!fromLine(guest)) return;
-    guest.patience -= delta;
+    if (!this.patienceFrozen) guest.patience -= delta;
     if (guest.patience > 0) return;
     this.gaveUp++;
+    this.tell('gaveUp', guest);
     guest.state = 'vanishing';
     guest.vanishing = 0;
     guest.target = null;
@@ -455,10 +498,22 @@ export class GuestSystem extends createSystem({}) {
     });
   }
 
-  /** A server has brought this guest its order: it eats from now on. */
+  /** A server has brought this guest its order: it eats from now on (one already fuming is past caring). */
   serve(id: number): void {
     const guest = this.guests.find((g) => g.id === id);
-    if (guest) guest.served = true;
+    if (guest && guest.fuming < 0) guest.served = true;
+  }
+
+  /** Is this guest sitting waiting for its order (seated, not served, not fuming)? */
+  waitingForFood(guest: Guest): boolean {
+    return guest.state === 'seated' && !guest.served && guest.fuming < 0;
+  }
+
+  /** Tell the listeners how a guest's visit ended. */
+  private tell(kind: Outcome['kind'], guest: Guest): void {
+    const at = guest.actor.root.position.clone();
+    at.y += guest.actor.bubbleAnchor.position.y + DIAL.above + 0.012;
+    for (const listen of this.outcomes) listen({ kind, guest: guest.id, share: guest.seatShare, at });
   }
 
   /**
@@ -626,6 +681,10 @@ export class GuestSystem extends createSystem({}) {
     if (fresh) {
       guest.seatedFor = 0;
       guest.served = false;
+      guest.eaten = 0;
+      // How long it waited to be seated, as a share of its patience; and a top-up for the wait for its food.
+      guest.seatShare = Math.min(1, Math.max(0, 1 - guest.patience / guest.patienceFull));
+      guest.patience = Math.min(guest.patienceFull, Math.max(0, guest.patience) + SERVICE_TOPUP_SECONDS);
       this.seated++;
     }
     guest.actor.play(fresh ? 'SitHappy' : 'SitIdle');
@@ -633,8 +692,27 @@ export class GuestSystem extends createSystem({}) {
 
   /** A seated guest: pleased, then waiting for its order, eating once served, then idle; when its time is up it gets down and leaves. */
   private sitting(guest: Guest, delta: number): void {
+    if (guest.fuming >= 0) {
+      this.fume(guest, delta);
+      return;
+    }
+    // Waiting for its food: its patience runs on, and if it runs out the guest loses its temper.
+    if (!guest.served) {
+      if (!this.patienceFrozen) guest.patience -= delta;
+      if (guest.patience <= 0) {
+        guest.fuming = 0;
+        guest.actor.play('SitUnhappy');
+        guest.actor.setFace(ANGRY_FACE);
+        const at = guest.actor.root.position.clone();
+        at.y += guest.actor.bubbleAnchor.position.y + DIAL.above;
+        guest.anger = this.popups.show('anger', at, true);
+        return;
+      }
+    }
     guest.seatedFor += delta;
-    if (guest.seatedFor >= this.seatedSeconds) {
+    if (guest.served) guest.eaten += delta;
+    // It leaves once its time is up and it has had a fair while to eat (served late, it stays to finish).
+    if (guest.served && guest.seatedFor >= this.seatedSeconds && guest.eaten >= Math.min(EAT_SECONDS, this.seatedSeconds * 0.25)) {
       this.standUp(guest);
       return;
     }
@@ -643,8 +721,21 @@ export class GuestSystem extends createSystem({}) {
     guest.actor.play(guest.seatedFor < HAPPY_SECONDS ? 'SitHappy' : last || !guest.served ? 'SitIdle' : 'SitEating');
   }
 
-  /** Off the chair with a hop, to the nearest aisle, out of the door and away. */
+  /** Fuming at the table: a cross face and the vein mark for a moment, then down and out without eating. */
+  private fume(guest: Guest, delta: number): void {
+    guest.fuming += delta;
+    if (guest.fuming < FUME_SECONDS) return;
+    if (guest.anger) this.popups.release(guest.anger);
+    guest.anger = null;
+    guest.actor.setFace(null);
+    this.stormedOff++;
+    this.tell('stormedOff', guest);
+    this.standUp(guest);
+  }
+
+  /** Off the chair with a hop, to the nearest aisle, out of the door and away (paying first, if it ate). */
   private standUp(guest: Guest): void {
+    if (guest.fuming < 0) this.tell('paid', guest);
     const seat = guest.seat!;
     seat.occupant = 0;
     guest.seat = null;
@@ -758,7 +849,8 @@ export class GuestSystem extends createSystem({}) {
     guest.actor.update(delta);
     // The dial shows for as long as the guest is waiting to be seated: in the line, and in the player's hand
     // (or the air) on its way from the line, where its patience is still running.
-    const waiting = guest.state === 'queued' || guest.state === 'vanishing' || ((guest.state === 'held' || guest.state === 'hop') && fromLine(guest));
+    const waiting =
+      guest.state === 'queued' || guest.state === 'vanishing' || ((guest.state === 'held' || guest.state === 'hop') && fromLine(guest)) || this.waitingForFood(guest);
     guest.dial.update(guest.patience / guest.patienceFull, waiting, opacity, delta);
     // A blob under everyone on their feet (not the seated, nor the carried).
     const p = guest.actor.root.position;
@@ -766,6 +858,7 @@ export class GuestSystem extends createSystem({}) {
   }
 
   private remove(guest: Guest): void {
+    if (guest.anger) this.popups.release(guest.anger);
     for (const seat of this.seats) if (seat.occupant === guest.id) seat.occupant = 0;
     guest.dial.dispose();
     guest.actor.dispose();

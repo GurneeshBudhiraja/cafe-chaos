@@ -239,6 +239,54 @@ export function unlock(ctx: BaseAudioContext, out: AudioNode, t: number): void {
   [784, 988, 1175, 1568, 1976].forEach((f, i) => partial(ctx, out, t + 0.25 + i * 0.11, f, 0.08, 0.9));
 }
 
+/** Coins paid: a bright little jingle, two coins and a tinkle. */
+export function coins(ctx: BaseAudioContext, out: AudioNode, t: number): void {
+  burst(ctx, out, t, { type: 'bandpass', freq: 5200, q: 6, level: 0.16, attack: 0.001, hold: 0.01, release: 0.06 });
+  partial(ctx, out, t + 0.005, 2637, 0.07, 0.25, 0.001);
+  burst(ctx, out, t + 0.07, { type: 'bandpass', freq: 6100, q: 6, level: 0.12, attack: 0.001, hold: 0.01, release: 0.05 });
+  partial(ctx, out, t + 0.075, 3136, 0.06, 0.3, 0.001);
+  partial(ctx, out, t + 0.16, 3951, 0.04, 0.35, 0.001);
+}
+
+/** A guest storming out: a low, cross little "hmph". */
+export function grumble(ctx: BaseAudioContext, out: AudioNode, t: number): void {
+  const pitch = 0.9 + Math.random() * 0.2;
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(260 * pitch, t);
+  osc.frequency.exponentialRampToValueAtTime(150 * pitch, t + 0.22);
+  const vowel = ctx.createBiquadFilter();
+  vowel.type = 'bandpass';
+  vowel.frequency.value = 520 * pitch;
+  vowel.Q.value = 1.6;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(0.13, t + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+  osc.connect(vowel).connect(gain).connect(out);
+  osc.start(t);
+  osc.stop(t + 0.32);
+  burst(ctx, out, t + 0.02, { type: 'lowpass', freq: 700, q: 0.7, level: 0.1, attack: 0.01, hold: 0.06, release: 0.12 });
+}
+
+/** Not enough money: a dull knock of stone, and a low two-note "uh-uh". */
+export function refuse(ctx: BaseAudioContext, out: AudioNode, t: number): void {
+  burst(ctx, out, t, { type: 'lowpass', freq: 500, q: 1, level: 0.25, attack: 0.002, hold: 0.02, release: 0.08 });
+  partial(ctx, out, t + 0.04, 330, 0.08, 0.12);
+  partial(ctx, out, t + 0.17, 262, 0.08, 0.18);
+}
+
+/** A button pressed: a soft wooden tick. */
+export function tick(ctx: BaseAudioContext, out: AudioNode, t: number): void {
+  burst(ctx, out, t, { type: 'bandpass', freq: 1800, q: 4, level: 0.22, attack: 0.001, hold: 0.006, release: 0.04 });
+  partial(ctx, out, t, 1046.5, 0.05, 0.08, 0.001);
+}
+
+/** Closing time: a slow, falling run of bells. */
+export function closing(ctx: BaseAudioContext, out: AudioNode, t: number): void {
+  [1568, 1319, 1175, 988, 784].forEach((f, i) => partial(ctx, out, t + i * 0.22, f, 0.07, 1.2));
+}
+
 /**
  * The room itself: a soft, low murmur of a quiet café (deep noise,
  * shaped round voices' warmth and slowly breathing), looped. Returns the

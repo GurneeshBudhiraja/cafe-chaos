@@ -22,6 +22,54 @@ café: pinch it and the left wall goes, the floor grows to the left with
 four more tables in line with the rest, and the exit moves to the new
 outer wall.
 
+**The game** (`src/systems/game-system.ts`, `src/systems/score-system.ts`,
+`src/systems/unlock-system.ts`; every number in `src/game/rules.ts`):
+
+- **Title.** Once the café is on the table a paper card floats over it:
+  Café Chaos, the bank and the best night, and *Open the café*, *How to
+  play* and *Walkthrough*. The café is quiet behind it: the staff work
+  and nobody comes. Buttons are pressed with a pinch on them (a hand
+  over one lights it), the way a guest is picked up (`src/ui/panel.ts`).
+- **The walkthrough** (the first time the café is opened, or from the
+  title): five steps on a small coach card, done rather than read: pick
+  up the guest waiting at the gate; seat it; its tea comes (its dial
+  runs until then); what makes the café happy (the scoreboard comes up);
+  the shop. Skip on every step; the last opens the café. The walkthrough
+  guest's patience is held, so nothing goes wrong while learning.
+- **A shift** lasts four minutes. A scoreboard stands over the back of
+  the café: the happiness meter with its face, the bank and the night's
+  takings, the clock, and the thumbs up and down.
+- **The wait runs from the gate to the food.** A guest's patience dial
+  keeps running once it is seated, until a server brings its order
+  (seating tops it up by 22 s, never past what it started with). So the
+  servers matter: with one, a busy café shows. A guest whose patience
+  runs out at the table fumes for a moment (cross face, a red vein mark
+  over its head, the unhappy sitting clip) and stomps out without eating.
+- **Scoring.** A guest who ate pays as it gets down from its chair, with
+  a thumbs up and its coins over its head: 12 coins and +6 happiness if
+  it was taken from the gate and seated within the first quarter of its
+  patience, 8 and +4 if a bit later, 5 and +2 at the last moment. One who
+  gives up in the line costs 9 happiness and 2 coins, a thumbs down; one
+  who storms out of its seat 13 and 4. Happiness starts full; at zero the
+  café closes early.
+- **The shop**: priced stone plaques in the gravel in front. The café
+  opens with one server; a second costs 30, the garden annex 80, and once
+  the annex is open the bigger café can take a third (60) and a fourth
+  (90): those plaques appear only then. Without the money a pinch gets a
+  shake and the price flashes coral; bought, the padlock pops, a new
+  server appears behind the counter and waves (its plaque sinks away), or
+  the annex rises.
+- **Closing card**: closing time (or closed early), the night's takings,
+  happiness, guests served, thumbs; *Next shift* or *Menu*.
+- **Kept between sessions** (`src/game/save.ts`, the headset browser's
+  local storage): the bank, what was bought (the annex is open and the
+  servers hired when the café comes back), the best night, and whether
+  the walkthrough has been seen.
+- **Test mode**: `?test` in the address skips all of this (no cards,
+  guests at once, all six servers, a free shop, nothing saved), as the
+  café was before the game; the check and recording scripts use it, apart
+  from `check-game.mjs`.
+
 **The sound** (`src/systems/sound-system.ts`, `src/audio/voices.ts`): under
 the theme, the café sounds like a café. Each sound comes from where its
 source is in the little café (3D sound, the listener at the player's
@@ -326,7 +374,10 @@ every number that tunes the look is in `src/light/mood.ts`):
   placed it fades in over about three seconds, tinting the room to dusk;
   the HDR environment is turned well down and a dim cool fill takes over.
 - **The lamps**: point lights at the two post lamps by the door and the
-  three paper lanterns over the counter, plus an unseen warm room light,
+  three paper lanterns over the counter, plus an unseen warm room light
+  (and, once the annex is open, two more paper lanterns under its eave,
+  copies of the main room's middle one, each with its own light and halo,
+  so the new room is lit as the old one is),
   each with a limited reach, and a soft additive halo sprite on every
   visible lamp. The lantern and shoji papers' emissive glow is set for
   the night. The lamps come up a moment after the dusk begins, and the
@@ -413,6 +464,16 @@ room has a desk-height table), from a running dev server:
   kettle, the pond, cups and the door's chime play by themselves; seating
   a guest and pressing the plaque play their sounds (what was played and
   when, not how it sounds).
+- `node scripts/check-game.mjs` (the real game, not test mode, with a
+  fresh save): the title card with nobody coming and one server; a pinch
+  on Open starts the walkthrough; the walkthrough guest is picked up and
+  seated with real pinches, the server brings its tea, and the last step
+  opens a shift; a guest seated quickly pays the top tip with a thumbs
+  up; a guest kept waiting for its food fumes and storms out; the shop
+  refuses what the bank cannot pay for, hires a server and opens the
+  annex, after which the next server's plaque appears; closing time saves
+  the bank and what was bought; happiness at zero closes early (13
+  checks), with screenshots.
 - `node scripts/check-expressions.mjs`: a guest watches a hand that comes
   close; picked up it is surprised, then calm, and stays calm; carried, its
   eyes are on the seat below it; its face follows its dial (uneasy on
@@ -476,7 +537,14 @@ src/
   cafe/layout.ts             the floor plan and the dressing (meals)
   cafe/materials.ts          the café's materials on the grey-box pieces
   systems/cafe-system.ts     building the café and placing it on the table; the left exit; extending the café
-  systems/unlock-system.ts   the stone plaque in front that extends the café
+  systems/unlock-system.ts   the shop: the priced stone plaques in front (servers, the annex)
+  systems/game-system.ts     the title, rules, walkthrough, shift and closing cards
+  systems/score-system.ts    happiness, coins, thumbs, and the scoreboard
+  game/rules.ts              every number of the shift, the scoring and the shop
+  game/save.ts               what is kept between sessions; test mode
+  ui/panel.ts                the paper cards with pinchable buttons
+  guests/popups.ts           thumbs, coins and the vein mark over guests' heads
+  cafe/split-mesh.ts         splitting part of a mesh off (the corner post), or copying it (a lantern)
   systems/sound-system.ts    the café's sounds, placed where they come from
   audio/voices.ts            each sound, made with the Web Audio API
   systems/hold-system.ts     reading the pinches; carrying, resizing and turning the café

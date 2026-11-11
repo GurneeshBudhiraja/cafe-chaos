@@ -22,9 +22,11 @@
  */
 
 import { createSystem, Vector3, type Object3D } from '@iwsdk/core';
-import { bubble, clink, cricket, espresso, furin, pop, roomTone, seated, trayDown, trickle, unlock, voice } from '../audio/voices.js';
+import { bubble, clink, closing, coins, cricket, espresso, furin, grumble, pop, refuse, roomTone, seated, tick, trayDown, trickle, unlock, voice } from '../audio/voices.js';
 import { BaristaSystem } from './barista-system.js';
 import { CafeSystem } from './cafe-system.js';
+import { GameSystem } from './game-system.js';
+import { ScoreSystem } from './score-system.js';
 import { GuestSystem } from './guest-system.js';
 import { UnlockSystem } from './unlock-system.js';
 
@@ -53,7 +55,9 @@ export class SoundSystem extends createSystem({}) {
   private baristas: BaristaSystem | null = null;
   private unlocks: UnlockSystem | null = null;
   private readonly next: Record<keyof typeof EVERY, number> = { bubble: 0, espresso: 8, clink: 3, trickle: 0, cricket: 2 };
-  private seen = { arrived: 0, pickedUp: 0, seated: 0, gaveUp: 0, served: 0, extended: false, placements: -1 };
+  private seen = { arrived: 0, pickedUp: 0, seated: 0, gaveUp: 0, served: 0, purchases: 0, refused: 0, scored: 0, clicks: 0, closed: false, placements: -1 };
+  private score: ScoreSystem | null = null;
+  private game: GameSystem | null = null;
   private readonly at = new Vector3();
   private readonly forward = new Vector3();
   private readonly up = new Vector3();
@@ -63,6 +67,8 @@ export class SoundSystem extends createSystem({}) {
     this.guests = this.world.getSystem(GuestSystem) ?? null;
     this.baristas = this.world.getSystem(BaristaSystem) ?? null;
     this.unlocks = this.world.getSystem(UnlockSystem) ?? null;
+    this.score = this.world.getSystem(ScoreSystem) ?? null;
+    this.game = this.world.getSystem(GameSystem) ?? null;
     const xr = this.world.renderer.xr;
     xr.addEventListener('sessionstart', () => {
       this.start();
@@ -220,10 +226,32 @@ export class SoundSystem extends createSystem({}) {
       this.emit('tray', seat ? (seat.meal ?? seat.position) : PLACES.room, SOUND.bar, 0.6, trayDown);
       seen.served = baristas.servedCount;
     }
-    const plaque = this.unlocks?.annexPlaque;
-    if (plaque?.pressed && !seen.extended) {
-      seen.extended = true;
-      this.emit('unlock', this.cafe.cafe.worldToLocal(plaque.grip.getWorldPosition(new Vector3())), SOUND.hands, 1.6, unlock);
+    // The shop: a purchase rings the bells; a pinch the bank cannot pay for gets a knock and an "uh-uh".
+    const unlocks = this.unlocks;
+    if (unlocks) {
+      const where = unlocks.lastPressed ? this.cafe.cafe.worldToLocal(unlocks.lastPressed.getWorldPosition(new Vector3())) : PLACES.room;
+      if (unlocks.purchases > seen.purchases) this.emit('unlock', where, SOUND.hands, 1.6, unlock);
+      if (unlocks.refused > seen.refused) this.emit('refuse', where, SOUND.hands, 0.4, refuse);
+      seen.purchases = unlocks.purchases;
+      seen.refused = unlocks.refused;
+    }
+    // The score: coins for a happy guest, a grumble for one who stormed out.
+    const log = this.score?.log ?? [];
+    if (log.length < seen.scored) seen.scored = 0;
+    for (const entry of log.slice(seen.scored)) {
+      if (entry.kind === 'paid') this.emit('coins', PLACES.room, SOUND.hands * 0.8, 0.3, coins);
+      if (entry.kind === 'stormedOff') this.emit('grumble', PLACES.room, SOUND.hands, 0.4, grumble);
+    }
+    seen.scored = log.length;
+    // The cards: a tick for a button, bells at closing time.
+    const game = this.game;
+    if (game) {
+      const card = game.card.mesh.position;
+      if (game.clicks > seen.clicks) this.emit('tick', card, SOUND.hands, 0.1, tick);
+      seen.clicks = game.clicks;
+      const closed = game.phase === 'closed';
+      if (closed && !seen.closed) this.emit('closing', card, SOUND.hands, 2, closing);
+      seen.closed = closed;
     }
     void now;
   }

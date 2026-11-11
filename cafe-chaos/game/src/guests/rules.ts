@@ -39,8 +39,22 @@ export const FIRST_SPAWN_SECONDS = 1.5;
 export const PATIENCE_SECONDS = 32;
 export const IMPATIENT_AFTER = 0.5;
 export const PATIENCE_SPREAD = 0.15;
-/** How long a seated guest stays before leaving (seconds). */
+/**
+ * The wait runs from the gate to the food: a guest's patience keeps
+ * running once it is seated, until a server brings its order, so a
+ * short-staffed café shows. Being seated tops it up by
+ * `SERVICE_TOPUP_SECONDS` (never past what it started with): a guest
+ * seated in good time has plenty for its tea, one seated at the last
+ * moment has a little. One whose patience runs out at the table loses its
+ * temper there for `FUME_SECONDS` (a cross face, the vein mark over its
+ * head), then gets down and stomps out without eating.
+ */
+export const SERVICE_TOPUP_SECONDS = 22;
+export const FUME_SECONDS = 1.6;
+/** How long a seated guest stays before leaving (seconds): it goes once served and this long seated... */
 export const SEATED_SECONDS = 60;
+/** ...and never before it has eaten for this long (seconds), so one served late stays to finish. */
+export const EAT_SECONDS = 15;
 /** A just-seated guest is happy for this long, then eats, then sits idle for the last stretch. */
 export const HAPPY_SECONDS = 3;
 export const IDLE_LAST_SECONDS = 12;

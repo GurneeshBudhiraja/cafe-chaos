@@ -29,16 +29,18 @@ import { setUpLighting } from './lighting.js';
 import { AmbienceSystem } from './systems/ambience-system.js';
 import { BaristaSystem } from './systems/barista-system.js';
 import { CafeSystem } from './systems/cafe-system.js';
+import { GameSystem } from './systems/game-system.js';
 import { GuestSystem } from './systems/guest-system.js';
 import { HandleSystem } from './systems/handle-system.js';
 import { HoldSystem } from './systems/hold-system.js';
 import { MoodSystem } from './systems/mood-system.js';
 import { RenderBudgetSystem } from './systems/render-budget-system.js';
+import { ScoreSystem } from './systems/score-system.js';
 import { SoundSystem } from './systems/sound-system.js';
 import { UnlockSystem } from './systems/unlock-system.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(UnlockSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
+  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(ScoreSystem).registerSystem(UnlockSystem).registerSystem(GameSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
   const system = world.getSystem(CafeSystem)!;
   const lights = setUpLighting(world, system.cafe);
   const mood = world.getSystem(MoodSystem)!;
@@ -50,10 +52,12 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   const ambience = world.getSystem(AmbienceSystem)!;
   const unlocks = world.getSystem(UnlockSystem)!;
   const sound = world.getSystem(SoundSystem)!;
+  const game = world.getSystem(GameSystem)!;
+  const score = world.getSystem(ScoreSystem)!;
   mood.lights = lights;
   themeHands(world);
   const theme = playTheme(world);
 
   // Dev only: lets the check and recording scripts find the world, the café, its lights, the mood, the hold, the handles and the surface finder.
-  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, budget, guests, baristas, unlocks, sound, ambience, theme, findSurfaceSpot };
+  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, budget, guests, baristas, unlocks, sound, ambience, theme, game, score, findSurfaceSpot };
 });
