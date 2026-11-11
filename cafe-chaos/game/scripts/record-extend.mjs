@@ -42,7 +42,10 @@ const h = await startHeadset({
   async prepare(h) {
     page = h.page;
     await h.head(SEAT, { x: TABLE.x, y: TABLE.y + 0.12, z: TABLE.z });
+    // The hands are read only once the café is down: measure the pinch point after that.
+    await page.waitForFunction(() => window.__cafe.system.placed && !window.__cafe.system.arriving, null, { timeout: 60000 });
     for (const hand of ['left', 'right']) await handTo(hand, LAP[hand]);
+    await frames(6);
     await pinch(1);
     await frames(3);
     pinchOffset = add(await page.evaluate(() => window.__cafe.hold.pinch.right.point.toArray()), LAP.right, -1);

@@ -115,6 +115,7 @@ const rest = await guestState(id);
   await pinchTo(add(rest.grip, [0.01, 0.035, 0.025]));
   await frames(3);
   const near = await guestState(id);
+  const lit = await page.evaluate((id) => window.__cafe.guests.hovered.some((g) => g && g.id === id), id);
   await h.screenshot('artifacts/expr-0-watching.png');
   await pinchTo(add(rest.grip, [0.01, 0.035, -0.035]));
   await frames(3);
@@ -123,6 +124,7 @@ const rest = await guestState(id);
   await frames(3);
   const gone = await guestState(id);
   const followed = near.pupils && moved.pupils && Math.hypot(near.pupils[0] - moved.pupils[0], near.pupils[1] - moved.pupils[1]) > 0.0003;
+  check('a free hand close enough to pick it up lights the guest up', lit, `lit ${lit}`);
   check('a guest in the line watches a hand that comes close', near.watching && near.eyes === 'EyesWide' && near.pupilsShown && followed && !gone.watching && !gone.parts.includes('EyesWide') && !gone.parts.includes('MouthO') && oneFace(gone),
     `${(Math.hypot(near.pinch[0] - near.grip[0], near.pinch[1] - near.grip[1], near.pinch[2] - near.grip[2]) * 100).toFixed(1)} cm away: watching ${near.watching} with ${near.eyes}/${near.mouth}, pupils followed the hand ${followed}; hand away: watching ${gone.watching}, ${gone.eyes}/${gone.mouth}`);
 }
