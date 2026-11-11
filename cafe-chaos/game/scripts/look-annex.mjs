@@ -6,7 +6,7 @@
  * counts, the ways out and how long the grid took to read again.
  *
  * Usage: dev server running, then `node scripts/look-annex.mjs`.
- * Output: artifacts/annex-before.png, artifacts/annex-after.png.
+ * Output: artifacts/annex-before.png, artifacts/annex-plaque.png, artifacts/annex-after.png.
  */
 
 import { chromium } from 'playwright';
@@ -77,8 +77,28 @@ async function shot(file) {
 }
 
 await shot('artifacts/annex-before.png');
-const opened = await page.evaluate(() => window.__cafe.system.openAnnex());
-console.log('openAnnex:', opened);
+// A close look at the plaque that extends the café, from the player's side.
+await page.evaluate(() => {
+  document.getElementById('overlay')?.remove();
+  const { world, system } = window.__cafe;
+  const V = world.camera.position.constructor;
+  const p = system.cafe.getObjectByName('PlaqueSpot-1').getWorldPosition(new V());
+  const cam = world.camera;
+  cam.up.set(0, 1, 0);
+  cam.position.set(p.x, p.y + 0.12, p.z + 0.1);
+  cam.lookAt(p.x, p.y, p.z);
+  cam.fov = 30;
+  cam.updateProjectionMatrix();
+});
+await page.waitForTimeout(2500);
+await page.screenshot({ path: 'artifacts/annex-plaque.png', timeout: 180000 });
+// Press it, as a pinch on it would.
+const opened = await page.evaluate(() => {
+  const { unlocks } = window.__cafe;
+  unlocks.press();
+  return !!window.__cafe.system.annex;
+});
+console.log('pressed the plaque; the café is extending:', opened);
 await page.waitForFunction(() => window.__cafe.system.annexOpen && window.__cafe.guests.seats.length > 23, null, { timeout: 120000 }).catch(() => console.log('annex did not finish opening'));
 await shot('artifacts/annex-after.png');
 console.log(errors.length ? `errors:\n${errors.slice(0, 5).join('\n')}` : 'no errors');

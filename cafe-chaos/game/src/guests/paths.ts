@@ -10,15 +10,16 @@
  *        +---------------------------------------+ . . fence . .
  *        |  T4   T4   T4    T2   T2      (quiet)  |rail
  *  fence |                                        |      deck
- *  < < <  EXIT  T2   T2   T2    T2   T2           = door = = gap =  Q Q Q Q Q  < arrivals
- *  ^ fade |                                        |                 > > > > >  those who give up
- *        |                                        |rail
- *        + - - - - - - - - - - - - - - - - - - - -+
+ *  < < <  EXIT  T2   T2   T2    T2   T2           = door = = gap =  Q Q
+ *  ^ fade |                                        |                    Q :  those who give up walk back beside it
+ *        |                                        |rail                Q :
+ *        + - - - - - - - - - - - - - - - - - - - -+                    Q :  < arrivals
  *          (the front is open, but nobody leaves that way)
  *                        (player)
  *
  * - Arrivals come along the table from the right and join the back of
- *   the line; the line stands outside the door, its head on the deck.
+ *   the line; the line's head stands on the deck outside the door, and
+ *   the rest of it runs down the table toward the player.
  * - A guest who gives up waiting turns round and walks back the way it
  *   came, beside the line, and fades out where newcomers appear.
  * - A guest who has eaten leaves by the exit in the room's left wall
@@ -51,29 +52,33 @@ const at = (x: number, z: number): Vector3 => new Vector3(x, groundAt(x, z), z);
 
 // ------------------------------------------------------------------ the line
 
-/** The line stands along this z, through the half of the door opening away from the player. */
-const QUEUE_Z = 0.03;
-/** The head of the line: on the deck, just outside the door. */
-const QUEUE_HEAD_X = 0.43;
-/** The rest stand on the table beyond the plate, this far apart. */
-const QUEUE_NEXT_X = 0.5;
-const QUEUE_SPACING = 0.058;
 /**
- * The way the line faces: toward the door (-X), turned part of the way to
- * the player, so faces show from the front seat.
+ * The line: its head on the deck just outside the door, the rest on the
+ * table beyond the plate, turned to run toward the player rather than out
+ * to the right, so the whole line stays within reach (about 55 cm from
+ * the eyes, with the café at its usual 35 cm). Everyone faces the door,
+ * turned part of the way to the player so faces show.
  */
+const QUEUE_HEAD = { x: 0.43, z: 0.03 };
+/** Just past the gap in the fence, then down the table toward the player, this far apart. */
+const QUEUE_BEND = { x: 0.505, z: 0.04 };
+const QUEUE_COLUMN_X = 0.525;
+const QUEUE_SPACING = 0.058;
+/** The way the line faces: toward the door (-X), turned part of the way to the player. */
 export const QUEUE_YAW = -0.95;
 
 /** The line's spots, front to back. */
-export const QUEUE_SPOTS: Vector3[] = Array.from({ length: MAX_QUEUE }, (_, i) => at(i === 0 ? QUEUE_HEAD_X : QUEUE_NEXT_X + (i - 1) * QUEUE_SPACING, QUEUE_Z));
+export const QUEUE_SPOTS: Vector3[] = Array.from({ length: MAX_QUEUE }, (_, i) =>
+  i === 0 ? at(QUEUE_HEAD.x, QUEUE_HEAD.z) : i === 1 ? at(QUEUE_BEND.x, QUEUE_BEND.z) : at(QUEUE_COLUMN_X, QUEUE_BEND.z + (i - 1) * QUEUE_SPACING),
+);
 
-/** Where newcomers appear: out along the table, beyond the end of the line. */
-export const ARRIVAL_POINT = at(QUEUE_NEXT_X + (MAX_QUEUE - 1) * QUEUE_SPACING + 0.2, QUEUE_Z);
+/** Where newcomers appear: out on the table to the right, level with the end of the line. */
+export const ARRIVAL_POINT = at(0.74, QUEUE_BEND.z + (MAX_QUEUE - 2) * QUEUE_SPACING);
 
 // ------------------------------------------------------------------ leaving
 
-/** Those who give up walk back beside the line, this far to the player's side of it (z). */
-const TURN_BACK_Z = QUEUE_Z + 0.046;
+/** Those who give up walk back beside the line, this far out from it (x). */
+const TURN_BACK_X = QUEUE_COLUMN_X + 0.05;
 
 /**
  * Back out the way it came: a guest who gives up turns round, steps to
@@ -83,9 +88,9 @@ const TURN_BACK_Z = QUEUE_Z + 0.046;
  */
 export function pathBack(from: Vector3): Vector3[] {
   const points = [from.clone()];
-  if (from.x < PLATE_EDGE_X) points.push(at(PLATE_EDGE_X - 0.006, TURN_BACK_Z), at(PLATE_EDGE_X + 0.02, TURN_BACK_Z));
-  else points.push(at(from.x + 0.025, TURN_BACK_Z));
-  points.push(at(ARRIVAL_POINT.x, TURN_BACK_Z));
+  if (from.x < PLATE_EDGE_X) points.push(at(PLATE_EDGE_X - 0.006, QUEUE_HEAD.z), at(PLATE_EDGE_X + 0.02, QUEUE_HEAD.z));
+  points.push(at(TURN_BACK_X, Math.max(from.z, QUEUE_BEND.z)));
+  points.push(ARRIVAL_POINT.clone());
   return points;
 }
 

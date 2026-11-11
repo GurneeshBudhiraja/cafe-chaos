@@ -32,10 +32,11 @@ const MAX_REACH_M = 1.2;
 const MAX_OFF_AHEAD_DEG = 80;
 /**
  * Where the café's centre lands when the surface allows: this far out from
- * the eyes, so the whole café sits below the gaze and is looked down on,
- * while the back row stays within seated reach.
+ * the eyes (measured flat), so the café sits below the gaze and is looked
+ * down on, and nearly everything the hands do (the back row, the line by
+ * the door, the plaques) is within about 60 cm, a seated arm's reach.
  */
-const PREFERRED_REACH_M = 0.45;
+const PREFERRED_REACH_M = 0.35;
 /** Kept between the café's centre and the surface's edge: about half the café room, plus a little. */
 const EDGE_MARGIN_M = 0.25;
 

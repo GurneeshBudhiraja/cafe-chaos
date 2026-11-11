@@ -143,10 +143,12 @@ await h.screenshot('artifacts/guests-4-turning-back.png');
   const back = await page.evaluate(() => window.__back);
   const walkingBack = back.find((q) => q.x > 0.56 && q.opacity === 1);
   const mine = back.filter((q) => q.id === walkingBack.id);
-  // Facing away from the door (+X is a yaw of a quarter turn), on the table beside the line, going steadily away.
-  const facingAway = Math.abs(Math.atan2(Math.sin(walkingBack.yaw - Math.PI / 2), Math.cos(walkingBack.yaw - Math.PI / 2))) < 0.5;
-  const away = mine.every((q, i) => i === 0 || q.x >= mine[i - 1].x - 1e-6);
-  check('one who gives up turns round and walks back the way it came', walkingBack.clip === 'Walk' && facingAway && away && Math.abs(walkingBack.y) < 0.002 && walkingBack.z > 0.06 && walkingBack.z < 0.09,
+  // Facing away from the door (its back to the door, at x 0.34 z 0.06), on the table beside the line, going steadily away from it.
+  const fromDoor = (q) => Math.hypot(q.x - 0.34, q.z - 0.06);
+  const awayYaw = Math.atan2(walkingBack.x - 0.34, walkingBack.z - 0.06);
+  const facingAway = Math.abs(Math.atan2(Math.sin(walkingBack.yaw - awayYaw), Math.cos(walkingBack.yaw - awayYaw))) < 1.0;
+  const away = mine.every((q, i) => i === 0 || fromDoor(q) >= fromDoor(mine[i - 1]) - 1e-6);
+  check('one who gives up turns round and walks back the way it came', walkingBack.clip === 'Walk' && facingAway && away && Math.abs(walkingBack.y) < 0.002,
     `guest ${walkingBack.id} at x ${walkingBack.x.toFixed(2)} z ${walkingBack.z.toFixed(3)} on the table beside the line, facing away from the door ${facingAway}, always going away ${away}, clip ${walkingBack.clip}`);
 }
 await page.waitForFunction(() => window.__cafe.guests.left >= 1, null, { timeout: 300000 });

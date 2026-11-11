@@ -7,7 +7,7 @@
  * Placement: when the XR session begins, the nearest detected flat
  * surface in front of the player that is not the floor (a table, desk,
  * counter, couch seat: WebXR plane detection, the surfaces from the
- * headset's Space Setup) is used, with the café's centre about 45 cm
+ * headset's Space Setup) is used, with the café's centre about 35 cm
  * out so it is looked down on and the back row stays within seated
  * reach. With no such surface within two seconds, the café floats
  * ahead and below the eyes instead. It
@@ -21,12 +21,16 @@
  *
  * The left side: the shell's left wall comes in two versions, closed and
  * with an exit (under the 出口 sign); the exit is shown, and it is the
- * guests' way out. `openAnnex()` grows the garden annex off that side
- * without rebuilding anything else: the wing (with a window booth and a
- * big table in it) rises out of the plate, the left garden strip it
- * covers is hidden, and once it is up the navigation grid is read again
- * and `furniture` goes up by one, which tells the guests and servers to
- * take in the new seats and tables.
+ * guests' one way out. `openAnnex()` extends the café to the left without
+ * rebuilding anything else, and it reads as the same café grown wider,
+ * not a second room: the left wall goes altogether, the new floor (the
+ * annex model: floor, outer walls, roof and garden) rises out of the
+ * plate with four more tables set out in line with the room's own two
+ * rows, and the exit moves to the new outer wall, so there is still just
+ * one way out. The left garden strip the new floor covers is hidden. Once
+ * it is up the navigation grid is read again and `furniture` goes up by
+ * one, which tells the guests and servers to take in the new seats and
+ * tables.
  */
 
 import { AssetManager, createSystem, Euler, Group, Quaternion, Vector3, XRPlane as DetectedPlane, type Object3D } from '@iwsdk/core';
@@ -38,10 +42,16 @@ import { findSurfaceSpot, type DetectedSurface } from '../lib/desk-placement.js'
 import { CAFE_NAV } from '../nav/cafe-nav.js';
 import { NavGrid } from '../nav/nav-grid.js';
 
-/** The annex's furniture: which model stands on which of its spots. */
-const ANNEX_FURNITURE: { model: ModelName; spot: string }[] = [
-  { model: 'window-booth', spot: 'AnnexSpot-1' },
-  { model: 'table-big', spot: 'AnnexSpot-2' },
+/**
+ * The tables on the new floor: the room's own columns (13 cm apart)
+ * carried on to the left, in its two rows (four-seaters at the back,
+ * two-seaters at the front), so the café simply has more tables.
+ */
+const ANNEX_TABLES: { model: ModelName; x: number; z: number }[] = [
+  { model: 'table-4', x: -0.39, z: -0.135 },
+  { model: 'table-4', x: -0.52, z: -0.135 },
+  { model: 'table-2', x: -0.39, z: 0.025 },
+  { model: 'table-2', x: -0.52, z: 0.025 },
 ];
 /** How long the annex takes to rise out of the plate (seconds). */
 const ANNEX_RISE_SECONDS = 0.9;
@@ -99,6 +109,8 @@ export class CafeSystem extends createSystem({
   furniture = 0;
   /** The annex: null until opened; `rising` from 0 to 1 while it comes up. */
   annex: { root: Group; rising: number } | null = null;
+  /** The tables the extension brought. */
+  readonly annexTables: { model: ModelName; piece: Object3D }[] = [];
   private arrival = -1;
   private sessionWas = false;
   private sessionStartedAt = 0;
@@ -164,19 +176,19 @@ export class CafeSystem extends createSystem({
    * already open or its models have not loaded yet.
    */
   openAnnex(): boolean {
-    if (this.annex || !AssetManager.getGLTF('cafe-annex') || ANNEX_FURNITURE.some((f) => !AssetManager.getGLTF(f.model))) return false;
+    if (this.annex || !AssetManager.getGLTF('cafe-annex') || ANNEX_TABLES.some((t) => !AssetManager.getGLTF(t.model))) return false;
     const root = new Group();
     root.name = 'Annex';
+    // The annex model lines up with the shell when it stands at the café's origin.
     const wing = copyModel('cafe-annex');
     root.add(wing);
     this.pieces.push(wing);
-    // Its furniture, stood on its spots (the spot carries the position and facing).
-    for (const { model, spot } of ANNEX_FURNITURE) {
-      const anchor = wing.getObjectByName(spot);
-      if (!anchor) continue;
+    for (const { model, x, z } of ANNEX_TABLES) {
       const piece = copyModel(model);
-      anchor.add(piece);
+      piece.position.set(x, FLOOR_TOP_M, z);
+      root.add(piece);
       this.pieces.push(piece);
+      this.annexTables.push({ model, piece });
       piece.traverse((node) => {
         if (/^Seat-\d+$/.test(node.name)) this.seats.push(node);
       });
@@ -186,9 +198,10 @@ export class CafeSystem extends createSystem({
     batchStatic(root);
     root.scale.set(1, 0.001, 1);
     this.annex = { root, rising: 0 };
-    // The annex's floor covers the left garden strip, and its way in is the exit in the left wall.
+    // One room: the left wall goes altogether (its exit with it), and the new floor covers the left garden strip.
+    this.setShown('WallLeft-Closed', false);
+    this.setShown('WallLeft-Open', false);
     this.setShown('GardenLeft', false);
-    this.openExit();
     return true;
   }
 

@@ -23,9 +23,9 @@
  */
 
 import { Box3, createSystem, Vector3 } from '@iwsdk/core';
-import { FLOOR_Y, HOLD_MARGIN_M, PINCH_M, RELEASE_M, SCALE_MAX, SCALE_MIN, SMOOTH, TRACKING_GRACE_S } from '../hold/hold.js';
+import { FLOOR_Y, GHOST_M, HOLD_MARGIN_M, PINCH_M, RELEASE_M, SCALE_MAX, SCALE_MIN, SETTLE_S, SMOOTH, TRACKING_GRACE_S } from '../hold/hold.js';
 import { PinchCursor } from '../hands/pinch-cursor.js';
-import { HANDS, readPinchPoint, type Hand } from '../lib/hand-pinch.js';
+import { HANDS, readJoint, readPinchPoint, type Hand } from '../lib/hand-pinch.js';
 import { ANNEX_MIN_X, CafeSystem } from './cafe-system.js';
 
 /** An angle brought into (-π, π], so a line of hands crossing the seam at ±π never reads as a full turn. */
@@ -44,6 +44,12 @@ interface Pinch {
   lost: number;
   /** The headset's own pinch for this hand (its select event is active). */
   native: boolean;
+  /** The headset has sent this hand select events this session: its pinch is trusted to say when the pinch ends. */
+  nativeSeen: boolean;
+  /** How long the hand has been tracked since it was last found (seconds). */
+  found: number;
+  /** The same real hand as the other one, read twice (see GHOST_M): not drawn, its pinch ignored. */
+  ghost: boolean;
 }
 
 export class HoldSystem extends createSystem({}) {
@@ -51,8 +57,8 @@ export class HoldSystem extends createSystem({}) {
   readonly holding: Hand[] = [];
   /** Each hand's pinch, read every frame (the dev harness reads these too). */
   readonly pinch: Record<Hand, Pinch> = {
-    left: { point: new Vector3(), gap: Infinity, closed: false, lost: 0, native: false },
-    right: { point: new Vector3(), gap: Infinity, closed: false, lost: 0, native: false },
+    left: { point: new Vector3(), gap: Infinity, closed: false, lost: 0, native: false, nativeSeen: false, found: 0, ghost: false },
+    right: { point: new Vector3(), gap: Infinity, closed: false, lost: 0, native: false, nativeSeen: false, found: 0, ghost: false },
   };
   /** The café's bounds in its own space at scale 1 (set once it is built). */
   readonly bounds = new Box3();
@@ -74,6 +80,7 @@ export class HoldSystem extends createSystem({}) {
     const hand = source.handedness;
     if (!source.hand || (hand !== 'left' && hand !== 'right')) return;
     this.pinch[hand].native = event.type === 'selectstart';
+    this.pinch[hand].nativeSeen = true;
   };
   // One hand: where the café's origin sits relative to the pinch (world).
   private readonly offset = new Vector3();
@@ -114,7 +121,10 @@ export class HoldSystem extends createSystem({}) {
     this.session = session;
     session?.addEventListener('selectstart', this.onSelect);
     session?.addEventListener('selectend', this.onSelect);
-    for (const hand of HANDS) this.pinch[hand].native = false;
+    for (const hand of HANDS) {
+      this.pinch[hand].native = false;
+      this.pinch[hand].nativeSeen = false;
+    }
   }
 
   update(delta: number): void {
@@ -126,10 +136,15 @@ export class HoldSystem extends createSystem({}) {
     }
     // The annex widens the café to the left: the handles go round it too.
     if (cafe.annexOpen && this.bounds.min.x > ANNEX_MIN_X) this.bounds.min.x = ANNEX_MIN_X;
+    for (const hand of HANDS) this.read(hand, delta);
+    this.findGhost();
     for (const hand of HANDS) {
-      this.read(hand, delta);
       const p = this.pinch[hand];
-      this.cursor.show(hand, p.point, p.gap < Infinity, p.closed, delta);
+      // No dot (and no hand drawn) until a newly found hand has settled, nor for a ghost.
+      const shown = p.gap < Infinity && p.found >= SETTLE_S && !p.ghost;
+      this.cursor.show(hand, p.point, shown, p.closed, delta);
+      const model = this.world.input.xr.visualAdapters.hand[hand].visual?.model;
+      if (model && !shown) model.visible = false;
     }
     this.release();
     this.takeByPinch();
@@ -153,8 +168,11 @@ export class HoldSystem extends createSystem({}) {
       }
       return;
     }
-    if (p.gap === Infinity) p.point.copy(this.raw);
-    else {
+    if (p.gap === Infinity) {
+      // Just found: start from here, and let it settle before its pinch counts.
+      p.point.copy(this.raw);
+      p.found = 0;
+    } else {
       // The one-euro filter: steadier the slower the hand moves.
       const speed = delta > 0 ? this.raw.distanceTo(p.point) / delta : 0;
       const k = 1 - Math.exp(-2 * Math.PI * (SMOOTH.minHz + SMOOTH.beta * speed) * delta);
@@ -162,8 +180,36 @@ export class HoldSystem extends createSystem({}) {
     }
     p.lost = 0;
     p.gap = gap;
-    // The headset's pinch, or the tips touching; with hysteresis, a pinch by the tips opens only once they are clearly apart.
-    p.closed = p.native || p.gap < PINCH_M || (p.closed && p.gap <= RELEASE_M);
+    p.found += delta;
+    if (p.found < SETTLE_S) {
+      // Still settling: open, whatever the fingers seem to do.
+      p.closed = false;
+      return;
+    }
+    // The headset's pinch, or the tips touching. Where the headset reports pinches, it also says when one ends:
+    // the fingers are let go of then, not held closed until the tips are well apart (relaxed tips are often 2-3 cm
+    // apart, which kept a guest stuck to the hand). Elsewhere, a pinch by the tips opens only once they are clearly
+    // apart (hysteresis).
+    p.closed = p.native || p.gap < PINCH_M || (!p.nativeSeen && p.closed && p.gap <= RELEASE_M);
+  }
+
+  /**
+   * One real hand read as both (wrists closer than GHOST_M): the hand found
+   * more recently is the ghost. Its pinch is dropped, so it neither picks
+   * anything up nor holds anything.
+   */
+  private findGhost(): void {
+    const { left, right } = this.pinch;
+    left.ghost = right.ghost = false;
+    if (left.gap === Infinity || right.gap === Infinity) return;
+    const space = this.xrManager.getReferenceSpace();
+    const input = this.world.input.xr;
+    if (!readJoint(input.getPrimaryInputSource('left'), this.xrFrame, space, this.player.matrixWorld, 'wrist', this.raw)) return;
+    if (!readJoint(input.getPrimaryInputSource('right'), this.xrFrame, space, this.player.matrixWorld, 'wrist', this.scratch)) return;
+    if (this.raw.distanceTo(this.scratch) > GHOST_M) return;
+    const ghost = left.found < right.found ? left : right;
+    ghost.ghost = true;
+    ghost.closed = false;
   }
 
   /** Is this hand's pinch point on or just around the café? */

@@ -8,7 +8,7 @@
  * 3. steam rises and blossom falls;
  * 4. the moment a guest is seated a server sets off with a tray, serves
  *    that guest (the tray goes down at the guest's own place, and the
- *    guest eats), bows and goes home;
+ *    guest eats), and goes straight home (no bow);
  * 5. of two guests seated together, one near and one far, the nearer is
  *    served first (one server);
  * 6. a server on its way to a far guest turns to a guest seated nearer
@@ -183,7 +183,8 @@ await page.evaluate(() => (window.__cafe.baristas.maxOut = 1));
   await until(([a, b]) => { const log = window.__cafe.baristas.servedLog; return log.includes(a) && log.includes(b); }, [far.guest, near.guest]);
   const s = await staff();
   const order = s.servedLog.filter((g) => g === far.guest || g === near.guest);
-  check('a server on its way turns to a guest seated nearer it, and the other is served next', server.order === near.guest && turned.switches === switchesBefore + 1 && order[0] === near.guest && order[1] === far.guest,
+  // At the emulator's frame rate the near guest may already be served (no bow now) by the time this is read: then it has no order.
+  check('a server on its way turns to a guest seated nearer it, and the other is served next', (server.order === near.guest || (server.order === null && turned.servedLog.includes(near.guest))) && turned.switches === switchesBefore + 1 && order[0] === near.guest && order[1] === far.guest,
     `${where.name} was at x ${where.x.toFixed(2)} heading for guest ${far.guest}; guest ${near.guest} seated just ahead of it; it is now bringing guest ${server.order}'s order (switches ${switchesBefore} to ${turned.switches}); served in the order ${order.join(', ')}`);
 }
 

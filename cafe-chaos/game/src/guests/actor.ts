@@ -43,6 +43,8 @@ const POSE_OF: Record<ClipName, Pose> = {
  * pastel guest should still read as pastel there.
  */
 const GLOW = 0.3;
+/** How much brighter a guest glows when a pinch now would pick it up. */
+const HIGHLIGHT = 0.45;
 
 /** The speed the Walk clip's planted foot was solved for (metres per second): play it faster or slower to match the ground. */
 export const WALK_CLIP_SPEED = 0.0181;
@@ -85,6 +87,8 @@ export class GuestActor {
   /** Each face part's scale as the model has it at rest (before any clip). */
   private readonly restScale = new Map<Object3D, number>();
   private readonly materials: Material[] = [];
+  /** How brightened it is now (setHighlight). */
+  private highlight = 0;
   private readonly skins: SkinnedMesh[] = [];
   /** A face set by hand, shown instead of the clip's own (null: the clip decides). */
   private face: Face | null = null;
@@ -188,6 +192,19 @@ export class GuestActor {
   update(delta: number): void {
     this.mixer.update(delta);
     this.showFaces();
+  }
+
+  /**
+   * Brighten the guest (0 as it is, 1 fully): its skin and clothes glow
+   * more in their own colours. The cue that a pinch now would pick it up.
+   */
+  setHighlight(amount: number): void {
+    if (amount === this.highlight) return;
+    this.highlight = amount;
+    for (const material of this.materials) {
+      const standard = material as MeshStandardMaterial;
+      if (standard.emissiveMap) standard.emissiveIntensity = GLOW + HIGHLIGHT * amount;
+    }
   }
 
   /** 0 hidden to 1 solid. Below 1 the guest is drawn blended; at 1 it is opaque again. */

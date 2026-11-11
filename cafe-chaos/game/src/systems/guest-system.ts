@@ -51,6 +51,7 @@ import {
   PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, PICK_WINDOW_S, SEAT_REACH_M, SEATED_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
+import { PickRings } from '../guests/pick-ring.js';
 import { SeatGlow } from '../guests/seat-glow.js';
 import { DIAL, PatienceDial } from '../guests/patience-dial.js';
 import { collectSeats, LANDING_REACH_M, seatUnder, type Seat } from '../guests/seats.js';
@@ -100,6 +101,8 @@ export interface Guest {
   /** Leaving by the exit: 'exit', and which spot across the path it is making for (null and -1 for one walking back from the line). */
   side: 'exit' | null;
   lane: number;
+  /** How lit up it is (0 to 1): up while a free hand is close enough that a pinch would pick it up. */
+  highlight: number;
   /** The ground under it (café space), for its blob. */
   ground: number;
   /** Held: the hand carrying it, where it was taken from, and the seat it would land on now. */
@@ -170,6 +173,9 @@ export class GuestSystem extends createSystem({}) {
   private readonly head = new Vector3();
   private readonly targets: (Seat | null)[] = [null, null];
   private readonly watchFace: Face = { eyes: 'EyesWide', mouth: 'MouthO', lookX: 0, lookY: 0 };
+  /** The ring round the guest each hand would pick up now, and that guest (null: none). */
+  readonly rings = new PickRings();
+  readonly hovered: (Guest | null)[] = [null, null];
   /** How many seat anchors the café had when the seats were last taken in, and the furniture count then. */
   private seatAnchors = 0;
   private furniture = 0;
@@ -183,6 +189,7 @@ export class GuestSystem extends createSystem({}) {
     this.handles = this.world.getSystem(HandleSystem);
     const cafe = this.cafeSystem.cafe;
     cafe.add(this.blobs.mesh);
+    cafe.add(this.rings.group);
     this.seats = collectSeats(cafe, this.cafeSystem.seats, this.cafeSystem.nav, this.cafeSystem.pieces);
     this.seatAnchors = this.cafeSystem.seats.length;
     this.firstSeatCount = this.seats.length;
@@ -221,6 +228,7 @@ export class GuestSystem extends createSystem({}) {
       this.show(guest, delta);
     }
     this.blobs.end();
+    for (let i = 0; i < 2; i++) this.rings.show(i, this.hovered[i]?.actor.root.position ?? null, delta);
     this.glow.show(this.seats, this.targets, this.targets.some((t, i) => t !== null || this.carriedBy(HANDS[i]) !== undefined), delta);
     this.peak = Math.max(this.peak, this.guests.length);
   }
@@ -302,6 +310,7 @@ export class GuestSystem extends createSystem({}) {
       dial,
       side: null,
       lane: -1,
+      highlight: 0,
       ground: ARRIVAL_POINT.y,
       hand: null,
       home: null,
@@ -417,6 +426,7 @@ export class GuestSystem extends createSystem({}) {
     }
     HANDS.forEach((hand, i) => {
       const pinch = hold.pinch[hand];
+      this.hovered[i] = null;
       this.closedFor[hand] = pinch.closed ? (this.pinched[hand] ? this.closedFor[hand] + delta : 0) : Infinity;
       this.pinched[hand] = pinch.closed;
       // A pinch that closed just now, or a moment ago on its way in (PICK_WINDOW_S).
@@ -434,10 +444,14 @@ export class GuestSystem extends createSystem({}) {
         else fading.hand = null;
         return;
       }
-      // A pinch closing now (or just before reaching it), on a guest, with the hand free (not on the café's handles).
-      if (!recent || hold.holding.includes(hand) || this.handles?.near(pinch.point)) return;
+      // The guest a pinch here would take: the nearest within reach of this free hand (not on the café's handles).
+      // It lights up while the hand is open, and a pinch closing now (or just before reaching it) takes exactly it.
+      if (pinch.gap === Infinity || pinch.ghost || hold.holding.includes(hand) || this.handles?.near(pinch.point)) return;
+      if (pinch.closed && !recent) return;
       const guest = this.nearestGuest(pinch.point, 1);
-      if (guest) this.pickUp(guest, hand);
+      if (!guest) return;
+      if (recent) this.pickUp(guest, hand);
+      else this.hovered[i] = guest;
     });
   }
 
@@ -737,6 +751,10 @@ export class GuestSystem extends createSystem({}) {
     if (guest.state === 'leaving' && walk) opacity = Math.min(1, walk.remaining / FADE_OUT_M);
     if (guest.state === 'vanishing') opacity = Math.max(0, 1 - guest.vanishing / VANISH_SECONDS);
     guest.actor.setOpacity(opacity);
+    // Lit up while a hand is over it, ready to pick it up.
+    const want = this.hovered.includes(guest) ? 1 : 0;
+    guest.highlight += (want - guest.highlight) * (1 - Math.exp(-(want ? 18 : 8) * delta));
+    guest.actor.setHighlight(guest.highlight < 0.01 ? 0 : guest.highlight);
     guest.actor.update(delta);
     // The dial shows for as long as the guest is waiting to be seated: in the line, and in the player's hand
     // (or the air) on its way from the line, where its patience is still running.
