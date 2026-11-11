@@ -20,7 +20,22 @@ guest hops down and leaves by the one exit, in the café's left wall
 under the 出口 sign. A stone plaque in the gravel in front extends the
 café: pinch it and the left wall goes, the floor grows to the left with
 four more tables in line with the rest, and the exit moves to the new
-outer wall. A very quiet lo-fi theme plays under it all from
+outer wall.
+
+**The sound** (`src/systems/sound-system.ts`, `src/audio/voices.ts`): under
+the theme, the café sounds like a café. Each sound comes from where its
+source is in the little café (3D sound, the listener at the player's
+head), so turning the head moves it and leaning in to the bar makes the
+bar louder: the room's soft murmur; the kettle simmering and, now and
+then, the espresso machine grinding and steaming; cups clinking at the
+occupied tables; the wind chime at the door as guests arrive; the pond
+trickling and a cricket in the garden; and for the hands, a pop and a
+little "oh!" when a guest is picked up, a soft thump, a two-note chime
+and a contented "mm" when one is seated, a sigh when one gives up, a
+tray set down when a server serves, and the padlock's click and a run of
+bells when the café is extended. All of it is made in code (no files, no
+licences). It starts with the XR session; the desktop preview is
+silent. Levels are in `SOUND` at the top of the system. A very quiet lo-fi theme plays under it all from
 the moment the session starts. Like a Horizon OS window, the café has a grab pill on the side
 facing the player (pinch and drag to move it) and a bracket at each
 corner (pinch and pull to resize, swing to turn), always visible, in the
@@ -394,6 +409,10 @@ room has a desk-height table), from a running dev server:
   sits; let go elsewhere it hops back to the line; its time up, it hops
   off, comes out by the Meta stone and goes left or right along the front
   path, its seat free (8 checks), with screenshots.
+- `node scripts/check-sound.mjs`: in a session the sound starts; the
+  kettle, the pond, cups and the door's chime play by themselves; seating
+  a guest and pressing the plaque play their sounds (what was played and
+  when, not how it sounds).
 - `node scripts/check-expressions.mjs`: a guest watches a hand that comes
   close; picked up it is surprised, then calm, and stays calm; carried, its
   eyes are on the seat below it; its face follows its dial (uneasy on
@@ -454,6 +473,8 @@ src/
   cafe/materials.ts          the café's materials on the grey-box pieces
   systems/cafe-system.ts     building the café and placing it on the table; the left exit; extending the café
   systems/unlock-system.ts   the stone plaque in front that extends the café
+  systems/sound-system.ts    the café's sounds, placed where they come from
+  audio/voices.ts            each sound, made with the Web Audio API
   systems/hold-system.ts     reading the pinches; carrying, resizing and turning the café
   systems/guest-system.ts    the guests: arriving, the line, carrying, sitting, leaving
   systems/render-budget-system.ts  the resting shadow map, the refresh rate, the fps readout

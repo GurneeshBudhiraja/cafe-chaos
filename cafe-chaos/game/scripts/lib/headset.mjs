@@ -28,7 +28,7 @@ export const OUT_DIR = 'artifacts';
  */
 export async function startHeadset({ size = { width: 1032, height: 800 }, fovDeg = 96, record = null, maxSpeedUp = 4, prepare } = {}) {
   mkdirSync(OUT_DIR, { recursive: true });
-  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args: ['--ignore-certificate-errors'] });
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args: ['--ignore-certificate-errors', '--autoplay-policy=no-user-gesture-required'] });
   const startedAt = Date.now();
   const context = await browser.newContext({
     viewport: size,
