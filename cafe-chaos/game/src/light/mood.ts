@@ -111,18 +111,25 @@ export const GLOW: Record<string, { strength: number; color?: number }> = {
 };
 
 /**
- * When the café grows (the annex), the light grows with it: the room's
- * own warm light moves to the middle of the wider room and reaches
- * further, and the house light shifts left a little, so the new tables
- * sit in the same cosy wash as the old ones. It follows the annex as it
- * rises. (No light is added: the same five carry the bigger room.)
+ * When the café grows (the annex), the light grows with it. The annex is
+ * a room of its own under its own eave, so it gets what the main room
+ * has: paper lanterns hanging under the eave (copies of the main room's
+ * middle lantern, `LANTERN_BOX`), each with a warm breathing light and a
+ * halo, and the room's own unseen warm light moves over to the middle of
+ * the wider room and reaches further. The house light stays over the
+ * counter, so the main room keeps its look. The new lights come up with
+ * the lamps and with the annex as it rises.
  */
 export const ANNEX_LIGHT = {
   /** The room light (LAMPS[ROOM_LAMP]): where it goes, how far it reaches, and how much stronger it gets. */
-  room: { position: [-0.17, 0.15, -0.05] as const, distance: 0.9, strength: 1.6 },
-  /** The house light's position and aim, shifted toward the middle of the wider room. */
-  house: { position: [-0.1, 0.17, -0.11] as const, target: [-0.1, 0, 0.16] as const },
+  room: { position: [-0.17, 0.15, -0.05] as const, distance: 0.9, strength: 1.4 },
 };
+/** The main room's middle paper lantern (café space): copied to hang in the annex. */
+export const LANTERN_BOX = { min: [-0.04, 0.085, -0.2] as const, max: [0.04, 0.175, -0.115] as const };
+/** The annex's lanterns: how far left of the main room's middle lantern each hangs (metres, café space). */
+export const ANNEX_LANTERNS_X = [-0.43, -0.59];
+/** Each annex lantern's light (a point light where the lantern hangs) and halo: as the main room's lanterns, a touch stronger to carry the room alone. */
+export const ANNEX_LAMP = { y: 0.124, z: -0.158, color: 0xffbe74, intensity: 0.17, distance: 0.55, halo: { size: 0.11, opacity: 0.45 } };
 /** Which lamp is the room's own unseen light. */
 export const ROOM_LAMP = 4;
 

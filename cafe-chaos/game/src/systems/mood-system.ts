@@ -7,10 +7,11 @@
  * preview) the lamps are simply on and nothing is dimmed.
  */
 
-import { createSystem, Vector3 } from '@iwsdk/core';
+import { createSystem, PointLight, Vector3, type Object3D, type Sprite } from '@iwsdk/core';
+import { makeHalo } from '../light/halo.js';
 import { lightAddition, type CafeLights } from '../light/cafe-lights.js';
 import { PassthroughDimmer } from '../light/dimmer.js';
-import { ANNEX_LIGHT, BREATH, DIM_FADE_SECONDS, DIM_LEVEL, HALOS, HOUSE, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS, ROOM_LAMP } from '../light/mood.js';
+import { ANNEX_LAMP, ANNEX_LANTERNS_X, ANNEX_LIGHT, BREATH, DIM_FADE_SECONDS, DIM_LEVEL, HALOS, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS, ROOM_LAMP } from '../light/mood.js';
 import { CafeSystem } from './cafe-system.js';
 
 export class MoodSystem extends createSystem({}) {
@@ -27,6 +28,9 @@ export class MoodSystem extends createSystem({}) {
   private litAnnex: object | null = null;
   /** How far the light has grown with the annex, 0 to 1. */
   private grown = 0;
+  /** The annex lanterns' lights and halos (made when the annex opens). */
+  readonly annexLamps: PointLight[] = [];
+  private readonly annexHalos: Sprite[] = [];
 
   init(): void {
     this.world.createTransformEntity(this.dimmer.mesh);
@@ -74,6 +78,7 @@ export class MoodSystem extends createSystem({}) {
     if (annex && this.litAnnex !== annex) {
       this.litAnnex = annex;
       lightAddition(annex.root);
+      this.lightLanterns(annex.root);
     }
     const grown = annex ? ease(Math.min(1, annex.rising)) : 0;
     if (grown === this.grown) return;
@@ -83,9 +88,20 @@ export class MoodSystem extends createSystem({}) {
     const to = ANNEX_LIGHT.room;
     room.position.set(...mix(from.position, to.position, grown));
     room.distance = from.distance + (to.distance - from.distance) * grown;
-    lights.house.position.set(...mix(HOUSE.position, ANNEX_LIGHT.house.position, grown));
-    lights.house.target.position.set(...mix(HOUSE.target, ANNEX_LIGHT.house.target, grown));
-    lights.house.target.updateMatrixWorld();
+  }
+
+  /** A warm light and a halo at each of the annex's lanterns; they rise with the annex (they are its children). */
+  private lightLanterns(root: Object3D): void {
+    for (const x of ANNEX_LANTERNS_X) {
+      const light = new PointLight(ANNEX_LAMP.color, 0, ANNEX_LAMP.distance, 2);
+      light.name = 'AnnexLamp';
+      light.position.set(x, ANNEX_LAMP.y, ANNEX_LAMP.z);
+      const halo = makeHalo(ANNEX_LAMP.halo.size, ANNEX_LAMP.color, 0);
+      halo.position.set(x, ANNEX_LAMP.y + 0.006, ANNEX_LAMP.z);
+      root.add(light, halo);
+      this.annexLamps.push(light);
+      this.annexHalos.push(halo);
+    }
   }
 
   /** Apply the lamps' level and the lanterns' breath to the lights and halos. */
@@ -100,6 +116,12 @@ export class MoodSystem extends createSystem({}) {
     });
     halos.forEach((halo, i) => {
       halo.material.opacity = HALOS[i].opacity * this.lampsUp * breath(HALOS[i].breathes, i);
+    });
+    // The annex's lanterns breathe as the main room's do, out of step with them, and come up as it rises.
+    this.annexLamps.forEach((lamp, i) => {
+      const b = breath(true, LAMPS.length + i);
+      lamp.intensity = ANNEX_LAMP.intensity * this.grown * this.lampsUp * b;
+      this.annexHalos[i].material.opacity = ANNEX_LAMP.halo.opacity * this.grown * this.lampsUp * b;
     });
   }
 }

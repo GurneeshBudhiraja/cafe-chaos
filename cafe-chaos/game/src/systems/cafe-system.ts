@@ -37,7 +37,8 @@ import { AssetManager, createSystem, Euler, Group, Mesh, Quaternion, Vector3, XR
 import type { ModelName } from '../assets.js';
 import { DRESSING, FLOOR_TOP_M, OPENING_LAYOUT, type Placement } from '../cafe/layout.js';
 import { dressGreyBox } from '../cafe/materials.js';
-import { splitOff, type Box } from '../cafe/split-mesh.js';
+import { copyPart, splitOff, type Box } from '../cafe/split-mesh.js';
+import { ANNEX_LANTERNS_X, LANTERN_BOX } from '../light/mood.js';
 import { batchStatic, type BatchReport } from '../cafe/static-batch.js';
 import { findSurfaceSpot, type DetectedSurface } from '../lib/desk-placement.js';
 import { CAFE_NAV } from '../nav/cafe-nav.js';
@@ -198,6 +199,7 @@ export class CafeSystem extends createSystem({
         if (/^Seat-\d+$/.test(node.name)) this.seats.push(node);
       });
     }
+    this.hangLanterns(root);
     this.cafe.add(root);
     // One mesh per material for the wing too.
     batchStatic(root);
@@ -210,6 +212,23 @@ export class CafeSystem extends createSystem({
     // The old room's front-left corner post and the beam over it would stand in the middle of the one room: they go too.
     this.setShown(JOIN_TIMBER, false);
     return true;
+  }
+
+  /**
+   * The annex's paper lanterns: copies of the main room's middle lantern,
+   * hung under the annex's eave at the same height (their lights are the
+   * mood's: MoodSystem). Nothing if the shell has no lanterns.
+   */
+  private hangLanterns(root: Group): void {
+    const papers = this.cafe.getObjectByName('LanternPapers');
+    if (!(papers instanceof Mesh)) return;
+    const lantern = copyPart(papers, this.cafe, LANTERN_BOX);
+    if (!lantern) return;
+    for (const [i, x] of ANNEX_LANTERNS_X.entries()) {
+      const copy = new Mesh(lantern.clone().translate(x, 0, 0), papers.material);
+      copy.name = `AnnexLantern-${i + 1}`;
+      root.add(copy);
+    }
   }
 
   /** The annex rises out of the plate with a small overshoot; once it is up, the grid is read again. */

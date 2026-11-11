@@ -23,6 +23,32 @@ export interface Box {
  * the new mesh, or null if no triangle was in the box.
  */
 export function splitOff(mesh: Mesh, frame: Object3D, box: Box, name: string): Mesh | null {
+  const { source, kept, split } = sortTriangles(mesh, frame, box);
+  if (split.length === 0) return null;
+  mesh.geometry = pick(source, kept);
+  const part = new Mesh(pick(source, split), mesh.material);
+  part.name = name;
+  part.position.copy(mesh.position);
+  part.quaternion.copy(mesh.quaternion);
+  part.scale.copy(mesh.scale);
+  mesh.parent?.add(part);
+  return part;
+}
+
+/**
+ * A copy of the part of `mesh` whose triangles have their centres in
+ * `box` (café space), as a geometry in café space; the mesh itself is
+ * left as it is. Null if no triangle was in the box. Used to hang more of
+ * a piece the model has only in one place (a paper lantern).
+ */
+export function copyPart(mesh: Mesh, frame: Object3D, box: Box): BufferGeometry | null {
+  const { source, split, toFrame } = sortTriangles(mesh, frame, box);
+  if (split.length === 0) return null;
+  return pick(source, split).applyMatrix4(toFrame);
+}
+
+/** The mesh's triangles (of a non-indexed copy of its geometry), sorted into those with their centres in the box and the rest. */
+function sortTriangles(mesh: Mesh, frame: Object3D, box: Box): { source: BufferGeometry; kept: number[]; split: number[]; toFrame: Matrix4 } {
   frame.updateMatrixWorld(true);
   const toFrame = new Matrix4().copy(frame.matrixWorld).invert().multiply(mesh.matrixWorld);
   const source = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry;
@@ -40,15 +66,7 @@ export function splitOff(mesh: Mesh, frame: Object3D, box: Box, name: string): M
     c.fromBufferAttribute(position, tri * 3 + 2).applyMatrix4(toFrame);
     (inBox(a.add(b).add(c).divideScalar(3)) ? split : kept).push(tri);
   }
-  if (split.length === 0) return null;
-  mesh.geometry = pick(source, kept);
-  const part = new Mesh(pick(source, split), mesh.material);
-  part.name = name;
-  part.position.copy(mesh.position);
-  part.quaternion.copy(mesh.quaternion);
-  part.scale.copy(mesh.scale);
-  mesh.parent?.add(part);
-  return part;
+  return { source, kept, split, toFrame };
 }
 
 /** A new geometry of just these triangles (of a non-indexed geometry), every attribute carried over. */
