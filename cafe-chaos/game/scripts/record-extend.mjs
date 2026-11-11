@@ -13,8 +13,8 @@
  * The theme plays under it. (The café's own sounds play in the headset;
  * the emulator's recording has no way to capture them.)
  *
- * So it fits a short clip, a seated guest stays 22 seconds here (a
- * minute in play).
+ * So it fits a short clip, the seated guest stays until the café has
+ * grown, then gets up a few seconds later (a minute in play).
  *
  * Usage: dev server running (`npm run dev`), then `npm run record:extend`.
  * Output: artifacts/extend.mp4
@@ -59,7 +59,7 @@ const h = await startHeadset({
       system.timeScale = timeScale;
       guests.spawnSeconds = [1.3, 1.9];
       guests.patienceSeconds = 90;
-      guests.seatedSeconds = 22;
+      guests.seatedSeconds = 600;
       system.replace();
     }, 1 / h.speedUp);
   },
@@ -164,7 +164,7 @@ async function seatAt(x, z, linger = 700) {
 await pause(3000);
 
 // 2. Lean over the right side: the line by the door, running toward the viewer, a dial over each head.
-const lineView = await toWorld([0.3, 0.3, 0.5]);
+const lineView = await toWorld([0.4, 0.2, 0.34]);
 await h.head(P(lineView), P(await toWorld([0.48, 0.04, 0.1])), 2000);
 await until(() => window.__cafe.guests.line.filter((g) => g.state === 'queued' && !g.walk).length >= 3);
 await pause(1500);
@@ -191,7 +191,9 @@ await pause(1500);
     }, guest.id)));
     if (process.env.NORECORD) process.exit(1);
   }
-  await pause(1800);
+  // Lean in to the lit guest, so the ring and the glow read.
+  await h.head(P(add(guest.grip, [0.1, 0.1, 0.12])), P(guest.grip), 1200);
+  await pause(1600);
   await reach(450, guest.grip);
   await pause(150);
   await pinch(1);
@@ -204,10 +206,10 @@ await pause(1500);
 // 4. The plaque in front: it lights up as the hand comes close; a pinch on it, and the café grows.
 {
   const grip = await page.evaluate(() => window.__cafe.unlocks.annexPlaque.grip.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
-  await h.head(SEAT, P(add(grip, [0.05, 0, -0.08])), 1500);
+  await h.head(P(add(grip, [0.17, 0.15, 0.02])), P(grip), 1500);
   await reach(1300, add(grip, [0.01, 0.03, 0.02]), true);
   await until(() => !!window.__cafe.unlocks.hovered);
-  await pause(1600);
+  await pause(1800);
   await reach(400, grip);
   await pause(150);
   await pinch(1);
@@ -218,11 +220,20 @@ await pause(1500);
   await pause(2600);
 }
 
-// 5. The seated guest, done: out through the one exit, in the new outer wall.
-await h.head(SEAT, P(await toWorld([-0.38, 0.03, 0.06])), 1500);
-await until(() => window.__cafe.guests.hoppedOff >= 1);
-await until(() => !window.__cafe.guests.guests.some((g) => g.state === 'leaving' && g.side === 'exit'));
-await pause(1200);
+// 5. The seated guest, done: it gets up and walks across the wider room and out through the one exit; the eyes follow it.
+await page.evaluate(() => { const { guests } = window.__cafe; const g = guests.guests.find((x) => x.state === 'seated'); if (g) guests.seatedSeconds = g.seatedFor + 2.5; });
+{
+  const where = () => page.evaluate(() => {
+    const { guests, system } = window.__cafe;
+    const g = guests.guests.find((x) => x.state === 'hop' || (x.state === 'leaving' && x.side === 'exit'));
+    return g ? system.cafe.localToWorld(g.actor.root.position.clone()).toArray() : null;
+  });
+  const seated = await page.evaluate(() => { const { guests, system } = window.__cafe; const g = guests.guests.find((x) => x.state === 'seated'); return g ? system.cafe.localToWorld(g.actor.root.position.clone()).toArray() : null; });
+  if (seated) await h.head(SEAT, P(seated), 1300);
+  await until(() => window.__cafe.guests.hoppedOff >= 1);
+  for (let at = await where(); at; at = await where()) await h.head(SEAT, P(at), 450);
+  await pause(1000);
+}
 
 // 6. Sit back: the whole café, one room, wider.
 await h.head(SEAT, { x: TABLE.x, y: TABLE.y + 0.1, z: TABLE.z }, 1800);
