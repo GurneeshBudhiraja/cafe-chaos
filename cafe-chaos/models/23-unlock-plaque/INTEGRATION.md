@@ -1,35 +1,35 @@
 # `unlock-plaque` — the unlock plaque, and `unlock-icons.png`
 
-A small standing **stone tablet** — a rounded granite slab set in a low ring of gravel with a few
-pebbles, like a garden marker — with a flat face the game draws on and a brass padlock hanging
-from a ring at its top. It stands in the gravel in front of the café (the shell has
-`PlaqueSpot-1 … 6` along the front strip, 10 cm apart) and is easy to pinch.
+A **flat stone lying in the gravel** — the same kind of stone as the garden's stepping stones —
+with a cream face set into its flat top for the game to draw on, and a brass padlock lying on it,
+its shackle hooked through a little brass staple at the stone's back edge. It sits in the gravel in
+front of the café (the shell has `PlaqueSpot-1 … 6` along the front strip, 10 cm apart) and is easy
+to pinch.
 
-- File: `unlock-plaque.glb`, ~840 triangles, 4 materials (`CafeStone`, `CafeGravel`,
-  `CafeBarPalette`, `PlaqueFace`), ~480 KB with textures packed (the game de-duplicates the
-  shell's materials by name).
-- Size: 5.2 cm wide × 4.65 cm tall × 4.1 cm deep (the gravel ring); the tablet itself 4.0 × 4.4 ×
-  1.1 cm; origin at the base's underside centre; **front faces +Z** (toward the player).
+- File: `unlock-plaque.glb`, ~830 triangles, 3 materials (`CafeStone`, `CafeBarPalette`,
+  `PlaqueFace`), ~480 KB with textures packed (the game de-duplicates the shell's materials by name).
+- Size: 6.2 cm wide × 4.8 cm deep × 1.1 cm tall (1.6 cm to the top of the padlock); origin at the
+  stone's underside centre; **front faces +Z** (toward the player). Set it on a `PlaqueSpot` with
+  no further transform.
 
 ## Nodes
 
 | Node | What |
 |---|---|
-| `Base`, `Pebbles` | the gravel ring and pebbles |
-| `Plaque` | pivot at the tablet's foot; the `Unlock` hop moves this |
-| `PlaqueStone` | the granite slab |
+| `Plaque` | the stone and everything on it; the `Unlock` hop moves this |
+| `PlaqueStone` | the flat stone |
 | `FaceRim` | a thin dark border around the face |
-| `PlaqueFace` | a light stone-cream quad on the front, 2.6 × 2.65 cm, **UV 0..1 across it** (u left→right, v bottom→top): draw the icon and price here (a 256 px canvas texture on a cloned `PlaqueFace` material) |
-| `Ring` | the brass ring at the top |
-| `Padlock` → `PadlockBody`, `Shackle` | the lock hanging from the ring; `Shackle` pivots |
-| `Grip` | the pinch point on the tablet's front (0, 0.025, 0.006) |
+| `PlaqueFace` | a cream quad lying on the stone's flat top, 3.1 × 2.3 cm, **UV 0..1 across it** (u left→right, v from the player's side to the back): draw the icon and price here (a 256 px canvas texture on a cloned `PlaqueFace` material). Keep the back fifth clear while locked: the padlock lies there |
+| `Staple` | the brass staple at the back edge |
+| `Padlock` → `PadlockBody`, `Shackle` | the padlock lying on the face's back edge; `Shackle` pivots |
+| `Grip` | the pinch point, just above the stone's centre (0, 0.013, 0.003) |
 
 ## Clips
 
 | Clip | Length | Use |
 |---|---|---|
-| `Locked` | 3 s loop | the stone is still; the padlock swings a little on its ring |
-| `Unlock` | 0.8 s, play once | the shackle pops open, the padlock drops and shrinks away, the stone gives a little hop |
+| `Locked` | 3 s loop | the stone is still; the padlock rocks a little on its staple |
+| `Unlock` | 0.8 s, play once | the shackle pops open, the padlock flips off toward the player and shrinks away, the stone gives a little hop |
 | `Owned` | still | padlock gone, plaque at rest — play this (or set `Padlock` scale 0) for bought items |
 
 Play `Unlock` once with `clampWhenFinished`, then switch to `Owned`.
