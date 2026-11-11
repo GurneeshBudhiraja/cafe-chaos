@@ -445,6 +445,10 @@ room has a desk-height table), from a running dev server:
   glowing seat, another giving up, the first leaving after its meal), with
   the theme mixed in, to `artifacts/guests.mp4`. Timers are shortened there
   so it fits one video.
+- `npm run record:extend`: this round as the headset shows it: the line
+  turned toward the viewer, a guest lighting up as the hand comes close
+  and seated, the plaque lit and pressed and the café growing wider, and
+  the seated guest leaving by the one exit, to `artifacts/extend.mp4`.
 - `npm run record:faces`: a short, close clip of how a held guest takes
   it: surprised, calm, its eyes on the seat below, puzzled up at the face,
   pleased once seated; and a second one going from calm to uneasy to

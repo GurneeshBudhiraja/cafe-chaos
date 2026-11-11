@@ -16,7 +16,8 @@
     "record:handles": "node scripts/record-handles.mjs",
     "record:guests": "node scripts/record-guests.mjs",
     "record:exits": "node scripts/record-exits.mjs",
-    "record:faces": "node scripts/record-faces.mjs"
+    "record:faces": "node scripts/record-faces.mjs",
+    "record:extend": "node scripts/record-extend.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",
