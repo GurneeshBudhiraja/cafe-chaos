@@ -79,8 +79,50 @@ three pictures from the game with a line each.
 - **7. The video.** The whole game as the headset shows it, start to
   closing, sent once phases 1 to 6 hold up.
 
+- **8. The room matters.** (Added after checking the game against the
+  rules.) Passthrough has to change the experience: guests arrive across
+  the player's real table from its edge and leave the same way, so the
+  café is a place on this table, not a scene in the air.
+- **9. Sending it in.** A draft of the write-up (tagline, description,
+  how hands are used, target launch date), and what hosting needs.
+
 After every phase: stop, re-read the result against this plan, write
 what was learned in the log, then go on.
+
+## The gaps against the rules, and where each is closed
+
+Each gap is carried by a phase, and every phase ends with a short list
+for the headset (`docs/HEADSET-CHECKS.md`), since four of these cannot
+be confirmed on this machine.
+
+| Gap | Closed in | Confirmed by |
+| --- | --- | --- |
+| Picking up feels bad | 3: tolerance, anchoring, cues on the hand | Headset |
+| Onboarding is text; How to play is a wall of it | 4: three done steps, pictures | Screenshots, then headset |
+| Passthrough does not matter | 8: guests cross the real table | Headset |
+| A run can pass ten minutes | 1: the ramp | Scripted players |
+| Buttons under 22 mm, pressed by pinch | 2: the side board, fingertip press, on every card | Measured in screenshots |
+| Reach near the 60 cm limit | 2: the board sits inside it | Measured |
+| Frame rate not measured since the new systems | 5: probe-perf here; the number on the headset | Headset |
+| Only one room tried | 5: the placement check in the emulator's other rooms | Headset, two or three tables |
+| Pause and save when the headset comes off | 1 (done), 2: the Pause button | Headset |
+| Nothing visibly grows between sessions | 1: staff stay hired; 6: guests with wishes | Play |
+| Not hosted, no video, no write-up | 7, 9 | The user |
+
+## Assets already made, to be used
+
+Nothing new needs modelling for this round.
+
+- `demand-bubble.glb`, `mood-ring.glb`: the wish card and its mood (6).
+- `25-music`, `accessories.glb` (the guitar): the singer and the
+  listener (6).
+- `window-booth.glb`, `quiet-corner.glb`, the door and the counter of
+  the shell: the places wishes name (6).
+- `coin.glb`: coins flying to the side board when a guest pays (2).
+- `seat-glow.glb`: the seat a let-go guest will fly to (3).
+- The six barista models: the staff row on the side board shows who is
+  hired and who is still to hire (2).
+- The annex, the stone plaques and their icon sheet are no longer used.
 
 ## What the rules and Meta's guidance ask for
 
