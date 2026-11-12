@@ -37,10 +37,10 @@ import { MoodSystem } from './systems/mood-system.js';
 import { RenderBudgetSystem } from './systems/render-budget-system.js';
 import { ScoreSystem } from './systems/score-system.js';
 import { SoundSystem } from './systems/sound-system.js';
-import { UnlockSystem } from './systems/unlock-system.js';
+import { ShopSystem } from './systems/shop-system.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(ScoreSystem).registerSystem(UnlockSystem).registerSystem(GameSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
+  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(ScoreSystem).registerSystem(ShopSystem).registerSystem(GameSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
   const system = world.getSystem(CafeSystem)!;
   const lights = setUpLighting(world, system.cafe);
   const mood = world.getSystem(MoodSystem)!;
@@ -50,7 +50,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   const guests = world.getSystem(GuestSystem)!;
   const baristas = world.getSystem(BaristaSystem)!;
   const ambience = world.getSystem(AmbienceSystem)!;
-  const unlocks = world.getSystem(UnlockSystem)!;
+  const shop = world.getSystem(ShopSystem)!;
   const sound = world.getSystem(SoundSystem)!;
   const game = world.getSystem(GameSystem)!;
   const score = world.getSystem(ScoreSystem)!;
@@ -59,5 +59,5 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   const theme = playTheme(world);
 
   // Dev only: lets the check and recording scripts find the world, the café, its lights, the mood, the hold, the handles and the surface finder.
-  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, budget, guests, baristas, unlocks, sound, ambience, theme, game, score, findSurfaceSpot };
+  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, budget, guests, baristas, shop, sound, ambience, theme, game, score, findSurfaceSpot };
 });

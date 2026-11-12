@@ -1,31 +1,34 @@
 /**
- * What the café keeps between sessions: the money in the bank, what has
- * been bought, whether the walkthrough has been seen, and the best shift.
- * Kept in the browser's local storage on the headset; where that is not
- * available (a private window) it lasts only as long as the page.
+ * What the café keeps between sessions: the money in the bank, how many
+ * servers have been hired, whether the first run's teaching has been
+ * seen, and the records (the longest the café stayed open, the most
+ * coins taken in one run). Kept in the browser's local storage on the
+ * headset; where that is not available (a private window) it lasts only
+ * as long as the page.
  *
  * Test mode (`?test` in the address, used by the check and recording
  * scripts) never reads or writes it: every run starts the same.
  */
 
-import type { ShopItem } from './rules.js';
-
 export interface Save {
   bank: number;
-  owned: ShopItem['id'][];
+  /** Servers hired beyond the first (0 to HIRE_PRICES.length). */
+  hires: number;
   tutorialDone: boolean;
-  /** The most coins taken in one shift. */
-  best: number;
-  shifts: number;
+  /** The longest the café has stayed open (seconds). */
+  bestSeconds: number;
+  /** The most coins taken in one run. */
+  bestCoins: number;
+  runs: number;
 }
 
-const KEY = 'cafe-chaos/save/v1';
+const KEY = 'cafe-chaos/save/v2';
 
 /** True when the page was opened for the checks and recordings (`?test`). */
 export const TEST_MODE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('test');
 
 export function freshSave(): Save {
-  return { bank: 0, owned: [], tutorialDone: false, best: 0, shifts: 0 };
+  return { bank: 0, hires: 0, tutorialDone: false, bestSeconds: 0, bestCoins: 0, runs: 0 };
 }
 
 export function loadSave(): Save {

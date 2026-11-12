@@ -41,7 +41,7 @@ export class ScoreSystem extends createSystem({}) {
   up = 0;
   down = 0;
   servedGuests = 0;
-  /** Seconds left in the shift (GameSystem keeps it); shown on the board. */
+  /** Seconds the café has been open this run (GameSystem keeps it); shown on the board. */
   clock = 0;
   /** True during a shift: outcomes count. */
   running = false;
@@ -63,8 +63,8 @@ export class ScoreSystem extends createSystem({}) {
     this.board.set((ctx, w, h) => this.drawBoard(ctx, w, h));
   }
 
-  /** A fresh shift: happiness full, nothing taken yet. */
-  startShift(): void {
+  /** A fresh run: happiness full, nothing taken yet. */
+  startRun(): void {
     this.happiness = HAPPINESS.start;
     this.takings = 0;
     this.up = 0;
@@ -109,7 +109,7 @@ export class ScoreSystem extends createSystem({}) {
     this.player.head.getWorldPosition(this.head);
     if (!board.update(delta, this.head)) return;
     // Draw it again when what it shows has changed (the clock by the second).
-    const now = `${Math.round(this.happiness)}|${this.bank}|${this.takings}|${Math.ceil(this.clock)}|${this.up}|${this.down}`;
+    const now = `${Math.round(this.happiness)}|${this.bank}|${this.takings}|${Math.floor(this.clock)}|${this.up}|${this.down}`;
     if (now !== this.shown) {
       this.shown = now;
       board.paint();
@@ -147,8 +147,8 @@ export class ScoreSystem extends createSystem({}) {
     write(ctx, `${this.bank}`, w * 0.52, mid - h * 0.02, h * 0.24, { weight: 800, align: 'left' });
     if (this.running) write(ctx, `${this.takings >= 0 ? '+' : ''}${this.takings} tonight`, w * 0.52, mid + h * 0.19, h * 0.09, { weight: 600, color: INK.inkSoft, align: 'left' });
     // The clock.
-    const left = Math.max(0, Math.ceil(this.clock));
-    write(ctx, this.running ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '—', w * 0.74, mid, h * 0.24, { weight: 800, color: left <= 20 && this.running ? INK.coral : INK.ink });
+    const left = Math.max(0, Math.floor(this.clock));
+    write(ctx, this.running ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '—', w * 0.74, mid, h * 0.24, { weight: 800, color: INK.ink });
     // The thumbs.
     thumbCount(ctx, w * 0.865, mid - h * 0.12, h * 0.1, INK.mint, '▲', this.up);
     thumbCount(ctx, w * 0.865, mid + h * 0.13, h * 0.1, INK.coral, '▼', this.down);

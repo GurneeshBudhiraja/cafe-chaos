@@ -171,6 +171,8 @@ export class GuestSystem extends createSystem({}) {
   spawnSeconds: [number, number] = [...SPAWN_SECONDS];
   /** In the game a guest gets down once it has eaten for this long, whatever `seatedSeconds` says, so quick service frees the table sooner (game/rules.ts MEAL_SECONDS). */
   mealSeconds = Infinity;
+  /** True while the game is paused: hands take and move nothing. */
+  handsOff = false;
   /** The gaps between arrivals are this many times longer (the game paces arrivals to the staff: game/rules.ts ARRIVAL_PACE). */
   spawnPace = 1;
   /** Set false to stop new arrivals. */
@@ -471,6 +473,7 @@ export class GuestSystem extends createSystem({}) {
 
   /** Pinches pick guests up, carry them, and let them go. */
   private hands(delta: number): void {
+    if (this.handsOff) return;
     const hold = this.holdSystem;
     this.targets.fill(null);
     if (!hold || !this.world.renderer.xr.isPresenting) {

@@ -28,7 +28,7 @@ import { CafeSystem } from './cafe-system.js';
 import { GameSystem } from './game-system.js';
 import { ScoreSystem } from './score-system.js';
 import { GuestSystem } from './guest-system.js';
-import { UnlockSystem } from './unlock-system.js';
+import { ShopSystem } from './shop-system.js';
 
 /** How loud it all is (0 to 1), and each group within that. The theme plays at 5%; these sit just under and around it. */
 export const SOUND = { master: 0.32, room: 0.5, bar: 0.7, door: 0.8, garden: 0.55, hands: 1 };
@@ -53,7 +53,7 @@ export class SoundSystem extends createSystem({}) {
   private cafe!: CafeSystem;
   private guests: GuestSystem | null = null;
   private baristas: BaristaSystem | null = null;
-  private unlocks: UnlockSystem | null = null;
+  private shop: ShopSystem | null = null;
   private readonly next: Record<keyof typeof EVERY, number> = { bubble: 0, espresso: 8, clink: 3, trickle: 0, cricket: 2 };
   private seen = { arrived: 0, pickedUp: 0, seated: 0, gaveUp: 0, served: 0, purchases: 0, refused: 0, scored: 0, clicks: 0, closed: false, placements: -1 };
   private score: ScoreSystem | null = null;
@@ -66,7 +66,7 @@ export class SoundSystem extends createSystem({}) {
     this.cafe = this.world.getSystem(CafeSystem)!;
     this.guests = this.world.getSystem(GuestSystem) ?? null;
     this.baristas = this.world.getSystem(BaristaSystem) ?? null;
-    this.unlocks = this.world.getSystem(UnlockSystem) ?? null;
+    this.shop = this.world.getSystem(ShopSystem) ?? null;
     this.score = this.world.getSystem(ScoreSystem) ?? null;
     this.game = this.world.getSystem(GameSystem) ?? null;
     const xr = this.world.renderer.xr;
@@ -226,14 +226,13 @@ export class SoundSystem extends createSystem({}) {
       this.emit('tray', seat ? (seat.meal ?? seat.position) : PLACES.room, SOUND.bar, 0.6, trayDown);
       seen.served = baristas.servedCount;
     }
-    // The shop: a purchase rings the bells; a pinch the bank cannot pay for gets a knock and an "uh-uh".
-    const unlocks = this.unlocks;
-    if (unlocks) {
-      const where = unlocks.lastPressed ? this.cafe.cafe.worldToLocal(unlocks.lastPressed.getWorldPosition(new Vector3())) : PLACES.room;
-      if (unlocks.purchases > seen.purchases) this.emit('unlock', where, SOUND.hands, 1.6, unlock);
-      if (unlocks.refused > seen.refused) this.emit('refuse', where, SOUND.hands, 0.4, refuse);
-      seen.purchases = unlocks.purchases;
-      seen.refused = unlocks.refused;
+    // Hiring: a new server rings the bells; a press the bank cannot pay for gets a knock and an "uh-uh".
+    const shop = this.shop;
+    if (shop) {
+      if (shop.purchases > seen.purchases) this.emit('unlock', PLACES.room, SOUND.hands, 1.6, unlock);
+      if (shop.refused > seen.refused) this.emit('refuse', PLACES.room, SOUND.hands, 0.4, refuse);
+      seen.purchases = shop.purchases;
+      seen.refused = shop.refused;
     }
     // The score: coins for a happy guest, a grumble for one who stormed out.
     const log = this.score?.log ?? [];
