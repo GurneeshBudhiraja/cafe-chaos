@@ -14,22 +14,15 @@
  * - Thumbs. Each happy guest leaves a thumbs up over its head with its
  *   coins; each unhappy one a thumbs down. Both are counted.
  *
- * The scoreboard is a small paper card standing over the back of the café
- * (it faces the player): the happiness meter with its face, the bank and
- * the shift's takings, the shift clock, and the thumbs.
+ * The numbers are shown on the side board (BoardSystem).
  *
- * Scoring only counts while `running` (a shift); the walkthrough and the
- * title screen keep it still.
+ * Scoring only counts while `running` (a run); the first run's teaching
+ * and the title screen keep it still.
  */
 
-import { createSystem, Vector3 } from '@iwsdk/core';
+import { createSystem } from '@iwsdk/core';
 import { HAPPINESS, LOSSES, PAY_TIERS } from '../game/rules.js';
-import { coin, INK, moodColour, moodFace, Panel, roundRect, write } from '../ui/panel.js';
-import { CafeSystem } from './cafe-system.js';
 import { GuestSystem, type Outcome } from './guest-system.js';
-
-/** The scoreboard's size and where it stands (café space, metres). */
-const BOARD = { width: 0.24, height: 0.062, position: [0.1, 0.27, -0.2] as const };
 
 export class ScoreSystem extends createSystem({}) {
   /** The café's happiness, 0 to HAPPINESS.max. */
@@ -47,20 +40,11 @@ export class ScoreSystem extends createSystem({}) {
   running = false;
   /** Every scored outcome this shift, in order (for the checks). */
   readonly log: { kind: Outcome['kind']; share: number; coins: number; happiness: number; tier?: string }[] = [];
-  readonly board = new Panel('Scoreboard', BOARD.width, BOARD.height);
   private guests!: GuestSystem;
-  private cafe!: CafeSystem;
-  private readonly head = new Vector3();
-  /** What the board last showed, so it is drawn again only when something changes. */
-  private shown = '';
 
   init(): void {
-    this.cafe = this.world.getSystem(CafeSystem)!;
     this.guests = this.world.getSystem(GuestSystem)!;
     this.guests.outcomes.push((outcome) => this.score(outcome));
-    this.board.mesh.position.set(...BOARD.position);
-    this.cafe.cafe.add(this.board.mesh);
-    this.board.set((ctx, w, h) => this.drawBoard(ctx, w, h));
   }
 
   /** A fresh run: happiness full, nothing taken yet. */
@@ -104,18 +88,6 @@ export class ScoreSystem extends createSystem({}) {
     this.log.push({ kind: outcome.kind, share: outcome.share, coins: 0, happiness: -loss.happiness });
   }
 
-  update(delta: number): void {
-    const board = this.board;
-    this.player.head.getWorldPosition(this.head);
-    if (!board.update(delta, this.head)) return;
-    // Draw it again when what it shows has changed (the clock by the second).
-    const now = `${Math.round(this.happiness)}|${this.bank}|${this.takings}|${Math.floor(this.clock)}|${this.up}|${this.down}`;
-    if (now !== this.shown) {
-      this.shown = now;
-      board.paint();
-    }
-  }
-
   private earn(coins: number): void {
     this.bank = Math.max(0, this.bank + coins);
     this.takings += coins;
@@ -124,43 +96,4 @@ export class ScoreSystem extends createSystem({}) {
   private cheer(amount: number): void {
     this.happiness = Math.max(0, Math.min(HAPPINESS.max, this.happiness + amount));
   }
-
-  /** The scoreboard: happiness (face and meter), bank and takings, clock, thumbs. */
-  private drawBoard(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    const mood = this.happiness / HAPPINESS.max;
-    const mid = h / 2;
-    const r = h * 0.2;
-    // Happiness: a face and a meter.
-    moodFace(ctx, w * 0.1, mid, r, mood);
-    const bar = { x: w * 0.165, y: mid - h * 0.07, w: w * 0.25, h: h * 0.14 };
-    roundRect(ctx, bar.x, bar.y, bar.w, bar.h, bar.h / 2);
-    ctx.fillStyle = '#e6d3b3';
-    ctx.fill();
-    if (mood > 0.005) {
-      roundRect(ctx, bar.x, bar.y, Math.max(bar.h, bar.w * mood), bar.h, bar.h / 2);
-      ctx.fillStyle = moodColour(mood);
-      ctx.fill();
-    }
-    write(ctx, 'HAPPINESS', bar.x + bar.w / 2, mid - h * 0.17, h * 0.1, { weight: 700, color: INK.inkSoft });
-    // The bank, and this shift's takings under it.
-    coin(ctx, w * 0.49, mid, r * 0.8);
-    write(ctx, `${this.bank}`, w * 0.52, mid - h * 0.02, h * 0.24, { weight: 800, align: 'left' });
-    if (this.running) write(ctx, `${this.takings >= 0 ? '+' : ''}${this.takings} tonight`, w * 0.52, mid + h * 0.19, h * 0.09, { weight: 600, color: INK.inkSoft, align: 'left' });
-    // The clock.
-    const left = Math.max(0, Math.floor(this.clock));
-    write(ctx, this.running ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '—', w * 0.74, mid, h * 0.24, { weight: 800, color: INK.ink });
-    // The thumbs.
-    thumbCount(ctx, w * 0.865, mid - h * 0.12, h * 0.1, INK.mint, '▲', this.up);
-    thumbCount(ctx, w * 0.865, mid + h * 0.13, h * 0.1, INK.coral, '▼', this.down);
-  }
-}
-
-/** A small coloured disc with an arrow in it, and a count beside it. */
-function thumbCount(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, colour: string, glyph: string, count: number): void {
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = colour;
-  ctx.fill();
-  write(ctx, glyph, x, y + r * 0.05, r * 1.1, { weight: 800, color: '#fffaf0' });
-  write(ctx, `${count}`, x + r * 1.6, y, r * 1.6, { weight: 800, align: 'left' });
 }

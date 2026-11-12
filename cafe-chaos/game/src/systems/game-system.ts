@@ -36,6 +36,7 @@ import { coin, INK, moodFace, Panel, paragraph, write, type Button } from '../ui
 import { castLoaded } from '../guests/actor.js';
 import { randomLook } from '../guests/cast.js';
 import { BaristaSystem } from './barista-system.js';
+import { BoardSystem, clockText } from './board-system.js';
 import { CafeSystem } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
 import { HoldSystem } from './hold-system.js';
@@ -60,12 +61,6 @@ interface Step {
   next?: boolean;
 }
 
-/** m:ss. */
-export function clockText(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
 export class GameSystem extends createSystem({}) {
   phase: GamePhase = 'waiting';
   /** The first run's step (0-based) while in it. */
@@ -84,6 +79,7 @@ export class GameSystem extends createSystem({}) {
   score!: ScoreSystem;
   baristas!: BaristaSystem;
   shop!: ShopSystem;
+  board!: BoardSystem;
   private cafe!: CafeSystem;
   private hold: HoldSystem | null = null;
   private readonly previous: Record<Hand, boolean> = { left: false, right: false };
@@ -96,6 +92,9 @@ export class GameSystem extends createSystem({}) {
   /** The café's own speed, kept while paused. */
   private speed = 1;
   private sinceSave = 0;
+  /** Every card with buttons, and the button lit on each this frame. */
+  private panels: Panel[] = [];
+  private readonly hovers: (string | null)[] = [];
 
   init(): void {
     this.cafe = this.world.getSystem(CafeSystem)!;
@@ -103,12 +102,15 @@ export class GameSystem extends createSystem({}) {
     this.baristas = this.world.getSystem(BaristaSystem)!;
     this.shop = this.world.getSystem(ShopSystem)!;
     this.score = this.world.getSystem(ScoreSystem)!;
+    this.board = this.world.getSystem(BoardSystem)!;
     this.hold = this.world.getSystem(HoldSystem) ?? null;
     for (const panel of [this.card, this.coach]) this.cafe.cafe.add(panel.mesh);
     this.card.mesh.position.set(...CARD.position);
     this.coach.mesh.position.set(...COACH.position);
     // A pinch on a card is the card's, never the café's or a guest's.
     this.hold?.claims.push((point) => this.card.covers(point) || this.coach.covers(point));
+    this.panels = [this.card, this.coach, this.board.panel];
+    this.hovers.length = this.panels.length;
     this.shop.bought.push(() => this.keep());
     if (TEST_MODE) {
       this.phase = 'test';
@@ -159,7 +161,10 @@ export class GameSystem extends createSystem({}) {
     this.phase = 'title';
     this.quiet();
     this.coach.show(false);
-    this.score.board.show(false);
+    this.score.clock = 0;
+    this.board.best = this.save.bestSeconds;
+    this.board.live = false;
+    this.board.panel.show(true);
     this.card.set(
       (ctx, w, h) => {
         write(ctx, 'Café Chaos', w / 2, h * 0.2, h * 0.15, { weight: 800, font: 'Georgia, serif' });
@@ -231,7 +236,9 @@ export class GameSystem extends createSystem({}) {
     this.pace();
     this.score.startRun();
     this.score.clock = 0;
-    this.score.board.show(true);
+    this.board.best = this.save.bestSeconds;
+    this.board.live = true;
+    this.board.panel.show(true);
   }
 
   /** Stop everything in the café where it is, and save. No-op unless a run is on. */
@@ -267,6 +274,7 @@ export class GameSystem extends createSystem({}) {
   toClosed(): void {
     this.unpause();
     this.phase = 'closed';
+    this.board.live = false;
     this.quiet();
     const s = this.score;
     const seconds = this.clock;
@@ -344,8 +352,6 @@ export class GameSystem extends createSystem({}) {
     this.mark = { pickedUp: this.guests.pickedUp, seated: this.guests.seated, served: this.baristas.servedCount };
     const step = this.steps[index];
     const last = index === this.steps.length - 1;
-    // The board comes up when the steps talk about it.
-    this.score.board.show(index >= 3);
     const bw = this.coach.width;
     const bh = this.coach.height;
     const buttons: Button[] = [];
@@ -394,29 +400,42 @@ export class GameSystem extends createSystem({}) {
 
   // ---------------------------------------------------------------- buttons
 
-  /** A hand over a button lights it; a pinch closing on it presses it. */
+  /**
+   * Buttons, on the cards and the side board: an index fingertip near
+   * one lights it, and pushing through the card's face presses it; a
+   * pinch closing on one presses it too. A hand carrying a guest or the
+   * café presses nothing.
+   */
   private press(): void {
     const hold = this.hold;
     if (!hold) return;
-    let hoverCard: string | null = null;
-    let hoverCoach: string | null = null;
+    const panels = this.panels;
+    for (let i = 0; i < panels.length; i++) this.hovers[i] = null;
     for (const hand of HANDS) {
       const pinch = hold.pinch[hand];
       const fresh = pinch.closed && !this.previous[hand];
       this.previous[hand] = pinch.closed;
-      if (pinch.gap === Infinity || pinch.ghost || hold.holding.includes(hand) || this.guests.carriedBy(hand)) continue;
-      const onCard = this.card.hit(pinch.point);
-      const onCoach = onCard ? null : this.coach.hit(pinch.point);
-      if (onCard) hoverCard = onCard.id;
-      if (onCoach) hoverCoach = onCoach.id;
-      const button = onCard ?? onCoach;
-      if (fresh && button) {
-        (onCard ? this.card : this.coach).press(button.id);
-        this.click(button.id);
+      const busy = pinch.gap === Infinity || pinch.ghost || hold.holding.includes(hand) || !!this.guests.carriedBy(hand);
+      const tip = hold.tip[hand];
+      let done = false;
+      for (let i = 0; i < panels.length; i++) {
+        const panel = panels[i];
+        // The fingertip: every card keeps track of it, so a press needs a push through this card's own face.
+        const touch = panel.touch(hand, busy || !tip.tracked ? null : tip.point);
+        if (busy || done) continue;
+        const pinched = panel.hit(pinch.point);
+        const over = touch.over ?? pinched;
+        if (over) this.hovers[i] = over.id;
+        const button = touch.pressed ?? (fresh ? pinched : null);
+        if (button) {
+          panel.press(button.id);
+          this.click(button.id);
+          // One press a hand a frame, and the cards may have changed under it.
+          done = true;
+        }
       }
     }
-    this.card.setHover(hoverCard);
-    this.coach.setHover(hoverCoach);
+    for (let i = 0; i < panels.length; i++) panels[i].setHover(this.hovers[i]);
   }
 
   /** What a button does (the checks call this directly too). */

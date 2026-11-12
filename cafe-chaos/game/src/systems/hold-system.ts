@@ -60,6 +60,11 @@ export class HoldSystem extends createSystem({}) {
     left: { point: new Vector3(), gap: Infinity, closed: false, lost: 0, native: false, nativeSeen: false, found: 0, ghost: false },
     right: { point: new Vector3(), gap: Infinity, closed: false, lost: 0, native: false, nativeSeen: false, found: 0, ghost: false },
   };
+  /** Each hand's index fingertip (world), for pressing buttons; `tracked` false when the hand is not seen. */
+  readonly tip: Record<Hand, { point: Vector3; tracked: boolean }> = {
+    left: { point: new Vector3(), tracked: false },
+    right: { point: new Vector3(), tracked: false },
+  };
   /** The café's bounds in its own space at scale 1 (set once it is built). */
   readonly bounds = new Box3();
   /** A pinch any of these claims is not taken here (it is on a handle, or on a guest). */
@@ -157,6 +162,8 @@ export class HoldSystem extends createSystem({}) {
   private read(hand: Hand, delta: number): void {
     const p = this.pinch[hand];
     const source = this.world.input.xr.getPrimaryInputSource(hand);
+    const tip = this.tip[hand];
+    tip.tracked = readJoint(source, this.xrFrame, this.xrManager.getReferenceSpace(), this.player.matrixWorld, 'index-finger-tip', tip.point);
     const gap = readPinchPoint(source, this.xrFrame, this.xrManager.getReferenceSpace(), this.player.matrixWorld, this.raw, this.scratch);
     if (gap === Infinity) {
       // Out of tracking: keep the last pinch for a moment, then count the hand as gone.

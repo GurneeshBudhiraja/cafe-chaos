@@ -1,23 +1,31 @@
 /**
- * A panel: a paper card that floats over the café and turns to face the
- * player, drawn on a canvas, with buttons pressed by pinching on them.
- * The title screen, the rules, the walkthrough's coach card, the
- * end-of-shift card and the scoreboard are all panels.
+ * A panel: a paper card that turns to face the player, drawn on a
+ * canvas, with buttons. The title screen, How to play, the first run's
+ * coach card, the pause and closing cards and the side board are all
+ * panels.
  *
  * The look is the café's: cream paper, a walnut rim, warm brown ink, and
  * buttons like little lacquered tags (amber for the main one, cream for
- * the rest). A hand over a button lights it up; a pinch closing on it
- * presses it (a quick dip), as a pinch on a guest picks it up.
+ * the rest).
  *
- * Sizes are in the café's space (metres before the café is scaled), so a
- * panel grows and shrinks with the café, as everything else does.
+ * Buttons are pressed with a fingertip, as Meta's guidance for direct
+ * touch asks: the index fingertip coming near lights the button, and
+ * pushing it through the card's face presses it (a quick dip). It must
+ * come back out before it can press again, and a finger that arrives
+ * from behind the card presses nothing. A pinch on a button presses it
+ * too, for players who reach for it that way.
+ *
+ * A panel's place is in the café's space, so it moves with the café; its
+ * size is in real metres and stays the same however small the café is
+ * made, so buttons never shrink below what a finger can press (22 mm).
  */
 
 import { CanvasTexture, DoubleSide, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, Vector3 } from '@iwsdk/core';
 
 export interface Button {
   id: string;
-  label: string;
+  /** Its words; a button that draws itself (`draw`) may have none. */
+  label?: string;
   /** Where it is on the canvas (pixels). */
   x: number;
   y: number;
@@ -25,6 +33,10 @@ export interface Button {
   h: number;
   /** The main action is amber; the others cream. */
   primary?: boolean;
+  /** Not available just now: drawn pale. It can still be pressed (the game says no). */
+  off?: boolean;
+  /** Draws what is on the button, in place of the label. */
+  draw?: (ctx: CanvasRenderingContext2D, b: Button) => void;
 }
 
 /** The café's palette for paper things. */
@@ -43,6 +55,13 @@ export const INK = {
 
 /** A pinch within this of the panel's face (metres, world) counts as on it. */
 const REACH_M = 0.035;
+/**
+ * A fingertip (metres in front of the card's face, world): it lights a
+ * button from `hover` away, presses on coming within `press`, and can
+ * press again once it has drawn back past `rearm`. One that is more
+ * than `behind` past the face is not touching the card at all.
+ */
+const TOUCH = { hover: 0.05, press: 0.004, rearm: 0.018, behind: 0.03 };
 /** Pixels per metre of panel (café space). */
 const PPM = 2400;
 
@@ -64,6 +83,8 @@ export class Panel {
   private want = false;
   private readonly local = new Vector3();
   private readonly scale = new Vector3();
+  /** Each fingertip's last distance in front of the face, and whether it may press. */
+  private readonly tips = new Map<string, { z: number; armed: boolean }>();
 
   constructor(name: string, widthM: number, heightM: number) {
     this.canvas = document.createElement('canvas');
@@ -120,7 +141,9 @@ export class Panel {
     this.mesh.visible = this.shown > 0;
     if (!this.mesh.visible) return false;
     this.material.opacity = this.shown;
-    const s = 0.9 + 0.1 * this.shown;
+    // Its size is in real metres, whatever the café's scale.
+    const parent = this.mesh.parent ? this.mesh.parent.getWorldScale(this.scale).x : 1;
+    const s = (0.9 + 0.1 * this.shown) / (parent || 1);
     this.mesh.scale.set(s, s, s);
     this.mesh.lookAt(head);
     if (this.pressed) {
@@ -146,6 +169,41 @@ export class Panel {
     return this.buttons.find((b) => px >= b.x - pad && px <= b.x + b.w + pad && py >= b.y - pad && py <= b.y + b.h + pad) ?? null;
   }
 
+  /**
+   * A fingertip (`tip`, world; null when its hand is not tracked), known
+   * by `key` (its hand). Returns the button it is over, and the button it
+   * has just pressed (once per push through the face).
+   */
+  touch(key: string, tip: Vector3 | null): { over: Button | null; pressed: Button | null } {
+    let state = this.tips.get(key);
+    if (!state) this.tips.set(key, (state = { z: Infinity, armed: false }));
+    if (!tip || !this.want || this.shown < 0.6) {
+      state.z = Infinity;
+      state.armed = false;
+      return NO_TOUCH;
+    }
+    const local = this.mesh.worldToLocal(this.local.copy(tip));
+    this.mesh.getWorldScale(this.scale);
+    const z = local.z * this.scale.z;
+    const params = (this.mesh.geometry as PlaneGeometry).parameters;
+    const px = (local.x / params.width + 0.5) * this.width;
+    const py = (0.5 - local.y / params.height) * this.height;
+    const pad = this.height * 0.015;
+    const under = z <= TOUCH.hover && z >= -TOUCH.behind ? (this.buttons.find((b) => px >= b.x - pad && px <= b.x + b.w + pad && py >= b.y - pad && py <= b.y + b.h + pad) ?? null) : null;
+    // Drawn back far enough (or seen in front for the first time): it may press.
+    if (z > TOUCH.rearm) state.armed = true;
+    let pressed: Button | null = null;
+    if (under && state.armed && z <= TOUCH.press && state.z > TOUCH.press) {
+      pressed = under;
+      state.armed = false;
+    }
+    state.z = z;
+    this.touched.over = under;
+    this.touched.pressed = pressed;
+    return this.touched;
+  }
+  private readonly touched: { over: Button | null; pressed: Button | null } = { over: null, pressed: null };
+
   /** Is a world point over the card at all (within reach of its face)? */
   covers(point: Vector3): boolean {
     if (!this.want) return false;
@@ -168,6 +226,8 @@ export class Panel {
     this.paint();
   }
 }
+
+const NO_TOUCH: { over: Button | null; pressed: Button | null } = { over: null, pressed: null };
 
 // ----------------------------------------------------------- drawing helpers
 
@@ -217,13 +277,21 @@ function drawButton(ctx: CanvasRenderingContext2D, b: Button, hover: boolean, pr
     ctx.shadowOffsetY = b.h * 0.06;
   }
   roundRect(ctx, b.x, b.y + dip, b.w, b.h, r);
-  ctx.fillStyle = b.primary ? (pressed ? INK.amberDeep : hover ? '#ffc07a' : INK.amber) : pressed ? INK.paperDeep : hover ? '#fffaf0' : '#f7ead2';
+  ctx.fillStyle = b.off ? (hover ? '#f1e6cf' : '#e9dcc3') : b.primary ? (pressed ? INK.amberDeep : hover ? '#ffc07a' : INK.amber) : pressed ? INK.paperDeep : hover ? '#fffaf0' : '#f7ead2';
   ctx.fill();
   ctx.restore();
   roundRect(ctx, b.x, b.y + dip, b.w, b.h, r);
-  ctx.lineWidth = b.h * 0.06;
-  ctx.strokeStyle = b.primary ? INK.amberDeep : '#c9a77d';
+  ctx.lineWidth = Math.max(2, b.h * 0.05);
+  ctx.strokeStyle = b.off ? '#cdb898' : b.primary ? INK.amberDeep : '#c9a77d';
   ctx.stroke();
+  if (b.draw) {
+    ctx.save();
+    ctx.translate(0, dip);
+    b.draw(ctx, b);
+    ctx.restore();
+    return;
+  }
+  if (!b.label) return;
   ctx.fillStyle = INK.ink;
   ctx.font = `700 ${Math.round(b.h * 0.42)}px sans-serif`;
   ctx.textAlign = 'center';
