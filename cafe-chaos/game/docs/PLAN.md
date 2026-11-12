@@ -82,8 +82,76 @@ three pictures from the game with a line each.
 After every phase: stop, re-read the result against this plan, write
 what was learned in the log, then go on.
 
+## What the rules and Meta's guidance ask for
+
+The entry is for the Meta VR Start Developer Competition 2026 (Gaming,
+New Experience; due Nov 18 2026). Judged in four equal parts: innovation,
+experience design, technical implementation, polish.
+
+- Hands only from start to finish; seated; every interaction within
+  about 60 cm (the "airplane seat test").
+- A satisfying session in ten minutes or less; fast start; clean pause
+  and resume.
+- Passthrough must matter; essential UI inside a comfortable, narrow
+  field of view; at least 60 fps (72 is the target here).
+- Special awards aimed at: Best First Five Minutes (teaches without a
+  wall of text, a payoff early) and Best Reason to Come Back (visible
+  growth between sessions).
+- Video under three minutes of real footage.
+
+Meta's numbers used below:
+
+- Pinch starts with the tips 1.6 cm apart and ends once they are more
+  than 3 cm apart (and 2 cm more than the closest they came).
+- A thing to grab lights up from 5 cm away and stays lit to 8 cm.
+- Touch buttons: at least 22 mm square, 12 mm apart, pressed with the
+  index fingertip (not a pinch), about 45 cm from the eyes, facing the
+  player, the most used controls low on the panel; a hover state, a
+  pressed state and a sound for every press.
+- Text no finer than it must be against passthrough; strong contrast.
+- Teach by doing, untimed; show the gesture; keep help in reach.
+- Snap and magnetism for small things; clear cues for small objects.
+
 ## Gaps found in review (phase 0)
 
-See the log.
+Read twice: once through the code, once against the rules above.
+
+The run
+1. The shift is a four-minute countdown; asked for: count up, endless.
+2. Nothing gets harder with time, so an endless run would never end.
+3. No pause, and nothing is saved if the headset comes off mid-run.
+4. The annex and its plaques are still in; asked to go.
+5. One check (the storm-off) races the slow emulator and fails at random.
+
+The board and buying
+6. The scoreboard floats over the back of the café: 6 cm tall, its
+   small print about 6 mm high. Too small, and behind the hands.
+7. Buying is by pinching stone plaques in the gravel, in the way of the
+   line and easy to miss.
+8. Card buttons are 2 cm tall and pressed with a pinch; Meta asks for
+   22 mm at least and a fingertip press.
+9. Cards hang over the middle of the café, between the hands and it.
+
+Hands
+10. A guest let go more than 5 cm from a seat goes back to the line.
+11. A held guest follows the fingertips through two smoothings (the
+    pinch filter, then the carry follow): shaky when still, late when
+    moving.
+12. The pinch ends the moment the tips part past 1.5 cm when the headset
+    reports its own pinch; Meta's own rule holds to 3 cm.
+13. The fingertip dot and the guest's highlight are the only cues; the
+    hand itself shows nothing now that the model hand is not drawn.
+
+The start
+14. The title card is plain text on a small card.
+15. How to play is five paragraphs of small text, no pictures.
+16. The walkthrough is five steps, two of them reading.
+
+Come back
+17. Only the bank and the best night are kept; nothing visibly grows.
+
+Decision changed after reading the rules: servers hired stay hired
+(saved), so the café visibly grows between sessions; the run gets harder
+with time whatever the staff, and the best time is the record to beat.
 
 ## Log
