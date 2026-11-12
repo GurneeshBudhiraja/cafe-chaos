@@ -722,10 +722,11 @@ export class GuestSystem extends createSystem({}) {
   /**
    * The seat a carried guest is aimed at when it is not hanging right
    * over one: the free seat nearest where the player is pointing it. That
-   * is the spot under the hand if the hand is low over the café, else the
-   * spot on the café behind the fingers along the line of sight. Null when
-   * that spot is clear of the café (DROP_MARGIN_M): it goes back where it
-   * came from.
+   * is the spot under the hand if the hand is low over the café; else the
+   * spot on the café behind the fingers along the line of sight; else (the
+   * line of sight running past the café) the spot under the hand again.
+   * Null when the hand is clear of the café (DROP_MARGIN_M): the guest
+   * goes back where it came from.
    */
   private seatAimed(hang: Vector3, pinch: Vector3, own: Seat | null, spoken: Seat | null): Seat | null {
     if (this.seats.length === 0) return null;
@@ -733,19 +734,27 @@ export class GuestSystem extends createSystem({}) {
     const bounds = this.holdSystem?.bounds;
     const level = this.seats[0].position.y;
     const spot = this.aimSpot;
-    if (hang.y - level < 0.2 && hang.y - level > -0.03) spot.copy(hang);
-    else if (!this.sight) return null;
-    else {
+    const inside = (p: Vector3): boolean =>
+      !bounds || (p.x >= bounds.min.x - DROP_MARGIN_M && p.x <= bounds.max.x + DROP_MARGIN_M && p.z >= bounds.min.z - DROP_MARGIN_M && p.z <= bounds.max.z + DROP_MARGIN_M);
+    const low = hang.y - level < 0.2 && hang.y - level > -0.03;
+    let found = false;
+    if (!low && this.sight) {
       // Where the line of sight through the pinch meets the seats' level (café space).
       const eye = cafe.worldToLocal(this.at.copy(this.eye));
       const through = cafe.worldToLocal(spot.copy(pinch));
       const fall = eye.y - through.y;
-      if (fall < 1e-4) return null;
-      const t = (eye.y - level) / fall;
-      if (t < 1) return null;
-      spot.set(eye.x + (through.x - eye.x) * t, level, eye.z + (through.z - eye.z) * t);
+      const t = fall > 1e-4 ? (eye.y - level) / fall : 0;
+      if (t >= 1) {
+        spot.set(eye.x + (through.x - eye.x) * t, level, eye.z + (through.z - eye.z) * t);
+        found = inside(spot);
+      }
     }
-    if (bounds && (spot.x < bounds.min.x - DROP_MARGIN_M || spot.x > bounds.max.x + DROP_MARGIN_M || spot.z < bounds.min.z - DROP_MARGIN_M || spot.z > bounds.max.z + DROP_MARGIN_M)) return null;
+    // Low over the café, or held high above it with the line of sight running past its far side: the spot under the hand.
+    if (!found) {
+      if (!low && !this.sight) return null;
+      spot.copy(hang);
+      if (!inside(spot)) return null;
+    }
     let best: Seat | null = null;
     let bestDistance = Infinity;
     for (const seat of this.seats) {

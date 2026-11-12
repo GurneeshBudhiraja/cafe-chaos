@@ -55,8 +55,8 @@ export const LOSSES = {
  *   evening a full line cannot all be saved and the end comes.
  */
 export const RAMP = {
-  pace: { start: 3.2, perMinute: 0.8, min: 0.25 },
-  patience: { perMinute: 0.88, min: 0.2 },
+  pace: { start: 3.2, perMinute: 0.72, min: 0.25 },
+  patience: { perMinute: 0.86, min: 0.2 },
 };
 
 /** How much longer the gaps between arrivals are than SPAWN_SECONDS, `seconds` into the run. */

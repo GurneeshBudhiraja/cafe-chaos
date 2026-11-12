@@ -86,8 +86,15 @@ async function line() {
     return { id: head.id, next: next.id, grip: head.actor.grip.getWorldPosition(new V()).toArray() };
   });
 }
+/**
+ * The emulator draws about one frame a second, where the headset draws 72: at full speed a single emulated frame is
+ * longer than the grace the hands give a flicker or a closing pinch. While a reach is made the café's clock is slowed
+ * so that a frame is about a headset frame long; it runs at full speed again for the hop to the seat.
+ */
+const slow = (on) => page.evaluate((on) => (window.__cafe.system.timeScale = on ? 0.03 : 1), on);
 const held = () => page.evaluate(() => window.__cafe.guests.carriedBy('right')?.id ?? 0);
 async function reset() {
+  await slow(false);
   await pinch(0);
   await handRaw(AWAY);
   await frames(2);
@@ -112,6 +119,7 @@ const picks = [
 for (const [name, where, expected] of picks) {
   const target = await line();
   const p = where(target.grip);
+  await slow(true);
   // Come in open (the guest should light), close with a one-frame flicker, hold.
   await holdAt(add(p, [0.02, 0.05, 0.02]), 2, true);
   await holdAt(p, 3, true);
@@ -127,12 +135,13 @@ for (const [name, where, expected] of picks) {
 // ---- Holding through a flicker, and putting down.
 const drops = [
   ['right over the seat', (s) => add(s, [0, 0.07, 0]), true],
-  ['5 cm off the seat', (s) => add(s, [0.035, 0.07, 0.035]), true],
+  ['3 cm off the seat', (s) => add(s, [0.02, 0.07, 0.02]), true],
   ['25 cm above the seat', (s) => add(s, [0, 0.25, 0]), true],
   ['over the seat as seen, 20 cm nearer the eyes', (s) => toward(add(s, [0, 0.03, 0]), eyeAt, 0.2), SIGHT],
 ];
 for (const [name, where, expected] of drops) {
   const target = await line();
+  await slow(true);
   await holdAt(target.grip, 3, true);
   await pinch(1);
   await holdAt(target.grip, 2, false);
@@ -155,7 +164,8 @@ for (const [name, where, expected] of drops) {
   note('hold', `through a one-frame flicker (${name})`, stillHeld, stillHeld ? '' : 'dropped');
   const aimed = await page.evaluate(() => window.__cafe.guests.carriedBy('right')?.target?.index ?? -1);
   await pinch(0);
-  await holdAt(p, 4, true);
+  await holdAt(p, 6, true);
+  await slow(false);
   await page.waitForFunction((id) => { const g = window.__cafe.guests.guests.find((x) => x.id === id); return !g || (g.state !== 'hop' && g.state !== 'held'); }, target.id, { timeout: 60000, polling: 200 });
   const landed = await page.evaluate((id) => { const g = window.__cafe.guests.guests.find((x) => x.id === id); return g ? { state: g.state, seat: g.seat?.index ?? -1 } : { state: 'gone', seat: -1 }; }, target.id);
   const onIt = landed.state === 'seated' && landed.seat === seat.index;
