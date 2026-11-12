@@ -59,7 +59,7 @@ for (const player of players) {
           waits.sort((a, b) => a - b);
           resolve({
             open: c.game.clock, fed: count('paid'), ...tiers, gaveUp: count('gaveUp'), stormed: count('stormedOff'), coins: c.score.takings, bank: c.score.bank,
-            staff: `${staff0}->${c.shop.staff}`, hiredAt: hires.join(' '), foodMedian: waits[waits.length >> 1] ?? 0, foodWorst: waits[waits.length - 1] ?? 0,
+            staff: `${staff0}->${c.shop.staff}`, debug: `staff ${c.baristas.staff.map((m) => m.state + (m.order ? '*' : '') + (m.walk ? 'w' : '')).join(',')} orders ${c.baristas.orders.length} served ${c.baristas.servedCount} seated ${c.guests.guests.filter((g) => g.state === 'seated').map((g) => g.seat?.index + (g.served ? 'S' : '')).join(',')}`, hiredAt: hires.join(' '), foodMedian: waits[waits.length >> 1] ?? 0, foodWorst: waits[waits.length - 1] ?? 0,
           });
           return;
         }
@@ -76,7 +76,7 @@ for (const player of players) {
       }, 40);
     }), [player.hand, CAP]);
     const t = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-    console.log(`${player.name.padEnd(8)} run ${run}: open ${t(r.open)}  fed ${String(r.fed).padStart(3)} (quick ${r.quick}, fair ${r.fair}, late ${r.late})  gave up ${r.gaveUp}  stormed ${r.stormed}  coins ${r.coins}  bank ${r.bank}  staff ${r.staff}${r.hiredAt ? ` (hired at ${r.hiredAt}s)` : ''}  food ${r.foodMedian.toFixed(0)}s, worst ${r.foodWorst.toFixed(0)}s`);
+    console.log(`${player.name.padEnd(8)} run ${run}: open ${t(r.open)}  fed ${String(r.fed).padStart(3)} (quick ${r.quick}, fair ${r.fair}, late ${r.late})  gave up ${r.gaveUp}  stormed ${r.stormed}  coins ${r.coins}  bank ${r.bank}  staff ${r.staff}${r.hiredAt ? ` (hired at ${r.hiredAt}s)` : ''}  food ${r.foodMedian.toFixed(0)}s, worst ${r.foodWorst.toFixed(0)}s${process.env.DEBUG ? `\n    ${r.debug}` : ''}`);
   }
   await page.close();
 }
