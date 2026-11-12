@@ -35,15 +35,15 @@
  * is drawn over a real one and the two never quite agree: a solid hand
  * hides part of the real one and reads as a second hand on top of it.
  * `HAND.style` chooses:
- * - 'occluded' (the default): the player's own hands, in front of the
+ * - 'outline' (the default): IWSDK's own grey hand, a faint outline
+ *   that fades toward the wrist and sits around the real hand: the
+ *   stock look of hands on Quest. The café is drawn over the real hand;
+ * - 'occluded': the player's own hands, in front of the
  *   café wherever they really are in front of it. Nothing of the hand
  *   is drawn; an unseen copy of the tracked hand is put into the depth
  *   buffer before anything else, so the café is not drawn where the
  *   hand covers it and the cameras' picture of the real hand shows
  *   there instead (see `OccludingHand`);
- * - 'outline': IWSDK's own grey hand, a faint outline that fades
- *   toward the wrist and sits around the real hand rather than over
- *   it. The café is still drawn over the real hand;
  * - 'cream': the café's solid cream hands;
  * - 'real': nothing drawn, the player's own hands only.
  *
@@ -74,10 +74,10 @@ interface Span {
 }
 
 type HandStyle = 'occluded' | 'outline' | 'cream' | 'real';
-/** 'occluded' unless the address asks for another (`?hands=cream`): for trying the styles on the headset, and for pictures that need a hand in them. */
+/** 'outline' (IWSDK's stock hands, the look Quest players know) unless the address asks for another (`?hands=occluded`, `cream`, `real`): for trying the styles on the headset, and for pictures that need a hand in them. */
 function handStyle(): HandStyle {
   const asked = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('hands') : null;
-  return asked === 'outline' || asked === 'cream' || asked === 'real' ? asked : 'occluded';
+  return asked === 'occluded' || asked === 'cream' || asked === 'real' ? asked : 'outline';
 }
 
 /** The hand's look, on top of the model's own cream and sage. */

@@ -116,15 +116,13 @@ silent. Levels are in `SOUND` at the top of the system. A very quiet lo-fi theme
 the moment the session starts. Like a Horizon OS window, the café has a grab pill on the side
 facing the player (pinch and drag to move it) and a bracket at each
 corner (pinch and pull to resize, swing to turn), always visible, in the
-café's own style. The hands are the player's own: in passthrough the real hands
-are in view, and they show in front of the café wherever they really
-are in front of it. An unseen copy of the tracked hand is put into the
-depth buffer before anything else is drawn, so the café is left out
-where the hand covers it and the cameras' picture of the hand shows
-there (`HAND.style` in `src/hands/cafe-hand.ts`: `'occluded'`, the
-default; `'outline'` for IWSDK's grey outline hands, `'cream'` for the
-café's solid cream hands, `'real'` for nothing at all; `HAND.occluder.grow`
-is how far the unseen hand is grown past the tracked one). A small dot sits between the thumb
+café's own style. The hands are IWSDK's stock hands (a faint outline that fades toward
+the wrist, sitting around the player's real hand), the look Quest players
+know. `HAND.style` in `src/hands/cafe-hand.ts`, or `?hands=` in the
+address, picks another: `occluded` shows the real hands in front of the
+café (an unseen copy of the tracked hand is put into the depth buffer
+first, so the café is left out where the hand covers it), `cream` the
+café's solid cream hands, `real` nothing at all. A small dot sits between the thumb
 and index tips of each tracked hand (`src/hands/pinch-cursor.ts`): faint
 cream open, amber and larger pinched, gone when the headset loses the
 hand. A pinch is the headset's own pinch (the session's select events)
