@@ -226,26 +226,33 @@ await pause(6000);
 
 // 5. The shop: with the coins in, hire a second server.
 // If the coins are not in yet (guests who gave up cost some), seat a few more until they are.
-for (let more = 0; more < 4 && (await page.evaluate(() => window.__cafe.score.bank)) < 30; more++) {
+for (let more = 0; more < 8 && (await page.evaluate(() => window.__cafe.score.bank)) < 30; more++) {
   await overview();
   await pickHead();
   await seatAt(spots[more % spots.length][0], spots[more % spots.length][1]);
   await rest();
   await pause(9000);
 }
+console.error('before the shop', JSON.stringify(await page.evaluate(() => ({ bank: window.__cafe.score.bank, staff: window.__cafe.baristas.staff.length }))));
 {
   const grip = await page.evaluate(() => window.__cafe.unlocks.plaques.get('server2').grip.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
   await h.head(P(add(grip, [0.12, 0.17, 0.12])), P(grip), 1400);
   await reach(1200, add(grip, [0.01, 0.03, 0.02]), true);
   await pause(1500);
-  await reach(400, grip);
-  await pause(150);
-  await pinch(1);
-  await pause(500);
-  await pinch(0);
+  // Pinch the plaque; if the pinch missed it (or the coins were short), lift the hand and try again.
+  for (let attempt = 0; attempt < 4 && (await page.evaluate(() => !window.__cafe.unlocks.owned.has('server2'))); attempt++) {
+    await reach(400, grip);
+    await pause(150);
+    await pinch(1);
+    await pause(500);
+    await pinch(0);
+    await pause(400);
+    console.error('shop attempt', attempt, JSON.stringify(await page.evaluate(() => ({ bank: window.__cafe.score.bank, owned: [...window.__cafe.unlocks.owned], refused: window.__cafe.unlocks.refused }))));
+    if (await page.evaluate(() => !window.__cafe.unlocks.owned.has('server2'))) await reach(500, add(grip, [0.01, 0.03, 0.02]), true);
+  }
   await rest();
   await h.head(SEAT, P(await toWorld([0, 0.08, -0.16])), 1500);
-  await until(() => window.__cafe.baristas.staff.length >= 2);
+  await page.waitForFunction(() => window.__cafe.baristas.staff.length >= 2, null, { timeout: 5 * 60 * 1000, polling: 100 }).catch(() => console.error('no second server'));
   await pause(4000);
 }
 
