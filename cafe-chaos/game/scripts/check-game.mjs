@@ -13,10 +13,10 @@
  * 4. scoring: the walkthrough guest, seated quickly, pays the top tip and
  *    leaves a thumbs up and its coins;
  * 5. a seated guest whose food never comes fumes (cross face, vein mark)
- *    and storms out: a thumbs down, happiness and coins lost;
- * 6. the shop: a plaque the bank cannot pay for is refused with a shake;
- *    with the money, a server is hired (two on the staff) and the annex
- *    bought, after which the next server's plaque appears;
+ *    and storms out: a thumbs down and happiness lost, the bank untouched;
+ * 6. the shop (free for now, game/rules.ts FREE_SHOP): every plaque is out
+ *    at once, each at FREE; a pinch with an empty bank hires a server (two
+ *    on the staff), buys the annex, and hires the rest up to six;
  * 7. closing time shows the night's card and saves the bank and what was
  *    bought; Next shift opens again with nobody about;
  * 8. happiness at zero closes the café early;
@@ -97,6 +97,7 @@ const state = () =>
       arrived: guests.arrived, onStage: guests.guests.length, staff: baristas.staff.length, staffSize: baristas.staffSize,
       bank: score.bank, happiness: score.happiness, up: score.up, down: score.down, clock: game.clock, log: score.log,
       popups: { ...guests.popups.shown }, owned: [...unlocks.owned], plaques: [...unlocks.plaques.keys()], refused: unlocks.refused,
+      free: [...unlocks.plaques.values()].every((p) => unlocks.price(p.item) === 0), prices: [...unlocks.plaques.values()].map((p) => unlocks.price(p.item)),
     };
   });
 
@@ -186,7 +187,7 @@ await page.evaluate(() => {
   baristas.serving = false;
   guests.arrivals = false;
 });
-const happyBefore = (await state()).happiness;
+const { happiness: happyBefore, bank: bankBefore } = await state();
 const fumer = await page.evaluate(() => {
   const { guests } = window.__cafe;
   const g = guests.line.find((x) => x.state === 'queued');
@@ -205,26 +206,27 @@ await h.screenshot('artifacts/game-fuming.png');
 await until(() => window.__cafe.score.log.some((e) => e.kind === 'stormedOff'), null, 120000);
 s = await state();
 const stormed = s.log.find((e) => e.kind === 'stormedOff');
-check('a guest kept waiting for its food fumes, then storms out: thumbs down, happiness and coins lost',
-  fuming.clip === 'SitUnhappy' && fuming.anger && s.down === 1 && stormed?.happiness === -13 && stormed.coins === -4 && s.happiness <= happyBefore - 13 && s.popups.anger >= 1 && s.popups.down >= 1,
-  `clip ${fuming.clip}, vein mark ${fuming.anger}, down ${s.down}, happiness ${happyBefore} -> ${s.happiness}, coins ${stormed?.coins}`);
+check('a guest kept waiting for its food fumes, then storms out: thumbs down and happiness lost, no coins',
+  fuming.clip === 'SitUnhappy' && fuming.anger && s.down === 1 && stormed?.happiness === -10 && stormed.coins === 0 && s.bank === bankBefore && s.happiness <= happyBefore - 10 && s.popups.anger >= 1 && s.popups.down >= 1,
+  `clip ${fuming.clip}, vein mark ${fuming.anger}, down ${s.down}, happiness ${happyBefore} -> ${s.happiness}, coins ${stormed?.coins}, bank ${bankBefore} -> ${s.bank}`);
 await page.evaluate(() => (window.__cafe.baristas.serving = true));
 
-// 6. The shop.
-const refused = await page.evaluate(() => window.__cafe.unlocks.press('annex'));
+// 6. The shop: free for now, everything out at once.
+await until(() => ['annex', 'server2', 'server3', 'server4', 'server5', 'server6'].every((id) => window.__cafe.unlocks.plaques.has(id)), null, 30000);
 s = await state();
-check('a plaque the bank cannot pay for is refused', refused === false && s.refused === 1 && !s.owned.includes('annex'), `bank ${s.bank}, refused ${s.refused}, owned ${JSON.stringify(s.owned)}`);
-await page.evaluate(() => (window.__cafe.score.bank = 300));
+check('every plaque is out at once, free', s.plaques.length >= 6 && s.free, `plaques ${JSON.stringify(s.plaques)}, prices ${JSON.stringify(s.prices)}`);
+await page.evaluate(() => (window.__cafe.score.bank = 0));
 const hired = await page.evaluate(() => window.__cafe.unlocks.press('server2'));
 await until(() => window.__cafe.baristas.staff.length === 2, null, 30000);
 s = await state();
-check('with the money, a second server is hired', hired && s.staff === 2 && s.bank === 260, `hired ${hired}, staff ${s.staff}, bank ${s.bank}`);
-const before3 = s.plaques.includes('server3');
-await page.evaluate(() => window.__cafe.unlocks.press('annex'));
-await until(() => window.__cafe.unlocks.plaques.has('server3'), null, 30000);
-s = await state();
-check('buying the annex puts out the next server\'s plaque', !before3 && s.owned.includes('annex') && s.plaques.includes('server3') && s.bank === 140, `server3 before ${before3}, after ${s.plaques.includes('server3')}, bank ${s.bank}`);
+check('with an empty bank, a second server is hired', hired && s.staff === 2 && s.bank === 0 && s.refused === 0, `hired ${hired}, staff ${s.staff}, bank ${s.bank}, refused ${s.refused}`);
+const annexBought = await page.evaluate(() => window.__cafe.unlocks.press('annex'));
 await until(() => window.__cafe.system.annexOpen, null, 60000);
+const rest = await page.evaluate(() => ['server3', 'server4', 'server5', 'server6'].map((id) => window.__cafe.unlocks.press(id)));
+await until(() => window.__cafe.baristas.staff.length === 6, null, 60000);
+s = await state();
+check('the annex opens and the rest of the servers are hired, six on the staff', annexBought && rest.every(Boolean) && s.owned.includes('annex') && s.staff === 6 && s.bank === 0,
+  `annex ${annexBought}, servers ${JSON.stringify(rest)}, staff ${s.staff}, owned ${JSON.stringify(s.owned)}, bank ${s.bank}`);
 await h.screenshot('artifacts/game-shop.png');
 
 // 7. Closing time, and the save.

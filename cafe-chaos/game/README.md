@@ -41,21 +41,30 @@ outer wall.
   takings, the clock, and the thumbs up and down.
 - **The wait runs from the gate to the food.** A guest's patience dial
   keeps running once it is seated, until a server brings its order
-  (seating tops it up by 22 s, never past what it started with). So the
-  servers matter: with one, a busy café shows. A guest whose patience
+  (seating tops it up by 28 s, up to 46 s). So the servers matter. A
+  server's round takes about 18 s, and guests arrive as fast as the
+  staff can serve them (`ARRIVAL_PACE` in `src/game/rules.ts`): with one
+  server they come about every 16 s, with two every 9, with four or more
+  every 5, so one server can run the café and each hire makes the
+  evening busier and richer. A guest gets down once it has eaten for
+  22 s (`MEAL_SECONDS`), so quick service frees the table sooner. A guest whose patience
   runs out at the table fumes for a moment (cross face, a red vein mark
   over its head, the unhappy sitting clip) and stomps out without eating.
 - **Scoring.** A guest who ate pays as it gets down from its chair, with
   a thumbs up and its coins over its head: 12 coins and +6 happiness if
   it was taken from the gate and seated within the first quarter of its
   patience, 8 and +4 if a bit later, 5 and +2 at the last moment. One who
-  gives up in the line costs 9 happiness and 2 coins, a thumbs down; one
-  who storms out of its seat 13 and 4. Happiness starts full; at zero the
-  café closes early.
-- **The shop**: priced stone plaques in the gravel in front. The café
-  opens with one server; a second costs 30, the garden annex 80, and once
-  the annex is open the bigger café can take a third (60) and a fourth
-  (90): those plaques appear only then. Without the money a pinch gets a
+  gives up in the line costs 6 happiness, a thumbs down; one who storms
+  out of its seat 10. Unhappy guests never take coins: the bank only
+  grows. Happiness starts full; at zero the café closes early.
+- **The shop**: stone plaques in the gravel in front. **For now it is
+  free** (`FREE_SHOP` in `src/game/rules.ts`): all six plaques are out at
+  once, each marked FREE, and can be bought in any order: the annex and
+  five more servers, up to all six baristas. With `FREE_SHOP` off the
+  prices and order come back: the café opens with one server; a second
+  costs 40, the garden annex 120, and once the annex is open the bigger
+  café can take a third (110), a fourth (160), a fifth (200) and a sixth
+  (240), each plaque appearing once the one before is bought. Without the money a pinch gets a
   shake and the price flashes coral; bought, the padlock pops, a new
   server appears behind the counter and waves (its plaque sinks away), or
   the annex rises.
@@ -196,7 +205,13 @@ snack-spirit cast from `public/models/guest-*.glb`.
   guest lights that guest up: a soft warm ring round its feet, breathing,
   and the guest itself glowing a little brighter (`guests/pick-ring.ts`).
   It is exactly the guest a pinch takes (the nearest within reach of the
-  pinch point), however close the hand is. A pinch closing on it lifts it;
+  pinch point, measured to its whole body, feet to head, so pinching the
+  head or the middle both count), however close the hand is. The lit
+  guest is remembered for a third of a second, so the pinch point
+  shifting as the fingers close never slips off it or onto a neighbour.
+  A carried guest is let go only once the fingers stay open for an
+  eighth of a second, so a flicker of the tracking never drops it.
+  A pinch closing on it lifts it;
   it hangs from the fingers, legs kicking, turned to face the player. A
   guest in the line or in a seat also watches a free hand that comes
   close with wide eyes.

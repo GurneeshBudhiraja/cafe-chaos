@@ -8,7 +8,8 @@
  * - Money. A guest who ate pays as it gets down from its chair: more if
  *   it was taken from the gate and seated in the first quarter of its
  *   patience, less if it was seated at the last moment
- *   (game/rules.ts PAY_TIERS). One who leaves unhappy costs a few coins.
+ *   (game/rules.ts PAY_TIERS). One who leaves unhappy costs no coins,
+ *   only happiness.
  *   The shift's takings go into the bank, which the shop spends.
  * - Thumbs. Each happy guest leaves a thumbs up over its head with its
  *   coins; each unhappy one a thumbs down. Both are counted.
@@ -95,14 +96,12 @@ export class ScoreSystem extends createSystem({}) {
       this.log.push({ kind: outcome.kind, share: outcome.share, coins: tier.coins, happiness: tier.happiness, tier: tier.name });
       return;
     }
+    // An unhappy guest costs happiness only; the bank and the night's takings are never touched.
     const loss = LOSSES[outcome.kind];
-    const coins = Math.min(loss.coins, this.bank);
-    this.earn(-coins);
     this.cheer(-loss.happiness);
     this.down++;
     popups.show('down', outcome.at);
-    if (coins > 0) popups.coins(-coins, outcome.at.clone().setY(outcome.at.y + 0.018));
-    this.log.push({ kind: outcome.kind, share: outcome.share, coins: -coins, happiness: -loss.happiness });
+    this.log.push({ kind: outcome.kind, share: outcome.share, coins: 0, happiness: -loss.happiness });
   }
 
   update(delta: number): void {

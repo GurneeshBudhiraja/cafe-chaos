@@ -48,7 +48,7 @@ import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_POINT, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
-  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, PICK_WINDOW_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
+  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_MEMORY_S, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
@@ -206,6 +206,12 @@ export class GuestSystem extends createSystem({}) {
   private readonly pinched: Record<Hand, boolean> = { left: false, right: false };
   /** How long each hand's pinch has been closed (seconds); Infinity while it is open. */
   private readonly closedFor: Record<Hand, number> = { left: Infinity, right: Infinity };
+  /** How long each hand's pinch has been open (seconds): a carried guest is let go only after RELEASE_HOLD_S. */
+  private readonly openFor: Record<Hand, number> = { left: Infinity, right: Infinity };
+  /** The guest each hand last lit up while open, and how long ago (PICK_MEMORY_S). */
+  private readonly lastLit: Record<Hand, { guest: Guest | null; age: number }> = { left: { guest: null, age: Infinity }, right: { guest: null, age: Infinity } };
+  private readonly feet = new Vector3();
+  private readonly crown = new Vector3();
   private readonly blobs = new Blobs(MAX_GUESTS + 2);
   private readonly at = new Vector3();
   private readonly head = new Vector3();
@@ -475,12 +481,16 @@ export class GuestSystem extends createSystem({}) {
       const pinch = hold.pinch[hand];
       this.hovered[i] = null;
       this.closedFor[hand] = pinch.closed ? (this.pinched[hand] ? this.closedFor[hand] + delta : 0) : Infinity;
+      this.openFor[hand] = pinch.closed ? 0 : (this.pinched[hand] ? 0 : Math.min(this.openFor[hand], 1e6) + delta);
       this.pinched[hand] = pinch.closed;
+      const lit = this.lastLit[hand];
+      lit.age += delta;
       // A pinch that closed just now, or a moment ago on its way in (PICK_WINDOW_S).
       const recent = this.closedFor[hand] <= PICK_WINDOW_S;
       const carried = this.carriedBy(hand);
       if (carried) {
-        if (!pinch.closed) this.letGo(carried);
+        // Let go only once the fingers have stayed open a moment (RELEASE_HOLD_S): a flicker never drops it.
+        if (!pinch.closed && (this.openFor[hand] >= RELEASE_HOLD_S || pinch.gap === Infinity)) this.letGo(carried);
         else this.targets[i] = this.carry(carried, pinch.point, delta);
         return;
       }
@@ -495,11 +505,52 @@ export class GuestSystem extends createSystem({}) {
       // It lights up while the hand is open, and a pinch closing now (or just before reaching it) takes exactly it.
       if (pinch.gap === Infinity || pinch.ghost || hold.holding.includes(hand) || this.handles?.near(pinch.point)) return;
       if (pinch.closed && !recent) return;
-      const guest = this.nearestGuest(pinch.point, 1);
+      const near = this.nearestGuest(pinch.point, 1);
+      if (!recent) {
+        // Open: light up the guest a pinch would take, and remember it for a moment.
+        this.hovered[i] = near;
+        if (near) {
+          lit.guest = near;
+          lit.age = 0;
+        }
+        return;
+      }
+      // Closing: the guest that was lit just now, if the closing fingers have not moved far from it
+      // (the pinch point shifts as they close); otherwise the nearest within reach.
+      const remembered = lit.age <= PICK_MEMORY_S && lit.guest && this.pickable(lit.guest) && this.reachTo(lit.guest, pinch.point) <= this.pickRadius() * PICK_STICKY_RADII ? lit.guest : null;
+      const guest = remembered ?? near;
       if (!guest) return;
-      if (recent) this.pickUp(guest, hand);
-      else this.hovered[i] = guest;
+      lit.guest = null;
+      lit.age = Infinity;
+      this.pickUp(guest, hand);
     });
+  }
+
+  /** The pick radius now (world metres): grows with the café, never below the world floor. */
+  private pickRadius(): number {
+    return Math.max(PICK_RADIUS_WORLD_MIN_M, PICK_RADIUS_M * this.cafeSystem.cafe.scale.x);
+  }
+
+  /** Can this guest be picked up (in the line, walking up, or seated; fully faded in)? */
+  private pickable(guest: Guest): boolean {
+    return (guest.state === 'queued' || guest.state === 'arriving' || guest.state === 'seated') && guest.actor.opacity >= 0.99;
+  }
+
+  /**
+   * How far a world point is from a guest's body: the nearest point on the
+   * line from its feet to the top of its head (world metres). A pinch at the
+   * head, the middle or the feet is equally close.
+   */
+  private reachTo(guest: Guest, point: Vector3): number {
+    const feet = guest.actor.root.getWorldPosition(this.feet);
+    const crown = guest.actor.bubbleAnchor.getWorldPosition(this.crown);
+    // The bubble floats a little above the head: stop at the grip's height plus the same again above it, at most.
+    const grip = guest.actor.grip.getWorldPosition(this.at);
+    const top = Math.min(crown.y, grip.y + (grip.y - feet.y));
+    crown.set(feet.x, top, feet.z);
+    const dy = crown.y - feet.y;
+    const t = dy > 1e-6 ? Math.min(1, Math.max(0, (point.y - feet.y) / dy)) : 0;
+    return Math.hypot(point.x - feet.x, point.y - (feet.y + dy * t), point.z - feet.z);
   }
 
   /** A server has brought this guest its order: it eats from now on (one already fuming is past caring). */
@@ -546,13 +597,12 @@ export class GuestSystem extends createSystem({}) {
 
   /** The guest whose grip is nearest a world point, within `radii` pick radii; null if none. Only guests that can be picked up count. */
   private nearestGuest(point: Vector3, radii: number): Guest | null {
-    const reach = Math.max(PICK_RADIUS_WORLD_MIN_M, PICK_RADIUS_M * this.cafeSystem.cafe.scale.x) * radii;
+    const reach = this.pickRadius() * radii;
     let best: Guest | null = null;
     let bestDistance = reach;
     for (const guest of this.guests) {
-      if (guest.state !== 'queued' && guest.state !== 'arriving' && guest.state !== 'seated') continue;
-      if (guest.actor.opacity < 0.99) continue;
-      const distance = guest.actor.grip.getWorldPosition(this.at).distanceTo(point);
+      if (!this.pickable(guest)) continue;
+      const distance = this.reachTo(guest, point);
       if (distance < bestDistance) {
         bestDistance = distance;
         best = guest;
