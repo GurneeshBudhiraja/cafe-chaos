@@ -26,8 +26,8 @@ export const HAPPINESS = { max: 100, start: 100 };
  * the last moment it still pays and still lifts the café, a little.
  */
 export const PAY_TIERS: { upTo: number; name: string; coins: number; happiness: number }[] = [
-  { upTo: 0.25, name: 'quick', coins: 12, happiness: 5 },
-  { upTo: 0.6, name: 'fair', coins: 8, happiness: 3 },
+  { upTo: 0.25, name: 'quick', coins: 12, happiness: 4 },
+  { upTo: 0.6, name: 'fair', coins: 8, happiness: 2 },
   { upTo: 1, name: 'late', coins: 5, happiness: 1 },
 ];
 
@@ -55,8 +55,8 @@ export const LOSSES = {
  *   evening a full line cannot all be saved and the end comes.
  */
 export const RAMP = {
-  pace: { start: 3.2, perMinute: 0.8, min: 0.55 },
-  patience: { perMinute: 0.95, min: 0.5 },
+  pace: { start: 3.2, perMinute: 0.78, min: 0.5 },
+  patience: { perMinute: 0.92, min: 0.4 },
 };
 
 /** How much longer the gaps between arrivals are than SPAWN_SECONDS, `seconds` into the run. */
@@ -84,5 +84,5 @@ export const MEAL_SECONDS = 22;
  * costs the first price. There are six baristas in all.
  */
 export const STARTING_STAFF = 1;
-export const HIRE_PRICES = [40, 80, 120, 160, 200];
+export const HIRE_PRICES = [60, 120, 200, 300, 420];
 export const MAX_STAFF = STARTING_STAFF + HIRE_PRICES.length;

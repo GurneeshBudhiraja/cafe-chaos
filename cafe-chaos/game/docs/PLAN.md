@@ -155,3 +155,20 @@ Decision changed after reading the rules: servers hired stay hired
 with time whatever the staff, and the best time is the record to beat.
 
 ## Log
+
+### Phase 1, the run
+
+Target: the café stays open about 3 minutes for slow hands, 5 to 6 for
+average, 8 to 9 for quick ones (a whole session in under ten); the
+first run pays for one or two servers and the staff is complete after
+four or five runs.
+
+**Iteration 1** (gaps shrink 0.8x a minute, patience 0.95x a minute,
+tips lift happiness 5/3/1, hires 40 to 200).
+Scripted players, three runs each: quick hands never closed (stopped at
+15:00), average 11:30, slow 8:30. Five servers hired in the first run.
+- Good: one server copes at opening; food comes in about 10 s; nobody
+  storms out; the line, not the kitchen, is where guests are lost.
+- Lacking: far too long and too rich. Happy guests refill happiness
+  faster than the lost ones drain it, so quick hands never lose.
+- Next: steeper ramp, smaller refill, dearer hires.
