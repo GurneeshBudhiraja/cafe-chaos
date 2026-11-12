@@ -48,7 +48,7 @@ import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_POINT, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
-  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_MEMORY_S, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
+  PATIENCE_SECONDS, PATIENCE_SPREAD, DROP_MARGIN_M, HOVER_EXIT_RADII, HOVER_SWITCH, PICK_MEMORY_S, PICK_RADIUS_M, SIGHT, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
@@ -171,6 +171,8 @@ export class GuestSystem extends createSystem({}) {
   spawnSeconds: [number, number] = [...SPAWN_SECONDS];
   /** In the game a guest gets down once it has eaten for this long, whatever `seatedSeconds` says, so quick service frees the table sooner (game/rules.ts MEAL_SECONDS). */
   mealSeconds = Infinity;
+  /** Pinch what you see (guests/rules.ts SIGHT). Off: only a pinch right at a guest, or a guest held right over a seat, counts. */
+  sight = true;
   /** True while the game is paused: hands take and move nothing. */
   handsOff = false;
   /** The gaps between arrivals are this many times longer (the game paces arrivals to the staff: game/rules.ts ARRIVAL_PACE). */
@@ -212,6 +214,8 @@ export class GuestSystem extends createSystem({}) {
   private readonly openFor: Record<Hand, number> = { left: Infinity, right: Infinity };
   /** The guest each hand last lit up while open, and how long ago (PICK_MEMORY_S). */
   private readonly lastLit: Record<Hand, { guest: Guest | null; age: number }> = { left: { guest: null, age: Infinity }, right: { guest: null, age: Infinity } };
+  /** The player's eyes this frame (world): the head's position. */
+  private readonly eye = new Vector3();
   private readonly feet = new Vector3();
   private readonly crown = new Vector3();
   private readonly blobs = new Blobs(MAX_GUESTS + 2);
@@ -480,6 +484,7 @@ export class GuestSystem extends createSystem({}) {
       for (const guest of this.guests) if (guest.state === 'held') this.letGo(guest);
       return;
     }
+    this.player.head.getWorldPosition(this.eye);
     HANDS.forEach((hand, i) => {
       const pinch = hold.pinch[hand];
       this.hovered[i] = null;
@@ -508,9 +513,15 @@ export class GuestSystem extends createSystem({}) {
       // It lights up while the hand is open, and a pinch closing now (or just before reaching it) takes exactly it.
       if (pinch.gap === Infinity || pinch.ghost || hold.holding.includes(hand) || this.handles?.near(pinch.point)) return;
       if (pinch.closed && !recent) return;
-      const near = this.nearestGuest(pinch.point, 1);
+      let near = this.nearestGuest(pinch.point, 1);
       if (!recent) {
-        // Open: light up the guest a pinch would take, and remember it for a moment.
+        // Open: light up the guest a pinch would take, and remember it for a moment. The one already lit stays
+        // lit a little further out, and is only given up for a neighbour that is clearly nearer.
+        const was = lit.age <= delta * 1.5 + 0.05 && lit.guest && this.pickable(lit.guest) ? lit.guest : null;
+        if (was && was !== near) {
+          const hold = this.aimAt(was, pinch.point);
+          if (hold <= HOVER_EXIT_RADII && (!near || this.aimAt(near, pinch.point) > hold * HOVER_SWITCH)) near = was;
+        }
         this.hovered[i] = near;
         if (near) {
           lit.guest = near;
@@ -520,7 +531,7 @@ export class GuestSystem extends createSystem({}) {
       }
       // Closing: the guest that was lit just now, if the closing fingers have not moved far from it
       // (the pinch point shifts as they close); otherwise the nearest within reach.
-      const remembered = lit.age <= PICK_MEMORY_S && lit.guest && this.pickable(lit.guest) && this.reachTo(lit.guest, pinch.point) <= this.pickRadius() * PICK_STICKY_RADII ? lit.guest : null;
+      const remembered = lit.age <= PICK_MEMORY_S && lit.guest && this.pickable(lit.guest) && this.aimAt(lit.guest, pinch.point) <= PICK_STICKY_RADII ? lit.guest : null;
       const guest = remembered ?? near;
       if (!guest) return;
       lit.guest = null;
@@ -600,18 +611,50 @@ export class GuestSystem extends createSystem({}) {
 
   /** The guest whose grip is nearest a world point, within `radii` pick radii; null if none. Only guests that can be picked up count. */
   private nearestGuest(point: Vector3, radii: number): Guest | null {
-    const reach = this.pickRadius() * radii;
     let best: Guest | null = null;
-    let bestDistance = reach;
+    let bestAim = radii;
     for (const guest of this.guests) {
       if (!this.pickable(guest)) continue;
-      const distance = this.reachTo(guest, point);
-      if (distance < bestDistance) {
-        bestDistance = distance;
+      const aim = this.aimAt(guest, point);
+      if (aim < bestAim) {
+        bestAim = aim;
         best = guest;
       }
     }
     return best;
+  }
+
+  /**
+   * How well a pinch point (world) is on a guest, in pick radii (under 1
+   * is on it): the lesser of how far the point is from its body, and how
+   * far the guest is from the line of sight through the point (SIGHT), so
+   * a pinch at the guest and a pinch held over it as the player sees it
+   * both count.
+   */
+  private aimAt(guest: Guest, point: Vector3): number {
+    const direct = this.reachTo(guest, point) / this.pickRadius();
+    const sight = this.sight ? this.offSight(guest.actor.grip.getWorldPosition(this.at), point) / SIGHT.radiusM : Infinity;
+    return Math.min(direct, sight);
+  }
+
+  /**
+   * How far a world point `target` is from the line of sight through the
+   * pinch `point` (metres); Infinity unless it lies beyond the hand, within
+   * SIGHT's range. `this.head` must hold the head's world position.
+   */
+  private offSight(target: Vector3, point: Vector3): number {
+    const head = this.eye;
+    const dx = point.x - head.x;
+    const dy = point.y - head.y;
+    const dz = point.z - head.z;
+    const reach = Math.hypot(dx, dy, dz);
+    if (reach < 0.1) return Infinity;
+    const tx = target.x - head.x;
+    const ty = target.y - head.y;
+    const tz = target.z - head.z;
+    const along = (tx * dx + ty * dy + tz * dz) / reach;
+    if (along < reach + SIGHT.nearM || along > reach + SIGHT.farM) return Infinity;
+    return Math.hypot(tx - (dx / reach) * along, ty - (dy / reach) * along, tz - (dz / reach) * along);
   }
 
   private pickUp(guest: Guest, hand: Hand): void {
@@ -643,7 +686,7 @@ export class GuestSystem extends createSystem({}) {
     const own = guest.home && 'seat' in guest.home ? guest.home.seat : null;
     // The seat the other hand's guest is aimed at is spoken for.
     const spoken = this.guests.find((g) => g !== guest && g.state === 'held')?.target ?? null;
-    guest.target = seatUnder(this.seats, root.position, SEAT_REACH_M, own, spoken);
+    guest.target = seatUnder(this.seats, root.position, SEAT_REACH_M, own, spoken) ?? this.seatAimed(root.position, pinch, own, spoken);
     // How it takes being held: one steady face (see guests/expressions.ts), by its patience, the seat below it and
     // how near the player's face it is.
     const held = this.held;
@@ -676,6 +719,47 @@ export class GuestSystem extends createSystem({}) {
   }
 
   /** Let go: onto the glowing seat if there is one, else back where it came from. */
+  /**
+   * The seat a carried guest is aimed at when it is not hanging right
+   * over one: the free seat nearest where the player is pointing it. That
+   * is the spot under the hand if the hand is low over the café, else the
+   * spot on the café behind the fingers along the line of sight. Null when
+   * that spot is clear of the café (DROP_MARGIN_M): it goes back where it
+   * came from.
+   */
+  private seatAimed(hang: Vector3, pinch: Vector3, own: Seat | null, spoken: Seat | null): Seat | null {
+    if (this.seats.length === 0) return null;
+    const cafe = this.cafeSystem.cafe;
+    const bounds = this.holdSystem?.bounds;
+    const level = this.seats[0].position.y;
+    const spot = this.aimSpot;
+    if (hang.y - level < 0.2 && hang.y - level > -0.03) spot.copy(hang);
+    else if (!this.sight) return null;
+    else {
+      // Where the line of sight through the pinch meets the seats' level (café space).
+      const eye = cafe.worldToLocal(this.at.copy(this.eye));
+      const through = cafe.worldToLocal(spot.copy(pinch));
+      const fall = eye.y - through.y;
+      if (fall < 1e-4) return null;
+      const t = (eye.y - level) / fall;
+      if (t < 1) return null;
+      spot.set(eye.x + (through.x - eye.x) * t, level, eye.z + (through.z - eye.z) * t);
+    }
+    if (bounds && (spot.x < bounds.min.x - DROP_MARGIN_M || spot.x > bounds.max.x + DROP_MARGIN_M || spot.z < bounds.min.z - DROP_MARGIN_M || spot.z > bounds.max.z + DROP_MARGIN_M)) return null;
+    let best: Seat | null = null;
+    let bestDistance = Infinity;
+    for (const seat of this.seats) {
+      if ((seat.occupant !== 0 && seat !== own) || seat === spoken) continue;
+      const d = Math.hypot(spot.x - seat.position.x, spot.z - seat.position.z);
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = seat;
+      }
+    }
+    return best;
+  }
+  private readonly aimSpot = new Vector3();
+
   private letGo(guest: Guest): void {
     const home = guest.home;
     const homeSeat = home && 'seat' in home ? home.seat : null;

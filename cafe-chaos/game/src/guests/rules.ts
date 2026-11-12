@@ -112,9 +112,34 @@ export const CLAIM_RADII = 1.7;
 /** A carried guest hangs from the pinch by its grip, this far up its body (café space, from the model). */
 export const GRIP_HEIGHT_M = 0.042;
 /** How tightly a carried guest follows the hand (per second): high is stiff, low is dangly. */
-export const CARRY_FOLLOW = 18;
-/** A carried guest lands on a free seat within this of where it hangs (metres across, café space). */
-export const SEAT_REACH_M = 0.05;
+export const CARRY_FOLLOW = 30;
+/** A carried guest held low over a free seat, within this of it across (metres, café space), lands on exactly that seat. */
+export const SEAT_REACH_M = 0.07;
+/**
+ * Pinch what you see. A guest (or, carrying one, a seat) also counts as
+ * under the pinch when it lies behind the fingers along the line from
+ * the player's eyes: within `radiusM` of that line (metres, world), and
+ * between `nearM` and `farM` beyond the hand. So nobody has to reach to
+ * the far side of the table, low over it, where hands track worst: a
+ * pinch held over the guest as the player sees it takes it, and it flies
+ * to the hand. A pinch right at the guest still works, and wins.
+ */
+export const SIGHT = { radiusM: 0.035, nearM: 0.03, farM: 0.9 };
+/**
+ * The guest lit under an open hand stays lit until the hand is this many
+ * pick radii away (Meta's hover goes on at 5 cm and off at 8), unless
+ * another guest is clearly nearer: the highlight does not flicker between
+ * neighbours in the line.
+ */
+export const HOVER_EXIT_RADII = 1.6;
+export const HOVER_SWITCH = 0.7;
+/**
+ * A carried guest let go anywhere over the café (within this margin of
+ * its edge, metres, café space) goes to the free seat nearest where it
+ * was aimed. Only one let go well clear of the café goes back to where
+ * it came from.
+ */
+export const DROP_MARGIN_M = 0.08;
 /** Hops: onto a seat, back to the line, and off a seat (seconds and height in metres). */
 export const HOP = { sit: { seconds: 0.28, height: 0.012 }, back: { seconds: 0.45, height: 0.03 }, off: { seconds: 0.42, height: 0.028 } };
 

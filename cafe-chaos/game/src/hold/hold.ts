@@ -8,11 +8,15 @@
  * detector (the session's select events, tuned by Meta for its hand
  * tracking, which is what every Quest app answers to), and the gap
  * between the thumb and index tips, for a runtime that sends no select
- * events. Tips closer than PINCH_M pinch; further apart than RELEASE_M,
- * with no native pinch either, let go (metres).
+ * events. Tips closer than PINCH_M pinch (Meta's own figure is 1.6 cm);
+ * once pinched, they stay pinched until they are further apart than
+ * RELEASE_M with no native pinch either (metres). The gap between the
+ * two numbers is what keeps a held guest in the hand when the fingers
+ * relax a little or the headset's own pinch flickers; it is kept below
+ * the 2.5 to 3 cm of a relaxed hand, so an open hand always lets go.
  */
-export const PINCH_M = 0.015;
-export const RELEASE_M = 0.03;
+export const PINCH_M = 0.016;
+export const RELEASE_M = 0.024;
 /**
  * A hand that drops out of tracking keeps its last pinch (its point and
  * whether it was closed) for this long before it counts as gone

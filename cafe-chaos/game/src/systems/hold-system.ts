@@ -193,11 +193,9 @@ export class HoldSystem extends createSystem({}) {
       p.closed = false;
       return;
     }
-    // The headset's pinch, or the tips touching. Where the headset reports pinches, it also says when one ends:
-    // the fingers are let go of then, not held closed until the tips are well apart (relaxed tips are often 2-3 cm
-    // apart, which kept a guest stuck to the hand). Elsewhere, a pinch by the tips opens only once they are clearly
-    // apart (hysteresis).
-    p.closed = p.native || p.gap < PINCH_M || (!p.nativeSeen && p.closed && p.gap <= RELEASE_M);
+    // The headset's pinch, or the tips touching; once pinched, it holds until the tips are clearly apart
+    // (hysteresis, PINCH_M to RELEASE_M), so a flicker of either reading never opens the hand.
+    p.closed = p.native || p.gap < PINCH_M || (p.closed && p.gap <= RELEASE_M);
   }
 
   /**
