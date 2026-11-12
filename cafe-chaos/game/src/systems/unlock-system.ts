@@ -27,7 +27,7 @@
  */
 
 import { AnimationMixer, AssetManager, CanvasTexture, Color, LoopOnce, LoopRepeat, SRGBColorSpace, Vector3, createSystem, type AnimationAction, type Mesh, type MeshStandardMaterial, type Object3D } from '@iwsdk/core';
-import { SHOP, type ShopItem } from '../game/rules.js';
+import { FREE_SHOP, SHOP, type ShopItem } from '../game/rules.js';
 import { TEST_MODE } from '../game/save.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
 import { BaristaSystem } from './barista-system.js';
@@ -109,14 +109,15 @@ export class UnlockSystem extends createSystem({}) {
     this.hold?.claims.push((point) => this.nearest(point, HOVER_RADII) !== null);
   }
 
-  /** What an item costs now (nothing in test mode). */
+  /** What an item costs now (nothing in test mode, or while the shop is free: game/rules.ts FREE_SHOP). */
   price(item: ShopItem): number {
-    return TEST_MODE ? 0 : item.price;
+    return TEST_MODE || FREE_SHOP ? 0 : item.price;
   }
 
-  /** Is this item on sale now (not owned, and what it needs is in place)? */
+  /** Is this item on sale now (not owned, and what it needs is in place; while the shop is free, everything is)? */
   onSale(item: ShopItem): boolean {
     if (this.owned.has(item.id)) return false;
+    if (FREE_SHOP) return true;
     if (item.needsAnnex && !this.owned.has('annex')) return false;
     return !item.after || this.owned.has(item.after);
   }

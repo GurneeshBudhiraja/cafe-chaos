@@ -29,13 +29,14 @@ export const PAY_TIERS: { upTo: number; name: string; coins: number; happiness: 
 ];
 
 /**
- * A guest who leaves unhappy takes something with it: some happiness and
- * a few coins (never below zero). Storming out of a seat, having been
- * seated and then kept waiting for food, is the worse of the two.
+ * A guest who leaves unhappy costs the café happiness only: the bank is
+ * never touched (coins are only ever earned). Storming out of a seat,
+ * having been seated and then kept waiting for food, is the worse of the
+ * two.
  */
 export const LOSSES = {
-  gaveUp: { coins: 2, happiness: 9 },
-  stormedOff: { coins: 4, happiness: 13 },
+  gaveUp: { coins: 0, happiness: 9 },
+  stormedOff: { coins: 0, happiness: 13 },
 };
 
 /**
@@ -49,7 +50,7 @@ export const LOSSES = {
  * (0 barista, 7 annex).
  */
 export interface ShopItem {
-  id: 'annex' | 'server2' | 'server3' | 'server4';
+  id: 'annex' | 'server2' | 'server3' | 'server4' | 'server5' | 'server6';
   spot: number;
   icon: number;
   label: string;
@@ -65,7 +66,17 @@ export const SHOP: ShopItem[] = [
   { id: 'server2', spot: 2, icon: 0, label: 'SERVER', price: 30 },
   { id: 'server3', spot: 3, icon: 0, label: 'SERVER', price: 60, needsAnnex: true, after: 'server2' },
   { id: 'server4', spot: 4, icon: 0, label: 'SERVER', price: 90, needsAnnex: true, after: 'server3' },
+  { id: 'server5', spot: 5, icon: 0, label: 'SERVER', price: 120, needsAnnex: true, after: 'server4' },
+  { id: 'server6', spot: 6, icon: 0, label: 'SERVER', price: 150, needsAnnex: true, after: 'server5' },
 ];
+
+/**
+ * For now, while the café is being tried out: everything in the shop is
+ * free and on sale at once (all five extra servers and the annex, in any
+ * order, without waiting for the annex). Set false to bring back the
+ * prices and the order above.
+ */
+export const FREE_SHOP = true;
 
 /** The café opens with this many servers; each server plaque bought adds one. */
 export const STARTING_STAFF = 1;

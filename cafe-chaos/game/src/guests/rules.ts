@@ -74,11 +74,13 @@ export const FADE_OUT_M = 0.16;
 export const FOLLOW_GAP_M = 0.06;
 
 /**
- * A pinch closing within this of a guest's grip picks it up (metres in
- * the café's space, and never less than the world floor). Generous: a
- * guest is a few centimetres wide, hand tracking is a centimetre or two
- * off, and depth over a table is misjudged by as much again; the nearest
- * guest within reach is the one taken, so being generous costs nothing.
+ * A pinch closing within this of a guest picks it up (metres in the
+ * café's space, and never less than the world floor), measured to the
+ * nearest point of its body from feet to the top of its head, so a pinch
+ * at the head, the middle or the feet all count. Generous: a guest is a
+ * few centimetres wide, hand tracking is a centimetre or two off, and
+ * depth over a table is misjudged by as much again; the nearest guest
+ * within reach is the one taken, so being generous costs nothing.
  */
 export const PICK_RADIUS_M = 0.07;
 export const PICK_RADIUS_WORLD_MIN_M = 0.05;
@@ -88,6 +90,21 @@ export const PICK_RADIUS_WORLD_MIN_M = 0.05;
  * tend to close on the way in, not at the spot.
  */
 export const PICK_WINDOW_S = 0.4;
+/**
+ * The guest lit up under an open hand is remembered for this long
+ * (seconds) after the hand moves off it, and a pinch closing in that time
+ * takes it if it is within `PICK_STICKY_RADII` pick radii: closing the
+ * fingers moves the pinch point a centimetre or two, which used to slip
+ * it off the lit guest or onto a neighbour. What lit up is what you get.
+ */
+export const PICK_MEMORY_S = 0.35;
+export const PICK_STICKY_RADII = 1.8;
+/**
+ * A carried guest is let go only once the pinch has read open for this
+ * long (seconds): a single frame of the tracking or the headset's pinch
+ * flickering open no longer drops it in the wrong place.
+ */
+export const RELEASE_HOLD_S = 0.12;
 /** A pinch within this many pick radii of a guest belongs to the guests: it never moves the café. */
 export const CLAIM_RADII = 1.7;
 /** A carried guest hangs from the pinch by its grip, this far up its body (café space, from the model). */
