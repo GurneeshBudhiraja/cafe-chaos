@@ -28,7 +28,7 @@
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
-import { arrivalPace, MEAL_SECONDS, PAY_TIERS, patienceShare } from '../game/rules.js';
+import { arrivalPace, MEAL_SECONDS, patienceShare, WISH, wishChance } from '../game/rules.js';
 import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS } from '../guests/rules.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
@@ -356,6 +356,8 @@ export class GameSystem extends createSystem({}) {
   private pace(): void {
     this.guests.spawnPace = arrivalPace(this.clock);
     this.guests.patienceSeconds = PATIENCE_SECONDS * patienceShare(this.clock);
+    this.guests.wishChance = wishChance(this.clock);
+    this.guests.singerChance = this.clock >= WISH.after ? WISH.singer : 0;
   }
 
   /** Write the bank and the staff to the save. */
@@ -379,6 +381,8 @@ export class GameSystem extends createSystem({}) {
     this.guests.patienceFrozen = true;
     this.guests.spawnPace = 1;
     this.guests.patienceSeconds = PATIENCE_SECONDS;
+    this.guests.wishChance = 0;
+    this.guests.singerChance = 0;
     this.score.running = false;
     if (this.phase === 'title') this.guests.clear();
   }

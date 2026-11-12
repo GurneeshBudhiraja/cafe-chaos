@@ -70,6 +70,25 @@ export function patienceShare(seconds: number): number {
 }
 
 /**
+ * Wishes (guests/wishes.ts). A guest whose wish is granted when it pays
+ * adds `coins` to its tip and `happiness` to the café; one whose wish was
+ * ignored pays one step down (a quick seating pays as a fair one, a fair
+ * as a late one) and is never a penalty beyond that.
+ *
+ * How many guests have a wish: none for the first `after` seconds of a
+ * run (the first minute teaches seating), then `chance.start`, rising by
+ * `chance.perMinute` to `chance.max`. Singers come with chance `singer`
+ * once wishes have begun, one at a time.
+ */
+export const WISH = { coins: 4, happiness: 2, after: 45, chance: { start: 0.35, perMinute: 0.1, max: 0.75 }, singer: 0.14 };
+
+/** The share of new guests who have a wish, `seconds` into the run. */
+export function wishChance(seconds: number): number {
+  if (seconds < WISH.after) return 0;
+  return Math.min(WISH.chance.max, WISH.chance.start + (WISH.chance.perMinute * (seconds - WISH.after)) / 60);
+}
+
+/**
  * A guest gets down from its chair once it has eaten for this long
  * (seconds). The sooner its food comes, the sooner its table is free for
  * the next guest: more servers means more guests through the door, and

@@ -7,6 +7,8 @@
  *   stormed out without eating).
  * - `anger`: the red cross-shaped vein mark of a guest losing its temper
  *   at the table (it stays over the head while the guest fumes).
+ * - `heart`, `shrug`: a guest's wish granted, or not; `note`: a singer's
+ *   tune.
  * - `coins`: a gold coin and "+12", the money a guest paid (or "-2" in
  *   coral, what one who left unhappy cost).
  *
@@ -16,8 +18,9 @@
  */
 
 import { CanvasTexture, Group, Sprite, SpriteMaterial, SRGBColorSpace, type Vector3 } from '@iwsdk/core';
+import { wishTexture } from './wish-art.js';
 
-export type PopupKind = 'up' | 'down' | 'anger';
+export type PopupKind = 'up' | 'down' | 'anger' | 'heart' | 'shrug' | 'note';
 
 /** Sizes (metres across, café space), how long a popup lasts and how far it rises (seconds, metres). */
 export const POPUP = { size: 0.022, coinSize: 0.03, seconds: 1.8, rise: 0.035 };
@@ -103,6 +106,10 @@ function thumb(ctx: CanvasRenderingContext2D, down: boolean): void {
 }
 
 const DRAW: Record<PopupKind, () => CanvasTexture> = {
+  // How a wish came out (a heart, a shrug), and a singer's note: guests/wish-art.ts.
+  heart: () => wishTexture('heart', false),
+  shrug: () => wishTexture('shrug', false),
+  note: () => wishTexture('note', false),
   up: () =>
     picture('up', (ctx) => {
       badge(ctx, 64, '#5fc48a', '#2f8f5b');

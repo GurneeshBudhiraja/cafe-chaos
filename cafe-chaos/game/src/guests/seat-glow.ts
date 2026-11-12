@@ -23,6 +23,8 @@ import type { Seat } from './seats.js';
 
 /** The glow's colour and sizes (metres, café space): the pad on the cushion, the halo round it, the column above, the dots. */
 export const GLOW = { color: 0x9a86ff, pad: 0.034, halo: 0.07, column: { radius: 0.016, height: 0.065 }, dot: 0.014, lift: 0.0025 };
+/** A seat that would grant the carried guest's wish: mint in place of violet, and its dot larger. */
+export const GRANT = { color: 0x58e39a, dot: 1.7 };
 /** The landing glow breathes between these, this many times a second: slow, like the lanterns. */
 const PULSE = { low: 0.72, high: 1, rate: 0.9 };
 /** How strong each layer is (0 to 1): enough to find at a glance, no more. */
@@ -89,6 +91,8 @@ export class SeatGlow {
   private readonly matrix = new Matrix4();
   private readonly flat = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
   private readonly scale = new Vector3(GLOW.dot, GLOW.dot, GLOW.dot);
+  private readonly violet = new Color(GLOW.color);
+  private readonly mint = new Color(GRANT.color);
   private readonly place = new Vector3();
 
   constructor(cafe: Group, seatCount: number) {
@@ -116,7 +120,11 @@ export class SeatGlow {
       cafe.add(group);
       this.landing.push({ group, ...materials });
     }
-    this.dots = new InstancedMesh(new PlaneGeometry(1, 1), paint(radial([[0, 1], [0.55, 0.9], [1, 0]]), OPACITY.dot), seatCount);
+    // The dots take their colour one by one (violet, or mint for a seat that grants a wish), so the material is white.
+    const dotPaint = paint(radial([[0, 1], [0.55, 0.9], [1, 0]]), OPACITY.dot);
+    dotPaint.color.set(0xffffff);
+    this.dots = new InstancedMesh(new PlaneGeometry(1, 1), dotPaint, seatCount);
+    for (let i = 0; i < seatCount; i++) this.dots.setColorAt(i, this.violet);
     this.dots.name = 'SeatDots';
     this.dots.renderOrder = 10;
     this.dots.frustumCulled = false;
@@ -129,9 +137,10 @@ export class SeatGlow {
    * Show the glows for this frame: `targets` is the landing seat of each
    * carrying hand (null where a hand carries nothing or is over no
    * seat); the dots show on the other free seats while anything is
-   * carried.
+   * carried. `granting` is the seats that would grant a carried guest's
+   * wish: they show mint, and larger.
    */
-  show(seats: Seat[], targets: (Seat | null)[], carrying: boolean, delta: number): void {
+  show(seats: Seat[], targets: (Seat | null)[], carrying: boolean, delta: number, granting: ReadonlySet<Seat> | null = null): void {
     this.time += delta;
     const pulse = PULSE.low + (PULSE.high - PULSE.low) * (0.5 + 0.5 * Math.sin(this.time * PULSE.rate * Math.PI * 2));
     for (let i = 0; i < this.landing.length; i++) {
@@ -141,6 +150,10 @@ export class SeatGlow {
       glow.group.visible = !!seat;
       if (!seat) continue;
       glow.group.position.set(seat.position.x, seat.position.y + GLOW.lift, seat.position.z);
+      const tint = granting?.has(seat) ? this.mint : this.violet;
+      glow.pad.color.copy(tint);
+      glow.halo.color.copy(tint);
+      glow.column.color.copy(tint);
       glow.pad.opacity = OPACITY.pad * pulse;
       glow.halo.opacity = OPACITY.halo * pulse;
       glow.column.opacity = OPACITY.column * pulse;
@@ -149,10 +162,14 @@ export class SeatGlow {
     if (carrying) {
       for (const seat of seats) {
         if (seat.occupant !== 0 || targets.includes(seat)) continue;
+        const grant = granting?.has(seat) ?? false;
+        this.scale.setScalar(GLOW.dot * (grant ? GRANT.dot : 1));
         this.matrix.compose(this.place.set(seat.position.x, seat.position.y + GLOW.lift, seat.position.z), this.flat, this.scale);
+        this.dots.setColorAt(count, grant ? this.mint : this.violet);
         this.dots.setMatrixAt(count++, this.matrix);
       }
       this.dots.instanceMatrix.needsUpdate = true;
+      if (this.dots.instanceColor) this.dots.instanceColor.needsUpdate = true;
     }
     this.dots.count = count;
   }

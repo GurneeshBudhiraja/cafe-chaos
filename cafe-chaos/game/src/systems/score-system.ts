@@ -21,7 +21,7 @@
  */
 
 import { createSystem } from '@iwsdk/core';
-import { HAPPINESS, LOSSES, PAY_TIERS } from '../game/rules.js';
+import { HAPPINESS, LOSSES, PAY_TIERS, WISH } from '../game/rules.js';
 import { GuestSystem, type Outcome } from './guest-system.js';
 
 export class ScoreSystem extends createSystem({}) {
@@ -34,12 +34,14 @@ export class ScoreSystem extends createSystem({}) {
   up = 0;
   down = 0;
   servedGuests = 0;
+  /** Guests who left with their wish granted, this run. */
+  wishesGranted = 0;
   /** Seconds the café has been open this run (GameSystem keeps it); shown on the board. */
   clock = 0;
   /** True during a shift: outcomes count. */
   running = false;
   /** Every scored outcome this shift, in order (for the checks). */
-  readonly log: { kind: Outcome['kind']; share: number; coins: number; happiness: number; tier?: string }[] = [];
+  readonly log: { kind: Outcome['kind']; share: number; coins: number; happiness: number; tier?: string; wish?: Outcome['wish'] }[] = [];
   private guests!: GuestSystem;
 
   init(): void {
@@ -54,6 +56,7 @@ export class ScoreSystem extends createSystem({}) {
     this.up = 0;
     this.down = 0;
     this.servedGuests = 0;
+    this.wishesGranted = 0;
     this.log.length = 0;
     this.running = true;
   }
@@ -70,14 +73,22 @@ export class ScoreSystem extends createSystem({}) {
     if (!this.running) return;
     const popups = this.guests.popups;
     if (outcome.kind === 'paid') {
-      const tier = PAY_TIERS.find((t) => outcome.share <= t.upTo) ?? PAY_TIERS[PAY_TIERS.length - 1];
-      this.earn(tier.coins);
-      this.cheer(tier.happiness);
+      // By how quickly it was seated; a wish ignored pays one step down, a wish granted adds to the tip.
+      let step = PAY_TIERS.findIndex((t) => outcome.share <= t.upTo);
+      if (step < 0) step = PAY_TIERS.length - 1;
+      if (outcome.wish === 'unmet') step = Math.min(PAY_TIERS.length - 1, step + 1);
+      const tier = PAY_TIERS[step];
+      const granted = outcome.wish === 'met';
+      const coins = tier.coins + (granted ? WISH.coins : 0);
+      const happiness = tier.happiness + (granted ? WISH.happiness : 0);
+      this.earn(coins);
+      this.cheer(happiness);
       this.up++;
       this.servedGuests++;
+      if (granted) this.wishesGranted++;
       popups.show('up', outcome.at);
-      popups.coins(tier.coins, outcome.at.clone().setY(outcome.at.y + 0.018));
-      this.log.push({ kind: outcome.kind, share: outcome.share, coins: tier.coins, happiness: tier.happiness, tier: tier.name });
+      popups.coins(coins, outcome.at.clone().setY(outcome.at.y + 0.018));
+      this.log.push({ kind: outcome.kind, share: outcome.share, coins, happiness, tier: tier.name, wish: outcome.wish });
       return;
     }
     // An unhappy guest costs happiness only; the bank and the night's takings are never touched.

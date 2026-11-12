@@ -115,6 +115,8 @@ export const GRIP_HEIGHT_M = 0.042;
 export const CARRY_FOLLOW = 30;
 /** A carried guest held low over a free seat, within this of it across (metres, café space), lands on exactly that seat. */
 export const SEAT_REACH_M = 0.07;
+/** The picture of a guest's wish over its head: its size, and how far above the patience dial (metres, café space). */
+export const WISH_TAG = { size: 0.024, above: 0.023 };
 /**
  * Pinch what you see. A guest (or, carrying one, a seat) also counts as
  * under the pinch when it lies behind the fingers along the line from
