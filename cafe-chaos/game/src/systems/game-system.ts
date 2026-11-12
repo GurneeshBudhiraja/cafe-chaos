@@ -37,6 +37,7 @@ import { castLoaded } from '../guests/actor.js';
 import { randomLook } from '../guests/cast.js';
 import { BaristaSystem } from './barista-system.js';
 import { BoardSystem, clockText } from './board-system.js';
+import { StripSystem } from './strip-system.js';
 import { CafeSystem } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
 import { HoldSystem } from './hold-system.js';
@@ -104,6 +105,7 @@ export class GameSystem extends createSystem({}) {
   baristas!: BaristaSystem;
   shop!: ShopSystem;
   board!: BoardSystem;
+  strip!: StripSystem;
   private cafe!: CafeSystem;
   private hold: HoldSystem | null = null;
   private readonly previous: Record<Hand, boolean> = { left: false, right: false };
@@ -127,6 +129,7 @@ export class GameSystem extends createSystem({}) {
     this.shop = this.world.getSystem(ShopSystem)!;
     this.score = this.world.getSystem(ScoreSystem)!;
     this.board = this.world.getSystem(BoardSystem)!;
+    this.strip = this.world.getSystem(StripSystem)!;
     this.hold = this.world.getSystem(HoldSystem) ?? null;
     for (const panel of [this.card, this.how, this.coach]) this.cafe.cafe.add(panel.mesh);
     this.card.mesh.position.set(...CARD.position);
@@ -201,6 +204,10 @@ export class GameSystem extends createSystem({}) {
     this.board.best = this.save.bestSeconds;
     this.board.live = false;
     this.board.panel.show(true);
+    this.strip.best = this.save.bestSeconds;
+    this.strip.live = false;
+    this.strip.settle();
+    this.strip.panel.show(true);
     this.how.show(false);
     const cw = this.card.width;
     const ch = this.card.height;
@@ -277,6 +284,10 @@ export class GameSystem extends createSystem({}) {
     this.board.best = this.save.bestSeconds;
     this.board.live = true;
     this.board.panel.show(true);
+    this.strip.best = this.save.bestSeconds;
+    this.strip.live = true;
+    this.strip.settle();
+    this.strip.panel.show(true);
   }
 
   /** Stop everything in the café where it is, and save. No-op unless a run is on. */
@@ -313,6 +324,7 @@ export class GameSystem extends createSystem({}) {
     this.unpause();
     this.phase = 'closed';
     this.board.live = false;
+    this.strip.live = false;
     this.quiet();
     const s = this.score;
     const seconds = this.clock;
@@ -529,7 +541,7 @@ function firstRun(): Step[] {
   return [
     { picture: 0, title: MOVES[0].title, text: 'Hold your fingers over the guest at the gate. When it lights up, pinch.', done: (g) => g.guests.pickedUp > g.mark.pickedUp },
     { picture: 1, title: MOVES[1].title, text: 'Carry them over the café and let go. They take the glowing seat.', done: (g) => g.guests.seated > g.mark.seated },
-    { picture: 2, title: 'Here comes their tea', text: 'Fed guests pay. More guests are coming: keep them happy, and hire help on the side board.', done: (g) => g.baristas.servedCount > g.mark.served },
+    { picture: 2, title: 'Here comes their tea', text: 'Fed guests pay. More guests are coming: keep them happy, and hire help on the board beside the café.', done: (g) => g.baristas.servedCount > g.mark.served },
   ];
 }
 

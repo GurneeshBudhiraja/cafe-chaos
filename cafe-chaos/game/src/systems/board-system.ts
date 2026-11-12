@@ -1,13 +1,11 @@
 /**
  * BoardSystem: the side board, a paper card standing on the table beside
  * the café (not over it, not in front of it), turned to the player. It
- * is where the evening is read and where the two things the player does
- * besides seating are pressed:
+ * is where the two things the player does besides seating are pressed
+ * (the clock, happiness and coins are read on the strip in front of the
+ * café, StripSystem):
  *
- * - the clock, counting up from 0:00, with the longest evening so far
- *   under it (amber once this run has passed it);
- * - the café's happiness: a face and a bar;
- * - the bank, and the staff: six places, filled as servers are hired;
+ * - the staff: six places, filled as servers are hired;
  * - Hire: until the bank can pay for the next server the button holds a
  *   savings bar (so much of the price saved); then it turns amber and
  *   reads the price; with all six hired it reads Full staff;
@@ -24,15 +22,15 @@
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
-import { HAPPINESS, MAX_STAFF } from '../game/rules.js';
-import { coin, INK, moodColour, moodFace, Panel, roundRect, write, type Button } from '../ui/panel.js';
+import { MAX_STAFF } from '../game/rules.js';
+import { coin, INK, Panel, roundRect, write, type Button } from '../ui/panel.js';
 import { CafeSystem } from './cafe-system.js';
 import { HoldSystem } from './hold-system.js';
 import { ScoreSystem } from './score-system.js';
 import { ShopSystem } from './shop-system.js';
 
 /** The board's size (real metres), and where it stands: this far out from the café's side and above the table (real metres), and how far toward the player from the café's middle (café space). */
-export const BOARD = { width: 0.216, height: 0.258, gap: 0.03, lift: 0.03, forward: 0.16 };
+export const BOARD = { width: 0.2, height: 0.15, gap: 0.03, lift: 0.03, forward: 0.16 };
 /**
  * The layout was drawn for an 18 cm board; from the seat the board is
  * about 75 cm from the eyes (the café itself is 92 cm across), so it is
@@ -80,7 +78,7 @@ export class BoardSystem extends createSystem({}) {
     this.player.head.getWorldPosition(this.head);
     if (!this.panel.update(Math.min(0.1, delta), this.head)) return;
     const s = this.score;
-    const now = `${Math.round(s.happiness)}|${s.bank}|${Math.floor(s.clock)}|${this.shop.hires}|${this.best}|${this.live}`;
+    const now = `${s.bank}|${this.shop.hires}|${this.live}`;
     if (now !== this.shown) {
       this.shown = now;
       this.layout();
@@ -105,7 +103,7 @@ export class BoardSystem extends createSystem({}) {
     const bank = this.score.bank;
     const canPay = price !== null && bank >= price;
     const hire: Button = {
-      id: 'hire', x: L, y: h * 0.67, w: R - L, h: 34 * MM, primary: true, off: !canPay,
+      id: 'hire', x: L, y: h - 34 * MM - h * 0.09, w: R - L, h: 34 * MM, primary: true, off: !canPay,
       draw: (ctx, b) => {
         const mid = b.x + b.w / 2;
         if (price === null) {
@@ -123,7 +121,7 @@ export class BoardSystem extends createSystem({}) {
       },
     };
     const pause: Button = {
-      id: 'pause', x: R - 26 * MM, y: h * 0.06, w: 26 * MM, h: 26 * MM,
+      id: 'pause', x: R - 26 * MM, y: h * 0.08, w: 26 * MM, h: 26 * MM,
       draw: (ctx, b) => {
         const x = b.x + b.w / 2;
         const y = b.y + b.h / 2;
@@ -139,20 +137,10 @@ export class BoardSystem extends createSystem({}) {
   }
 
   private draw(ctx: CanvasRenderingContext2D, _w: number, h: number, L: number, R: number): void {
-    const s = this.score;
-    const mood = s.happiness / HAPPINESS.max;
-    // The clock, and the record under it.
-    const record = this.live && this.best > 0 && s.clock > this.best;
-    write(ctx, clockText(s.clock), L, h * 0.135, 21 * MM, { weight: 800, font: 'Georgia, serif', align: 'left' });
-    const under = record ? 'your longest evening!' : this.best > 0 ? `longest ${clockText(this.best)}` : 'how long can you stay open?';
-    write(ctx, under, L + 1 * MM, h * 0.235, 5.5 * MM, { weight: 700, color: record ? INK.amberDeep : INK.inkSoft, align: 'left' });
-    // Happiness.
-    moodFace(ctx, L + 7.5 * MM, h * 0.37, 7.5 * MM, mood);
-    meter(ctx, L + 20 * MM, h * 0.37 - 4 * MM, R - L - 20 * MM, 8 * MM, mood, moodColour(mood));
-    // The bank and the staff.
-    coin(ctx, L + 7.5 * MM, h * 0.525, 7 * MM);
-    write(ctx, `${s.bank}`, L + 19 * MM, h * 0.53, 14 * MM, { weight: 800, align: 'left' });
-    for (let i = 0; i < MAX_STAFF; i++) person(ctx, R - 5 * MM - (MAX_STAFF - 1 - i) * 11.5 * MM, h * 0.525, 6 * MM, i < this.shop.staff);
+    // The staff: six places, filled as servers are hired. (The clock, happiness and coins are on the strip in front.)
+    write(ctx, 'STAFF', L, h * 0.15, 6 * MM, { weight: 800, color: INK.inkSoft, align: 'left' });
+    for (let i = 0; i < MAX_STAFF; i++) person(ctx, L + 5 * MM + i * 13 * MM, h * 0.36, 7 * MM, i < this.shop.staff);
+    void R;
   }
 }
 
