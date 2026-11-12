@@ -1,5 +1,5 @@
 /**
- * A look at the scoreboard strip in front of the café, from the seat, and
+ * A look at the scoreboard strip (at eye level over the café), from the seat, and
  * close up, at full, middling and low happiness; and a few frames of a
  * segment draining when a guest leaves unhappy.
  * Usage: dev server running, then `node scripts/look-strip.mjs`.
@@ -40,7 +40,12 @@ for (const [name, happy, bank, clock] of [['full', 100, 0, 12], ['mid', 70, 46, 
   await h.head(SEAT, LOOK, 200);
   await frames(4);
   await h.screenshot(`artifacts/strip-${name}-seat.png`);
-  await h.head(P([at[0] + 0.2, at[1] + 0.16, at[2] + 0.02]), P(at), 200);
+  // Looking a little up from the café, at the strip, as a player glances at it.
+  const mid = await page.evaluate(() => window.__cafe.strip.panel.mesh.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
+  await h.head(SEAT, P([mid[0], mid[1] - 0.12, mid[2]]), 200);
+  await frames(4);
+  await h.screenshot(`artifacts/strip-${name}-glance.png`);
+  await h.head(P([mid[0] + 0.28, mid[1], mid[2] + 0.02]), P(mid), 200);
   await frames(4);
   await h.screenshot(`artifacts/strip-${name}-close.png`);
 }

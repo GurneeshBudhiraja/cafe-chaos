@@ -90,6 +90,13 @@ export class Panel {
    * fingertip turns slowly, so a nod of the head never swings its face through a finger held near it.
    */
   turn = Infinity;
+  /** Draw the paper card behind the content (false: the content draws its own). */
+  frame = true;
+  /** Draw over everything in the scene (nothing in front of it hides it). */
+  set onTop(on: boolean) {
+    this.material.depthTest = !on;
+    this.mesh.renderOrder = on ? 40 : 30;
+  }
   private readonly facing = new Quaternion();
   private faced = false;
 
@@ -131,7 +138,7 @@ export class Panel {
   paint(): void {
     const { ctx, width: w, height: h } = this;
     ctx.clearRect(0, 0, w, h);
-    card(ctx, w, h);
+    if (this.frame) card(ctx, w, h);
     this.content(ctx, w, h);
     for (const b of this.buttons) drawButton(ctx, b, this.hover === b.id, this.pressed?.id === b.id);
     this.texture.needsUpdate = true;
