@@ -309,3 +309,16 @@ shaking hand and a flickering pinch).
   a penalty beyond that, so the pace set in phase 1 holds.
 - Wishes begin after the first minute and become commoner, so the first
   run teaches seating before it teaches wishes.
+
+Probe results (pick up / hold through a flicker / put down):
+- **Iteration 1**, the new picking as first written: 3 of 8, 2 of 4,
+  1 of 4. Two real faults found: a guest held high over a seat went back
+  to the line, and the probe itself ran each emulated frame as 0.7 s,
+  longer than every grace period in the hand code.
+- **Iteration 2**, the high-hand fix, and the probe run at headset frame
+  time: 8 of 8, 3 of 4, 4 of 4. The one miss: a pinch flicker 25 cm
+  above a seat let the guest go, but it still went to the seat meant.
+- **Iteration 3**, cues on the hand: the fingertip dot turns mint while
+  a guest is lit under it (a pinch now takes it) and amber on the pinch.
+- Not measurable here: how it feels with real tracking. On
+  `docs/HEADSET-CHECKS.md`.

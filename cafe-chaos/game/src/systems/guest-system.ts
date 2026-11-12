@@ -281,6 +281,8 @@ export class GuestSystem extends createSystem({}) {
     this.blobs.end();
     this.popups.update(delta);
     for (let i = 0; i < 2; i++) this.rings.show(i, this.hovered[i]?.actor.root.position ?? null, delta);
+    // The dot at the fingertips turns mint while a guest is lit under that hand.
+    if (this.holdSystem) HANDS.forEach((hand, i) => (this.holdSystem!.cursor.aiming[hand] = this.hovered[i] !== null));
     this.glow.show(this.seats, this.targets, this.targets.some((t, i) => t !== null || this.carriedBy(HANDS[i]) !== undefined), delta);
     this.peak = Math.max(this.peak, this.guests.length);
   }
