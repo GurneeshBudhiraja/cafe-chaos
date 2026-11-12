@@ -58,7 +58,7 @@ const h = await startHeadset({
     await page.evaluate((timeScale) => {
       const { system, guests } = window.__cafe;
       system.timeScale = timeScale;
-      guests.spawnSeconds = [2.5, 3.5];
+      guests.spawnSeconds = [6, 8];
       guests.seatedSeconds = 9;
       system.replace();
     }, 1 / h.speedUp);
@@ -208,6 +208,7 @@ for (const [x, z] of spots.slice(0, 3)) {
   await rest();
   await pause(800);
 }
+console.error('three seated', JSON.stringify(await page.evaluate(() => ({ bank: window.__cafe.score.bank, log: window.__cafe.score.log, phase: window.__cafe.game.phase, running: window.__cafe.score.running }))));
 // One kept waiting for its food loses its temper and storms out (its patience run down, so it shows here).
 await until(() => window.__cafe.guests.guests.some((g) => g.state === 'seated' && !g.served && g.fuming < 0 && g.seatedFor > 2));
 await page.evaluate(() => {
@@ -233,7 +234,7 @@ for (let more = 0; more < 8 && (await page.evaluate(() => window.__cafe.score.ba
   await rest();
   await pause(9000);
 }
-console.error('before the shop', JSON.stringify(await page.evaluate(() => ({ bank: window.__cafe.score.bank, staff: window.__cafe.baristas.staff.length }))));
+console.error('before the shop', JSON.stringify(await page.evaluate(() => ({ bank: window.__cafe.score.bank, staff: window.__cafe.baristas.staff.length, log: window.__cafe.score.log, gaveUp: window.__cafe.guests.gaveUp, stormedOff: window.__cafe.guests.stormedOff }))));
 {
   const grip = await page.evaluate(() => window.__cafe.unlocks.plaques.get('server2').grip.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
   await h.head(P(add(grip, [0.12, 0.17, 0.12])), P(grip), 1400);
