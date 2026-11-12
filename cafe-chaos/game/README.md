@@ -17,67 +17,87 @@ door; the player pinches one up, carries it over the café and lets go
 over the seat that glows a soft violet (a free hand near a guest lights
 it up with a warm ring: pinch now and it is yours); after its meal the
 guest hops down and leaves by the one exit, in the café's left wall
-under the 出口 sign. A stone plaque in the gravel in front extends the
-café: pinch it and the left wall goes, the floor grows to the left with
-four more tables in line with the rest, and the exit moves to the new
-outer wall.
+under the 出口 sign.
 
-**The game** (`src/systems/game-system.ts`, `src/systems/score-system.ts`,
-`src/systems/unlock-system.ts`; every number in `src/game/rules.ts`):
+**The game** (`src/systems/game-system.ts`, `score-system.ts`,
+`shop-system.ts`, `board-system.ts`; every number in `src/game/rules.ts`;
+the plan and what each iteration taught in `docs/PLAN.md`):
 
-- **Title.** Once the café is on the table a paper card floats over it:
-  Café Chaos, the bank and the best night, and *Open the café*, *How to
-  play* and *Walkthrough*. The café is quiet behind it: the staff work
-  and nobody comes. Buttons are pressed with a pinch on them (a hand
-  over one lights it), the way a guest is picked up (`src/ui/panel.ts`).
-- **The walkthrough** (the first time the café is opened, or from the
-  title): five steps on a small coach card, done rather than read: pick
-  up the guest waiting at the gate; seat it; its tea comes (its dial
-  runs until then); what makes the café happy (the scoreboard comes up);
-  the shop. Skip on every step; the last opens the café. The walkthrough
-  guest's patience is held, so nothing goes wrong while learning.
-- **A shift** lasts four minutes. A scoreboard stands over the back of
-  the café: the happiness meter with its face, the bank and the night's
-  takings, the clock, and the thumbs up and down.
+- **One endless evening.** The café opens at 0:00 and the clock counts
+  up. Guests come faster and wait less patiently as the evening goes on
+  (`RAMP`); the café closes when its happiness runs out. How long it
+  stayed open is the score, and the longest evening is the record to
+  beat. Scripted players (`scripts/sim-run.mjs`) last about six and a
+  half minutes with slow hands and nine and a half with quick ones.
+- **Title.** Once the café is on the table a card shows: Café Chaos, the
+  question the game asks, the record, *Open the café* and *How to play*.
+  The café is quiet behind it: the staff work and nobody comes.
+- **Buttons are pressed with a fingertip** (`src/ui/panel.ts`), as Meta's
+  guidance for direct touch asks: the index fingertip coming near lights
+  a button, pushing it through the card's face presses it, and it must
+  come back out before it can press again. A pinch on a button works
+  too. Cards keep their real size whatever the café's scale, so no
+  button is ever under 22 mm.
+- **How to play** is three pictures taken from the game
+  (`scripts/shoot-howto.mjs`, `public/ui/`), a line under each: pinch a
+  guest; seat them; stay open.
+- **The first run** teaches by doing, in three steps on a small coach
+  card that shows the picture of the move in hand: pinch the guest at
+  the gate; seat it; its tea arrives and the café opens. Every step has
+  Skip, and the guest's patience is held while the player learns.
+- **The side board** (`board-system.ts`) stands beside the café, turned
+  to the player: the clock and the record, the happiness bar, the bank,
+  six places for the staff, **Hire** and **Pause**. Until the bank can
+  pay for the next server, Hire holds a savings bar; then it turns amber
+  with the price; with all six hired it reads Full staff. Nothing to buy
+  stands in the gravel any more, and the café is no longer extended.
 - **The wait runs from the gate to the food.** A guest's patience dial
   keeps running once it is seated, until a server brings its order
-  (seating tops it up by 28 s, up to 46 s). So the servers matter. A
-  server's round takes about 18 s, and guests arrive as fast as the
-  staff can serve them (`ARRIVAL_PACE` in `src/game/rules.ts`): with one
-  server they come about every 16 s, with two every 9, with four or more
-  every 5, so one server can run the café and each hire makes the
-  evening busier and richer. A guest gets down once it has eaten for
-  22 s (`MEAL_SECONDS`), so quick service frees the table sooner. A guest whose patience
-  runs out at the table fumes for a moment (cross face, a red vein mark
-  over its head, the unhappy sitting clip) and stomps out without eating.
+  (seating tops it up by 28 s, up to 46 s). A server's round takes about
+  18 s. A guest whose patience runs out at the table fumes for a moment
+  (cross face, a red vein mark over its head) and stomps out without
+  eating. A guest gets down once it has eaten for 22 s, so quick service
+  frees the table sooner.
 - **Scoring.** A guest who ate pays as it gets down from its chair, with
-  a thumbs up and its coins over its head: 12 coins and +6 happiness if
-  it was taken from the gate and seated within the first quarter of its
-  patience, 8 and +4 if a bit later, 5 and +2 at the last moment. One who
-  gives up in the line costs 6 happiness, a thumbs down; one who storms
-  out of its seat 10. Unhappy guests never take coins: the bank only
-  grows. Happiness starts full; at zero the café closes early.
-- **The shop**: stone plaques in the gravel in front. **For now it is
-  free** (`FREE_SHOP` in `src/game/rules.ts`): all six plaques are out at
-  once, each marked FREE, and can be bought in any order: the annex and
-  five more servers, up to all six baristas. With `FREE_SHOP` off the
-  prices and order come back: the café opens with one server; a second
-  costs 40, the garden annex 120, and once the annex is open the bigger
-  café can take a third (110), a fourth (160), a fifth (200) and a sixth
-  (240), each plaque appearing once the one before is bought. Without the money a pinch gets a
-  shake and the price flashes coral; bought, the padlock pops, a new
-  server appears behind the counter and waves (its plaque sinks away), or
-  the annex rises.
-- **Closing card**: closing time (or closed early), the night's takings,
-  happiness, guests served, thumbs; *Next shift* or *Menu*.
+  a thumbs up and its coins over its head: 12 coins and +4 happiness if
+  it was seated within the first quarter of its patience, 8 and +2 if a
+  bit later, 5 and +1 at the last moment. One who gives up in the line
+  costs 8 happiness; one who storms out of its seat 10. Unhappy guests
+  never take coins: the bank only grows.
+- **Guests with wishes** (`src/guests/wishes.ts`, `wish-art.ts`,
+  `src/ui/wish-card.ts`). Every guest has its own name. From the first
+  minute on, more and more of them have a wish: a window seat, a seat by
+  the gate, a seat by the counter, somewhere quiet, a table to itself,
+  some company, a seat near the singer. Now and then one sings (notes
+  float up from it).
+  - A small picture of the wish floats over each waiting guest.
+  - A hand over a guest, or carrying it, brings up its card beside the
+    hand: its name and its wish in a few words.
+  - While a guest is carried, the seats that would grant its wish show
+    mint, the others violet.
+  - Seated, it gets a heart (granted: 4 coins and 2 happiness more when
+    it pays) or a shrug (not: it pays one step down). A loner shrugs if
+    someone is then put at its table; one who wanted company gets its
+    heart when someone is.
+- **Hiring.** The café opens with one server. Each further one (up to
+  all six baristas) costs more: 60, 120, 200, 300, 420. Hired servers
+  stay hired, so the café grows between sessions.
+- **Pause** stops everything in the café where it is (*Resume*, or *End
+  the evening*). The game pauses and saves itself when the headset comes
+  off or another app takes over.
+- **Closing card**: how long the café stayed open, the record, coins
+  earned and guests fed; *Play again* or *Menu*.
+- **The room.** On a detected table, guests come from the table's real
+  edge and walk across the player's own table to the line
+  (`CafeSystem.tableRun`); on a narrow table they start nearer, never in
+  the air beyond its edge.
 - **Kept between sessions** (`src/game/save.ts`, the headset browser's
-  local storage): the bank, what was bought (the annex is open and the
-  servers hired when the café comes back), the best night, and whether
-  the walkthrough has been seen.
+  local storage): the bank, the servers hired, the longest evening, the
+  most coins in one run, and whether the first run has been seen.
 - **Test mode**: `?test` in the address skips all of this (no cards,
-  guests at once, all six servers, a free shop, nothing saved), as the
-  café was before the game; the check and recording scripts use it, apart
-  from `check-game.mjs`.
+  guests at once, all six servers, no wishes, nothing saved), as the
+  café was before the game; the older check and recording scripts use
+  it. `?hands=cream`, `outline` or `real` picks another hand style.
 
 **The sound** (`src/systems/sound-system.ts`, `src/audio/voices.ts`): under
 the theme, the café sounds like a café. Each sound comes from where its
@@ -484,15 +504,31 @@ room has a desk-height table), from a running dev server:
   a guest and pressing the plaque play their sounds (what was played and
   when, not how it sounds).
 - `node scripts/check-game.mjs` (the real game, not test mode, with a
-  fresh save): the title card with nobody coming and one server; a pinch
-  on Open starts the walkthrough; the walkthrough guest is picked up and
-  seated with real pinches, the server brings its tea, and the last step
-  opens a shift; a guest seated quickly pays the top tip with a thumbs
-  up; a guest kept waiting for its food fumes and storms out; the shop
-  refuses what the bank cannot pay for, hires a server and opens the
-  annex, after which the next server's plaque appears; closing time saves
-  the bank and what was bought; happiness at zero closes early (13
-  checks), with screenshots.
+  fresh save): the title card and the side board with nobody coming and
+  one server; a fingertip pushed through Open starts the first run; its
+  guest is picked up and seated with real pinches, the server brings its
+  tea and the café opens at 0:00; the clock counts up and the pace
+  builds; a guest seated quickly pays the top tip; a guest kept waiting
+  for its food fumes and storms out, costing happiness and no coins;
+  Hire is refused while the bank is short and hires with the money
+  (saved); Pause stops the clock and Resume carries on; happiness at zero
+  closes the café and saves the record; Play again starts at 0:00.
+- `node scripts/check-wishes.mjs`: names, the wish pictures over the
+  line, the card beside the hand, the mint seats that grant a carried
+  guest's wish, the heart and the shrug, a loner put out and a
+  company-seeker pleased, and what each pays.
+- `node scripts/sim-run.mjs`: whole runs played by scripted players
+  (quick, average and slow hands), to tune the pace and the money.
+- `node scripts/probe-pinch.mjs`: a fixed set of reaches with a shaking
+  hand and a flickering pinch: picking up (at the guest, a little off
+  it, and held over it as the player sees it), holding through a
+  flicker, and putting down.
+- `node scripts/look-board.mjs`, `look-table.mjs`: the side board from
+  the seat with a real fingertip press; guests arriving from the table's
+  edge.
+- `node scripts/shoot-howto.mjs`: takes the How to play pictures.
+- `scripts/with-server.sh <command>`: runs any of these with the dev
+  server up for just that long.
 - `node scripts/check-expressions.mjs`: a guest watches a hand that comes
   close; picked up it is surprised, then calm, and stays calm; carried, its
   eyes are on the seat below it; its face follows its dial (uneasy on
@@ -556,12 +592,14 @@ src/
   cafe/layout.ts             the floor plan and the dressing (meals)
   cafe/materials.ts          the café's materials on the grey-box pieces
   systems/cafe-system.ts     building the café and placing it on the table; the left exit; extending the café
-  systems/unlock-system.ts   the shop: the priced stone plaques in front (servers, the annex)
-  systems/game-system.ts     the title, rules, walkthrough, shift and closing cards
-  systems/score-system.ts    happiness, coins, thumbs, and the scoreboard
-  game/rules.ts              every number of the shift, the scoring and the shop
+  systems/shop-system.ts     hiring servers with coins
+  systems/board-system.ts    the side board: clock, happiness, bank, staff, Hire, Pause
+  systems/game-system.ts     the title, How to play, the first run, the run, pause and closing
+  systems/score-system.ts    happiness, coins, thumbs
+  game/rules.ts              every number of the run, the scoring, the wishes and the hires
+  guests/wishes.ts           names and wishes; guests/wish-art.ts their pictures; ui/wish-card.ts the card beside the hand
   game/save.ts               what is kept between sessions; test mode
-  ui/panel.ts                the paper cards with pinchable buttons
+  ui/panel.ts                the paper cards and their fingertip buttons
   guests/popups.ts           thumbs, coins and the vein mark over guests' heads
   cafe/split-mesh.ts         splitting part of a mesh off (the corner post), or copying it (a lantern)
   systems/sound-system.ts    the café's sounds, placed where they come from
