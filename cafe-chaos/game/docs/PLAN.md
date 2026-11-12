@@ -214,3 +214,43 @@ Scripted players, three runs each: quick hands never closed (stopped at
 - Lacking: far too long and too rich. Happy guests refill happiness
   faster than the lost ones drain it, so quick hands never lose.
 - Next: steeper ramp, smaller refill, dearer hires.
+
+**Iteration 2** (gaps 0.78x a minute, patience 0.92x a minute down to
+0.4, tips lift 4/2/1, hires 60 to 420).
+Quick hands still never closed; average 10:00; slow 8:05. Two to four
+servers hired in the first run, the sixth by the third run.
+- Good: the hires now spread over three runs; the first run buys two.
+- Lacking: the length hardly moved. Reading the runs: never more than
+  ten guests are about at once, so however fast they are meant to come,
+  the line stops filling and nobody is lost. Arrivals cannot end a run.
+- Learned: the lever that ends a run is patience, not arrivals.
+- Next: patience falls faster and further (0.86x a minute, to 0.28).
+
+### Phase 2, the side board: layout
+
+Drawn at real size off the game first (`docs/iterations/board-1-2-3.png`,
+`board-final.png`), judged against Meta's touch sizes (22 mm, 12 mm
+apart) and the 60 cm reach.
+
+**Iteration 1, the menu board** (17 x 26 cm, everything stacked).
+- Good: one clear order to read; a big clock; a row of six staff.
+- Lacking: too tall for the table; Pause is as big as Hire and right
+  under it, so one is pressed for the other; a greyed Hire does not say
+  why it is grey.
+
+**Iteration 2, the ticket strip** (36 x 11 cm, status left, buttons right).
+- Good: low, does not hide the room.
+- Lacking: 36 cm more to reach across, on top of a 60 cm café; the staff
+  row shrinks to specks; the buttons become slabs.
+
+**Iteration 3, the till** (20 x 20 cm, happiness as a ring round the clock).
+- Good: the savings bar inside the Hire button says exactly how far the
+  next server is: this is the progress bar asked for. Compact.
+- Lacking: the ring makes the clock small and happiness harder to read
+  at a glance than a bar; the staff sit in a cramped grid.
+
+**Final** (18 x 21.5 cm): the menu board's order and big clock; the
+till's savings bar in the Hire button, which turns amber and glows when
+the bank can pay and reads "Full staff" at six; Pause small (26 mm) in
+the top corner, far from Hire (34 mm tall, 148 wide). The record sits
+under the clock and turns amber the moment it is beaten.

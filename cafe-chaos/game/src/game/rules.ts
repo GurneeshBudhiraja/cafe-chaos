@@ -56,7 +56,7 @@ export const LOSSES = {
  */
 export const RAMP = {
   pace: { start: 3.2, perMinute: 0.78, min: 0.5 },
-  patience: { perMinute: 0.92, min: 0.4 },
+  patience: { perMinute: 0.86, min: 0.28 },
 };
 
 /** How much longer the gaps between arrivals are than SPAWN_SECONDS, `seconds` into the run. */
