@@ -254,3 +254,58 @@ till's savings bar in the Hire button, which turns amber and glows when
 the bank can pay and reads "Full staff" at six; Pause small (26 mm) in
 the top corner, far from Hire (34 mm tall, 148 wide). The record sits
 under the clock and turns amber the moment it is beaten.
+
+**Iteration 3** (patience 0.86x a minute to 0.28). Slow 7:40, average
+6:30 to 9:45, quick anything from 3:03 to never: the runs swung wildly.
+- Learned: with patience alone, a quick player whose kitchen falls
+  behind early spirals (storm-outs stop the income that would hire the
+  help), and one who gets past that point never loses.
+
+**Iteration 4** (gaps 0.85x, patience 0.84x to 0.12). Quick: 15:00,
+stopped. Even with guests waiting under four seconds, hands that seat
+one guest every five seconds break even.
+- Learned: a floor on how fast guests come is what makes a player
+  unbeatable. The arrivals have to keep building.
+
+**Iteration 5** (gaps 0.8x with no early floor, patience 0.88x).
+Quick 11:20, average 9:50, slow 8:25. Everyone closes; nobody spirals.
+- Lacking: a minute or two long for "a session in ten minutes".
+
+**Final** (gaps 0.72x a minute down to a quarter; patience 0.86x a
+minute down to a fifth; tips lift 4/2/1; a guest lost costs 8, a
+storm-out 10; hires 60, 120, 200, 300, 420). To be confirmed by round 6.
+
+### Phase 3, hands (in progress)
+
+What changed, from the review and Meta's numbers:
+- Pinch what you see: a guest behind the fingers along the line from
+  the eyes counts as under the pinch, and flies to the hand. No reach
+  to the far side of the table, where hands track worst.
+- The pinch holds from 1.6 cm until the tips are 2.4 cm apart.
+- The lit guest stays lit until another is clearly nearer.
+- A guest let go anywhere over the café goes to the nearest free seat
+  to where it was aimed.
+Measured with `scripts/probe-pinch.mjs` (a fixed set of reaches with a
+shaking hand and a flickering pinch).
+
+### Phase 6, guests with wishes: the design (not built yet)
+
+- **Names.** Every guest has its own short name from the café's own
+  list (none shared with the baristas), never two the same on stage.
+- **Wishes** (judged when the guest sits): by the window; near the way
+  out; at the counter; somewhere quiet; a table to itself; some company;
+  near the music. **Traits**: the singer (notes float up from it: music
+  lovers want to be near, quiet-seekers far).
+- **How the player reads it.**
+  1. A small picture bubble over each waiting guest shows its wish at a
+     glance (the demand-bubble model): no reading to plan the line.
+  2. A hand near a guest (the one that lights up), or carrying it,
+     brings up its card beside it: its name and its wish in a few
+     words. The card sits to the side of the hand, never under it.
+  3. While a guest is carried, the seats that grant its wish glow mint
+     and the others the usual violet: the puzzle is read off the café.
+- **What it is worth.** A wish granted: a heart, a bigger tip and a
+  little happiness. A wish ignored: a shrug and the smallest tip. Never
+  a penalty beyond that, so the pace set in phase 1 holds.
+- Wishes begin after the first minute and become commoner, so the first
+  run teaches seating before it teaches wishes.
