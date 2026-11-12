@@ -154,7 +154,11 @@ for (const [name, where, expected] of drops) {
     return { index: s.index, at: system.cafe.localToWorld(s.position.clone()).toArray() };
   });
   const p = where(seat.at);
+  // Carried over at full speed (the guest catches the hand up), then the last of the reach at headset frame time.
+  await slow(false);
   await holdAt(add(p, [0, 0.05, 0]), 3, false);
+  await holdAt(p, 3, false);
+  await slow(true);
   // The pinch flickers open for one frame.
   await pinch(0);
   await holdAt(p, 1, false);
