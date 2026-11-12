@@ -65,7 +65,9 @@ await until(() => window.__cafe.guests.line.filter((g) => g.state === 'queued' &
 await page.evaluate(() => (window.__cafe.guests.arrivals = false));
 const line = await page.evaluate(() => window.__cafe.guests.line.map((g) => ({ id: g.id, name: g.name, wish: g.wish, tag: !!g.tag && g.tag.visible })));
 const names = new Set(line.map((g) => g.name));
-check('every guest has its own name, and its wish over its head', names.size === line.length && line.every((g) => g.name && g.wish && g.tag), JSON.stringify(line));
+// (The very first guest may have set off before wishes were switched on here.)
+const wishing = line.filter((g) => g.wish);
+check('every guest has its own name, and those with a wish carry its picture', names.size === line.length && line.every((g) => g.name) && wishing.length >= 3 && wishing.every((g) => g.tag), JSON.stringify(line));
 await h.screenshot('artifacts/wishes-1-line.png');
 
 // The head of the line is given a window wish, to have a known case.

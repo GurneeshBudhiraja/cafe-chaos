@@ -43,6 +43,8 @@ export class WishCards {
   constructor(parent: Object3D) {
     for (const card of this.cards) {
       card.mesh.renderOrder = 34;
+      // Over everything: a post or a roof between the eyes and the guest never hides who it is.
+      (card.mesh.material as { depthTest: boolean }).depthTest = false;
       parent.add(card.mesh);
     }
   }

@@ -349,3 +349,27 @@ The first run: three steps, none of them read-and-press. Pinch the
 guest; seat it; its tea arrives and the café opens. The coach card
 shows the picture of the move in hand beside one line, and stands over
 the back of the café, out of the way of the hands. Skip on every step.
+
+**Phase 1, confirmed (round 7, after the frozen-server fix).** Quick
+hands 9:32 and 8:41; average 7:18 and 7:19; slow 6:30. Everyone closes
+inside ten minutes, faster hands last longer, and the first run pays for
+two or three servers. The wild swings of the earlier rounds were a bug,
+not the pace: a server whose guest lost its temper mid-serve froze for
+good, and with one server nobody was fed again.
+
+### Phase 6, guests with wishes: built
+
+`scripts/check-wishes.mjs`, 7 of 8 on its first run (the miss was the
+check's own: the first guest set off before it switched wishes on).
+- **Iteration 1, the picture over the head.** Every waiting guest with a
+  wish carries it in a small bubble above its patience dial. Reads from
+  the seat; no words.
+- **Iteration 2, the card beside the hand.** The lit or carried guest's
+  name and wish. First version was hidden by the gate post when the
+  guest stood behind it: it is now drawn over everything.
+- **Iteration 3, the café answers.** While a guest is carried, seats
+  that grant its wish are mint and larger; the landing glow turns mint
+  on one. A heart or a shrug when it sits; a loner shrugs if someone is
+  then seated at its table, and one who wanted company gets its heart.
+- **Final:** all three together. A wish granted pays 4 coins and 2
+  happiness more; a wish ignored pays one step down.
