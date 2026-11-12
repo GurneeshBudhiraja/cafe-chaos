@@ -35,16 +35,22 @@
  * is drawn over a real one and the two never quite agree: a solid hand
  * hides part of the real one and reads as a second hand on top of it.
  * `HAND.style` chooses:
- * - 'outline' (the default): IWSDK's own grey hand, a faint outline
- *   that fades toward the wrist and sits around the real hand rather
- *   than over it, so the two read as one hand;
+ * - 'occluded' (the default): the player's own hands, in front of the
+ *   café wherever they really are in front of it. Nothing of the hand
+ *   is drawn; an unseen copy of the tracked hand is put into the depth
+ *   buffer before anything else, so the café is not drawn where the
+ *   hand covers it and the cameras' picture of the real hand shows
+ *   there instead (see `OccludingHand`);
+ * - 'outline': IWSDK's own grey hand, a faint outline that fades
+ *   toward the wrist and sits around the real hand rather than over
+ *   it. The café is still drawn over the real hand;
  * - 'cream': the café's solid cream hands;
  * - 'real': nothing drawn, the player's own hands only.
  *
  * Installed with `themeHands(world)`.
  */
 
-import { AnimatedHand, Color, MeshStandardMaterial, Vector3, type IUniform, type Mesh, type Object3D, type VisualConstructor, type VisualImplementation, type World } from '@iwsdk/core';
+import { AnimatedHand, Color, MeshStandardMaterial, ShaderMaterial, Vector3, type IUniform, type Mesh, type Object3D, type VisualConstructor, type VisualImplementation, type World } from '@iwsdk/core';
 import { foldParts } from '../lib/fold-parts.js';
 
 /**
@@ -70,12 +76,22 @@ interface Span {
 /** The hand's look, on top of the model's own cream and sage. */
 export const HAND = {
   /**
-   * 'outline': IWSDK's stock outline hand (it surrounds the real hand
-   * instead of covering it). 'cream': the cream model hands, solid, so
-   * they cover the real hand and read as a second hand on top of it.
-   * 'real': no model at all.
+   * 'occluded': the real hands, shown in front of the café where they
+   * are in front of it. 'outline': IWSDK's stock outline hand (it
+   * surrounds the real hand instead of covering it). 'cream': the cream
+   * model hands, solid, so they cover the real hand and read as a second
+   * hand on top of it. 'real': no model at all (the café draws over the
+   * real hands).
    */
-  style: 'outline' as 'outline' | 'cream' | 'real',
+  style: 'occluded' as 'occluded' | 'outline' | 'cream' | 'real',
+  /**
+   * The unseen hand that hides the café ('occluded'). It is the tracked
+   * hand model grown outward by `grow` metres, so the edge of the real
+   * hand (and the little the tracking lags behind it) stays clear of the
+   * café; too much and a rim of the room shows around the hand.
+   * `outline` also draws IWSDK's faint outline around it.
+   */
+  occluder: { grow: 0.0025, outline: false },
   /**
    * The night's fill light is a dim blue, and the model's near-white
    * cream takes it on and reads as lilac grey. Two things keep it cream:
@@ -247,6 +263,63 @@ class CafeHand extends AnimatedHand {
   }
 }
 
+/**
+ * The hand that hides the café behind it, so the player's real hand is
+ * seen in front.
+ *
+ * In passthrough the page draws over the cameras' picture: wherever the
+ * page leaves a pixel untouched (clear), the real world shows. So the
+ * real hand cannot be drawn over the café, but the café can be left out
+ * where the hand is. This is IWSDK's tracked hand model (posed from the
+ * headset's joints every frame) with a material that writes depth and
+ * no colour, drawn before everything else: anything further away than
+ * the hand then fails the depth test there and is not drawn, and the
+ * real hand shows through. Things nearer than the hand (a guest held
+ * between the fingers and the eye) still draw over it, as they should.
+ */
+const occluderMaterial = new ShaderMaterial({
+  uniforms: { grow: { value: HAND.occluder.grow } },
+  vertexShader: /* glsl */ `
+    #include <common>
+    #include <skinning_pars_vertex>
+    uniform float grow;
+    void main() {
+      #include <skinbase_vertex>
+      #include <beginnormal_vertex>
+      #include <skinnormal_vertex>
+      #include <defaultnormal_vertex>
+      vec3 transformed = position + normal * grow;
+      #include <skinning_vertex>
+      gl_Position = projectionMatrix * modelViewMatrix * vec4( transformed, 1.0 );
+    }`,
+  fragmentShader: /* glsl */ `void main() { gl_FragColor = vec4( 0.0 ); }`,
+  colorWrite: false,
+  depthWrite: true,
+  depthTest: true,
+});
+/** Before the dimmer and the café (both sort after this). */
+const OCCLUDER_ORDER = -2000;
+
+class OccludingHand extends AnimatedHand {
+  // Its own cache entry, so it is not handed a stock outline hand made earlier.
+  static assetKeyPrefix = 'cafe-occluding-hand';
+
+  init(): void {
+    super.init();
+    // The stock hand is two skinned meshes: the body (it writes depth, but among the see-through things, after the café is drawn) and the outline.
+    this.model.traverse((node) => {
+      const mesh = node as Mesh;
+      if (!mesh.isMesh) return;
+      if (mesh.renderOrder === 999) mesh.visible = HAND.occluder.outline;
+      else {
+        mesh.name = 'HandOccluder';
+        mesh.material = occluderMaterial;
+        mesh.renderOrder = OCCLUDER_ORDER;
+      }
+    });
+  }
+}
+
 const modelUrl = (side: 'left' | 'right'): string => `${import.meta.env.BASE_URL}models/cafe-hand-${side}.glb`;
 
 /** Each hand has its own model (the right is the left's mirror) and its own cache entry. */
@@ -263,6 +336,11 @@ class CafeHandRight extends CafeHand {
 export function themeHands(world: World): void {
   if (HAND.style === 'outline') return;
   const as = (visual: unknown): VisualConstructor<VisualImplementation> => visual as VisualConstructor<VisualImplementation>;
+  if (HAND.style === 'occluded') {
+    world.input.xr.visualAdapters.hand.left.updateVisualImplementation(as(OccludingHand));
+    world.input.xr.visualAdapters.hand.right.updateVisualImplementation(as(OccludingHand));
+    return;
+  }
   world.input.xr.visualAdapters.hand.left.updateVisualImplementation(as(CafeHandLeft));
   world.input.xr.visualAdapters.hand.right.updateVisualImplementation(as(CafeHandRight));
 }
