@@ -17,5 +17,6 @@ if ! curl -sk -o /dev/null "https://localhost:${PORT}/"; then
 fi
 "$@"
 status=$?
-if [ -n "${started}" ]; then kill "${started}" 2>/dev/null; fi
+# npx starts vite as a child: stop the server itself, not only its launcher.
+if [ -n "${started}" ]; then kill "${started}" 2>/dev/null; pkill -f "vite --port ${PORT}" 2>/dev/null; fi
 exit "${status}"
