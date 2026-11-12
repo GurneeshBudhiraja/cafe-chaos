@@ -535,6 +535,13 @@ export class BaristaSystem extends createSystem({}) {
         if (member.t >= member.lasts) this.work(member);
         break;
       case 'serving':
+        // Its guest lost its temper (or was moved) while it leant in: straighten up and take the tray back.
+        // Without this it would wait there for good, tray in hand, and with one server nobody would be served again.
+        if (barista.tray && !member.order) {
+          this.dirty = true;
+          this.sendHome(member);
+          break;
+        }
         if (barista.tray && member.order && member.t >= SET_DOWN_AT) this.setDown(member);
         // The order is down: straight back to the counter, no bow. It is free for the next order from here.
         if (!barista.tray && member.t >= SET_DOWN_AT) {

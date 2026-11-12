@@ -20,7 +20,7 @@
  * made, so buttons never shrink below what a finger can press (22 mm).
  */
 
-import { CanvasTexture, DoubleSide, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, Vector3 } from '@iwsdk/core';
+import { CanvasTexture, DoubleSide, Mesh, MeshBasicMaterial, PlaneGeometry, Quaternion, SRGBColorSpace, Vector3 } from '@iwsdk/core';
 
 export interface Button {
   id: string;
@@ -85,6 +85,13 @@ export class Panel {
   private readonly scale = new Vector3();
   /** Each fingertip's last distance in front of the face, and whether it may press. */
   private readonly tips = new Map<string, { z: number; armed: boolean }>();
+  /**
+   * How quickly it turns to face the player (per second); Infinity turns at once. A board that is pressed with a
+   * fingertip turns slowly, so a nod of the head never swings its face through a finger held near it.
+   */
+  turn = Infinity;
+  private readonly facing = new Quaternion();
+  private faced = false;
 
   constructor(name: string, widthM: number, heightM: number) {
     this.canvas = document.createElement('canvas');
@@ -145,7 +152,15 @@ export class Panel {
     const parent = this.mesh.parent ? this.mesh.parent.getWorldScale(this.scale).x : 1;
     const s = (0.9 + 0.1 * this.shown) / (parent || 1);
     this.mesh.scale.set(s, s, s);
-    this.mesh.lookAt(head);
+    if (this.turn === Infinity || !this.faced) {
+      this.mesh.lookAt(head);
+      this.facing.copy(this.mesh.quaternion);
+      this.faced = true;
+    } else {
+      this.mesh.lookAt(head);
+      this.facing.slerp(this.mesh.quaternion, 1 - Math.exp(-this.turn * delta));
+      this.mesh.quaternion.copy(this.facing);
+    }
     if (this.pressed) {
       this.pressed.t += delta;
       if (this.pressed.t > 0.18) {

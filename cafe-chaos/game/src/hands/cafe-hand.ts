@@ -73,6 +73,13 @@ interface Span {
   rest: number;
 }
 
+type HandStyle = 'occluded' | 'outline' | 'cream' | 'real';
+/** 'occluded' unless the address asks for another (`?hands=cream`): for trying the styles on the headset, and for pictures that need a hand in them. */
+function handStyle(): HandStyle {
+  const asked = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('hands') : null;
+  return asked === 'outline' || asked === 'cream' || asked === 'real' ? asked : 'occluded';
+}
+
 /** The hand's look, on top of the model's own cream and sage. */
 export const HAND = {
   /**
@@ -83,7 +90,7 @@ export const HAND = {
    * hand on top of it. 'real': no model at all (the café draws over the
    * real hands).
    */
-  style: 'occluded' as 'occluded' | 'outline' | 'cream' | 'real',
+  style: handStyle(),
   /**
    * The unseen hand that hides the café ('occluded'). It is the tracked
    * hand model grown outward by `grow` metres, so the edge of the real

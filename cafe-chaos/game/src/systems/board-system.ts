@@ -17,8 +17,9 @@
  * are 41 mm and 31 mm tall, over Meta's 22 mm for a fingertip, and the
  * board keeps its real size whatever the café's (ui/panel.ts).
  *
- * It stands by the café's front right corner, within reach of a seated
- * player's right hand; `side` moves it to the left for a left-handed
+ * It stands off the café's front right corner (nearer the player than
+ * the line at the gate, so it never hides the guests), within reach of
+ * a seated player's right hand; `side` moves it to the left for a left-handed
  * player. GameSystem shows and hides it and handles its presses.
  */
 
@@ -31,7 +32,7 @@ import { ScoreSystem } from './score-system.js';
 import { ShopSystem } from './shop-system.js';
 
 /** The board's size (real metres), and where it stands: this far out from the café's side and above the table (real metres), and how far toward the player from the café's middle (café space). */
-export const BOARD = { width: 0.216, height: 0.258, gap: 0.03, lift: 0.03, forward: 0.2 };
+export const BOARD = { width: 0.216, height: 0.258, gap: 0.03, lift: 0.03, forward: 0.3 };
 /**
  * The layout was drawn for an 18 cm board; from the seat the board is
  * about 75 cm from the eyes (the café itself is 92 cm across), so it is
@@ -68,6 +69,7 @@ export class BoardSystem extends createSystem({}) {
     this.shop = this.world.getSystem(ShopSystem)!;
     this.hold = this.world.getSystem(HoldSystem) ?? null;
     this.cafe.cafe.add(this.panel.mesh);
+    this.panel.turn = 2.5;
     // A pinch on the board is the board's, never the café's or a guest's.
     this.hold?.claims.push((point) => this.panel.covers(point));
     this.layout();
