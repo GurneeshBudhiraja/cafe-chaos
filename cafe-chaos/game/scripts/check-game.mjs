@@ -218,12 +218,12 @@ await page.evaluate(() => (window.__cafe.score.bank = 300));
 const hired = await page.evaluate(() => window.__cafe.unlocks.press('server2'));
 await until(() => window.__cafe.baristas.staff.length === 2, null, 30000);
 s = await state();
-check('with the money, a second server is hired', hired && s.staff === 2 && s.bank === 270, `hired ${hired}, staff ${s.staff}, bank ${s.bank}`);
+check('with the money, a second server is hired', hired && s.staff === 2 && s.bank === 260, `hired ${hired}, staff ${s.staff}, bank ${s.bank}`);
 const before3 = s.plaques.includes('server3');
 await page.evaluate(() => window.__cafe.unlocks.press('annex'));
 await until(() => window.__cafe.unlocks.plaques.has('server3'), null, 30000);
 s = await state();
-check('buying the annex puts out the next server\'s plaque', !before3 && s.owned.includes('annex') && s.plaques.includes('server3') && s.bank === 190, `server3 before ${before3}, after ${s.plaques.includes('server3')}, bank ${s.bank}`);
+check('buying the annex puts out the next server\'s plaque', !before3 && s.owned.includes('annex') && s.plaques.includes('server3') && s.bank === 140, `server3 before ${before3}, after ${s.plaques.includes('server3')}, bank ${s.bank}`);
 await until(() => window.__cafe.system.annexOpen, null, 60000);
 await h.screenshot('artifacts/game-shop.png');
 

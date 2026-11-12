@@ -48,7 +48,7 @@ import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_POINT, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
-  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, PICK_WINDOW_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
+  PATIENCE_SECONDS, PATIENCE_SPREAD, PICK_RADIUS_M, PICK_RADIUS_WORLD_MIN_M, PICK_WINDOW_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
@@ -169,6 +169,10 @@ export class GuestSystem extends createSystem({}) {
   patienceSeconds = PATIENCE_SECONDS;
   seatedSeconds = SEATED_SECONDS;
   spawnSeconds: [number, number] = [...SPAWN_SECONDS];
+  /** In the game a guest gets down once it has eaten for this long, whatever `seatedSeconds` says, so quick service frees the table sooner (game/rules.ts MEAL_SECONDS). */
+  mealSeconds = Infinity;
+  /** The gaps between arrivals are this many times longer (the game paces arrivals to the staff: game/rules.ts ARRIVAL_PACE). */
+  spawnPace = 1;
   /** Set false to stop new arrivals. */
   arrivals = true;
   /** Set true to hold every guest's patience where it is (the walkthrough). */
@@ -318,7 +322,7 @@ export class GuestSystem extends createSystem({}) {
     // The fuller the café, the longer until the next one.
     const [min, max] = this.spawnSeconds;
     const fullness = this.guests.length / MAX_GUESTS;
-    this.nextSpawnIn = (min + Math.random() * (max - min)) * (1 + (SPAWN_STRETCH - 1) * fullness);
+    this.nextSpawnIn = (min + Math.random() * (max - min)) * (1 + (SPAWN_STRETCH - 1) * fullness) * this.spawnPace;
   }
 
   /** Bring a new guest on at the arrival point and send it to the back of the line. */
@@ -684,7 +688,7 @@ export class GuestSystem extends createSystem({}) {
       guest.eaten = 0;
       // How long it waited to be seated, as a share of its patience; and a top-up for the wait for its food.
       guest.seatShare = Math.min(1, Math.max(0, 1 - guest.patience / guest.patienceFull));
-      guest.patience = Math.min(guest.patienceFull, Math.max(0, guest.patience) + SERVICE_TOPUP_SECONDS);
+      guest.patience = Math.min(SERVICE_MAX_SECONDS, Math.max(0, guest.patience) + SERVICE_TOPUP_SECONDS);
       this.seated++;
     }
     guest.actor.play(fresh ? 'SitHappy' : 'SitIdle');
@@ -712,12 +716,13 @@ export class GuestSystem extends createSystem({}) {
     guest.seatedFor += delta;
     if (guest.served) guest.eaten += delta;
     // It leaves once its time is up and it has had a fair while to eat (served late, it stays to finish).
-    if (guest.served && guest.seatedFor >= this.seatedSeconds && guest.eaten >= Math.min(EAT_SECONDS, this.seatedSeconds * 0.25)) {
+    const stayed = guest.seatedFor >= this.seatedSeconds && guest.eaten >= Math.min(EAT_SECONDS, this.seatedSeconds * 0.25);
+    if (guest.served && (stayed || guest.eaten >= this.mealSeconds)) {
       this.standUp(guest);
       return;
     }
     // Pleased to be seated; then it waits for its order, eats once a server has brought it, and sits back at the end.
-    const last = guest.seatedFor > this.seatedSeconds - Math.min(IDLE_LAST_SECONDS, this.seatedSeconds * 0.25);
+    const last = guest.seatedFor > this.seatedSeconds - Math.min(IDLE_LAST_SECONDS, this.seatedSeconds * 0.25) || guest.eaten > this.mealSeconds * 0.8;
     guest.actor.play(guest.seatedFor < HAPPY_SECONDS ? 'SitHappy' : last || !guest.served ? 'SitIdle' : 'SitEating');
   }
 

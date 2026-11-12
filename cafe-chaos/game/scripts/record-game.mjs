@@ -227,7 +227,7 @@ await pause(6000);
 
 // 5. The shop: with the coins in, hire a second server.
 // If the coins are not in yet (guests who gave up cost some), seat a few more until they are.
-for (let more = 0; more < 8 && (await page.evaluate(() => window.__cafe.score.bank)) < 30; more++) {
+for (let more = 0; more < 8 && (await page.evaluate(() => window.__cafe.score.bank)) < 40; more++) {
   await overview();
   await pickHead();
   await seatAt(spots[more % spots.length][0], spots[more % spots.length][1]);

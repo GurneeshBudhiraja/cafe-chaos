@@ -6,8 +6,13 @@
 
 /** How many servers may be out on the floor at once (the rest work behind the counter). */
 export const MAX_OUT = 3;
-/** Walking speeds (metres per second): empty-handed, carrying a tray, and a sidestep at the bar. */
-export const SPEED = { walk: 0.065, carry: 0.055, shuffle: 0.03 };
+/**
+ * Walking speeds (metres per second): empty-handed, carrying a tray, and
+ * a sidestep at the bar. A server is brisk (quicker than a guest's
+ * stroll): an order takes it about 18 seconds, there and back, and the
+ * guests' arrivals are paced to that (game/rules.ts ARRIVAL_PACE).
+ */
+export const SPEED = { walk: 0.1, carry: 0.085, shuffle: 0.03 };
 /** How quickly a server turns to face its way (radians per second). */
 export const TURN_SPEED = 6.5;
 /** The tray leaves the hands this far into the Serve clip (seconds): the lowest point of the lean. */

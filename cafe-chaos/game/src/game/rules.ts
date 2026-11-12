@@ -34,9 +34,27 @@ export const PAY_TIERS: { upTo: number; name: string; coins: number; happiness: 
  * seated and then kept waiting for food, is the worse of the two.
  */
 export const LOSSES = {
-  gaveUp: { coins: 2, happiness: 9 },
-  stormedOff: { coins: 4, happiness: 13 },
+  gaveUp: { coins: 2, happiness: 6 },
+  stormedOff: { coins: 4, happiness: 10 },
 };
+
+/**
+ * Word gets around: the more servers the café has, the more guests come.
+ * The gaps between arrivals (guests/rules.ts SPAWN_SECONDS) are this many
+ * times longer with one server, two, three, and four or more. A server's
+ * round takes about 18 seconds, so each pace brings guests about as fast
+ * as that staff can serve them: a player who seats them promptly keeps
+ * everyone fed, and each hire makes the evening both busier and richer.
+ */
+export const ARRIVAL_PACE = [3.2, 1.7, 1.2, 1];
+
+/**
+ * A guest gets down from its chair once it has eaten for this long
+ * (seconds). The sooner its food comes, the sooner its table is free for
+ * the next guest: more servers means more guests through the door, and
+ * more money.
+ */
+export const MEAL_SECONDS = 22;
 
 /**
  * The shop: the stone plaques in the gravel in front of the café. Each
@@ -61,10 +79,10 @@ export interface ShopItem {
 }
 
 export const SHOP: ShopItem[] = [
-  { id: 'annex', spot: 1, icon: 7, label: 'ANNEX', price: 80 },
-  { id: 'server2', spot: 2, icon: 0, label: 'SERVER', price: 30 },
-  { id: 'server3', spot: 3, icon: 0, label: 'SERVER', price: 60, needsAnnex: true, after: 'server2' },
-  { id: 'server4', spot: 4, icon: 0, label: 'SERVER', price: 90, needsAnnex: true, after: 'server3' },
+  { id: 'annex', spot: 1, icon: 7, label: 'ANNEX', price: 120 },
+  { id: 'server2', spot: 2, icon: 0, label: 'SERVER', price: 40 },
+  { id: 'server3', spot: 3, icon: 0, label: 'SERVER', price: 110, needsAnnex: true, after: 'server2' },
+  { id: 'server4', spot: 4, icon: 0, label: 'SERVER', price: 160, needsAnnex: true, after: 'server3' },
 ];
 
 /** The café opens with this many servers; each server plaque bought adds one. */

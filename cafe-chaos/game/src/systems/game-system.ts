@@ -29,7 +29,7 @@
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
-import { HAPPINESS, PAY_TIERS, SHIFT_SECONDS, STARTING_STAFF } from '../game/rules.js';
+import { ARRIVAL_PACE, HAPPINESS, MEAL_SECONDS, PAY_TIERS, SHIFT_SECONDS, STARTING_STAFF } from '../game/rules.js';
 import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
 import { coin, INK, moodFace, Panel, paragraph, write, type Button } from '../ui/panel.js';
@@ -110,6 +110,7 @@ export class GameSystem extends createSystem({}) {
     // The café as it was left: its bank, its staff and what it has bought.
     this.score.bank = this.save.bank;
     this.baristas.staffSize = STARTING_STAFF;
+    this.guests.mealSeconds = MEAL_SECONDS;
     for (const id of this.save.owned) this.unlocks.restore(id);
     this.quiet();
   }
@@ -117,7 +118,7 @@ export class GameSystem extends createSystem({}) {
   update(frameDelta: number): void {
     if (this.phase === 'test') return;
     const cafe = this.cafe;
-    const delta = Math.min(0.1, frameDelta) * cafe.timeScale;
+    const delta = Math.min(1, frameDelta) * cafe.timeScale;
     // The café put down (afresh): back to the title.
     if (cafe.placed && cafe.placements !== this.placement) {
       this.placement = cafe.placements;
@@ -248,6 +249,8 @@ export class GameSystem extends createSystem({}) {
   private shiftTick(delta: number): void {
     this.clock = Math.max(0, this.clock - delta);
     this.score.clock = this.clock;
+    // Guests come as fast as the staff can serve them.
+    this.guests.spawnPace = ARRIVAL_PACE[Math.min(ARRIVAL_PACE.length, this.baristas.staffSize) - 1];
     if (this.score.happiness <= 0) this.toClosed(true);
     else if (this.clock <= 0) this.toClosed(false);
   }
