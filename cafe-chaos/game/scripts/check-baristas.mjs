@@ -170,6 +170,9 @@ await page.evaluate(() => (window.__cafe.baristas.maxOut = 1));
 // 6. A server on its way to a far guest turns to one seated nearer it; the far guest is served next.
 {
   await until(() => window.__cafe.baristas.out === 0);
+  // Servers walk briskly and the emulator's frames are long: the café's clock is slowed for this one, so the server
+  // is still short of the near seat when its guest has sat down.
+  await page.evaluate(() => (window.__cafe.system.timeScale = 0.4));
   // The far guest: front left, the whole length of the aisle away.
   const far = await seatGuest(-0.297, 0.025);
   // As the server comes out of the corridor into the aisle, seat a guest just ahead of it (the emulator's
@@ -183,6 +186,7 @@ await page.evaluate(() => (window.__cafe.baristas.maxOut = 1));
   const server = turned.staff.find((m) => m.name === where.name);
   await until(([a, b]) => { const log = window.__cafe.baristas.servedLog; return log.includes(a) && log.includes(b); }, [far.guest, near.guest]);
   const s = await staff();
+  await page.evaluate(() => (window.__cafe.system.timeScale = 1));
   const order = s.servedLog.filter((g) => g === far.guest || g === near.guest);
   // At the emulator's frame rate the near guest may already be served (no bow now) by the time this is read: then it has no order.
   check('a server on its way turns to a guest seated nearer it, and the other is served next', (server.order === near.guest || (server.order === null && turned.servedLog.includes(near.guest))) && turned.switches === switchesBefore + 1 && order[0] === near.guest && order[1] === far.guest,
