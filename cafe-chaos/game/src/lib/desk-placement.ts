@@ -53,9 +53,12 @@ export function findSurfaceSpot(
   head: Vector3,
   yaw: number,
   out: Vector3,
+  chosen?: { surface: DetectedSurface | null },
 ): boolean {
   let best = Infinity;
-  for (const { object, plane } of surfaces) {
+  if (chosen) chosen.surface = null;
+  for (const surface of surfaces) {
+    const { object, plane } = surface;
     if (!isSurface(plane, object.position.y, head.y)) continue;
     object.updateWorldMatrix(true, false);
     // Straight ahead at the preferred reach, at the surface's height.
@@ -72,9 +75,44 @@ export function findSurfaceSpot(
     if (miss < best) {
       best = miss;
       out.copy(spot);
+      if (chosen) chosen.surface = surface;
     }
   }
   return best < Infinity;
+}
+
+const from = new Vector3();
+const toward = new Vector3();
+
+/**
+ * How far the surface runs from a point on it (`origin`, world) in a
+ * direction along it (`direction`, world, need not be unit): the distance
+ * in metres to the surface's edge, 0 if the point is not over it. So
+ * things can be made to come from the real edge of the real table.
+ */
+export function distanceToEdge(surface: DetectedSurface, origin: Vector3, direction: Vector3): number {
+  const { object, plane } = surface;
+  object.updateWorldMatrix(true, false);
+  object.worldToLocal(from.copy(origin));
+  object.worldToLocal(toward.copy(origin).add(direction));
+  // `t` runs from 0 at the point to 1 at the point plus `direction`, so the distance is t times its length.
+  const dx = toward.x - from.x;
+  const dz = toward.z - from.z;
+  const polygon = plane.polygon;
+  if (Math.hypot(dx, dz) < 1e-9 || !contains(polygon, from.x, from.z)) return 0;
+  let nearest = Infinity;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    const ex = b.x - a.x;
+    const ez = b.z - a.z;
+    const cross = dx * ez - dz * ex;
+    if (Math.abs(cross) < 1e-12) continue;
+    const t = ((a.x - from.x) * ez - (a.z - from.z) * ex) / cross;
+    const u = ((a.x - from.x) * dz - (a.z - from.z) * dx) / cross;
+    if (t > 0 && u >= 0 && u <= 1) nearest = Math.min(nearest, t);
+  }
+  return nearest === Infinity ? 0 : nearest * direction.length();
 }
 
 function isSurface(plane: XRPlane, height: number, eyes: number): boolean {

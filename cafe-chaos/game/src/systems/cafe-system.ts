@@ -40,7 +40,7 @@ import { dressGreyBox } from '../cafe/materials.js';
 import { copyPart, splitOff, type Box } from '../cafe/split-mesh.js';
 import { ANNEX_LANTERNS_X, LANTERN_BOX } from '../light/mood.js';
 import { batchStatic, type BatchReport } from '../cafe/static-batch.js';
-import { findSurfaceSpot, type DetectedSurface } from '../lib/desk-placement.js';
+import { distanceToEdge, findSurfaceSpot, type DetectedSurface } from '../lib/desk-placement.js';
 import { CAFE_NAV } from '../nav/cafe-nav.js';
 import { NavGrid } from '../nav/nav-grid.js';
 
@@ -275,12 +275,35 @@ export class CafeSystem extends createSystem({
 
   // ------------------------------------------------------------ placement
 
+  /** The real surface the café was last put on (null: it floats). */
+  private readonly chosen: { surface: DetectedSurface | null } = { surface: null };
+  private readonly edgeFrom = new Vector3();
+  private readonly edgeDirection = new Vector3();
+
+  /**
+   * How far the real table runs from a point of the café (`x`, `z`, café
+   * space, on the table) toward the café's +X or -X: metres in the café's
+   * space, to the table's real edge. 0 when the café is not on a detected
+   * surface (it floats), or has been carried off it. Guests use it to walk
+   * in from the edge of the player's own table.
+   */
+  tableRun(x: number, z: number, sign: 1 | -1): number {
+    const surface = this.chosen.surface;
+    if (!surface || !this.onDesk) return 0;
+    this.cafe.updateMatrixWorld(true);
+    this.cafe.localToWorld(this.edgeFrom.set(x, 0, z));
+    this.cafe.localToWorld(this.edgeDirection.set(x + sign, 0, z)).sub(this.edgeFrom);
+    // Lifted well off the table (carried in the hand), it is no longer on it.
+    if (Math.abs(this.edgeFrom.y - surface.object.getWorldPosition(this.spot).y) > 0.06) return 0;
+    return distanceToEdge(surface, this.edgeFrom, this.edgeDirection) / (this.cafe.scale.x || 1);
+  }
+
   /** Find a surface in front of the player and put the café on it (or float it, once `giveUp`). */
   private place(giveUp: boolean): void {
     this.player.head.getWorldPosition(this.head);
     this.player.head.getWorldQuaternion(this.q);
     const yaw = this.euler.setFromQuaternion(this.q, 'YXZ').y;
-    this.onDesk = findSurfaceSpot(this.surfaces, this.head, yaw, this.spot);
+    this.onDesk = findSurfaceSpot(this.surfaces, this.head, yaw, this.spot, this.chosen);
     if (!this.onDesk && !giveUp) return;
     if (!this.onDesk) this.spot.set(this.head.x - Math.sin(yaw) * FLOAT_AHEAD_M, this.head.y - FLOAT_BELOW_M, this.head.z - Math.cos(yaw) * FLOAT_AHEAD_M);
     this.settle(this.spot, Math.atan2(this.head.x - this.spot.x, this.head.z - this.spot.z));

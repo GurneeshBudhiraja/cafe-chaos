@@ -45,7 +45,7 @@ import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/ac
 import { Blobs } from '../guests/blobs.js';
 import { randomLook, type Look } from '../guests/cast.js';
 import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
-import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_POINT, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
+import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
   PATIENCE_SECONDS, PATIENCE_SPREAD, DROP_MARGIN_M, HOVER_EXIT_RADII, HOVER_SWITCH, PICK_MEMORY_S, PICK_RADIUS_M, SIGHT, WISH_TAG, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
@@ -184,6 +184,9 @@ export class GuestSystem extends createSystem({}) {
   spawnSeconds: [number, number] = [...SPAWN_SECONDS];
   /** In the game a guest gets down once it has eaten for this long, whatever `seatedSeconds` says, so quick service frees the table sooner (game/rules.ts MEAL_SECONDS). */
   mealSeconds = Infinity;
+  /** Where the last newcomer appeared (café space), and how much further out than the usual spot that was (metres): the real table's edge. */
+  readonly arrival = ARRIVAL_POINT.clone();
+  fromEdge = 0;
   /** The share of new guests who come with a wish, and with a song (the game sets them: game/rules.ts WISH). 0: none. */
   wishChance = 0;
   singerChance = 0;
@@ -446,7 +449,10 @@ export class GuestSystem extends createSystem({}) {
     this.lastLook = look;
     const actor = new GuestActor(look);
     actor.root.name = `Guest-${++this.arrived}`;
-    actor.root.position.copy(ARRIVAL_POINT);
+    // On a real table it comes from the table's real edge (CafeSystem.tableRun); else from the usual spot.
+    this.arrival.copy(arrivalPoint(this.cafeSystem.tableRun(ARRIVAL_FROM.x, ARRIVAL_FROM.z, 1)));
+    this.fromEdge = this.arrival.x - ARRIVAL_POINT.x;
+    actor.root.position.copy(this.arrival);
     actor.setOpacity(0);
     this.cafeSystem.cafe.add(actor.root);
     const patience = this.patienceSeconds * (1 + (Math.random() * 2 - 1) * PATIENCE_SPREAD);
@@ -520,7 +526,8 @@ export class GuestSystem extends createSystem({}) {
       if (guest.spot === index || guest.state === 'hop') return;
       guest.spot = index;
       guest.walk = new Walk([guest.actor.root.position, QUEUE_SPOTS[index]]);
-      guest.speed = guest.state === 'arriving' ? SPEED.arrive : SPEED.shuffle;
+      // One coming all the way from the table's edge steps out, so the walk is not a long wait.
+      guest.speed = guest.state === 'arriving' ? (this.fromEdge > 0.1 ? SPEED.march : SPEED.arrive) : SPEED.shuffle;
     });
   }
 
@@ -571,7 +578,7 @@ export class GuestSystem extends createSystem({}) {
     guest.state = 'leaving';
     guest.side = null;
     guest.lane = -1;
-    guest.walk = new Walk(pathBack(guest.actor.root.position));
+    guest.walk = new Walk(pathBack(guest.actor.root.position, this.arrival));
     guest.speed = SPEED.leave;
   }
 

@@ -373,3 +373,22 @@ check's own: the first guest set off before it switched wishes on).
   then seated at its table, and one who wanted company gets its heart.
 - **Final:** all three together. A wish granted pays 4 coins and 2
   happiness more; a wish ignored pays one step down.
+
+### Phase 8, the room matters
+
+Guests now come from the real edge of the player's real table. The café
+keeps the surface it was put on and can say how far that surface runs
+from any point of it (`CafeSystem.tableRun`, from the plane's own
+outline). Newcomers appear just inside the table's edge and walk across
+the table to the line; guests who give up walk back to it.
+- **Iteration 1**: start at the edge when the table is wider than the
+  usual arrival point. In the emulator's room the table ends 2 cm past
+  that point, so nothing moved: measured, not seen.
+- **Iteration 2**: a narrow table. The usual point would be in the air
+  beyond the edge; guests now start on the table, nearer the line.
+- **Iteration 3**: a long table. The start is at most 40 cm further out,
+  and those guests step out briskly, so the walk is not a wait.
+- **Final**: all three. Carried off the table (or floating with no
+  surface found), the café falls back to the usual point.
+- Needs the headset: this is the one phase whose point is the real
+  room. On `docs/HEADSET-CHECKS.md`.

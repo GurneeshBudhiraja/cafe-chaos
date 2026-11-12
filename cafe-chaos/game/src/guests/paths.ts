@@ -72,8 +72,27 @@ export const QUEUE_SPOTS: Vector3[] = Array.from({ length: MAX_QUEUE }, (_, i) =
   i === 0 ? at(QUEUE_HEAD.x, QUEUE_HEAD.z) : i === 1 ? at(QUEUE_BEND.x, QUEUE_BEND.z) : at(QUEUE_COLUMN_X, QUEUE_BEND.z + (i - 1) * QUEUE_SPACING),
 );
 
-/** Where newcomers appear: out on the table to the right, level with the end of the line. */
+/** Where newcomers appear when the café is not on a real table: out to the right, level with the end of the line. */
 export const ARRIVAL_POINT = at(0.74, QUEUE_BEND.z + (MAX_QUEUE - 2) * QUEUE_SPACING);
+/**
+ * On a real table, newcomers come from its real edge: they appear just
+ * inside it and walk across the player's own table to the line. `runM`
+ * is how far the table runs to the right of the line's column (café
+ * space, metres; CafeSystem.tableRun), 0 when the café is not on a
+ * table. On a wide table they start beyond the usual point, by up to
+ * `ARRIVAL_MAX_M` (further would make the walk too long to wait for); on
+ * a narrow one they start nearer, on the table, never in the air beyond
+ * its edge.
+ */
+export const ARRIVAL_INSET_M = 0.03;
+export const ARRIVAL_MAX_M = 0.4;
+/** Where the table's run is measured from: the line's column, level with where newcomers appear. */
+export const ARRIVAL_FROM = { x: QUEUE_COLUMN_X, z: ARRIVAL_POINT.z };
+export function arrivalPoint(runM: number): Vector3 {
+  const point = ARRIVAL_POINT.clone();
+  if (runM > 0) point.x = Math.max(QUEUE_COLUMN_X + 0.06, Math.min(ARRIVAL_POINT.x + ARRIVAL_MAX_M, QUEUE_COLUMN_X + runM - ARRIVAL_INSET_M));
+  return point;
+}
 
 // ------------------------------------------------------------------ leaving
 
@@ -86,11 +105,11 @@ const TURN_BACK_X = QUEUE_COLUMN_X + 0.05;
  * newcomers appear. From the head of the line (on the deck) that starts
  * with the step down through the gap in the fence.
  */
-export function pathBack(from: Vector3): Vector3[] {
+export function pathBack(from: Vector3, arrival: Vector3 = ARRIVAL_POINT): Vector3[] {
   const points = [from.clone()];
   if (from.x < PLATE_EDGE_X) points.push(at(PLATE_EDGE_X - 0.006, QUEUE_HEAD.z), at(PLATE_EDGE_X + 0.02, QUEUE_HEAD.z));
   points.push(at(TURN_BACK_X, Math.max(from.z, QUEUE_BEND.z)));
-  points.push(ARRIVAL_POINT.clone());
+  points.push(arrival.clone());
   return points;
 }
 
