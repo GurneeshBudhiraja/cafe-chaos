@@ -1,22 +1,22 @@
 /**
- * The whole evening, recorded as the headset shows it (Quest 3 field of
+ * The whole game, recorded as the headset shows it (Quest 3 field of
  * view, no captions), in the real game with a fresh save (not test mode):
- * - the café pops up and the title card floats over it; How to play shows
- *   the rules, Back returns;
- * - Open the café starts the walkthrough (the first time): the guest at
- *   the gate is picked up and seated with the hand, the one server brings
- *   its tea, Next, and Open the café! starts the shift;
- * - the shift: the scoreboard comes up; guests are seated as they come;
- *   those seated quickly pay with a thumbs up and coins; one kept waiting
- *   for its food fumes and storms out (a thumbs down);
- * - with the money, the server plaque is pinched and a second server
- *   appears behind the counter and waves;
- * - closing time: the night's card.
+ * - the café pops up with the title card and the side board; a fingertip
+ *   on How to play shows the three pictures, Got it returns;
+ * - Open the café starts the first run: the guest at the gate is pinched
+ *   up and seated, the server brings its tea, and the café opens at 0:00;
+ * - the run: guests with wishes come. A hand over one brings up its card;
+ *   carried, the seats that grant its wish show mint; seated there it
+ *   gets a heart. One is seated against its wish (a shrug); one kept
+ *   waiting for its food fumes and storms out;
+ * - with the coins, a fingertip on Hire brings a second server, who waves;
+ * - Pause, Resume; then the café's happiness runs out and it closes: the
+ *   card with how long it stayed open.
  * The theme plays under it. (The café's own sounds play in the headset;
  * the emulator's recording has no way to capture them.)
  *
- * So it fits a short clip, guests eat for a few seconds instead of a
- * minute, and the clock is moved on to closing time at the end.
+ * So it fits a short clip, guests eat for a few seconds, every guest has
+ * a wish, and the happiness is run down at the end.
  *
  * Usage: dev server running, then `npm run record:game`.
  * Output: artifacts/game.mp4
@@ -58,8 +58,7 @@ const h = await startHeadset({
     await page.evaluate((timeScale) => {
       const { system, guests } = window.__cafe;
       system.timeScale = timeScale;
-      guests.spawnSeconds = [6, 8];
-      guests.seatedSeconds = 9;
+      guests.spawnSeconds = [5, 7];
       system.replace();
     }, 1 / h.speedUp);
     await page.waitForFunction(() => window.__cafe.system.placed && !window.__cafe.system.arriving, null, { timeout: 60000 });
@@ -104,25 +103,47 @@ const until = (predicate, arg) => page.waitForFunction(predicate, arg, { timeout
 const HANG = 0.042 + 0.03;
 const overview = () => h.head(SEAT, { x: TABLE.x, y: TABLE.y + 0.12, z: TABLE.z }, 1300);
 
-/** World position of a button's centre on a card ('card' or 'coach'), a hair in front of it. */
-const buttonAt = (panel, id) =>
-  page.evaluate(([panel, id]) => {
-    const p = window.__cafe.game[panel];
+/** The index fingertip sits at a fixed offset from the emulated hand (measured in `measureTip`). */
+let tipOffset = [0, 0, 0];
+async function measureTip() {
+  const at = add(LAP.right, [0, 0, 0]);
+  await handTo('right', at);
+  await frames(3);
+  tipOffset = add(await page.evaluate(() => window.__cafe.hold.tip.right.point.toArray()), at, -1);
+}
+const panelOf = (name) => (name === 'board' ? 'window.__cafe.board.panel' : `window.__cafe.game.${name}`);
+/** A point `out` metres in front of a button on a card ('card', 'how', 'coach') or the side board ('board'). */
+const buttonAt = (panel, id, out) =>
+  page.evaluate(([panel, id, out]) => {
+    const p = panel === 'board' ? window.__cafe.board.panel : window.__cafe.game[panel];
     const b = p.buttons.find((x) => x.id === id);
     const g = p.mesh.geometry.parameters;
     const V = p.mesh.position.constructor;
-    return p.mesh.localToWorld(new V(((b.x + b.w / 2) / p.width - 0.5) * g.width, (0.5 - (b.y + b.h / 2) / p.height) * g.height, 0.004)).toArray();
-  }, [panel, id]);
-/** Reach for a button (it lights), pinch it, and let go. */
+    const s = p.mesh.getWorldScale(new V()).z;
+    return p.mesh.localToWorld(new V(((b.x + b.w / 2) / p.width - 0.5) * g.width, (0.5 - (b.y + b.h / 2) / p.height) * g.height, out / s)).toArray();
+  }, [panel, id, out]);
+/** Move the right hand so its index fingertip travels to `to` over `ms`, eased. */
+async function touchTo(ms, to) {
+  const from = handAt ?? LAP.right;
+  const goal = add(to, tipOffset, -1);
+  const real = ms * h.speedUp;
+  const t0 = performance.now();
+  for (;;) {
+    const t = Math.min(1, (performance.now() - t0) / real);
+    await handTo('right', lerp(from, goal, ease(t)));
+    if (t >= 1) break;
+    await frames(1);
+  }
+  handAt = goal;
+}
+/** Bring the fingertip to a button (it lights), push it through, and draw back. */
 async function press(panel, id) {
-  const at = await buttonAt(panel, id);
-  await reach(1100, add(at, [0.01, 0.02, 0.03]), true);
-  await reach(400, at);
-  await pause(500);
-  await pinch(1);
-  await pause(300);
-  await pinch(0);
-  await pause(200);
+  await touchTo(1200, await buttonAt(panel, id, 0.045));
+  await pause(450);
+  await touchTo(260, await buttonAt(panel, id, -0.005));
+  await pause(220);
+  await touchTo(300, await buttonAt(panel, id, 0.05));
+  await pause(150);
 }
 /** Pinch up the guest at the head of the line; returns it. */
 async function pickHead() {
@@ -166,110 +187,135 @@ async function seatAt(x, z, linger = 500) {
   return seat;
 }
 
-// 1. Seated: the café pops up, the title card over it.
+/** The seat a carried guest should go to: one that grants its wish if any is free (`grant`), else one that does not. */
+const seatFor = (grant) => page.evaluate((grant) => {
+  const { guests, system } = window.__cafe;
+  const g = guests.carriedBy('right');
+  const free = guests.seats.filter((s) => s.occupant === 0);
+  const fits = free.filter((s) => guests.wouldGrant(g, s) === grant);
+  const from = fits.length ? fits : free;
+  // The nearest to the middle of the room, so it is in view.
+  const s = from.reduce((best, s) => (Math.hypot(s.position.x, s.position.z + 0.03) < Math.hypot(best.position.x, best.position.z + 0.03) ? s : best));
+  return system.cafe.localToWorld(s.position.clone()).toArray();
+}, grant);
+/** Carry the held guest over a seat (`at`, world) and let go. */
+async function drop(at, linger = 700) {
+  await reach(1400, add(at, [0, HANG + 0.05, 0]));
+  await reach(400, add(at, [0, HANG, 0]));
+  await pause(linger);
+  await pinch(0);
+  await pause(600);
+}
+// Every guest in the recording has a wish (the game sets the share each frame: hold it here), and they eat quickly.
+const pacer = setInterval(() => page.evaluate(() => { const g = window.__cafe.guests; if (window.__cafe.game.phase === 'run') { g.wishChance = 1; g.spawnPace = 1.4; g.mealSeconds = 6; } }).catch(() => {}), 120);
+
+await measureTip();
+// 1. Seated: the café pops up, the title card over it, the side board beside it.
 await until(() => window.__cafe.game.phase === 'title');
 await pause(3500);
 
-// 2. How to play, then Back.
+// 2. How to play: three pictures. Got it.
 await press('card', 'rules');
-await pause(5500);
-await press('card', 'back');
-await pause(1500);
+await rest();
+await pause(6000);
+await press('how', 'back');
+await rest();
+await pause(1200);
 
-// 3. Open the café: the walkthrough, the first time.
+// 3. Open the café: the first run.
 await press('card', 'open');
 await rest();
-await pause(3000);
-// Step 1: the guest at the gate, picked up. Step 2: seated.
+await pause(2500);
 const lineView = await toWorld([0.4, 0.2, 0.34]);
 await h.head(P(lineView), P(await toWorld([0.48, 0.04, 0.1])), 1600);
 await until(() => window.__cafe.guests.line.some((g) => g.state === 'queued' && !g.walk));
-await pause(1000);
+await pause(1200);
 await pickHead();
-await h.head(SEAT, { x: TABLE.x, y: TABLE.y + 0.12, z: TABLE.z }, 1100);
-await pause(1500);
-await seatAt(0.167, 0.025, 800);
+await overview();
+await pause(1200);
+await seatAt(0.04, 0.03, 800);
 await rest();
-// Step 3: the dial runs until the server brings the tea.
+// The server brings the tea; the café opens.
+await until(() => window.__cafe.game.phase === 'run');
 await pause(2500);
-await until(() => window.__cafe.game.step >= 3);
-await pause(2500);
-// Step 4, Next; step 5, Open the café!
-await press('coach', 'next');
-await pause(3500);
-await press('coach', 'start');
-await rest();
 
-// 4. The shift: guests seated as they come; quick ones pay with a thumbs up and coins.
-const spots = [[0.05, 0.025], [-0.12, 0.025], [0.05, -0.15], [-0.2, -0.15], [0.25, -0.15]];
-for (const [x, z] of spots.slice(0, 3)) {
-  await pickHead();
-  await seatAt(x, z);
-  await rest();
-  await pause(800);
+// 4. The run. A guest with a wish: the hand over it brings up its card; carried, the seats that grant it are mint.
+await h.head(P(lineView), P(await toWorld([0.5, 0.05, 0.12])), 1500);
+await until(() => window.__cafe.guests.line.some((g) => g.state === 'queued' && !g.walk && g.wish));
+{
+  const grip = await page.evaluate(() => { const { guests, system } = window.__cafe; const g = guests.line.find((x) => x.state === 'queued' && !x.walk); return g.actor.grip.getWorldPosition(new system.cafe.position.constructor()).toArray(); });
+  await reach(1200, add(grip, [0.012, 0.035, 0.005]), true);
+  await pause(2600);
 }
-console.error('three seated', JSON.stringify(await page.evaluate(() => ({ bank: window.__cafe.score.bank, log: window.__cafe.score.log, phase: window.__cafe.game.phase, running: window.__cafe.score.running }))));
+await pickHead();
+await overview();
+await pause(2200);
+await drop(await seatFor(true), 1100);
+await rest();
+await pause(2200);
+// Another, granted too.
+await pickHead();
+await pause(900);
+await drop(await seatFor(true));
+await rest();
+await pause(1500);
+// One seated against its wish: a shrug.
+await pickHead();
+await pause(600);
+await drop(await seatFor(false));
+await rest();
+await pause(2500);
 // One kept waiting for its food loses its temper and storms out (its patience run down, so it shows here).
-await until(() => window.__cafe.guests.guests.some((g) => g.state === 'seated' && !g.served && g.fuming < 0 && g.seatedFor > 2));
+await pickHead();
+await drop(await seatFor(true));
+await rest();
 await page.evaluate(() => {
   const { guests } = window.__cafe;
   const g = guests.guests.filter((x) => x.state === 'seated' && !x.served && x.fuming < 0).sort((a, b) => b.id - a.id)[0];
   if (g) g.patience = Math.min(g.patience, 2.5);
 });
-await pause(6000);
-for (const [x, z] of spots.slice(3)) {
-  await pickHead();
-  await seatAt(x, z);
-  await rest();
-  await pause(800);
-}
-await pause(6000);
+await pause(6500);
 
-// 5. The shop: with the coins in, hire a second server.
-// If the coins are not in yet (guests who gave up cost some), seat a few more until they are.
-for (let more = 0; more < 8 && (await page.evaluate(() => window.__cafe.score.bank)) < 40; more++) {
-  await overview();
+// 5. The side board: with the coins in, a fingertip on Hire.
+for (let more = 0; more < 6 && (await page.evaluate(() => !window.__cafe.shop.affordable)); more++) {
   await pickHead();
-  await seatAt(spots[more % spots.length][0], spots[more % spots.length][1]);
+  await drop(await seatFor(true));
   await rest();
-  await pause(9000);
+  await pause(7000);
 }
-console.error('before the shop', JSON.stringify(await page.evaluate(() => ({ bank: window.__cafe.score.bank, staff: window.__cafe.baristas.staff.length, log: window.__cafe.score.log, gaveUp: window.__cafe.guests.gaveUp, stormedOff: window.__cafe.guests.stormedOff }))));
 {
-  const grip = await page.evaluate(() => window.__cafe.unlocks.plaques.get('server2').grip.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
-  await h.head(P(add(grip, [0.12, 0.17, 0.12])), P(grip), 1400);
-  await reach(1200, add(grip, [0.01, 0.03, 0.02]), true);
-  await pause(1500);
-  // Pinch the plaque; if the pinch missed it (or the coins were short), lift the hand and try again.
-  for (let attempt = 0; attempt < 4 && (await page.evaluate(() => !window.__cafe.unlocks.owned.has('server2'))); attempt++) {
-    await reach(400, grip);
-    await pause(150);
-    await pinch(1);
-    await pause(500);
-    await pinch(0);
-    await pause(400);
-    console.error('shop attempt', attempt, JSON.stringify(await page.evaluate(() => ({ bank: window.__cafe.score.bank, owned: [...window.__cafe.unlocks.owned], refused: window.__cafe.unlocks.refused }))));
-    if (await page.evaluate(() => !window.__cafe.unlocks.owned.has('server2'))) await reach(500, add(grip, [0.01, 0.03, 0.02]), true);
-  }
+  const board = await page.evaluate(() => window.__cafe.board.panel.mesh.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
+  await h.head(SEAT, P(board), 1300);
+  await pause(1800);
+  await press('board', 'hire');
   await rest();
   await h.head(SEAT, P(await toWorld([0, 0.08, -0.16])), 1500);
   await page.waitForFunction(() => window.__cafe.baristas.staff.length >= 2, null, { timeout: 5 * 60 * 1000, polling: 100 }).catch(() => console.error('no second server'));
   await pause(4000);
+  // Pause, and Resume.
+  await h.head(SEAT, P(board), 1200);
+  await press('board', 'pause');
+  await rest();
+  await overview();
+  await pause(2500);
+  await press('card', 'resume');
+  await rest();
 }
 
-// 6. Keep going a little, then closing time.
-await overview();
+// 6. A little more of the evening, then the café's happiness runs out and it closes.
 await pickHead();
-await seatAt(0.25, 0.025);
+await drop(await seatFor(true));
 await rest();
-await pause(6000);
-await page.evaluate(() => (window.__cafe.game.clock = Math.min(window.__cafe.game.clock, 4)));
+await pause(5000);
+await page.evaluate(() => (window.__cafe.score.happiness = 9));
+await page.evaluate(() => { const { guests } = window.__cafe; for (const g of guests.line) g.patience = Math.min(g.patience, 2 + Math.random() * 3); });
 await until(() => window.__cafe.game.phase === 'closed');
-await pause(6000);
+await pause(6500);
+clearInterval(pacer);
 
 const stats = await page.evaluate(() => {
   const { guests, score, baristas, game } = window.__cafe;
-  return { phase: game.phase, takings: score.takings, bank: score.bank, up: score.up, down: score.down, staff: baristas.staff.length, seated: guests.seated, stormedOff: guests.stormedOff, gaveUp: guests.gaveUp };
+  return { phase: game.phase, openFor: Math.round(game.clock), takings: score.takings, bank: score.bank, up: score.up, down: score.down, wishesGranted: score.wishesGranted, staff: baristas.staff.length, seated: guests.seated, stormedOff: guests.stormedOff, gaveUp: guests.gaveUp };
 });
 const errors = await h.finish();
 addTheme('artifacts/game.mp4');
