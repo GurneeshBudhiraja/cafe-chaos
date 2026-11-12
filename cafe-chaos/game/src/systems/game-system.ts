@@ -32,7 +32,7 @@ import { arrivalPace, MEAL_SECONDS, PAY_TIERS, patienceShare } from '../game/rul
 import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS } from '../guests/rules.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
-import { coin, INK, moodFace, Panel, paragraph, write, type Button } from '../ui/panel.js';
+import { coin, INK, moodFace, Panel, paragraph, roundRect, write, type Button } from '../ui/panel.js';
 import { castLoaded } from '../guests/actor.js';
 import { randomLook } from '../guests/cast.js';
 import { BaristaSystem } from './barista-system.js';
@@ -45,9 +45,28 @@ import { ShopSystem } from './shop-system.js';
 
 export type GamePhase = 'waiting' | 'title' | 'rules' | 'tutorial' | 'run' | 'paused' | 'closed' | 'test';
 
-/** The big card (title, rules, pause, closing) and the first run's coach card: sizes and places (café space, metres). */
-const CARD = { width: 0.32, height: 0.21, position: [0, 0.2, 0.1] as const };
-const COACH = { width: 0.27, height: 0.1, position: [0.08, 0.25, 0.02] as const };
+/**
+ * The cards: the big one (title, pause, closing), How to play, and the
+ * first run's coach card. Sizes are real metres (ui/panel.ts); places are
+ * in the café's space. The coach card stands over the back of the café,
+ * clear of the gate and the seats the player is working at.
+ */
+const CARD = { width: 0.34, height: 0.24, position: [0, 0.22, 0.1] as const };
+const HOW = { width: 0.5, height: 0.255, position: [0, 0.23, 0.1] as const };
+const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as const };
+/** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
+const MM = 2.4;
+
+/**
+ * The game in three pictures, taken from the game itself
+ * (scripts/shoot-howto.mjs). How to play shows all three; the first run's
+ * coach card shows the one for the step in hand.
+ */
+const MOVES = [
+  { picture: 'howto-pinch.jpg', title: 'Pinch a guest', text: 'Hold your fingers over a guest at the gate. When it lights up, pinch.' },
+  { picture: 'howto-seat.jpg', title: 'Seat them', text: 'Carry them over the café and let go. They take the glowing seat.' },
+  { picture: 'howto-hire.jpg', title: 'Stay open', text: 'Fed guests pay. Tap Hire on the side board for more servers.' },
+];
 /** The bank is saved this often during a run (seconds), so little is lost if the page is closed. */
 const AUTOSAVE_SECONDS = 20;
 
@@ -59,6 +78,8 @@ interface Step {
   done?: (game: GameSystem) => boolean;
   /** A Next button (steps that are read rather than done). */
   next?: boolean;
+  /** Which of the MOVES pictures goes with it. */
+  picture: number;
 }
 
 export class GameSystem extends createSystem({}) {
@@ -71,7 +92,10 @@ export class GameSystem extends createSystem({}) {
   record = false;
   readonly save: Save = loadSave();
   readonly card = new Panel('GameCard', CARD.width, CARD.height);
+  readonly how = new Panel('HowCard', HOW.width, HOW.height);
   readonly coach = new Panel('CoachCard', COACH.width, COACH.height);
+  /** The MOVES pictures, once loaded. */
+  private readonly pictures: (HTMLImageElement | null)[] = MOVES.map(() => null);
   /** Buttons pressed (for the checks and sounds). */
   clicks = 0;
   readonly steps: Step[] = firstRun();
@@ -104,12 +128,23 @@ export class GameSystem extends createSystem({}) {
     this.score = this.world.getSystem(ScoreSystem)!;
     this.board = this.world.getSystem(BoardSystem)!;
     this.hold = this.world.getSystem(HoldSystem) ?? null;
-    for (const panel of [this.card, this.coach]) this.cafe.cafe.add(panel.mesh);
+    for (const panel of [this.card, this.how, this.coach]) this.cafe.cafe.add(panel.mesh);
     this.card.mesh.position.set(...CARD.position);
+    this.how.mesh.position.set(...HOW.position);
+    MOVES.forEach((move, i) => {
+      const image = new Image();
+      image.onload = () => {
+        this.pictures[i] = image;
+        // Cards already up are drawn again with it.
+        this.how.paint();
+        this.coach.paint();
+      };
+      image.src = `${import.meta.env.BASE_URL}ui/${move.picture}`;
+    });
     this.coach.mesh.position.set(...COACH.position);
     // A pinch on a card is the card's, never the café's or a guest's.
-    this.hold?.claims.push((point) => this.card.covers(point) || this.coach.covers(point));
-    this.panels = [this.card, this.coach, this.board.panel];
+    this.hold?.claims.push((point) => this.card.covers(point) || this.how.covers(point) || this.coach.covers(point));
+    this.panels = [this.card, this.how, this.coach, this.board.panel];
     this.hovers.length = this.panels.length;
     this.shop.bought.push(() => this.keep());
     if (TEST_MODE) {
@@ -146,6 +181,7 @@ export class GameSystem extends createSystem({}) {
     // The cards move at their own speed, paused or not.
     const cardDelta = Math.min(0.1, frameDelta);
     this.card.update(cardDelta, this.head);
+    this.how.update(cardDelta, this.head);
     this.coach.update(cardDelta, this.head);
     if (!cafe.placed || cafe.arriving) return;
     this.press();
@@ -165,48 +201,48 @@ export class GameSystem extends createSystem({}) {
     this.board.best = this.save.bestSeconds;
     this.board.live = false;
     this.board.panel.show(true);
+    this.how.show(false);
+    const cw = this.card.width;
+    const ch = this.card.height;
     this.card.set(
       (ctx, w, h) => {
-        write(ctx, 'Café Chaos', w / 2, h * 0.2, h * 0.15, { weight: 800, font: 'Georgia, serif' });
-        write(ctx, 'How long can you keep it open?', w / 2, h * 0.32, h * 0.055, { weight: 500, color: INK.inkSoft });
-        coin(ctx, w * 0.36, h * 0.44, h * 0.03);
-        write(ctx, `${this.save.bank} in the bank`, w * 0.39, h * 0.44, h * 0.05, { weight: 700, align: 'left' });
-        if (this.save.bestSeconds > 0) write(ctx, `Longest evening: ${clockText(this.save.bestSeconds)}`, w / 2, h * 0.52, h * 0.042, { weight: 500, color: INK.inkSoft });
+        write(ctx, 'Café Chaos', w / 2, h * 0.2, 24 * MM, { weight: 800, font: 'Georgia, serif' });
+        write(ctx, 'How long can you keep the café open?', w / 2, h * 0.36, 6.5 * MM, { weight: 600, color: INK.inkSoft });
+        if (this.save.bestSeconds > 0) write(ctx, `Longest evening  ${clockText(this.save.bestSeconds)}`, w / 2, h * 0.47, 6.5 * MM, { weight: 800, color: INK.amberDeep });
       },
       [
-        { id: 'open', label: 'Open the café', x: this.card.width * 0.25, y: this.card.height * 0.58, w: this.card.width * 0.5, h: this.card.height * 0.13, primary: true },
-        { id: 'rules', label: 'How to play', x: this.card.width * 0.14, y: this.card.height * 0.76, w: this.card.width * 0.34, h: this.card.height * 0.11 },
-        { id: 'walkthrough', label: 'Walkthrough', x: this.card.width * 0.52, y: this.card.height * 0.76, w: this.card.width * 0.34, h: this.card.height * 0.11 },
+        { id: 'open', label: 'Open the café', x: cw * 0.2, y: ch * 0.56, w: cw * 0.6, h: 36 * MM, primary: true },
+        { id: 'rules', label: 'How to play', x: cw * 0.3, y: ch * 0.79, w: cw * 0.4, h: 26 * MM },
       ],
     );
     this.card.show(true);
   }
 
-  /** The rules, on one card. */
+  /** How to play: the game in three pictures, each with a line. */
   toRules(): void {
     this.phase = 'rules';
-    const [quick, fair, late] = PAY_TIERS;
-    const rules = [
-      'Pinch a guest at the gate, carry it over the café and let go above a seat.',
-      'Each guest has a dial: its patience. It runs from the gate until a server brings its food. Out of patience in the line, it leaves; at the table, it storms out.',
-      `Guests pay as they leave: ${quick.coins} coins if seated within the first quarter of their wait, ${fair.coins} if a bit later, ${late.coins} at the last moment.`,
-      "Happy guests fill the café's happiness; guests who leave unhappy drain it. At zero the café closes.",
-      'The evening gets busier as it goes on. Hire more servers with your coins, and see how long you can stay open.',
-    ];
-    this.card.set(
+    this.card.show(false);
+    const hw = this.how.width;
+    const hh = this.how.height;
+    this.how.set(
       (ctx, w, h) => {
-        write(ctx, 'How to play', w / 2, h * 0.13, h * 0.08, { weight: 800, font: 'Georgia, serif' });
-        let y = h * 0.23;
-        for (const line of rules) {
-          ctx.beginPath();
-          ctx.arc(w * 0.09, y + h * 0.002, h * 0.012, 0, Math.PI * 2);
-          ctx.fillStyle = INK.amberDeep;
-          ctx.fill();
-          y = paragraph(ctx, line, w * 0.12, y, w * 0.8, h * 0.038) + h * 0.012;
-        }
+        write(ctx, 'How to play', w / 2, h * 0.1, 11.5 * MM, { weight: 800, font: 'Georgia, serif' });
+        const pw = w * 0.285;
+        const ph = pw * 0.72;
+        const gap = w * 0.025;
+        const x0 = (w - 3 * pw - 2 * gap) / 2;
+        const y0 = h * 0.18;
+        MOVES.forEach((move, i) => {
+          const x = x0 + i * (pw + gap);
+          picture(ctx, this.pictures[i], x, y0, pw, ph, 5 * MM);
+          badge(ctx, i + 1, x + 6.5 * MM, y0 + 6.5 * MM, 6.5 * MM);
+          write(ctx, move.title, x + pw / 2, y0 + ph + 10 * MM, 8.5 * MM, { weight: 800 });
+          paragraph(ctx, move.text, x + pw / 2, y0 + ph + 20 * MM, pw * 0.98, 6.2 * MM, { align: 'center', color: INK.inkSoft });
+        });
       },
-      [{ id: 'back', label: 'Back', x: this.card.width * 0.36, y: this.card.height * 0.83, w: this.card.width * 0.28, h: this.card.height * 0.1, primary: true }],
+      [{ id: 'back', label: 'Got it', x: hw / 2 - 40 * MM, y: hh - 37 * MM, w: 80 * MM, h: 28 * MM, primary: true }],
     );
+    this.how.show(true);
   }
 
   /** The first run's teaching: a guest waits at the gate, its patience held, and the coach card says what to do. */
@@ -214,6 +250,7 @@ export class GameSystem extends createSystem({}) {
     this.unpause();
     this.phase = 'tutorial';
     this.card.show(false);
+    this.how.show(false);
     this.guests.clear();
     this.guests.arrivals = false;
     this.guests.patienceFrozen = true;
@@ -227,6 +264,7 @@ export class GameSystem extends createSystem({}) {
     if (this.phase !== 'tutorial') this.guests.clear();
     this.phase = 'run';
     this.card.show(false);
+    this.how.show(false);
     this.coach.show(false);
     this.guests.arrivals = true;
     this.guests.patienceFrozen = false;
@@ -355,21 +393,17 @@ export class GameSystem extends createSystem({}) {
     const bw = this.coach.width;
     const bh = this.coach.height;
     const buttons: Button[] = [];
-    if (last) buttons.push({ id: 'start', label: 'Open the café!', x: bw * 0.6, y: bh * 0.68, w: bw * 0.34, h: bh * 0.22, primary: true });
-    else {
-      if (step.next) buttons.push({ id: 'next', label: 'Next', x: bw * 0.74, y: bh * 0.68, w: bw * 0.2, h: bh * 0.22, primary: true });
-      buttons.push({ id: 'skip', label: 'Skip', x: step.next ? bw * 0.52 : bw * 0.74, y: bh * 0.68, w: bw * 0.2, h: bh * 0.22 });
-    }
+    if (step.next) buttons.push({ id: last ? 'start' : 'next', label: last ? 'Open!' : 'Next', x: bw - 96 * MM, y: bh * 0.09, w: 44 * MM, h: 22 * MM, primary: true });
+    buttons.push({ id: 'skip', label: 'Skip', x: bw - 48 * MM, y: bh * 0.09, w: 40 * MM, h: 22 * MM });
     this.coach.set((ctx, w, h) => {
-      write(ctx, step.title, w * 0.07, h * 0.2, h * 0.13, { weight: 800, align: 'left', font: 'Georgia, serif' });
-      paragraph(ctx, step.text, w * 0.07, h * 0.38, w * 0.86, h * 0.082);
-      // The step dots.
-      for (let i = 0; i < this.steps.length; i++) {
-        ctx.beginPath();
-        ctx.arc(w * 0.08 + i * h * 0.1, h * 0.79, h * 0.03, 0, Math.PI * 2);
-        ctx.fillStyle = i <= index ? INK.amberDeep : '#dcc7a4';
-        ctx.fill();
-      }
+      // The picture of the move, and beside it which step this is, what to do, and how.
+      const ph = h * 0.74;
+      const pw = ph * 1.33;
+      picture(ctx, this.pictures[step.picture], h * 0.13, h * 0.13, pw, ph, 4 * MM);
+      const x = h * 0.13 + pw + 8 * MM;
+      write(ctx, `${index + 1} of ${this.steps.length}`, x, h * 0.2, 5.5 * MM, { weight: 800, color: INK.amberDeep, align: 'left' });
+      write(ctx, step.title, x, h * 0.37, 9.5 * MM, { weight: 800, align: 'left', font: 'Georgia, serif' });
+      paragraph(ctx, step.text, x, h * 0.56, w - x - 8 * MM, 6 * MM, { color: INK.inkSoft });
     }, buttons);
     this.coach.show(true);
   }
@@ -482,23 +516,43 @@ export class GameSystem extends createSystem({}) {
   }
 }
 
-/** The first run's steps. */
+/**
+ * The first run's steps: three, each done rather than read. The third
+ * needs nothing of the player: the server brings the tea, and the café
+ * opens.
+ */
 function firstRun(): Step[] {
-  const top = PAY_TIERS[0].coins;
   return [
-    { title: 'A guest!', text: 'Someone is waiting at the gate. Reach over and pinch them to pick them up.', done: (g) => g.guests.pickedUp > g.mark.pickedUp },
-    { title: 'Find them a seat', text: 'Carry them over the café. A seat glows under them: let go there.', done: (g) => g.guests.seated > g.mark.seated },
-    {
-      title: 'Their tea is coming',
-      text: 'The dial over their head is their patience. It runs from the gate until a server brings their tea, so seat guests fast and hire more servers.',
-      next: true,
-      done: (g) => g.baristas.servedCount > g.mark.served,
-    },
-    {
-      title: 'Keep the café happy',
-      text: `Guests seated quickly tip best (up to ${top} coins). Guests who give up or storm out drain the café's happiness. When it empties, the café closes.`,
-      next: true,
-    },
-    { title: 'Stay open', text: 'The evening gets busier. Hire servers with your coins and see how long you can keep the café open. Ready?', next: true },
+    { picture: 0, title: MOVES[0].title, text: 'Hold your fingers over the guest at the gate. When it lights up, pinch.', done: (g) => g.guests.pickedUp > g.mark.pickedUp },
+    { picture: 1, title: MOVES[1].title, text: 'Carry them over the café and let go. They take the glowing seat.', done: (g) => g.guests.seated > g.mark.seated },
+    { picture: 2, title: 'Here comes their tea', text: 'Fed guests pay. More guests are coming: keep them happy, and hire help on the side board.', done: (g) => g.baristas.servedCount > g.mark.served },
   ];
+}
+
+/** A picture with rounded corners and a walnut rim; a paper blank until it has loaded. */
+function picture(ctx: CanvasRenderingContext2D, image: HTMLImageElement | null, x: number, y: number, w: number, h: number, r: number): void {
+  ctx.save();
+  roundRect(ctx, x, y, w, h, r);
+  ctx.clip();
+  if (image) {
+    const k = Math.max(w / image.width, h / image.height);
+    ctx.drawImage(image, x + (w - image.width * k) / 2, y + (h - image.height * k) / 2, image.width * k, image.height * k);
+  } else {
+    ctx.fillStyle = INK.paperDeep;
+    ctx.fillRect(x, y, w, h);
+  }
+  ctx.restore();
+  roundRect(ctx, x, y, w, h, r);
+  ctx.lineWidth = 1.2 * MM;
+  ctx.strokeStyle = INK.rim;
+  ctx.stroke();
+}
+
+/** A step's number in an amber disc. */
+function badge(ctx: CanvasRenderingContext2D, n: number, x: number, y: number, r: number): void {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = INK.amberDeep;
+  ctx.fill();
+  write(ctx, `${n}`, x, y + r * 0.06, r * 1.25, { weight: 800, color: '#fffaf0' });
 }

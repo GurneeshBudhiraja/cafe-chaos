@@ -322,3 +322,30 @@ Probe results (pick up / hold through a flicker / put down):
   a guest is lit under it (a pinch now takes it) and amber on the pinch.
 - Not measurable here: how it feels with real tracking. On
   `docs/HEADSET-CHECKS.md`.
+
+### Phase 4, the start
+
+Pictures first: `scripts/shoot-howto.mjs` takes three from the game (a
+hand over a guest at the gate; a guest carried over a glowing seat; a
+fingertip at Hire on the side board), with the cream model hands drawn
+since real hands cannot be in a picture.
+
+How to play, three layouts drawn at real size
+(`docs/iterations/howto-1-2-3.png`):
+- **Iteration 1, three across.** The whole game at one glance; nothing
+  to press but Got it. Captions a little small.
+- **Iteration 2, one at a time with Next.** Big pictures, but three
+  presses to read what one look could give, and no overview.
+- **Iteration 3, a list.** Bold titles read well; tall (33 cm), and the
+  pictures shrink.
+- **Final** (`start-final.png`): three across, with the list's bolder
+  titles and larger pictures (50 x 25.5 cm), one line under each.
+
+The title: the name, the one question the game asks ("How long can you
+keep the café open?"), the record, and two buttons (36 and 26 mm tall).
+The Walkthrough button is gone: the first run teaches by itself.
+
+The first run: three steps, none of them read-and-press. Pinch the
+guest; seat it; its tea arrives and the café opens. The coach card
+shows the picture of the move in hand beside one line, and stands over
+the back of the café, out of the way of the hands. Skip on every step.
