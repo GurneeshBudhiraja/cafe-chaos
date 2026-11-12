@@ -392,3 +392,23 @@ the table to the line; guests who give up walk back to it.
   surface found), the café falls back to the usual point.
 - Needs the headset: this is the one phase whose point is the real
   room. On `docs/HEADSET-CHECKS.md`.
+
+### Phase 5 and 7: the whole-game pass and the video
+
+Checks after every phase was in: game 16 of 16, wishes 8 of 8, guests
+10 of 10, seating 9 of 9, servers 10 of 11 (the miss was the check's
+timing against the faster servers; the check now slows the clock for
+that step and is to be run again). `npm run record:game` records the
+whole game from the title to the café closing (3:51; the competition
+video must be under 3:00, so it needs trimming or a tighter script).
+
+Still open, in order of weight:
+1. Everything on `docs/HEADSET-CHECKS.md`: the feel of the pick-up, the
+   frame rate, other tables, pause when the headset comes off.
+2. The café is 92 cm across at full size, past the 60 cm reach. Pinch
+   what you see removes the need to reach, but the default size on a
+   small desk should be looked at on the headset.
+3. The How to play pictures are taken in the emulator's grey room.
+4. The older checks (navigation, mood, placement, handles, expressions,
+   sound) have not been run since this round began.
+5. The annex's code and models are still in the project, unused.
