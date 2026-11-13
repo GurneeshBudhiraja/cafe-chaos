@@ -201,6 +201,7 @@ export class GameSystem extends createSystem({}) {
     this.card.update(cardDelta, this.head);
     this.how.update(cardDelta, this.head);
     this.coach.update(cardDelta, this.head);
+    this.tab.update(cardDelta, this.head);
     if (!cafe.placed || cafe.arriving) return;
     this.press();
     if (this.phase === 'tutorial') this.coachTick();
