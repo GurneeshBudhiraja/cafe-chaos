@@ -36,7 +36,9 @@ export interface Button {
   /** Not available just now: drawn pale. It can still be pressed (the game says no). */
   off?: boolean;
   /** Draws what is on the button, in place of the label. */
-  draw?: (ctx: CanvasRenderingContext2D, b: Button) => void;
+  draw?: (ctx: CanvasRenderingContext2D, b: Button, hover?: boolean, pressed?: boolean) => void;
+  /** Draw nothing but `draw` (the button draws its own background and frame). */
+  bare?: boolean;
 }
 
 /** The café's palette for paper things. */
@@ -287,6 +289,10 @@ function card(ctx: CanvasRenderingContext2D, w: number, h: number): void {
 
 /** A button: a rounded tag with its label; lighter with a glow while a hand is over it, dipped while pressed. */
 function drawButton(ctx: CanvasRenderingContext2D, b: Button, hover: boolean, pressed: boolean): void {
+  if (b.bare && b.draw) {
+    b.draw(ctx, b, hover, pressed);
+    return;
+  }
   const r = b.h * 0.42;
   const dip = pressed ? b.h * 0.06 : 0;
   ctx.save();

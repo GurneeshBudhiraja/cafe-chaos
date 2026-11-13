@@ -14,7 +14,9 @@
  *   RAMP); the café closes when its happiness reaches zero. Coins go to
  *   the bank and hire servers (ShopSystem), who stay hired.
  * - Pause: everything in the café stops where it is (Resume, or End the
- *   run). The game pauses itself when the headset comes off or another
+ *   run). Pause, hiring and How to play are on the wrist menu
+ *   (WristMenuSystem: turn the left palm toward you); a small pause tab
+ *   at the table's edge does the same for anyone who never tries it. The game pauses itself when the headset comes off or another
  *   app takes over, and the bank is saved then too.
  * - Closing card: how long the café stayed open, the record, guests fed,
  *   coins earned; Play again or Menu.
@@ -36,7 +38,9 @@ import { coin, INK, moodFace, Panel, paragraph, roundRect, write, type Button } 
 import { castLoaded } from '../guests/actor.js';
 import { randomLook } from '../guests/cast.js';
 import { BaristaSystem } from './barista-system.js';
-import { BoardSystem, clockText } from './board-system.js';
+import { clockText } from '../game/clock.js';
+import { sketchButton } from '../ui/sketch-button.js';
+import { sketchFontReady } from '../ui/sketch.js';
 import { StripSystem } from './strip-system.js';
 import { CafeSystem } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
@@ -55,6 +59,8 @@ export type GamePhase = 'waiting' | 'title' | 'rules' | 'tutorial' | 'run' | 'pa
 const CARD = { width: 0.34, height: 0.24, position: [0, 0.22, 0.1] as const };
 const HOW = { width: 0.5, height: 0.255, position: [0, 0.23, 0.1] as const };
 const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as const };
+/** The pause tab at the table's edge: its size (real metres), and how far out from the café's front-right corner it stands (café space). */
+const TAB = { width: 0.06, height: 0.045, inX: 0.06, outZ: 0.05 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
 
@@ -66,7 +72,7 @@ const MM = 2.4;
 const MOVES = [
   { picture: 'howto-pinch.jpg', title: 'Pinch a guest', text: 'Hold your fingers over a guest at the gate. When it lights up, pinch.' },
   { picture: 'howto-seat.jpg', title: 'Seat them', text: 'Carry them over the café and let go. They take the glowing seat.' },
-  { picture: 'howto-hire.jpg', title: 'Stay open', text: 'Fed guests pay. Tap Hire on the side board for more servers.' },
+  { picture: 'howto-hire.jpg', title: 'Your menu', text: 'Turn your left palm toward you: pause and hire servers from the menu by your wrist.' },
 ];
 /** The bank is saved this often during a run (seconds), so little is lost if the page is closed. */
 const AUTOSAVE_SECONDS = 20;
@@ -104,14 +110,19 @@ export class GameSystem extends createSystem({}) {
   score!: ScoreSystem;
   baristas!: BaristaSystem;
   shop!: ShopSystem;
-  board!: BoardSystem;
+  /** The pause tab at the table's edge: the menu for those who never turn their palm. */
+  readonly tab = new Panel('PauseTab', TAB.width, TAB.height);
+  /** Times the wrist menu has been opened (WristMenuSystem counts them; the first run waits for one). */
+  wristOpens = 0;
+  /** Where How to play was opened from: back there when it is closed. */
+  private rulesFrom: GamePhase = 'title';
   strip!: StripSystem;
   private cafe!: CafeSystem;
   private hold: HoldSystem | null = null;
   private readonly previous: Record<Hand, boolean> = { left: false, right: false };
   private readonly head = new Vector3();
   /** Counts when the step began (to tell when the player has done it). */
-  mark = { pickedUp: 0, seated: 0, served: 0 };
+  mark = { pickedUp: 0, seated: 0, served: 0, wristOpens: 0 };
   /** The first run's guest is still to come (its model may still be loading). */
   private needGuest = false;
   private placement = -1;
@@ -128,7 +139,6 @@ export class GameSystem extends createSystem({}) {
     this.baristas = this.world.getSystem(BaristaSystem)!;
     this.shop = this.world.getSystem(ShopSystem)!;
     this.score = this.world.getSystem(ScoreSystem)!;
-    this.board = this.world.getSystem(BoardSystem)!;
     this.strip = this.world.getSystem(StripSystem)!;
     this.hold = this.world.getSystem(HoldSystem) ?? null;
     for (const panel of [this.card, this.how, this.coach]) this.cafe.cafe.add(panel.mesh);
@@ -147,7 +157,12 @@ export class GameSystem extends createSystem({}) {
     this.coach.mesh.position.set(...COACH.position);
     // A pinch on a card is the card's, never the café's or a guest's.
     this.hold?.claims.push((point) => this.card.covers(point) || this.how.covers(point) || this.coach.covers(point));
-    this.panels = [this.card, this.how, this.coach, this.board.panel];
+    this.cafe.cafe.add(this.tab.mesh);
+    this.tab.frame = false;
+    this.tab.turn = 2.5;
+    this.layoutTab();
+    void sketchFontReady.then(() => this.layoutTab());
+    this.panels = [this.card, this.how, this.coach, this.tab];
     this.hovers.length = this.panels.length;
     this.shop.bought.push(() => this.keep());
     if (TEST_MODE) {
@@ -201,9 +216,7 @@ export class GameSystem extends createSystem({}) {
     this.quiet();
     this.coach.show(false);
     this.score.clock = 0;
-    this.board.best = this.save.bestSeconds;
-    this.board.live = false;
-    this.board.panel.show(true);
+    this.tab.show(false);
     this.strip.best = this.save.bestSeconds;
     this.strip.live = false;
     this.strip.settle();
@@ -227,6 +240,7 @@ export class GameSystem extends createSystem({}) {
 
   /** How to play: the game in three pictures, each with a line. */
   toRules(): void {
+    this.rulesFrom = this.phase;
     this.phase = 'rules';
     this.card.show(false);
     const hw = this.how.width;
@@ -281,9 +295,8 @@ export class GameSystem extends createSystem({}) {
     this.pace();
     this.score.startRun();
     this.score.clock = 0;
-    this.board.best = this.save.bestSeconds;
-    this.board.live = true;
-    this.board.panel.show(true);
+    this.tab.show(true);
+    this.layoutTab();
     this.strip.best = this.save.bestSeconds;
     this.strip.live = true;
     this.strip.settle();
@@ -298,6 +311,12 @@ export class GameSystem extends createSystem({}) {
     this.cafe.timeScale = 0;
     this.guests.handsOff = true;
     this.keep();
+    this.showPauseCard();
+    this.layoutTab();
+  }
+
+  /** The pause card over the café: Resume, or End the evening. */
+  private showPauseCard(): void {
     this.card.set(
       (ctx, w, h) => {
         write(ctx, 'Paused', w / 2, h * 0.2, h * 0.12, { weight: 800, font: 'Georgia, serif' });
@@ -317,13 +336,14 @@ export class GameSystem extends createSystem({}) {
     this.unpause();
     this.phase = 'run';
     this.card.show(false);
+    this.layoutTab();
   }
 
   /** The café closes: the run is over. The time it stayed open is the score. */
   toClosed(): void {
     this.unpause();
     this.phase = 'closed';
-    this.board.live = false;
+    this.tab.show(false);
     this.strip.live = false;
     this.quiet();
     const s = this.score;
@@ -403,7 +423,7 @@ export class GameSystem extends createSystem({}) {
 
   private goToStep(index: number): void {
     this.step = index;
-    this.mark = { pickedUp: this.guests.pickedUp, seated: this.guests.seated, served: this.baristas.servedCount };
+    this.mark = { pickedUp: this.guests.pickedUp, seated: this.guests.seated, served: this.baristas.servedCount, wristOpens: this.wristOpens };
     const step = this.steps[index];
     const last = index === this.steps.length - 1;
     const bw = this.coach.width;
@@ -449,6 +469,35 @@ export class GameSystem extends createSystem({}) {
   }
 
   // ---------------------------------------------------------------- buttons
+
+  /** The pause tab: two bars while the café is open, a play arrow while it is paused; at the café's front-right corner. */
+  private layoutTab(): void {
+    const tab = this.tab;
+    const bounds = this.hold?.bounds;
+    const right = bounds && bounds.max.x > 0 ? bounds.max.x : 0.46;
+    const front = bounds && bounds.max.z > 0 ? bounds.max.z : 0.31;
+    tab.mesh.position.set(right - TAB.inX, TAB.height / 2 + 0.004, front + TAB.outZ);
+    const paused = this.phase === 'paused';
+    const { width: w, height: h, canvas } = tab;
+    tab.set(() => {}, [
+      sketchButton(canvas, 'tab', '', w * 0.04, h * 0.05, w * 0.92, h * 0.9, 901, paused ? 'go' : 'plain', (ctx, b) => {
+        const cx = b.x + b.w / 2;
+        const cy = b.y + b.h / 2;
+        const r = b.h * 0.26;
+        ctx.fillStyle = paused ? '#fbeee2' : '#1c2036';
+        ctx.beginPath();
+        if (paused) {
+          ctx.moveTo(cx - r * 0.7, cy - r);
+          ctx.lineTo(cx + r, cy);
+          ctx.lineTo(cx - r * 0.7, cy + r);
+        } else {
+          ctx.rect(cx - r * 0.75, cy - r, r * 0.5, r * 2);
+          ctx.rect(cx + r * 0.25, cy - r, r * 0.5, r * 2);
+        }
+        ctx.fill();
+      }),
+    ]);
+  }
 
   /**
    * Buttons, on the cards and the side board: an index fingertip near
@@ -503,8 +552,23 @@ export class GameSystem extends createSystem({}) {
         this.toRules();
         break;
       case 'back':
+        if (this.rulesFrom === 'paused') {
+          this.how.show(false);
+          this.phase = 'paused';
+          this.showPauseCard();
+        } else this.toTitle();
+        break;
       case 'menu':
         this.toTitle();
+        break;
+      case 'how':
+        // From the wrist menu: pause first, then How to play; Got it comes back to the pause.
+        this.pause();
+        if (this.phase === 'paused') this.toRules();
+        break;
+      case 'tab':
+        if (this.phase === 'run') this.pause();
+        else if (this.phase === 'paused') this.resume();
         break;
       case 'again':
         this.toRun();
@@ -533,15 +597,16 @@ export class GameSystem extends createSystem({}) {
 }
 
 /**
- * The first run's steps: three, each done rather than read. The third
- * needs nothing of the player: the server brings the tea, and the café
- * opens.
+ * The first run's steps, each done rather than read: pick up the guest,
+ * seat it, watch its tea come, and open the wrist menu once (or press
+ * Next). Then the café opens.
  */
 function firstRun(): Step[] {
   return [
     { picture: 0, title: MOVES[0].title, text: 'Hold your fingers over the guest at the gate. When it lights up, pinch.', done: (g) => g.guests.pickedUp > g.mark.pickedUp },
     { picture: 1, title: MOVES[1].title, text: 'Carry them over the café and let go. They take the glowing seat.', done: (g) => g.guests.seated > g.mark.seated },
-    { picture: 2, title: 'Here comes their tea', text: 'Fed guests pay. More guests are coming: keep them happy, and hire help on the board beside the café.', done: (g) => g.baristas.servedCount > g.mark.served },
+    { picture: 2, title: 'Here comes their tea', text: 'Fed guests pay. Keep them happy: the board above the café shows how they feel.', done: (g) => g.baristas.servedCount > g.mark.served },
+    { picture: 2, title: 'Your menu', text: 'Turn your left palm toward you and hold it: your menu appears by your wrist. Pause and hire servers there.', next: true, done: (g) => g.wristOpens > g.mark.wristOpens },
   ];
 }
 

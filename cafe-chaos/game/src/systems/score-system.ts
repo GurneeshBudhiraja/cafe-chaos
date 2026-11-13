@@ -14,7 +14,7 @@
  * - Thumbs. Each happy guest leaves a thumbs up over its head with its
  *   coins; each unhappy one a thumbs down. Both are counted.
  *
- * The numbers are shown on the side board (BoardSystem).
+ * The numbers are shown on the scoreboard (StripSystem).
  *
  * Scoring only counts while `running` (a run); the first run's teaching
  * and the title screen keep it still.

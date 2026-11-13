@@ -27,7 +27,7 @@ import { createSystem, Vector3 } from '@iwsdk/core';
 import { HAPPINESS } from '../game/rules.js';
 import { Panel } from '../ui/panel.js';
 import { line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
-import { clockText } from './board-system.js';
+import { clockText } from '../game/clock.js';
 import { CafeSystem } from './cafe-system.js';
 import { ScoreSystem } from './score-system.js';
 
@@ -41,6 +41,13 @@ export const STRIP = { width: 0.42, height: 0.103, below: 0.03, clear: 0.03, bac
 /** How long a segment takes to drain or fill, and a coin pop lasts (seconds); the pulse under 30 % (times a second); how quickly it follows the eyes' height (per second). */
 const MOTION = { segment: 0.5, pop: 0.3, pulse: 1, follow: 1.2 };
 const SEGMENTS = 10;
+/**
+ * Where it hangs: 'eye' (at eye level, the default), or 'low' (just above
+ * the café's tallest point), for a narrow field of view where looking
+ * down at the café would leave an eye-level board out of sight
+ * (`?board=low` in the address).
+ */
+export const STRIP_HEIGHT: 'eye' | 'low' = typeof location !== 'undefined' && new URLSearchParams(location.search).get('board') === 'low' ? 'low' : 'eye';
 
 export class StripSystem extends createSystem({}) {
   readonly panel = new Panel('ScoreStrip', STRIP.width, STRIP.height);
@@ -123,7 +130,7 @@ export class StripSystem extends createSystem({}) {
     this.spot.y = this.height;
     cafe.worldToLocal(this.spot);
     const lowest = STRIP.top + (STRIP.clear + STRIP.height / 2) / scale;
-    this.panel.mesh.position.set(0, Math.max(lowest, this.spot.y), STRIP.back);
+    this.panel.mesh.position.set(0, STRIP_HEIGHT === 'low' ? lowest : Math.max(lowest, this.spot.y), STRIP.back);
   }
 
   private draw(ctx: CanvasRenderingContext2D, w: number, h: number): void {
