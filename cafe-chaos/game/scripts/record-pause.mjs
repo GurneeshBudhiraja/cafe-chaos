@@ -39,12 +39,13 @@ const at = (panel, id, out) => page.evaluate(([panel, id, out]) => {
 }, [panel, id, out]);
 /** The fingertip comes in from the rest spot, pushes through the button, and goes back. */
 async function press(panel, id) {
-  const near = (await at(panel, id, 0.05)).map((v, i) => v - tipOff[i]);
+  // Where to go, worked out before the press: the card changes once it is pressed.
+  const [near, through] = (await Promise.all([at(panel, id, 0.05), at(panel, id, -0.004)])).map((p) => p.map((v, i) => v - tipOff[i]));
   for (let i = 1; i <= 6; i++) { await handTo(AWAY.map((v, k) => v + (near[k] - v) * (i / 6))); await h.pause(110); }
   await h.pause(300);
-  await handTo((await at(panel, id, -0.004)).map((v, i) => v - tipOff[i]));
+  await handTo(through);
   await h.pause(350);
-  await handTo((await at(panel, id, 0.05)).map((v, i) => v - tipOff[i]));
+  await handTo(near);
   await h.pause(250);
   for (let i = 1; i <= 5; i++) { await handTo(near.map((v, k) => v + (AWAY[k] - v) * (i / 5))); await h.pause(110); }
 }
