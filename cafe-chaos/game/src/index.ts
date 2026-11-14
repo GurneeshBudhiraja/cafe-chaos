@@ -23,6 +23,7 @@
 import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { playTheme } from './audio/theme.js';
+import { AnchorSystem } from './systems/anchor-system.js';
 import { themeHands } from './hands/cafe-hand.js';
 import { findSurfaceSpot } from './lib/desk-placement.js';
 import { setUpLighting } from './lighting.js';
@@ -42,7 +43,7 @@ import { StripSystem } from './systems/strip-system.js';
 import { ShopSystem } from './systems/shop-system.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(ScoreSystem).registerSystem(ShopSystem).registerSystem(StripSystem).registerSystem(GameSystem).registerSystem(WristMenuSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
+  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(AnchorSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(ScoreSystem).registerSystem(ShopSystem).registerSystem(StripSystem).registerSystem(GameSystem).registerSystem(WristMenuSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
   const system = world.getSystem(CafeSystem)!;
   const lights = setUpLighting(world, system.cafe);
   const mood = world.getSystem(MoodSystem)!;
@@ -56,6 +57,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   const wrist = world.getSystem(WristMenuSystem)!;
   const strip = world.getSystem(StripSystem)!;
   const sound = world.getSystem(SoundSystem)!;
+  const anchor = world.getSystem(AnchorSystem)!;
   const game = world.getSystem(GameSystem)!;
   const score = world.getSystem(ScoreSystem)!;
   mood.lights = lights;
@@ -64,5 +66,5 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   sound.theme = theme;
 
   // Dev only: lets the check and recording scripts find the world, the café, its lights, the mood, the hold, the handles and the surface finder.
-  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, budget, guests, baristas, shop, wrist, strip, sound, ambience, theme, game, score, findSurfaceSpot };
+  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, anchor, lights, mood, hold, handles, budget, guests, baristas, shop, wrist, strip, sound, ambience, theme, game, score, findSurfaceSpot };
 });
