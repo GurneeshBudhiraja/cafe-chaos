@@ -72,12 +72,11 @@ export interface Lamp {
 }
 
 export const LAMPS: Lamp[] = [
-  // The two post lamps at the entrance, either side of the door frame: their pools reach out onto the table.
-  { position: [0.34, 0.078, -0.036], color: 0xffa858, intensity: 0.08, distance: 0.5, breathes: false },
-  { position: [0.34, 0.078, 0.146], color: 0xffa858, intensity: 0.08, distance: 0.5, breathes: false },
-  // The paper lanterns under the eave over the counter: the outer two carry the light for all three.
-  { position: [-0.2, 0.124, -0.158], color: 0xffbe74, intensity: 0.14, distance: 0.5, breathes: true },
-  { position: [0.2, 0.124, -0.158], color: 0xffbe74, intensity: 0.14, distance: 0.5, breathes: true },
+  // The two post lamps at the entrance, either side of the door frame: one light between them carries both
+  // (every light is worked out for every pixel, so fewer keep the frame rate up on the headset).
+  { position: [0.34, 0.078, 0.055], color: 0xffa858, intensity: 0.15, distance: 0.6, breathes: false },
+  // The paper lanterns under the eave over the counter: one light in the middle carries all three.
+  { position: [0, 0.124, -0.158], color: 0xffbe74, intensity: 0.26, distance: 0.62, breathes: true },
   // The room's own warmth: an unseen light high in the middle of the café, so the tables sit in a cosy wash.
   { position: [0, 0.15, -0.05], color: 0xffc080, intensity: 0.13, distance: 0.6, breathes: false },
 ];
@@ -131,7 +130,7 @@ export const ANNEX_LANTERNS_X = [-0.43, -0.59];
 /** Each annex lantern's light (a point light where the lantern hangs) and halo: as the main room's lanterns, a touch stronger to carry the room alone. */
 export const ANNEX_LAMP = { y: 0.124, z: -0.158, color: 0xffbe74, intensity: 0.17, distance: 0.55, halo: { size: 0.11, opacity: 0.45 } };
 /** Which lamp is the room's own unseen light. */
-export const ROOM_LAMP = 4;
+export const ROOM_LAMP = 2;
 
 /** The light spill on the player's table: a disc under the café, this radius (metres, café space). */
 export const SPILL_RADIUS = 0.85;

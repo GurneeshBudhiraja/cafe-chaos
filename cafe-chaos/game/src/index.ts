@@ -27,6 +27,7 @@ import { AnchorSystem } from './systems/anchor-system.js';
 import { themeHands } from './hands/cafe-hand.js';
 import { findSurfaceSpot } from './lib/desk-placement.js';
 import { setUpLighting } from './lighting.js';
+import { useCheapMaterials } from './light/cheap-materials.js';
 import { AmbienceSystem } from './systems/ambience-system.js';
 import { BaristaSystem } from './systems/barista-system.js';
 import { CafeSystem } from './systems/cafe-system.js';
@@ -42,6 +43,8 @@ import { WristMenuSystem } from './systems/wrist-menu-system.js';
 import { StripSystem } from './systems/strip-system.js';
 import { ShopSystem } from './systems/shop-system.js';
 
+// Matte surfaces on every model (see light/cheap-materials.ts): before anything is loaded.
+useCheapMaterials();
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
   world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(AnchorSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(ScoreSystem).registerSystem(ShopSystem).registerSystem(StripSystem).registerSystem(GameSystem).registerSystem(WristMenuSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
   const system = world.getSystem(CafeSystem)!;

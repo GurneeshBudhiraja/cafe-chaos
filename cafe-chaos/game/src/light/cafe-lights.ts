@@ -96,9 +96,10 @@ function brightenGlow(root: Object3D): void {
     if (!(node instanceof Mesh)) return;
     for (const m of Array.isArray(node.material) ? node.material : [node.material]) {
       const glow = GLOW[m.name];
-      if (!glow || done.has(m) || !(m instanceof MeshStandardMaterial)) continue;
-      m.emissiveIntensity = glow.strength;
-      if (glow.color !== undefined) m.emissive = new Color(glow.color);
+      if (!glow || done.has(m) || !('emissiveIntensity' in m)) continue;
+      const lit = m as MeshStandardMaterial;
+      lit.emissiveIntensity = glow.strength;
+      if (glow.color !== undefined) lit.emissive = new Color(glow.color);
       done.add(m);
     }
   });
