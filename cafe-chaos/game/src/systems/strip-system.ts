@@ -37,7 +37,7 @@ import { ScoreSystem } from './score-system.js';
  * never lower than `clear` above the café's tallest point (the cherry
  * tree, 0.405 m in café space) so nothing of the café hides it.
  */
-export const STRIP = { width: 0.42, height: 0.103, below: 0.03, clear: 0.03, back: -0.33, top: 0.405 };
+export const STRIP = { width: 0.58, height: 0.103, below: 0.03, clear: 0.03, back: -0.33, top: 0.405 };
 /** How long a segment takes to drain or fill, and a coin pop lasts (seconds); the pulse under 30 % (times a second); how quickly it follows the eyes' height (per second). */
 const MOTION = { segment: 0.5, pop: 0.3, pulse: 1, follow: 1.2 };
 const SEGMENTS = 10;
@@ -140,24 +140,35 @@ export class StripSystem extends createSystem({}) {
     const lw = Math.max(2, h * 0.016);
     // The paper, with a marker border.
     rc.rectangle(lw * 2, lw * 2, w - lw * 4, h - lw * 4, line(11, lw * 1.2, { fill: SKETCH.paper, fillStyle: 'solid', roughness: 1.3 }));
-    // The clock, and the record under it.
-    scrawl(ctx, 'open', w * 0.045, h * 0.24, h * 0.13, { color: SKETCH.soft, weight: 400 });
-    scrawl(ctx, clockText(s.clock), w * 0.04, h * 0.56, h * 0.36);
-    const record = this.live && this.best > 0 && s.clock > this.best;
-    if (this.best > 0) scrawl(ctx, record ? 'new record!' : `best ${clockText(this.best)}`, w * 0.045, h * 0.83, h * 0.12, { color: record ? SKETCH.red : SKETCH.soft });
-    // Dividers.
-    rc.line(w * 0.225, h * 0.17, w * 0.227, h * 0.83, line(21, lw * 0.8));
-    rc.line(w * 0.765, h * 0.17, w * 0.763, h * 0.83, line(22, lw * 0.8));
-    // Happiness: the face, the segments and the percentage.
-    sketchFace(rc, w * 0.27, h * 0.56, h * 0.36, mood, 31, lw);
-    scrawl(ctx, 'happiness', w * 0.315, h * 0.24, h * 0.13, { color: SKETCH.soft, weight: 400 });
-    scrawl(ctx, `${Math.round(mood * 100)}%`, w * 0.745, h * 0.24, h * 0.15, { color: moodInk(mood), align: 'right' });
-    const x0 = w * 0.315;
-    const span = w * 0.43;
-    const gap = span * 0.022;
+    // Laid out left to right with room between every part; the time and the bank are given room for their widest so nothing shifts as they change.
+    const pad = h * 0.22, inner = h * 0.12, around = h * 0.2;
+    const icon = h * 0.36, timeSize = h * 0.36, bankSize = h * 0.34;
+    // The widest time ('59:59') and bank ('9999') in the hand font, as drawn on the headset.
+    const timeW = h * 0.9;
+    const bankW = h * 0.72;
+    let x = pad;
+    // The clock: a drawn clock face and the time.
+    const cx = x + icon / 2, cy = h * 0.5;
+    rc.circle(cx, cy, icon, line(12, lw, { fill: SKETCH.paper, fillStyle: 'solid' }));
+    rc.line(cx, cy, cx, cy - icon * 0.32, line(13, lw * 0.9));
+    rc.line(cx, cy, cx + icon * 0.24, cy + icon * 0.06, line(14, lw * 0.9));
+    x += icon + inner;
+    scrawl(ctx, clockText(s.clock), x, h * 0.53, timeSize);
+    x += timeW + around;
+    rc.line(x, h * 0.17, x + 2, h * 0.83, line(21, lw * 0.8));
+    x += around;
+    // Happiness: the face and the segments, up to the coins' divider.
+    const face = h * 0.4;
+    sketchFace(rc, x + face / 2, h * 0.5, face, mood, 31, lw);
+    x += face + inner;
+    const right = w - pad - bankW - inner - icon - around;
+    rc.line(right, h * 0.17, right - 2, h * 0.83, line(22, lw * 0.8));
+    const x0 = x;
+    const span = right - around - x0;
+    const gap = span * 0.03;
     const sw = (span - gap * (SEGMENTS - 1)) / SEGMENTS;
-    const sy = h * 0.38;
-    const sh = h * 0.42;
+    const sy = h * 0.27;
+    const sh = h * 0.46;
     const low = this.live && mood <= 0.3 && mood > 0;
     const pulse = low ? 0.55 + 0.45 * (0.5 + 0.5 * Math.cos(this.time * MOTION.pulse * Math.PI * 2)) : 1;
     for (let i = 0; i < SEGMENTS; i++) {
@@ -177,9 +188,8 @@ export class StripSystem extends createSystem({}) {
     }
     // The bank, popping for a moment when coins come in.
     const pop = this.popAge < MOTION.pop ? 1 + 0.22 * Math.sin((this.popAge / MOTION.pop) * Math.PI) : 1;
-    const digits = String(s.bank).length;
-    scrawl(ctx, 'coins', w * 0.79, h * 0.24, h * 0.13, { color: SKETCH.soft, weight: 400 });
-    sketchCoin(rc, w * 0.815, h * 0.58, h * 0.27 * pop, 41, lw);
-    scrawl(ctx, `${s.bank}`, w * 0.855, h * 0.58, h * (digits > 3 ? 0.24 : digits > 2 ? 0.3 : 0.36) * pop);
+    const coinX = right + around + icon / 2;
+    sketchCoin(rc, coinX, h * 0.5, icon * pop, 41, lw);
+    scrawl(ctx, `${s.bank}`, coinX + icon / 2 + inner, h * 0.53, bankSize * pop);
   }
 }

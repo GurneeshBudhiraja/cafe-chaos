@@ -39,11 +39,11 @@ import { castLoaded } from '../guests/actor.js';
 import { randomLook } from '../guests/cast.js';
 import { BaristaSystem } from './barista-system.js';
 import { clockText } from '../game/clock.js';
-import { sketchButton } from '../ui/sketch-button.js';
 import { sketchFontReady } from '../ui/sketch.js';
 import { StripSystem } from './strip-system.js';
 import { CafeSystem } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
+import { HandleSystem } from './handle-system.js';
 import { HoldSystem } from './hold-system.js';
 import { ScoreSystem } from './score-system.js';
 import { ShopSystem } from './shop-system.js';
@@ -59,8 +59,8 @@ export type GamePhase = 'waiting' | 'title' | 'rules' | 'tutorial' | 'run' | 'pa
 const CARD = { width: 0.34, height: 0.24, position: [0, 0.22, 0.1] as const };
 const HOW = { width: 0.5, height: 0.255, position: [0, 0.23, 0.1] as const };
 const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as const };
-/** The pause tab at the table's edge: its size (real metres), and how far out from the café's front-right corner it stands (café space). */
-const TAB = { width: 0.06, height: 0.045, inX: 0.06, outZ: 0.05 };
+/** The pause button beside the grab pill: its card's size (real metres); the round button fills its height, 36 mm across. */
+const TAB = { width: 0.045, height: 0.04 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
 
@@ -119,6 +119,8 @@ export class GameSystem extends createSystem({}) {
   strip!: StripSystem;
   private cafe!: CafeSystem;
   private hold: HoldSystem | null = null;
+  private handles: HandleSystem | null = null;
+  private readonly spot = new Vector3();
   private readonly previous: Record<Hand, boolean> = { left: false, right: false };
   private readonly head = new Vector3();
   /** Counts when the step began (to tell when the player has done it). */
@@ -141,6 +143,7 @@ export class GameSystem extends createSystem({}) {
     this.score = this.world.getSystem(ScoreSystem)!;
     this.strip = this.world.getSystem(StripSystem)!;
     this.hold = this.world.getSystem(HoldSystem) ?? null;
+    this.handles = this.world.getSystem(HandleSystem) ?? null;
     for (const panel of [this.card, this.how, this.coach]) this.cafe.cafe.add(panel.mesh);
     this.card.mesh.position.set(...CARD.position);
     this.how.mesh.position.set(...HOW.position);
@@ -201,6 +204,7 @@ export class GameSystem extends createSystem({}) {
     this.card.update(cardDelta, this.head);
     this.how.update(cardDelta, this.head);
     this.coach.update(cardDelta, this.head);
+    this.placeTab();
     this.tab.update(cardDelta, this.head);
     if (!cafe.placed || cafe.arriving) return;
     this.press();
@@ -321,7 +325,8 @@ export class GameSystem extends createSystem({}) {
     this.card.set(
       (ctx, w, h) => {
         write(ctx, 'Paused', w / 2, h * 0.2, h * 0.12, { weight: 800, font: 'Georgia, serif' });
-        write(ctx, `Open for ${clockText(this.clock)}`, w / 2, h * 0.36, h * 0.06, { weight: 600, color: INK.inkSoft });
+        write(ctx, `Open for ${clockText(this.clock)}`, w / 2, h * 0.33, h * 0.06, { weight: 600, color: INK.inkSoft });
+        if (this.save.bestSeconds > 0) write(ctx, `Longest evening ${clockText(this.save.bestSeconds)}`, w / 2, h * 0.42, h * 0.05, { weight: 600, color: INK.amberDeep });
       },
       [
         { id: 'resume', label: 'Resume', x: this.card.width * 0.25, y: this.card.height * 0.5, w: this.card.width * 0.5, h: this.card.height * 0.14, primary: true },
@@ -471,33 +476,53 @@ export class GameSystem extends createSystem({}) {
 
   // ---------------------------------------------------------------- buttons
 
-  /** The pause tab: two bars while the café is open, a play arrow while it is paused; at the café's front-right corner. */
+  /**
+   * The pause button: a round cream button, dark pause bars while the café
+   * is open and a play arrow while it is paused, no words. It stands beside
+   * the grab pill (placeTab), the pair centred on the café's edge.
+   */
   private layoutTab(): void {
     const tab = this.tab;
-    const bounds = this.hold?.bounds;
-    const right = bounds && bounds.max.x > 0 ? bounds.max.x : 0.46;
-    const front = bounds && bounds.max.z > 0 ? bounds.max.z : 0.31;
-    tab.mesh.position.set(right - TAB.inX, TAB.height / 2 + 0.004, front + TAB.outZ);
     const paused = this.phase === 'paused';
-    const { width: w, height: h, canvas } = tab;
-    tab.set(() => {}, [
-      sketchButton(canvas, 'tab', '', w * 0.04, h * 0.05, w * 0.92, h * 0.9, 901, paused ? 'go' : 'plain', (ctx, b) => {
-        const cx = b.x + b.w / 2;
-        const cy = b.y + b.h / 2;
-        const r = b.h * 0.26;
-        ctx.fillStyle = paused ? '#fbeee2' : '#1c2036';
-        ctx.beginPath();
-        if (paused) {
-          ctx.moveTo(cx - r * 0.7, cy - r);
-          ctx.lineTo(cx + r, cy);
-          ctx.lineTo(cx - r * 0.7, cy + r);
-        } else {
-          ctx.rect(cx - r * 0.75, cy - r, r * 0.5, r * 2);
-          ctx.rect(cx + r * 0.25, cy - r, r * 0.5, r * 2);
-        }
-        ctx.fill();
-      }),
-    ]);
+    const { width: w, height: h } = tab;
+    const draw = (ctx: CanvasRenderingContext2D, b: Button, hover?: boolean, pressed?: boolean): void => {
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      const r = b.h * 0.45 * (pressed ? 0.93 : 1);
+      ctx.fillStyle = hover ? '#fff4e4' : '#f7e9d3';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = r * 0.08;
+      ctx.strokeStyle = '#e3c9a4';
+      ctx.stroke();
+      ctx.fillStyle = '#1c2036';
+      ctx.beginPath();
+      if (paused) {
+        ctx.moveTo(cx - r * 0.28, cy - r * 0.42);
+        ctx.lineTo(cx + r * 0.42, cy);
+        ctx.lineTo(cx - r * 0.28, cy + r * 0.42);
+      } else {
+        const bw = r * 0.2;
+        const bh = r * 0.84;
+        ctx.rect(cx - bw * 1.6, cy - bh / 2, bw, bh);
+        ctx.rect(cx + bw * 0.6, cy - bh / 2, bw, bh);
+      }
+      ctx.fill();
+    };
+    tab.set(() => {}, [{ id: 'tab', label: '', x: (w - h) / 2, y: 0, w: h, h, bare: true, draw }]);
+  }
+
+  /** Each frame: the pause button stands beside the pill, wherever the pill is. */
+  private placeTab(): void {
+    const handles = this.handles;
+    const showing = this.tab.open;
+    if (!handles) return;
+    handles.paired = showing;
+    if (!showing) return;
+    const spot = handles.pairSpot(this.spot);
+    spot.y += TAB.height / 2 + 0.004;
+    this.tab.mesh.position.copy(this.cafe.cafe.worldToLocal(spot));
   }
 
   /**

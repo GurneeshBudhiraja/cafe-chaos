@@ -2,7 +2,7 @@
  * Game check: the evening around the café, in the real game (not test
  * mode), with a fresh save. With the viewer seated at the emulated table
  * it checks that:
- * 1. once the café is down, the title card and the side board show,
+ * 1. once the café is down, the title card and the scoreboard show,
  *    nobody arrives, and the café has one server;
  * 2. a fingertip pushed through "Open the café" starts the first run;
  * 3. the first run: a guest waits with its patience held; picking it up
@@ -60,10 +60,10 @@ await frames(3);
 const tipOffset = (await page.evaluate(() => window.__cafe.hold.tip.right.point.toArray())).map((v, i) => v - AWAY[i]);
 const pinchAt = (p) => handTo(p.map((v, i) => v - offset[i]));
 const tipTo = (p) => handTo(p.map((v, i) => v - tipOffset[i]));
-/** A point `out` metres in front of a button on one of the game's cards ('card', 'coach') or the side board ('board'). */
+/** A point `out` metres in front of a button on one of the game's cards ('card', 'coach') or the pause button ('tab'). */
 const buttonAt = (panel, id, out) =>
   page.evaluate(([panel, id, out]) => {
-    const p = panel === 'board' ? window.__cafe.board.panel : window.__cafe.game[panel];
+    const p = window.__cafe.game[panel];
     const b = p.buttons.find((x) => x.id === id);
     const g = p.mesh.geometry.parameters;
     const V = p.mesh.position.constructor;
@@ -74,7 +74,7 @@ const buttonAt = (panel, id, out) =>
 async function poke(panel, id) {
   await tipTo(await buttonAt(panel, id, 0.04));
   await frames(3);
-  const lit = await page.evaluate(([panel]) => (panel === 'board' ? window.__cafe.board.panel : window.__cafe.game[panel]).hover, [panel]);
+  const lit = await page.evaluate(([panel]) => (window.__cafe.game[panel]).hover, [panel]);
   await tipTo(await buttonAt(panel, id, -0.004));
   await frames(3);
   await handTo(AWAY);
@@ -83,9 +83,9 @@ async function poke(panel, id) {
 }
 const state = () =>
   page.evaluate(() => {
-    const { game, guests, baristas, score, shop, board } = window.__cafe;
+    const { game, guests, baristas, score, shop, strip } = window.__cafe;
     return {
-      phase: game.phase, step: game.step, card: game.card.open, coach: game.coach.open, board: board.panel.open, live: board.live,
+      phase: game.phase, step: game.step, card: game.card.open, coach: game.coach.open, board: strip.panel.open, live: strip.live,
       arrived: guests.arrived, onStage: guests.guests.length, staff: baristas.staff.length, hires: shop.hires, price: shop.price,
       bank: score.bank, happiness: score.happiness, up: score.up, down: score.down, clock: game.clock, log: score.log,
       popups: { ...guests.popups.shown }, refused: shop.refused, pace: guests.spawnPace, patience: guests.patienceSeconds,
@@ -96,7 +96,7 @@ const state = () =>
 await until(() => window.__cafe.game.phase === 'title');
 await page.waitForTimeout(3000);
 let s = await state();
-check('the title card and the side board show once the café is down, and nobody comes', s.phase === 'title' && s.card && s.board && s.arrived === 0, `phase ${s.phase}, card ${s.card}, board ${s.board}, arrived ${s.arrived}`);
+check('the title card and the scoreboard show once the café is down, and nobody comes', s.phase === 'title' && s.card && s.board && s.arrived === 0, `phase ${s.phase}, card ${s.card}, board ${s.board}, arrived ${s.arrived}`);
 check('the café has one server', s.staff === 1 && s.hires === 0 && s.price === 60, `staff ${s.staff}, next costs ${s.price}`);
 await h.screenshot('artifacts/game-title.png');
 
@@ -190,23 +190,24 @@ check('a guest kept waiting for its food fumes, then storms out: a thumbs down a
   `clip ${fuming?.clip}, vein mark ${fuming?.anger}, happiness ${before.happiness} -> ${s.happiness}, bank ${before.bank} -> ${s.bank}`);
 await page.evaluate(() => { window.__cafe.baristas.serving = true; window.__cafe.guests.patienceFrozen = true; });
 
-// 7. Hiring, with a fingertip on the side board.
+// 7. Hiring (from the wrist menu; check-wrist.mjs presses it with a fingertip).
 await page.evaluate(() => (window.__cafe.score.bank = 20));
 await frames(3);
-await poke('board', 'hire');
+await page.evaluate(() => window.__cafe.game.click('hire'));
+await frames(2);
 s = await state();
 check('Hire is refused while the bank is short', s.refused === 1 && s.staff === 1 && s.bank === 20, `refused ${s.refused}, staff ${s.staff}, bank ${s.bank}`);
 await page.evaluate(() => (window.__cafe.score.bank = 100));
 await frames(3);
-await poke('board', 'hire');
+await page.evaluate(() => window.__cafe.game.click('hire'));
 await until(() => window.__cafe.baristas.staff.length === 2, null, 60000);
 s = await state();
 const savedHire = await page.evaluate(() => JSON.parse(localStorage.getItem('cafe-chaos/save/v2') ?? 'null'));
 check('with the money a server is hired, the price taken, and it is saved', s.staff === 2 && s.bank === 40 && s.price === 120 && savedHire?.hires === 1 && savedHire.bank === 40, `staff ${s.staff}, bank ${s.bank}, next ${s.price}, saved ${JSON.stringify(savedHire)}`);
 await h.screenshot('artifacts/game-hired.png');
 
-// 8. Pause and Resume.
-await poke('board', 'pause');
+// 8. Pause (the pause button beside the pill) and Resume.
+await poke('tab', 'tab');
 s = await state();
 const pausedAt = s.clock;
 await page.waitForTimeout(4000);
