@@ -96,8 +96,9 @@ const label = await page.evaluate(() => window.__cafe.wrist.panel.buttons.find((
 check('Pause pauses, and the button then reads resume', s.phase === 'paused' && label === 'resume', `${JSON.stringify(s)} label ${label}`);
 await h.screenshot('artifacts/wrist-3-paused.png');
 await poke('w-pause');
+await page.waitForFunction(() => window.__cafe.game.phase === 'run', null, { timeout: 60000 }).catch(() => {});
 s = await state();
-check('pressed again it resumes', s.phase === 'run', JSON.stringify(s));
+check('pressed again it resumes (after its 3-2-1)', s.phase === 'run', JSON.stringify(s));
 // 5. How to play pauses, Got it comes back to the pause.
 await poke('w-how');
 s = await state();
@@ -106,6 +107,7 @@ await page.evaluate(() => window.__cafe.game.click('back'));
 const back = await state();
 check('How to play pauses first; Got it returns to the pause', howOpen && back.phase === 'paused' && back.card && !back.how, `${JSON.stringify(s)} -> ${JSON.stringify(back)}`);
 await page.evaluate(() => window.__cafe.game.click('resume'));
+await page.waitForFunction(() => window.__cafe.game.phase === 'run', null, { timeout: 60000 }).catch(() => {});
 // 6. Lower the hand: closed.
 await handTo('left', [-1.0, 0.85, 0.5], quat(worst.t));
 await page.waitForFunction(() => !window.__cafe.wrist.open, null, { timeout: 30000 }).catch(() => {});
@@ -119,6 +121,7 @@ await h.head(SEAT, LOOK, 200);
 await frames(3);
 await h.screenshot('artifacts/wrist-4-tab-paused.png');
 for (const p of tab) { await handTo('right', p.map((v, i) => v - tipOff[i])); await frames(3); }
+await page.waitForFunction(() => window.__cafe.game.phase === 'run', null, { timeout: 60000 }).catch(() => {});
 const t2 = await state();
 check('the pause tab at the table edge pauses and resumes', t1.phase === 'paused' && t2.phase === 'run', `${t1.phase} -> ${t2.phase}`);
 const errors = await h.finish();

@@ -60,6 +60,8 @@ const CARD = { width: 0.34, height: 0.24, position: [0, 0.22, 0.1] as const };
 const HOW = { width: 0.5, height: 0.255, position: [0, 0.23, 0.1] as const };
 const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as const };
 /** The pause button beside the grab pill: its card's size (real metres); the round button fills its height, 36 mm across. */
+/** The count back from a pause: 3, 2, 1 (seconds). */
+const RESUME_COUNT = 3;
 const TAB = { width: 0.045, height: 0.04 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
@@ -115,6 +117,9 @@ export class GameSystem extends createSystem({}) {
   /** Times the wrist menu has been opened (WristMenuSystem counts them; the first run waits for one). */
   wristOpens = 0;
   /** Where How to play was opened from: back there when it is closed. */
+  /** Seconds left of the count back from a pause (0: none). */
+  resuming = 0;
+  private shownCount = 0;
   private rulesFrom: GamePhase = 'title';
   strip!: StripSystem;
   private cafe!: CafeSystem;
@@ -206,6 +211,7 @@ export class GameSystem extends createSystem({}) {
     this.coach.update(cardDelta, this.head);
     this.placeTab();
     this.tab.update(cardDelta, this.head);
+    this.countDown(frameDelta);
     if (!cafe.placed || cafe.arriving) return;
     this.press();
     if (this.phase === 'tutorial') this.coachTick();
@@ -308,8 +314,9 @@ export class GameSystem extends createSystem({}) {
     this.strip.panel.show(true);
   }
 
-  /** Stop everything in the café where it is, and save. No-op unless a run is on. */
+  /** Stop everything in the café where it is, and save. No-op unless a run is on (mid-count, it holds the pause). */
   pause(): void {
+    if (this.phase === 'paused') return this.holdPause();
     if (this.phase !== 'run') return;
     this.phase = 'paused';
     this.speed = this.cafe.timeScale;
@@ -336,13 +343,52 @@ export class GameSystem extends createSystem({}) {
     this.card.show(true);
   }
 
-  /** Carry on from a pause. */
+  /**
+   * Carry on from a pause: a 3-2-1 first, on the card and the pause button,
+   * with the café still frozen, so the hands can come back to the table
+   * before guests move again. Pausing again during it cancels it.
+   */
   resume(): void {
-    if (this.phase !== 'paused') return;
+    if (this.phase !== 'paused' || this.resuming > 0) return;
+    this.resuming = RESUME_COUNT;
+    this.showCount();
+  }
+
+  /** The count is over: the café moves again. */
+  private carryOn(): void {
+    this.resuming = 0;
     this.unpause();
     this.phase = 'run';
     this.card.show(false);
     this.layoutTab();
+  }
+
+  /** Back to the pause card from the middle of a count. */
+  private holdPause(): void {
+    if (this.phase !== 'paused' || this.resuming <= 0) return;
+    this.resuming = 0;
+    this.showPauseCard();
+    this.layoutTab();
+  }
+
+  /** The count on the card (one big number) and on the pause button. */
+  private showCount(): void {
+    const n = Math.ceil(this.resuming);
+    this.shownCount = n;
+    this.card.set((ctx, w, h) => {
+      write(ctx, 'Back in', w / 2, h * 0.24, h * 0.08, { weight: 600, color: INK.inkSoft });
+      write(ctx, `${n}`, w / 2, h * 0.6, h * 0.4, { weight: 800, font: 'Georgia, serif', color: INK.amberDeep });
+    });
+    this.card.show(true);
+    this.layoutTab();
+  }
+
+  /** Each frame of a count: on real time (the café's own clock is stopped). */
+  private countDown(frameDelta: number): void {
+    if (this.resuming <= 0) return;
+    this.resuming -= Math.min(0.25, frameDelta);
+    if (this.resuming <= 0) this.carryOn();
+    else if (Math.ceil(this.resuming) !== this.shownCount) this.showCount();
   }
 
   /** The café closes: the run is over. The time it stayed open is the score. */
@@ -409,6 +455,7 @@ export class GameSystem extends createSystem({}) {
   /** Let the café move again after a pause (a no-op when it is not paused). */
   private unpause(): void {
     if (this.phase !== 'paused') return;
+    this.resuming = 0;
     this.cafe.timeScale = this.speed;
     this.guests.handsOff = false;
   }
@@ -478,12 +525,14 @@ export class GameSystem extends createSystem({}) {
 
   /**
    * The pause button: a round cream button, dark pause bars while the café
-   * is open and a play arrow while it is paused, no words. It stands beside
+   * is open, a play arrow while it is paused, the number while counting
+   * back in (3, 2, 1), no words. It stands beside
    * the grab pill (placeTab), the pair centred on the café's edge.
    */
   private layoutTab(): void {
     const tab = this.tab;
     const paused = this.phase === 'paused';
+    const count = this.resuming > 0 ? Math.ceil(this.resuming) : 0;
     const { width: w, height: h } = tab;
     const draw = (ctx: CanvasRenderingContext2D, b: Button, hover?: boolean, pressed?: boolean): void => {
       const cx = b.x + b.w / 2;
@@ -497,6 +546,14 @@ export class GameSystem extends createSystem({}) {
       ctx.strokeStyle = '#e3c9a4';
       ctx.stroke();
       ctx.fillStyle = '#1c2036';
+      if (count > 0) {
+        // Mid-count: the number, in the same ink.
+        ctx.font = `800 ${Math.round(r * 1.25)}px Georgia, serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${count}`, cx, cy + r * 0.06);
+        return;
+      }
       ctx.beginPath();
       if (paused) {
         ctx.moveTo(cx - r * 0.28, cy - r * 0.42);
@@ -593,7 +650,7 @@ export class GameSystem extends createSystem({}) {
         if (this.phase === 'paused') this.toRules();
         break;
       case 'tab':
-        if (this.phase === 'run') this.pause();
+        if (this.phase === 'run' || this.resuming > 0) this.pause();
         else if (this.phase === 'paused') this.resume();
         break;
       case 'again':

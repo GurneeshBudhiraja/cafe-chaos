@@ -14,6 +14,9 @@ import { PassthroughDimmer } from '../light/dimmer.js';
 import { ANNEX_LAMP, ANNEX_LANTERNS_X, ANNEX_LIGHT, BREATH, DIM_FADE_SECONDS, DIM_LEVEL, HALOS, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS, ROOM_LAMP } from '../light/mood.js';
 import { CafeSystem } from './cafe-system.js';
 
+/** How much the café's lamps go down while the game is paused. */
+const PAUSE_DIM = 0.45;
+
 export class MoodSystem extends createSystem({}) {
   readonly dimmer = new PassthroughDimmer();
   /** The café's lights, once set up (see index.ts). */
@@ -22,6 +25,8 @@ export class MoodSystem extends createSystem({}) {
   lampsUp = 1;
   private sinceDusk = -1;
   private time = 0;
+  /** 0 to 1: how far the lamps are turned down for a pause (the café is still while paused). */
+  paused = 0;
   private placement = 0;
   private readonly head = new Vector3();
   /** The annex whose furniture has been lit (see `growLight`). */
@@ -67,6 +72,9 @@ export class MoodSystem extends createSystem({}) {
       this.lampsUp = presenting ? 0 : 1;
     }
     this.growLight(cafe);
+    // Paused (the café's clock stopped): the lamps go down a little, so the pause is plain to see; eased on real time.
+    const pausedNow = cafe?.timeScale === 0 ? 1 : 0;
+    this.paused += (pausedNow - this.paused) * Math.min(1, frameDelta * 4);
     this.light();
   }
 
@@ -109,7 +117,8 @@ export class MoodSystem extends createSystem({}) {
     if (!this.lights) return;
     const { lamps, halos } = this.lights;
     // Each lantern breathes on its own phase; the gate lamps and the room light hold steady.
-    const breath = (breathes: boolean, phase: number): number => (breathes ? 1 + BREATH.depth * Math.sin(this.time * BREATH.rate * Math.PI * 2 + phase * 1.7) : 1);
+    const dim = 1 - PAUSE_DIM * this.paused;
+    const breath = (breathes: boolean, phase: number): number => dim * (breathes ? 1 + BREATH.depth * Math.sin(this.time * BREATH.rate * Math.PI * 2 + phase * 1.7) : 1);
     lamps.forEach((lamp, i) => {
       const grow = i === ROOM_LAMP ? 1 + (ANNEX_LIGHT.room.strength - 1) * this.grown : 1;
       lamp.intensity = LAMPS[i].intensity * grow * this.lampsUp * breath(LAMPS[i].breathes, i);

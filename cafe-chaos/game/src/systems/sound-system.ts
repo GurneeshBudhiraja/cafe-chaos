@@ -21,6 +21,7 @@
  * nothing else has to know about sound.
  */
 
+import type { Theme } from '../audio/theme.js';
 import { createSystem, Vector3, type Object3D } from '@iwsdk/core';
 import { bubble, clink, closing, coins, cricket, espresso, furin, grumble, pop, refuse, roomTone, seated, tick, trayDown, trickle, unlock, voice } from '../audio/voices.js';
 import { BaristaSystem } from './barista-system.js';
@@ -30,6 +31,8 @@ import { ScoreSystem } from './score-system.js';
 import { GuestSystem } from './guest-system.js';
 import { ShopSystem } from './shop-system.js';
 
+/** While the game is paused the café's own sounds play at this share of their level. */
+const PAUSED_SHARE = 0.35;
 /** How loud it all is (0 to 1), and each group within that. The theme plays at 5%; these sit just under and around it. */
 export const SOUND = { master: 0.32, room: 0.5, bar: 0.7, door: 0.8, garden: 0.55, hands: 1 };
 /** How often the background sounds come (seconds between, at random within the range). */
@@ -47,6 +50,8 @@ const NEAR_M = 0.35;
 export class SoundSystem extends createSystem({}) {
   /** The audio context, made when the session starts. */
   ctx: AudioContext | null = null;
+  /** The theme (index.ts hands it over), ducked while the game is paused. */
+  theme: Theme | null = null;
   master: GainNode | null = null;
   /** How many sounds have played, by name (for the checks). */
   readonly played: Record<string, number> = {};
@@ -78,8 +83,16 @@ export class SoundSystem extends createSystem({}) {
     xr.addEventListener('sessionend', () => void this.ctx?.suspend());
   }
 
-  update(): void {
+  update(frameDelta: number): void {
+    // Paused: the theme and the café's own sounds both drop back, and come up again on resume.
+    const paused = this.game?.phase === 'paused';
+    this.theme?.duck(paused);
     const ctx = this.ctx;
+    if (ctx && this.master) {
+      const want = SOUND.master * (paused ? PAUSED_SHARE : 1);
+      const g = this.master.gain.value;
+      this.master.gain.value = g + (want - g) * Math.min(1, frameDelta * 3);
+    }
     if (!ctx || ctx.state !== 'running' || !this.cafe.placed || this.cafe.arriving) return;
     this.listen();
     const now = ctx.currentTime;

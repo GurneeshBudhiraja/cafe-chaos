@@ -61,6 +61,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   mood.lights = lights;
   themeHands(world);
   const theme = playTheme(world);
+  sound.theme = theme;
 
   // Dev only: lets the check and recording scripts find the world, the café, its lights, the mood, the hold, the handles and the surface finder.
   if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, budget, guests, baristas, shop, wrist, strip, sound, ambience, theme, game, score, findSurfaceSpot };

@@ -218,6 +218,8 @@ const stillAt = (await state()).clock;
 check('Pause stops the clock', s.phase === 'paused' && s.card && stillAt === pausedAt, `phase ${s.phase}, clock ${pausedAt.toFixed(2)} -> ${stillAt.toFixed(2)}`);
 await h.screenshot('artifacts/game-paused.png');
 await poke('card', 'resume');
+// Resume counts 3, 2, 1 first (on real time), then the café moves again.
+await until(() => window.__cafe.game.phase === 'run', null, 60000);
 await page.waitForTimeout(3000);
 s = await state();
 check('Resume carries on', s.phase === 'run' && s.clock > pausedAt, `phase ${s.phase}, clock ${s.clock.toFixed(2)}`);

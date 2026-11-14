@@ -19,6 +19,8 @@ import type { World } from '@iwsdk/core';
 export const THEME_VOLUME = 0.05;
 /** It comes in over this long, and goes out over this long (seconds). */
 const FADE = { in: 4, out: 1.2 };
+/** How loud it plays while the game is paused, as a share of its usual volume. */
+const DUCK = 0.4;
 
 export class Theme {
   readonly audio: HTMLAudioElement;
@@ -27,6 +29,8 @@ export class Theme {
   /** How many times it has been asked to play (for the checks). */
   asked = 0;
   private target = 0;
+  /** Quieter while the game is paused (see duck). */
+  ducked = false;
   private rate = 0;
   private last = performance.now();
 
@@ -40,7 +44,7 @@ export class Theme {
   /** Start (or resume) the theme, fading in. */
   play(): void {
     this.asked++;
-    this.target = THEME_VOLUME;
+    this.target = THEME_VOLUME * (this.ducked ? DUCK : 1);
     this.rate = THEME_VOLUME / FADE.in;
     this.audio
       .play()
@@ -55,6 +59,14 @@ export class Theme {
   /** Try again after a player action, if the browser held the theme back. */
   nudge(): void {
     if (!this.started && this.target > 0) this.play();
+  }
+
+  /** Quieter while the game is paused (40%), back up when it carries on; only while it is playing. */
+  duck(on: boolean): void {
+    if (on === this.ducked || this.target === 0) return;
+    this.ducked = on;
+    this.target = THEME_VOLUME * (on ? DUCK : 1);
+    this.rate = THEME_VOLUME / FADE.out;
   }
 
   /** Fade out and pause. */
