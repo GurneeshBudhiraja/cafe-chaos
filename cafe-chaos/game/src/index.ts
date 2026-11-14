@@ -48,6 +48,10 @@ useCheapMaterials();
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
   world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(AnchorSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(ScoreSystem).registerSystem(ShopSystem).registerSystem(StripSystem).registerSystem(GameSystem).registerSystem(WristMenuSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
   const system = world.getSystem(CafeSystem)!;
+  // Draw the headset's view at 85% resolution (`?res=1` for full): leaning in, the café fills the view and the
+  // cost of every pixel is what pulls the frame rate down. Set before any session starts.
+  const res = Number(new URLSearchParams(location.search).get('res'));
+  world.renderer.xr.setFramebufferScaleFactor(res > 0.3 && res <= 1 ? res : 0.85);
   const lights = setUpLighting(world, system.cafe);
   const mood = world.getSystem(MoodSystem)!;
   const hold = world.getSystem(HoldSystem)!;

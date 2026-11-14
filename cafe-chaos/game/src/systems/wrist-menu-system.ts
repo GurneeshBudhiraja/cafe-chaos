@@ -10,7 +10,12 @@
  *   [ how to play ]
  *
  * Pressed with the right index fingertip, like every other button
- * (ui/panel.ts). Lower the hand, or turn it away, and the menu goes. It
+ * (ui/panel.ts). It opens where the wrist is and then stays still in the
+ * air, turned to the eyes (Meta: spawn a menu from the wrist, but do not
+ * anchor it to a moving hand), so it does not slide away under the other
+ * hand's finger. It stays while the left hand is near it or the palm is
+ * still roughly toward the eyes, and goes once the hand has been lowered
+ * or taken away for most of a second. It
  * is there during a run and while paused; never on the title, the first
  * run's teaching or the closing card.
  *
@@ -36,12 +41,25 @@ import { HoldSystem } from './hold-system.js';
 import { ScoreSystem } from './score-system.js';
 import { ShopSystem } from './shop-system.js';
 
+/**
+ * Off for now (the gesture was not steady enough on the headset): pause,
+ * hire and How to play are on the pause card, from the round button by
+ * the café. `?wrist` in the address turns the wrist menu back on.
+ */
+export const WRIST_MENU_ON = typeof location !== 'undefined' && new URLSearchParams(location.search).has('wrist');
+
 /** The menu's size (real metres), and where it sits from the wrist: up the hand and out to the side, toward the body's middle. */
 export const WRIST = { width: 0.12, height: 0.15, up: 0.05, side: 0.105 };
-/** How squarely the palm must face the eyes (the cosine of the angle), and for how long (seconds) to open; how long it may look away before the menu goes. */
-export const OPEN = { facing: 0.55, hold: 0.3, grace: 0.35 };
-/** How tightly the menu follows the wrist (per second): steady, but never trailing. */
-const FOLLOW = 14;
+/** How squarely the palm must face the eyes (the cosine of the angle), and for how long (seconds), to open. */
+export const OPEN = { facing: 0.55, hold: 0.3 };
+/**
+ * Once open it stays while the palm still faces the eyes this much, or the
+ * wrist is within `near` metres of the menu; it goes after `grace` seconds
+ * of neither (a hand lowered or taken away, or lost to tracking).
+ */
+export const STAY = { facing: 0.15, near: 0.25, grace: 0.8 };
+/** How quickly the palm's measured direction is smoothed (per second): tracking noise must not flicker the menu. */
+const SMOOTH = 12;
 
 export class WristMenuSystem extends createSystem({}) {
   readonly panel = new Panel('WristMenu', WRIST.width, WRIST.height);
@@ -86,22 +104,21 @@ export class WristMenuSystem extends createSystem({}) {
   update(frameDelta: number): void {
     const delta = Math.min(0.1, frameDelta);
     this.player.head.getWorldPosition(this.head);
-    const allowed = this.game.phase === 'run' || this.game.phase === 'paused';
-    const steady = allowed && this.readPalm();
-    if (steady) {
-      this.facingFor += delta;
-      this.awayFor = 0;
-    } else {
-      this.awayFor += delta;
-      this.facingFor = 0;
-    }
+    const allowed = WRIST_MENU_ON && (this.game.phase === 'run' || this.game.phase === 'paused');
+    const tracked = allowed && this.readPalm(delta);
+    const steady = tracked && this.facing >= OPEN.facing;
+    this.facingFor = steady ? this.facingFor + delta : 0;
+    // Open, it stays while the hand is still with it: the palm roughly toward the eyes, or the wrist by the menu.
+    const staying = tracked && (this.facing >= STAY.facing || this.wrist.distanceTo(this.panel.mesh.position) <= STAY.near);
+    this.awayFor = (this.open ? staying : steady) ? 0 : this.awayFor + delta;
     if (!this.open && steady && this.facingFor >= OPEN.hold) {
       this.open = true;
       this.placed = false;
       this.game.wristOpens++;
     }
-    if (this.open && (!allowed || this.awayFor >= OPEN.grace)) this.open = false;
-    if (this.open && steady) this.follow(delta);
+    if (this.open && (!allowed || this.awayFor >= STAY.grace)) this.open = false;
+    // Put where the wrist is when it opens, then left still.
+    if (this.open && !this.placed && tracked) this.place();
     this.panel.show(this.open);
     if (!this.panel.update(delta, this.head)) return;
     // Its buttons: the right fingertip (the left hand holds the menu).
@@ -119,8 +136,8 @@ export class WristMenuSystem extends createSystem({}) {
     }
   }
 
-  /** The left palm this frame: true when it faces the eyes squarely and the hand is free. */
-  private readPalm(): boolean {
+  /** The left palm this frame: true when the hand is free and tracked (its facing, smoothed, in `facing`). */
+  private readPalm(delta: number): boolean {
     const hold = this.hold;
     const pinch = hold?.pinch.left;
     if (!pinch || pinch.gap === Infinity || pinch.closed || pinch.ghost || hold.holding.includes('left') || this.guests.carriedBy('left')) {
@@ -141,21 +158,21 @@ export class WristMenuSystem extends createSystem({}) {
       return false;
     }
     // Out of the palm, for a left hand: (index - wrist) x (pinky - wrist).
-    this.normal.copy(this.index).sub(this.wrist).cross(this.scratch.copy(this.pinky).sub(this.wrist)).normalize();
+    this.scratch.copy(this.index).sub(this.wrist).cross(this.side.copy(this.pinky).sub(this.wrist)).normalize();
+    // Smoothed: a jittery joint must not flicker the menu open and shut.
+    if (this.normal.lengthSq() < 0.5) this.normal.copy(this.scratch);
+    else this.normal.lerp(this.scratch, 1 - Math.exp(-SMOOTH * delta)).normalize();
     this.facing = this.normal.dot(this.scratch.copy(this.head).sub(this.wrist).normalize());
-    return this.facing >= OPEN.facing;
+    return true;
   }
 
-  /** Beside the wrist: up the hand a little, out toward the body's middle, turned to the eyes. */
-  private follow(delta: number): void {
+  /** Beside the wrist: up the hand a little, out toward the body's middle, turned to the eyes (once, as it opens). */
+  private place(): void {
     this.up.copy(this.middle).sub(this.wrist).normalize();
     this.side.copy(this.up).cross(this.normal).normalize();
     this.target.copy(this.wrist).addScaledVector(this.up, WRIST.up).addScaledVector(this.side, WRIST.side);
-    const mesh = this.panel.mesh;
-    if (!this.placed) {
-      mesh.position.copy(this.target);
-      this.placed = true;
-    } else mesh.position.lerp(this.target, 1 - Math.exp(-FOLLOW * delta));
+    this.panel.mesh.position.copy(this.target);
+    this.placed = true;
   }
 
   private press(id: string): void {

@@ -74,7 +74,7 @@ const MM = 2.4;
 const MOVES = [
   { picture: 'howto-pinch.jpg', title: 'Pinch a guest', text: 'Hold your fingers over a guest at the gate. When it lights up, pinch.' },
   { picture: 'howto-seat.jpg', title: 'Seat them', text: 'Carry them over the café and let go. They take the glowing seat.' },
-  { picture: 'howto-hire.jpg', title: 'Your menu', text: 'Turn your left palm toward you: pause and hire servers from the menu by your wrist.' },
+  { picture: 'howto-hire.jpg', title: 'Pause & hire', text: 'Press the round button by the café to pause. Hire servers there too.' },
 ];
 /** The bank is saved this often during a run (seconds), so little is lost if the page is closed. */
 const AUTOSAVE_SECONDS = 20;
@@ -327,17 +327,27 @@ export class GameSystem extends createSystem({}) {
     this.layoutTab();
   }
 
-  /** The pause card over the café: Resume, or End the evening. */
+  /**
+   * The pause card over the café: Resume first, then Hire a server (its
+   * price, or full staff; dimmed while the bank is short), How to play,
+   * and End the evening last and smallest.
+   */
   private showPauseCard(): void {
+    const { width: w, height: h } = this.card;
+    const price = this.shop.price;
+    const canPay = price !== null && this.score.bank >= price;
+    const hire = price === null ? 'Full staff' : canPay ? `Hire a server · ${price}` : `Hire at ${price} coins`;
     this.card.set(
-      (ctx, w, h) => {
-        write(ctx, 'Paused', w / 2, h * 0.2, h * 0.12, { weight: 800, font: 'Georgia, serif' });
-        write(ctx, `Open for ${clockText(this.clock)}`, w / 2, h * 0.33, h * 0.06, { weight: 600, color: INK.inkSoft });
-        if (this.save.bestSeconds > 0) write(ctx, `Longest evening ${clockText(this.save.bestSeconds)}`, w / 2, h * 0.42, h * 0.05, { weight: 600, color: INK.amberDeep });
+      (ctx) => {
+        write(ctx, 'Paused', w / 2, h * 0.12, h * 0.1, { weight: 800, font: 'Georgia, serif' });
+        write(ctx, `Open for ${clockText(this.clock)}`, w / 2, h * 0.22, h * 0.05, { weight: 600, color: INK.inkSoft });
+        if (this.save.bestSeconds > 0) write(ctx, `Longest evening ${clockText(this.save.bestSeconds)}`, w / 2, h * 0.29, h * 0.045, { weight: 600, color: INK.amberDeep });
       },
       [
-        { id: 'resume', label: 'Resume', x: this.card.width * 0.25, y: this.card.height * 0.5, w: this.card.width * 0.5, h: this.card.height * 0.14, primary: true },
-        { id: 'end', label: 'End the evening', x: this.card.width * 0.27, y: this.card.height * 0.72, w: this.card.width * 0.46, h: this.card.height * 0.11 },
+        { id: 'resume', label: 'Resume', x: w * 0.2, y: h * 0.35, w: w * 0.6, h: h * 0.13, primary: true },
+        { id: 'hire', label: hire, x: w * 0.12, y: h * 0.51, w: w * 0.76, h: h * 0.12, primary: canPay },
+        { id: 'how', label: 'How to play', x: w * 0.24, y: h * 0.66, w: w * 0.52, h: h * 0.11 },
+        { id: 'end', label: 'End the evening', x: w * 0.27, y: h * 0.81, w: w * 0.46, h: h * 0.1 },
       ],
     );
     this.card.show(true);
@@ -645,7 +655,7 @@ export class GameSystem extends createSystem({}) {
         this.toTitle();
         break;
       case 'how':
-        // From the wrist menu: pause first, then How to play; Got it comes back to the pause.
+        // From the pause card (or the wrist menu): pause first, then How to play; Got it comes back to the pause.
         this.pause();
         if (this.phase === 'paused') this.toRules();
         break;
@@ -674,6 +684,8 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'hire':
         this.shop.hire();
+        // From the pause card: show the new price (or full staff).
+        if (this.phase === 'paused' && this.resuming <= 0) this.showPauseCard();
         break;
     }
   }
@@ -681,15 +693,15 @@ export class GameSystem extends createSystem({}) {
 
 /**
  * The first run's steps, each done rather than read: pick up the guest,
- * seat it, watch its tea come, and open the wrist menu once (or press
- * Next). Then the café opens.
+ * seat it, watch its tea come, then a word about the pause button (press
+ * Open!). Then the café opens.
  */
 function firstRun(): Step[] {
   return [
     { picture: 0, title: MOVES[0].title, text: 'Hold your fingers over the guest at the gate. When it lights up, pinch.', done: (g) => g.guests.pickedUp > g.mark.pickedUp },
     { picture: 1, title: MOVES[1].title, text: 'Carry them over the café and let go. They take the glowing seat.', done: (g) => g.guests.seated > g.mark.seated },
     { picture: 2, title: 'Here comes their tea', text: 'Fed guests pay. Keep them happy: the board above the café shows how they feel.', done: (g) => g.baristas.servedCount > g.mark.served },
-    { picture: 2, title: 'Your menu', text: 'Turn your left palm toward you and hold it: your menu appears by your wrist. Pause and hire servers there.', next: true, done: (g) => g.wristOpens > g.mark.wristOpens },
+    { picture: 2, title: 'Pause & hire', text: 'The round button by the café pauses it. Hire servers and see how to play there too.', next: true, done: () => false },
   ];
 }
 

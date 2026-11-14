@@ -5,13 +5,14 @@
  * 3. the right fingertip on Hire (with the money) hires a server;
  * 4. on Pause it pauses; the button reads resume; pressed again it resumes;
  * 5. on How to play it pauses and shows How to play; Got it returns to the pause;
- * 6. lowering the hand closes the menu;
+ * 6. lowering the hand closes the menu (it stays while the hand is still with it);
  * 7. the pause tab at the table's edge pauses and resumes.
  * Usage: dev server running, then `node scripts/check-wrist.mjs`.
  * Output: PASS/FAIL lines; artifacts/wrist-*.png.
  */
 
-process.env.APP_URL = process.env.APP_URL_GAME ?? 'https://localhost:8082/';
+// The wrist menu is off unless the address asks for it.
+process.env.APP_URL = `${process.env.APP_URL_GAME ?? 'https://localhost:8082/'}?wrist`;
 const { startHeadset } = await import('./lib/headset.mjs');
 const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
 const LOOK = { x: -1.3, y: 0.79, z: 0.28 };
@@ -109,7 +110,8 @@ check('How to play pauses first; Got it returns to the pause', howOpen && back.p
 await page.evaluate(() => window.__cafe.game.click('resume'));
 await page.waitForFunction(() => window.__cafe.game.phase === 'run', null, { timeout: 60000 }).catch(() => {});
 // 6. Lower the hand: closed.
-await handTo('left', [-1.0, 0.85, 0.5], quat(worst.t));
+// Lowered into the lap, palm down: well away from the menu.
+await handTo('left', [-0.95, 0.65, 0.55], quat(worst.t));
 await page.waitForFunction(() => !window.__cafe.wrist.open, null, { timeout: 30000 }).catch(() => {});
 s = await state();
 check('lowering the hand closes the menu', !s.open, JSON.stringify(s));
