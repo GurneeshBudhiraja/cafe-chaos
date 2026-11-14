@@ -100,8 +100,9 @@ export const MEAL_SECONDS = 22;
  * The staff. The café opens with `STARTING_STAFF` server; each further
  * one is hired with coins and stays hired (it is saved). `HIRE_PRICES[n]`
  * is the price of the server after the n-th hire, so the second server
- * costs the first price. There are six baristas in all.
+ * costs the first price. Three baristas in all: few enough that the café
+ * never feels crowded and there is room to pick guests up between them.
  */
 export const STARTING_STAFF = 1;
-export const HIRE_PRICES = [60, 120, 200, 300, 420];
+export const HIRE_PRICES = [60, 120];
 export const MAX_STAFF = STARTING_STAFF + HIRE_PRICES.length;

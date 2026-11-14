@@ -16,7 +16,7 @@ export const CAFE_PIECES = ['cafe-shell', 'table-2', 'table-4', 'bar-2', 'quiet-
 /** The guests (three species) and what they wear: needed moments after the café is up. */
 export const GUEST_PIECES = ['guest-mochi', 'guest-onigiri', 'guest-tofu', 'accessories'] as const;
 /** The staff (six looks on one rig), the trays they carry, and the petals that fall from the tree. */
-export const STAFF_PIECES = ['barista-sora', 'barista-momo', 'barista-yuki', 'barista-ren', 'barista-hana', 'barista-kenji', 'tray-tea', 'tray-coffee', 'petals'] as const;
+export const STAFF_PIECES = ['barista-sora', 'barista-momo', 'barista-yuki', 'tray-tea', 'tray-coffee', 'petals'] as const;
 /** The annex wing and the plaque that opens it, its furniture, and the rest for the game to come (the janitor, the markers). */
 export const LATER_PIECES = ['cafe-annex', 'unlock-plaque', 'window-booth', 'table-big', 'table-mess', 'janitor', 'demand-bubble', 'mood-ring', 'seat-glow', 'coin'] as const;
 

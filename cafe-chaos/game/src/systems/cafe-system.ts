@@ -281,6 +281,30 @@ export class CafeSystem extends createSystem({
   private readonly edgeDirection = new Vector3();
 
   /**
+   * The real table's outline under the café, in the café's own space (x, z
+   * on its floor), into `out`; false when the café floats, has been lifted
+   * off its table, or the table has no outline. The light spill keeps to it.
+   */
+  tableOutline(out: { x: number; z: number }[]): boolean {
+    out.length = 0;
+    const surface = this.chosen.surface;
+    if (!surface || !this.onDesk || !this.placed) return false;
+    const polygon = surface.plane.polygon;
+    if (!polygon || polygon.length < 3) return false;
+    this.cafe.updateMatrixWorld(true);
+    surface.object.updateWorldMatrix(true, false);
+    // Lifted well off the table (carried in the hand), it is no longer on it.
+    this.cafe.getWorldPosition(this.edgeFrom);
+    if (Math.abs(this.edgeFrom.y - surface.object.getWorldPosition(this.spot).y) > 0.06) return false;
+    for (const p of polygon) {
+      surface.object.localToWorld(this.edgeDirection.set(p.x, 0, p.z));
+      this.cafe.worldToLocal(this.edgeDirection);
+      out.push({ x: this.edgeDirection.x, z: this.edgeDirection.z });
+    }
+    return true;
+  }
+
+  /**
    * How far the real table runs from a point of the café (`x`, `z`, café
    * space, on the table) toward the café's +X or -X: metres in the café's
    * space, to the table's real edge. 0 when the café is not on a detected

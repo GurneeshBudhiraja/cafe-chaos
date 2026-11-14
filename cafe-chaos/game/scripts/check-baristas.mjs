@@ -43,7 +43,7 @@ const h = await startHeadset({
       guests.seatedSeconds = 100000;
       system.replace();
     });
-    await h.page.waitForFunction(() => window.__cafe.system.placed && !window.__cafe.system.arriving && window.__cafe.baristas.staff.length === 6 && window.__cafe.ambience.petals, null, { timeout: 60000 });
+    await h.page.waitForFunction(() => window.__cafe.system.placed && !window.__cafe.system.arriving && window.__cafe.baristas.staff.length === 3 && window.__cafe.ambience.petals, null, { timeout: 60000 });
   },
 });
 const { page } = h;
@@ -86,7 +86,7 @@ const start = await staff();
 {
   const stations = await page.evaluate(async () => (await import('/src/baristas/routes.ts')).STATION_X);
   const atStation = start.staff.every((m) => Math.abs(m.at[0] - stations[m.station]) < 0.03 && Math.abs(m.at[1] - 0.036) < 1e-3 && m.at[2] < -0.19 && m.at[2] > -0.225);
-  check('all six servers are at their stations behind the counter', start.staff.length === 6 && atStation && new Set(start.staff.map((m) => m.name)).size === 6, start.staff.map((m) => `${m.name}@${m.at[0].toFixed(2)},${m.at[2].toFixed(3)}`).join(' '));
+  check('all three servers are at their stations behind the counter', start.staff.length === 3 && atStation && new Set(start.staff.map((m) => m.name)).size === 3, start.staff.map((m) => `${m.name}@${m.at[0].toFixed(2)},${m.at[2].toFixed(3)}`).join(' '));
   check('each server is one draw call', start.staff.every((m) => m.drawn === 1), `meshes drawn: ${start.staff.map((m) => m.drawn).join(', ')}`);
 }
 await h.head(await toWorld([-0.05, 0.3, 0.28]), await toWorld([-0.1, 0.07, -0.19]), 400);

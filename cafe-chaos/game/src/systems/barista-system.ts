@@ -39,6 +39,7 @@
 import { AssetManager, createSystem, Vector3, type Material, type Mesh, type Object3D } from '@iwsdk/core';
 import { Barista, BARISTA_NAMES, baristaLoaded, type BaristaName } from '../baristas/barista.js';
 import { BACK_BAR_YAW, servePointFor, servePointsForPlace, SHUFFLE_M, STATION_YAW, stationPoint, type ServePoint } from '../baristas/routes.js';
+import { MAX_STAFF } from '../game/rules.js';
 import { BACK_BAR_SECONDS, FIDGET_SECONDS, MAX_OUT, REPLAN_SECONDS, SAME_TIME_SECONDS, SET_DOWN_AT, SPEED, SWITCH_GAIN_M, TRAY_FADE_SECONDS, TRAY_SLIDE_SECONDS, TURN_SPEED, WAVE_CHANCE } from '../baristas/rules.js';
 import type { Seat } from '../guests/seats.js';
 import { Walk, yawDelta } from '../guests/walker.js';
@@ -117,10 +118,10 @@ export class BaristaSystem extends createSystem({}) {
   serving = true;
   /**
    * How many servers are on the staff: the first this many baristas. The
-   * game starts the café with one and hires more from the shop; the checks
-   * and recordings (test mode) keep all six.
+   * game starts the café with one and hires more from the shop (three in
+   * all); the checks and recordings (test mode) keep all three.
    */
-  staffSize: number = BARISTA_NAMES.length;
+  staffSize: number = MAX_STAFF;
   /** Counts, for the checks. */
   servedCount = 0;
   switches = 0;

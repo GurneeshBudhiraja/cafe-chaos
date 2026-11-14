@@ -12,7 +12,7 @@
 import { AnimationMixer, AssetManager, Color, LoopOnce, LoopRepeat, type AnimationAction, type AnimationClip, type Mesh, type MeshStandardMaterial, type Object3D } from '@iwsdk/core';
 import { foldParts } from '../lib/fold-parts.js';
 
-export const BARISTA_NAMES = ['sora', 'momo', 'yuki', 'ren', 'hana', 'kenji'] as const;
+export const BARISTA_NAMES = ['sora', 'momo', 'yuki'] as const;
 export type BaristaName = (typeof BARISTA_NAMES)[number];
 export type BaristaClip = 'Idle' | 'Work' | 'Wave' | 'Bow' | 'Walk' | 'Carry' | 'Serve';
 

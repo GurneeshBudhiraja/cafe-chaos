@@ -84,6 +84,14 @@ export async function startHeadset({ size = { width: 1032, height: 800 }, fovDeg
      * soundtrack (its music, and every effect it logged, at the moment it
      * happened on the video's clock) rendered offline and mixed in.
      */
+    /** Reload the page as a player would (what it saved stays), and set the headset up again. */
+    async reload() {
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => window.__cafe?.world && window.IWER_DEVICE, null, { timeout: 30000 });
+      await page.evaluate(installHelpers);
+      await page.evaluate((f) => window.__h.setup(f), fovDeg);
+      await page.evaluate((s) => (window.__h.speedUp = s), speedUp);
+    },
     async finish() {
       let wav = null;
       if (record) {

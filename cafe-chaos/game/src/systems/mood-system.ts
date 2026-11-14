@@ -11,11 +11,14 @@ import { createSystem, PointLight, Vector3, type Object3D, type Sprite } from '@
 import { makeHalo } from '../light/halo.js';
 import { lightAddition, type CafeLights } from '../light/cafe-lights.js';
 import { PassthroughDimmer } from '../light/dimmer.js';
+import { fitSpill } from '../light/spill.js';
 import { ANNEX_LAMP, ANNEX_LANTERNS_X, ANNEX_LIGHT, BREATH, DIM_FADE_SECONDS, DIM_LEVEL, HALOS, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS, ROOM_LAMP } from '../light/mood.js';
 import { CafeSystem } from './cafe-system.js';
 
 /** How much the café's lamps go down while the game is paused. */
 const PAUSE_DIM = 0.45;
+/** How often the light spill is checked against the real table (seconds). */
+const SPILL_REFIT_S = 0.2;
 
 export class MoodSystem extends createSystem({}) {
   readonly dimmer = new PassthroughDimmer();
@@ -25,6 +28,9 @@ export class MoodSystem extends createSystem({}) {
   lampsUp = 1;
   private sinceDusk = -1;
   private time = 0;
+  private sinceFit = Infinity;
+  private fitKey = '';
+  private readonly outline: { x: number; z: number }[] = [];
   /** 0 to 1: how far the lamps are turned down for a pause (the café is still while paused). */
   paused = 0;
   private placement = 0;
@@ -75,7 +81,25 @@ export class MoodSystem extends createSystem({}) {
     // Paused (the café's clock stopped): the lamps go down a little, so the pause is plain to see; eased on real time.
     const pausedNow = cafe?.timeScale === 0 ? 1 : 0;
     this.paused += (pausedNow - this.paused) * Math.min(1, frameDelta * 4);
+    this.fitSpill(cafe, frameDelta);
     this.light();
+  }
+
+  /**
+   * Keep the light spill to the real table (see light/spill.ts): re-cut when
+   * the café or the table has moved, a few times a second at most.
+   */
+  private fitSpill(cafe: CafeSystem | undefined, frameDelta: number): void {
+    const spill = this.lights?.spill;
+    if (!spill || !cafe) return;
+    this.sinceFit += frameDelta;
+    if (this.sinceFit < SPILL_REFIT_S) return;
+    this.sinceFit = 0;
+    const on = cafe.tableOutline(this.outline);
+    const key = on ? this.outline.map((p) => `${p.x.toFixed(3)},${p.z.toFixed(3)}`).join(';') : 'none';
+    if (key === this.fitKey) return;
+    this.fitKey = key;
+    fitSpill(spill, on ? this.outline : null);
   }
 
   /** The light follows the café as it grows: the annex lit like the rest, and the room light and house light moved over it. */
