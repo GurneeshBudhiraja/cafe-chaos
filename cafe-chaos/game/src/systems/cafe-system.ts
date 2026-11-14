@@ -43,6 +43,7 @@ import { batchStatic, type BatchReport } from '../cafe/static-batch.js';
 import { distanceToEdge, findSurfaceSpot, fitOnSurface, type DetectedSurface, type Fit, type Footprint } from '../lib/desk-placement.js';
 import { CAFE_NAV } from '../nav/cafe-nav.js';
 import { NavGrid } from '../nav/nav-grid.js';
+import { LandingOutline } from '../cafe/landing-outline.js';
 
 /**
  * The tables on the new floor: the room's own columns (13 cm apart)
@@ -82,7 +83,13 @@ const DESK_RETRY_MS = 30000;
 const FLOAT_AHEAD_M = 0.8;
 const FLOAT_BELOW_M = 0.5;
 /** The pop-up when the café is placed (seconds). */
-const ARRIVE_SECONDS = 0.7;
+/**
+ * The arrival: first a dotted outline is drawn where the café will stand
+ * (`outline` seconds; it is fully drawn after `draw`), then the café rises
+ * a little and grows gently into it (`rise` seconds, no overshoot), as the
+ * outline fades. Nothing appears suddenly close or large (Meta MR guidance).
+ */
+const ARRIVE = { outline: 1.3, draw: 0.9, rise: 0.9, from: 0.86, lift: 0.03 };
 /** Where the café stands for the desktop preview (world, metres). */
 const PREVIEW_SPOT = new Vector3(0, 0.78, 0);
 
@@ -118,6 +125,9 @@ export class CafeSystem extends createSystem({
   /** The tables the extension brought. */
   readonly annexTables: { model: ModelName; piece: Object3D }[] = [];
   private arrival = -1;
+  /** The dotted outline of where the café lands (see ARRIVE). */
+  readonly outline = new LandingOutline();
+  private readonly landing = new Vector3();
   private sessionWas = false;
   private sessionStartedAt = 0;
   private readonly head = new Vector3();
@@ -151,6 +161,7 @@ export class CafeSystem extends createSystem({
     // From the café as built, the map the characters find their way by.
     this.nav = new NavGrid(this.cafe, CAFE_NAV);
     this.world.createTransformEntity(this.cafe);
+    this.world.createTransformEntity(this.outline.group);
     this.showPreview();
     // The café's footprint at full size (it stands unturned at full size in the preview), for fitting it to a table.
     this.cafe.updateMatrixWorld(true);
@@ -355,29 +366,44 @@ export class CafeSystem extends createSystem({
   private settle(spot: Vector3, yaw: number): void {
     this.cafe.position.copy(spot);
     this.cafe.rotation.set(0, yaw, 0);
-    this.cafe.scale.setScalar(0.001);
-    this.cafe.visible = true;
+    this.cafe.scale.setScalar(this.targetScale);
+    // Hidden until the outline has been drawn; then it rises into it.
+    this.cafe.visible = false;
+    this.landing.copy(spot);
+    this.outline.place(this.footprint, spot, yaw, this.targetScale);
+    this.outline.show(0, 1);
     this.placed = true;
     this.placements++;
     this.arrival = 0;
   }
 
-  /** The pop-up: a quick ease up to size with a small overshoot. */
+  /** The arrival: the outline drawn, then the café rising gently into it (see ARRIVE). */
   private arrive(delta: number): void {
     if (this.arrival < 0) return;
     this.arrival += delta;
-    const t = Math.min(1, this.arrival / ARRIVE_SECONDS);
-    const c = 1.4;
-    const eased = 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2;
-    this.cafe.scale.setScalar(Math.max(0.001, eased) * this.targetScale);
-    if (t >= 1) {
+    const t = this.arrival;
+    if (t < ARRIVE.outline) {
+      this.cafe.visible = false;
+      this.outline.show(t / ARRIVE.draw, Math.min(1, t / 0.25));
+      return;
+    }
+    const u = Math.min(1, (t - ARRIVE.outline) / ARRIVE.rise);
+    const k = 1 - (1 - u) ** 3;
+    this.cafe.visible = true;
+    this.cafe.scale.setScalar(this.targetScale * (ARRIVE.from + (1 - ARRIVE.from) * k));
+    this.cafe.position.set(this.landing.x, this.landing.y - ARRIVE.lift * (1 - k), this.landing.z);
+    this.outline.show(1, 1 - u);
+    if (u >= 1) {
       this.cafe.scale.setScalar(this.targetScale);
+      this.cafe.position.copy(this.landing);
+      this.outline.hide();
       this.arrival = -1;
     }
   }
 
   /** The desktop preview: the café in front of the camera, no pop-up. */
   private showPreview(): void {
+    this.outline.hide();
     this.cafe.position.copy(PREVIEW_SPOT);
     this.cafe.rotation.set(0, 0, 0);
     this.cafe.scale.setScalar(CAFE_SCALE);

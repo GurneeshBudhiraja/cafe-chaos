@@ -19,7 +19,8 @@ import type { RoughCanvas } from 'roughjs/bin/canvas';
 import type { Options } from 'roughjs/bin/core';
 
 export const SKETCH = {
-  paper: '#ddcdbb',
+  // Kept under Meta's #DADADA limit for light backgrounds in passthrough.
+  paper: '#d6c7b4',
   paperDeep: '#d1bfaa',
   ink: '#1c2036',
   soft: '#4a4160',

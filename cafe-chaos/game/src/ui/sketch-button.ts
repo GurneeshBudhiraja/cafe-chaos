@@ -8,8 +8,8 @@
 import type { Button } from './panel.js';
 import { hand, line, pen, SKETCH } from './sketch.js';
 
-/** A sketch button: `kind` 'go' is sun-red (the main action), 'plain' is paper. `seed` fixes its lines. */
-export function sketchButton(canvas: HTMLCanvasElement, id: string, label: string, x: number, y: number, w: number, h: number, seed: number, kind: 'go' | 'plain' = 'plain', extra?: (ctx: CanvasRenderingContext2D, b: Button) => void): Button {
+/** A sketch button: `kind` 'go' is sun-red, 'calm' is the green of a main, safe action (Open), 'plain' is paper. `seed` fixes its lines. */
+export function sketchButton(canvas: HTMLCanvasElement, id: string, label: string, x: number, y: number, w: number, h: number, seed: number, kind: 'go' | 'calm' | 'plain' = 'plain', extra?: (ctx: CanvasRenderingContext2D, b: Button) => void): Button {
   return {
     id, label, x, y, w, h, bare: true,
     draw: (ctx, b, hover, pressed) => {
@@ -26,7 +26,9 @@ export function sketchButton(canvas: HTMLCanvasElement, id: string, label: strin
       }
       rc.rectangle(b.x, b.y + dip, b.w, b.h, line(seed, lw, kind === 'go'
         ? { fill: hover ? '#d94a3a' : SKETCH.red, fillStyle: 'solid', stroke: SKETCH.redInk }
-        : { fill: hover ? '#e9dccb' : SKETCH.paperDeep, fillStyle: 'solid' }));
+        : kind === 'calm'
+          ? { fill: hover ? '#4f957e' : SKETCH.calm, fillStyle: 'solid' }
+          : { fill: hover ? '#e9dccb' : SKETCH.paperDeep, fillStyle: 'solid' }));
       if (extra) {
         ctx.save();
         ctx.translate(0, dip);
@@ -35,7 +37,7 @@ export function sketchButton(canvas: HTMLCanvasElement, id: string, label: strin
         return;
       }
       ctx.font = hand(b.h * 0.42);
-      ctx.fillStyle = kind === 'go' ? '#fbeee2' : SKETCH.ink;
+      ctx.fillStyle = kind === 'plain' ? SKETCH.ink : '#efe4d4';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(b.label ?? '', b.x + b.w / 2, b.y + b.h / 2 + dip + b.h * 0.03);
