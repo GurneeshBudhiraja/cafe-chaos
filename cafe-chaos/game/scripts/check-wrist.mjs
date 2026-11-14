@@ -53,7 +53,9 @@ console.log('palm facing: best', JSON.stringify(best), 'worst', JSON.stringify(w
 
 // 1. Back of the hand to the eyes: nothing.
 await handTo('left', LEFT, quat(worst.t));
-await page.waitForTimeout(2500);
+// The menu closes by game time (a grace after looking away), so wait on that, not on the wall clock.
+await page.waitForFunction(() => !window.__cafe.wrist.open, null, { timeout: 30000 }).catch(() => {});
+await frames(6);
 let s = await state();
 check('the back of the hand opens nothing', !s.open, JSON.stringify(s));
 // 2. Palm to the face, held: the menu.
@@ -106,7 +108,7 @@ check('How to play pauses first; Got it returns to the pause', howOpen && back.p
 await page.evaluate(() => window.__cafe.game.click('resume'));
 // 6. Lower the hand: closed.
 await handTo('left', [-1.0, 0.85, 0.5], quat(worst.t));
-await page.waitForTimeout(2500);
+await page.waitForFunction(() => !window.__cafe.wrist.open, null, { timeout: 30000 }).catch(() => {});
 s = await state();
 check('lowering the hand closes the menu', !s.open, JSON.stringify(s));
 // 7. The pause tab.

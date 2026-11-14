@@ -135,10 +135,13 @@ await until(() => window.__cafe.guests.seated >= 1, null, 30000);
 await until(() => window.__cafe.game.step === 2, null, 20000);
 s = await state();
 check('picking the guest up and seating it move the coach card on', step1 === 1 && s.step === 2, `step after pick-up ${step1}, after seating ${s.step}`);
-// The server brings the tea, and the café opens by itself.
-const opened = await until(() => window.__cafe.game.phase === 'run', null, 240000);
+// The server brings the tea; then the last step teaches the wrist menu (check-wrist.mjs opens it with a palm): Open! starts the run.
+const menuStep = await until(() => window.__cafe.game.step === 3, null, 240000);
+check('after the tea, the last first-run step teaches the wrist menu', menuStep && (await state()).coach, `step ${(await state()).step}`);
+await page.evaluate(() => window.__cafe.game.click('start'));
+const opened = await until(() => window.__cafe.game.phase === 'run', null, 20000);
 s = await state();
-check('its tea arrives and the café opens: a run, the clock near 0:00, the coach card away', opened && s.phase === 'run' && !s.coach && s.live && s.clock < 20, `phase ${s.phase}, coach ${s.coach}, clock ${s.clock.toFixed(1)}`);
+check('Open! starts the run: the clock near 0:00, the coach card away', opened && s.phase === 'run' && !s.coach && s.live && s.clock < 20, `phase ${s.phase}, coach ${s.coach}, clock ${s.clock.toFixed(1)}`);
 await page.evaluate(() => {
   // From here guests eat quickly and nobody in the line gives up, so each outcome below is the one asked for.
   window.__cafe.guests.mealSeconds = 4;
