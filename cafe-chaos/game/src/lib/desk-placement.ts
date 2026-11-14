@@ -36,7 +36,7 @@ const MAX_OFF_AHEAD_DEG = 80;
  * down on, and nearly everything the hands do (the back row, the line by
  * the door, the plaques) is within about 60 cm, a seated arm's reach.
  */
-const PREFERRED_REACH_M = 0.35;
+const PREFERRED_REACH_M = 0.5;
 /** Kept between the café's centre and the surface's edge: about half the café room, plus a little. */
 const EDGE_MARGIN_M = 0.25;
 
@@ -182,4 +182,113 @@ function contains(polygon: readonly DOMPointReadOnly[], x: number, z: number): b
     if (a.z > z !== b.z > z && x < ((b.x - a.x) * (z - a.z)) / (b.z - a.z) + a.x) inside = !inside;
   }
   return inside;
+}
+
+/** The café's footprint on the table at full size (café space: x across, z front to back, +z toward the player). */
+export interface Footprint {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+/** Where and how the café sits on a table: centre (world), turn about the vertical (world), and size. */
+export interface Fit {
+  spot: Vector3;
+  yaw: number;
+  scale: number;
+}
+
+/** Fitting: kept clear of the table's edge (metres), the smallest size tried, the step between sizes, and the search step. */
+const FIT = { margin: 0.02, minScale: 0.45, scaleStep: 0.05, step: 0.015 };
+/** Where the café's centre would ideally be: this far out from the eyes, measured flat (metres). */
+const FIT_REACH_M = 0.5;
+/** Square the café to the table's near edge only when that edge faces the player within this (degrees); else it faces the player. */
+const SQUARE_WITHIN_DEG = 40;
+
+const fitHead = new Vector3();
+const fitDir = new Vector3();
+
+/**
+ * Fit the café to a table: turned square to the table's edge nearest the
+ * player (its front toward them), as large as fits inside the table's
+ * outline (never larger than its full size), and as near to straight ahead
+ * at a comfortable reach as the table allows. Null when even the smallest
+ * size does not fit.
+ */
+export function fitOnSurface(surface: DetectedSurface, head: Vector3, headYaw: number, footprint: Footprint, out: Fit): Fit | null {
+  const { object, plane } = surface;
+  const polygon = plane.polygon;
+  if (!polygon || polygon.length < 3) return null;
+  object.updateWorldMatrix(true, false);
+  object.worldToLocal(fitHead.copy(head));
+  // The table's local frame: which way does "toward the player" point, and where would the centre ideally be?
+  const ahead = new Vector3(-Math.sin(headYaw), 0, -Math.cos(headYaw));
+  const localAhead = object.worldToLocal(fitDir.copy(head).add(ahead)).sub(fitHead).setY(0).normalize();
+  const want = { x: fitHead.x + localAhead.x * FIT_REACH_M, z: fitHead.z + localAhead.z * FIT_REACH_M };
+  // Facing: toward the player, squared to the near edge when that edge faces them.
+  let face = { x: -localAhead.x, z: -localAhead.z };
+  let bestDot = Math.cos((SQUARE_WITHIN_DEG * Math.PI) / 180);
+  const area = polygon.reduce((sum, a, i) => { const b = polygon[(i + 1) % polygon.length]; return sum + (a.x * b.z - b.x * a.z); }, 0);
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    const ex = b.x - a.x;
+    const ez = b.z - a.z;
+    const len = Math.hypot(ex, ez);
+    if (len < 0.1) continue;
+    // The outward normal (the polygon's winding decides which side is out).
+    const sign = area > 0 ? 1 : -1;
+    const nx = (sign * ez) / len;
+    const nz = (-sign * ex) / len;
+    const dot = nx * -localAhead.x + nz * -localAhead.z;
+    if (dot > bestDot) {
+      bestDot = dot;
+      face = { x: nx, z: nz };
+    }
+  }
+  const turn = Math.atan2(face.x, face.z);
+  const cos = Math.cos(turn);
+  const sin = Math.sin(turn);
+  // The table's bounds, for the search.
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const p of polygon) {
+    x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z);
+  }
+  const corners = (s: number): [number, number][] => {
+    const m = FIT.margin;
+    return [
+      [footprint.minX * s - m, footprint.minZ * s - m],
+      [footprint.maxX * s + m, footprint.minZ * s - m],
+      [footprint.maxX * s + m, footprint.maxZ * s + m],
+      [footprint.minX * s - m, footprint.maxZ * s + m],
+    ];
+  };
+  for (let s = 1; s >= FIT.minScale - 1e-6; s -= FIT.scaleStep) {
+    const box = corners(s);
+    let best: { x: number; z: number } | null = null;
+    let miss = Infinity;
+    for (let x = x0; x <= x1; x += FIT.step) {
+      for (let z = z0; z <= z1; z += FIT.step) {
+        const d = Math.hypot(x - want.x, z - want.z);
+        if (d >= miss) continue;
+        // The café's corners, turned and moved to this centre, all on the table?
+        const fits = box.every(([cx, cz]) => contains(polygon, x + cx * cos + cz * sin, z - cx * sin + cz * cos));
+        if (!fits) continue;
+        miss = d;
+        best = { x, z };
+      }
+    }
+    if (best) {
+      out.spot.set(best.x, 0, best.z);
+      object.localToWorld(out.spot);
+      // The facing in the world: turn the table's direction out of its frame.
+      const p0 = object.localToWorld(new Vector3(0, 0, 0));
+      const p1 = object.localToWorld(new Vector3(face.x, 0, face.z)).sub(p0);
+      out.yaw = Math.atan2(p1.x, p1.z);
+      out.scale = Math.round(s * 100) / 100;
+      return out;
+    }
+  }
+  return null;
 }

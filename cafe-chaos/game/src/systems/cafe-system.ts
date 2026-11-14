@@ -33,14 +33,14 @@
  * tables.
  */
 
-import { AssetManager, createSystem, Euler, Group, Mesh, Quaternion, Vector3, XRPlane as DetectedPlane, type Object3D } from '@iwsdk/core';
+import { AssetManager, Box3, createSystem, Euler, Group, Mesh, Quaternion, Vector3, XRPlane as DetectedPlane, type Object3D } from '@iwsdk/core';
 import type { ModelName } from '../assets.js';
 import { DRESSING, FLOOR_TOP_M, OPENING_LAYOUT, type Placement } from '../cafe/layout.js';
 import { dressGreyBox } from '../cafe/materials.js';
 import { copyPart, splitOff, type Box } from '../cafe/split-mesh.js';
 import { ANNEX_LANTERNS_X, LANTERN_BOX } from '../light/mood.js';
 import { batchStatic, type BatchReport } from '../cafe/static-batch.js';
-import { distanceToEdge, findSurfaceSpot, type DetectedSurface } from '../lib/desk-placement.js';
+import { distanceToEdge, findSurfaceSpot, fitOnSurface, type DetectedSurface, type Fit, type Footprint } from '../lib/desk-placement.js';
 import { CAFE_NAV } from '../nav/cafe-nav.js';
 import { NavGrid } from '../nav/nav-grid.js';
 
@@ -73,14 +73,14 @@ export const CAFE_SCALE = 1.0;
 /** Give plane detection this long to find a surface before floating the café... */
 const DESK_WAIT_MS = 2000;
 /** ...and keep looking this long after floating: a surface found late still gets the café. */
-const DESK_RETRY_MS = 10000;
+const DESK_RETRY_MS = 30000;
 /**
  * With no table: this far ahead of the eyes and this far below them, so
  * the café sits well under the gaze and is looked down on, not met at eye
  * level (the player can then pinch it to wherever suits; see HoldSystem).
  */
-const FLOAT_AHEAD_M = 0.6;
-const FLOAT_BELOW_M = 0.55;
+const FLOAT_AHEAD_M = 0.8;
+const FLOAT_BELOW_M = 0.5;
 /** The pop-up when the café is placed (seconds). */
 const ARRIVE_SECONDS = 0.7;
 /** Where the café stands for the desktop preview (world, metres). */
@@ -152,6 +152,11 @@ export class CafeSystem extends createSystem({
     this.nav = new NavGrid(this.cafe, CAFE_NAV);
     this.world.createTransformEntity(this.cafe);
     this.showPreview();
+    // The café's footprint at full size (it stands unturned at full size in the preview), for fitting it to a table.
+    this.cafe.updateMatrixWorld(true);
+    const box = new Box3();
+    for (const piece of this.pieces) box.expandByObject(piece);
+    this.footprint = { minX: box.min.x - this.cafe.position.x, maxX: box.max.x - this.cafe.position.x, minZ: box.min.z - this.cafe.position.z, maxZ: box.max.z - this.cafe.position.z };
   }
 
   update(delta: number): void {
@@ -275,6 +280,10 @@ export class CafeSystem extends createSystem({
 
   // ------------------------------------------------------------ placement
 
+  /** The café's footprint at full size (café space), and the size it lands at (fitted to the table). */
+  private footprint: Footprint = { minX: -0.47, maxX: 0.47, minZ: -0.32, maxZ: 0.32 };
+  targetScale = CAFE_SCALE;
+  private readonly fit: Fit = { spot: new Vector3(), yaw: 0, scale: 1 };
   /** The real surface the café was last put on (null: it floats). */
   private readonly chosen: { surface: DetectedSurface | null } = { surface: null };
   private readonly edgeFrom = new Vector3();
@@ -329,6 +338,15 @@ export class CafeSystem extends createSystem({
     const yaw = this.euler.setFromQuaternion(this.q, 'YXZ').y;
     this.onDesk = findSurfaceSpot(this.surfaces, this.head, yaw, this.spot, this.chosen);
     if (!this.onDesk && !giveUp) return;
+    // On a table: squared to its near edge, as large as fits on it (up to full size), at a comfortable reach.
+    const surface = this.chosen.surface;
+    const fit = this.onDesk && surface ? fitOnSurface(surface, this.head, yaw, this.footprint, this.fit) : null;
+    if (fit) {
+      this.targetScale = fit.scale;
+      this.settle(fit.spot, fit.yaw);
+      return;
+    }
+    this.targetScale = CAFE_SCALE;
     if (!this.onDesk) this.spot.set(this.head.x - Math.sin(yaw) * FLOAT_AHEAD_M, this.head.y - FLOAT_BELOW_M, this.head.z - Math.cos(yaw) * FLOAT_AHEAD_M);
     this.settle(this.spot, Math.atan2(this.head.x - this.spot.x, this.head.z - this.spot.z));
   }
@@ -351,9 +369,9 @@ export class CafeSystem extends createSystem({
     const t = Math.min(1, this.arrival / ARRIVE_SECONDS);
     const c = 1.4;
     const eased = 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2;
-    this.cafe.scale.setScalar(Math.max(0.001, eased) * CAFE_SCALE);
+    this.cafe.scale.setScalar(Math.max(0.001, eased) * this.targetScale);
     if (t >= 1) {
-      this.cafe.scale.setScalar(CAFE_SCALE);
+      this.cafe.scale.setScalar(this.targetScale);
       this.arrival = -1;
     }
   }
