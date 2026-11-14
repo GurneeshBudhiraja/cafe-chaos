@@ -52,6 +52,9 @@ for (const t of turns) {
 }
 console.log('palm facing: best', JSON.stringify(best), 'worst', JSON.stringify(worst));
 
+// The sweep may have opened it: lower the hand into the lap until it closes.
+await handTo('left', [-0.95, 0.65, 0.55], quat(worst.t));
+await page.waitForFunction(() => !window.__cafe.wrist.open, null, { timeout: 30000 }).catch(() => {});
 // 1. Back of the hand to the eyes: nothing.
 await handTo('left', LEFT, quat(worst.t));
 // The menu closes by game time (a grace after looking away), so wait on that, not on the wall clock.
