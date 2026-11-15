@@ -9,11 +9,14 @@
  *   less motion, and while the headset view is on.
  * - How to play opens on a second card in front; CLOSE, Escape or a click
  *   outside closes it.
+ * - The game's theme plays here too (the end of this file).
  * - On a device with no headset view (a computer, a phone), PLAY IN VR is
  *   greyed out and the note says where to open the page.
  */
 
 import rough from 'roughjs';
+import { Theme } from './audio/theme.js';
+import { loadSave, TEST_MODE } from './game/save.js';
 
 const STROKES: Record<string, string> = { ink: '#16171d', timber: '#3e2a1c', 'moss-deep': '#2f522d', off: '#b6a993' };
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -83,3 +86,24 @@ addEventListener('load', () =>
     draw();
   }, 1500),
 );
+
+// The game's theme plays here too, quietly, at the player's music level (Settings), so the page sounds
+// like the café. Browsers hold sound back until the player does something, so it starts on the first
+// click, tap or key if it could not start at once. It stops as the headset view opens (the game plays
+// its own) and comes back when the player returns to the page.
+const theme = new Theme(`${import.meta.env.BASE_URL}audio/theme.mp3`);
+theme.level = loadSave().music / 2;
+if (!TEST_MODE) theme.play();
+for (const kind of ['pointerdown', 'keydown', 'touchstart'] as const) addEventListener(kind, () => theme.nudge(), { capture: true });
+new MutationObserver(() => {
+  if (document.body.classList.contains('in-xr')) {
+    theme.stop();
+    theme.audio.pause();
+    theme.audio.volume = 0;
+  } else if (!TEST_MODE) theme.play();
+}).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+const tick = (): void => {
+  theme.update();
+  requestAnimationFrame(tick);
+};
+requestAnimationFrame(tick);
