@@ -73,7 +73,7 @@ const SIZE = { min: 60, max: 140, step: 10 };
  * without reaching (Meta's direct touch range is about 42 to 46 cm).
  * It glides back in front when the player turns more than `follow` degrees away.
  */
-const MENU_SPOT = { ahead: 0.4, below: 0.03, follow: 35, glide: 4 };
+const MENU_SPOT = { ahead: 0.38, drop: 0.15, follow: 35, glide: 4 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
 
@@ -255,6 +255,7 @@ export class GameSystem extends createSystem({}) {
     this.menu.tick(cardDelta);
     this.menu.card.update(cardDelta, this.head);
     this.menu.sheet.update(cardDelta, this.head);
+    this.turnSheet();
     if (this.opening && cafe.placed && !cafe.waiting && !cafe.arriving) {
       const what = this.opening;
       this.opening = null;
@@ -313,12 +314,16 @@ export class GameSystem extends createSystem({}) {
   }
 
   /**
-   * Where the start card stands: centred in front of the eyes, close enough
-   * to press without reaching (MENU_SPOT), a little below eye level, facing
-   * the player. It stays put while used; if the player turns well away
-   * (over MENU_SPOT.follow degrees) and no fingertip is near it, it glides
-   * back in front of them (a lazy follow, never stuck to the head). The card
-   * opened in front of it (Settings, the warning) stands 4 cm nearer.
+   * Where the start card stands: straight ahead (by the way the head points,
+   * not by how it tilts), MENU_SPOT.ahead out and MENU_SPOT.drop below the
+   * eyes, so its top edge is a little under eye level and the eyes look down
+   * at it (about 20 degrees), tilted back to face them. It faces the player
+   * once, when it is put there, and then stays still: a nod or a lean while a
+   * finger presses does not move or turn it. Only if the player turns well
+   * away (over MENU_SPOT.follow degrees) with no fingertip near does it glide
+   * back in front of them, and face them again (a lazy follow, never stuck
+   * to the head). The card opened in front of it (Settings, the warning)
+   * stands 4 cm nearer, turned the same way.
    */
   private placeMenu(delta: number): void {
     const card = this.menu.card;
@@ -332,15 +337,18 @@ export class GameSystem extends createSystem({}) {
     }
     if (onMenu) {
       this.player.head.getWorldQuaternion(this.headQ);
-      // Where the eyes look (pitch included, so it is centred in view), a little below the line of sight, never above the eyes.
-      this.wanted.set(0, 0, -1).applyQuaternion(this.headQ);
-      this.wanted.multiplyScalar(MENU_SPOT.ahead).add(this.head);
-      this.wanted.y = Math.min(this.wanted.y - MENU_SPOT.below, this.head.y - 0.06);
-      this.forward.set(0, 0, -1).applyQuaternion(this.headQ).setY(0).normalize();
+      // Level ahead (heading only), then down: the same spot whether the player looks up or down.
+      this.forward.set(0, 0, -1).applyQuaternion(this.headQ).setY(0);
+      if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
+      this.forward.normalize();
+      this.wanted.copy(this.head).addScaledVector(this.forward, MENU_SPOT.ahead);
+      this.wanted.y -= MENU_SPOT.drop;
       if (!this.menuPlaced) {
         this.menuSpot.copy(this.wanted);
         this.menuPlaced = true;
         this.menuFollowing = false;
+        card.faceNow();
+        card.turn = 0;
       } else {
         // Turned well away, and no finger at the card: glide back in front.
         this.toMenu.copy(this.menuSpot).sub(this.head).setY(0).normalize();
@@ -349,18 +357,31 @@ export class GameSystem extends createSystem({}) {
         const fingerNear = !!tips && HANDS.some((h) => tips[h].tracked && tips[h].point.distanceTo(this.menuSpot) < 0.15);
         if (off > MENU_SPOT.follow && !fingerNear) this.menuFollowing = true;
         if (this.menuFollowing) {
+          card.turn = 3;
           this.menuSpot.lerp(this.wanted, 1 - Math.exp(-MENU_SPOT.glide * delta));
-          if (this.menuSpot.distanceTo(this.wanted) < 0.01) this.menuFollowing = false;
+          if (this.menuSpot.distanceTo(this.wanted) < 0.01) {
+            this.menuFollowing = false;
+            card.turn = 0;
+          }
         }
       }
       card.mesh.position.copy(this.menuSpot);
     }
     if (!sheet.open) return;
-    // In front of the card it was opened from, 4 cm nearer the eyes.
+    // In front of the card it was opened from, 4 cm nearer the eyes, turned the same way.
     const from = this.settingsFrom === 'pause' ? this.card.mesh : card.mesh;
     from.getWorldPosition(this.spot);
-    this.toMenu.copy(this.head).sub(this.spot).normalize();
+    from.getWorldQuaternion(this.headQ);
+    this.toMenu.set(0, 0, 1).applyQuaternion(this.headQ);
     sheet.mesh.position.copy(this.spot).addScaledVector(this.toMenu, 0.04);
+  }
+
+  /** After the cards have turned: the sheet takes the turn of the card behind it (it never turns on its own). */
+  private turnSheet(): void {
+    const sheet = this.menu.sheet;
+    if (!sheet.open) return;
+    const from = this.settingsFrom === 'pause' ? this.card.mesh : this.menu.card.mesh;
+    from.getWorldQuaternion(sheet.mesh.quaternion);
   }
 
   /** Settings as the menu shows them. */

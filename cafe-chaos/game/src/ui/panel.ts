@@ -109,6 +109,11 @@ export class Panel {
   private readonly facing = new Quaternion();
   private faced = false;
 
+  /** Face the player at once on the next update (then turn at `turn` as before; `turn = 0` keeps it still). */
+  faceNow(): void {
+    this.faced = false;
+  }
+
   constructor(name: string, widthM: number, heightM: number) {
     this.canvas = document.createElement('canvas');
     this.width = this.canvas.width = Math.round(widthM * PPM);
