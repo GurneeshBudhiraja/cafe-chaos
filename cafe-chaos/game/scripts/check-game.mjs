@@ -2,7 +2,7 @@
  * Game check: the evening around the café, in the real game (not test
  * mode), with a fresh save. With the viewer seated at the emulated table
  * it checks that:
- * 1. once the café is down, the title card and the scoreboard show,
+ * 1. once the café is placed, the start card shows (the café waits, hidden),
  *    nobody arrives, and the café has one server;
  * 2. a fingertip pushed through "Open the café" starts the first run;
  * 3. the first run: a guest waits with its patience held; picking it up
@@ -63,7 +63,7 @@ const tipTo = (p) => handTo(p.map((v, i) => v - tipOffset[i]));
 /** A point `out` metres in front of a button on one of the game's cards ('card', 'coach') or the pause button ('tab'). */
 const buttonAt = (panel, id, out) =>
   page.evaluate(([panel, id, out]) => {
-    const p = window.__cafe.game[panel];
+    const p = (panel === 'menu' ? window.__cafe.game.menu.card : window.__cafe.game[panel]);
     const b = p.buttons.find((x) => x.id === id);
     const g = p.mesh.geometry.parameters;
     const V = p.mesh.position.constructor;
@@ -74,7 +74,7 @@ const buttonAt = (panel, id, out) =>
 async function poke(panel, id) {
   await tipTo(await buttonAt(panel, id, 0.04));
   await frames(3);
-  const lit = await page.evaluate(([panel]) => (window.__cafe.game[panel]).hover, [panel]);
+  const lit = await page.evaluate(([panel]) => ((panel === 'menu' ? window.__cafe.game.menu.card : window.__cafe.game[panel])).hover, [panel]);
   await tipTo(await buttonAt(panel, id, -0.004));
   await frames(3);
   await handTo(AWAY);
@@ -85,7 +85,7 @@ const state = () =>
   page.evaluate(() => {
     const { game, guests, baristas, score, shop, strip } = window.__cafe;
     return {
-      phase: game.phase, step: game.step, card: game.card.open, coach: game.coach.open, board: strip.panel.open, live: strip.live,
+      phase: game.phase, step: game.step, card: game.card.open || game.menu.card.open, coach: game.coach.open, board: strip.panel.open, live: strip.live,
       arrived: guests.arrived, onStage: guests.guests.length, staff: baristas.staff.length, hires: shop.hires, price: shop.price,
       bank: score.bank, happiness: score.happiness, up: score.up, down: score.down, clock: game.clock, log: score.log,
       popups: { ...guests.popups.shown }, refused: shop.refused, pace: guests.spawnPace, patience: guests.patienceSeconds,
@@ -96,15 +96,16 @@ const state = () =>
 await until(() => window.__cafe.game.phase === 'title');
 await page.waitForTimeout(3000);
 let s = await state();
-check('the title card and the scoreboard show once the café is down, and nobody comes', s.phase === 'title' && s.card && s.board && s.arrived === 0, `phase ${s.phase}, card ${s.card}, board ${s.board}, arrived ${s.arrived}`);
+const waiting = await page.evaluate(() => ({ waiting: window.__cafe.system.waiting, visible: window.__cafe.system.cafe.visible }));
+check('the start card shows at the table; the café waits hidden, no scoreboard, nobody comes', s.phase === 'title' && s.card && !s.board && waiting.waiting && !waiting.visible && s.arrived === 0, `phase ${s.phase}, card ${s.card}, board ${s.board}, ${JSON.stringify(waiting)}, arrived ${s.arrived}`);
 check('the café has one server', s.staff === 1 && s.hires === 0 && s.price === 60, `staff ${s.staff}, next costs ${s.price}`);
 await h.screenshot('artifacts/game-title.png');
 
 // 2. A fingertip on "Open the café".
-const lit = await poke('card', 'open');
+const lit = await poke('menu', 'new');
 await until(() => window.__cafe.game.phase === 'tutorial', null, 15000);
 s = await state();
-check('a fingertip near the button lights it, and pushed through it starts the first run', lit === 'open' && s.phase === 'tutorial' && s.coach, `lit ${lit}, phase ${s.phase}, coach card ${s.coach}`);
+check('a fingertip near NEW GAME on the start card lights it, and pushed through it starts the first run', lit === 'new' && s.phase === 'tutorial' && s.coach, `lit ${lit}, phase ${s.phase}, coach card ${s.coach}`);
 
 // 3. The first run: the guest at the gate, picked up and seated with real pinches.
 await until(() => window.__cafe.guests.guests.some((g) => g.state === 'queued'), null, 120000);

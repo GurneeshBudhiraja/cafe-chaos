@@ -239,6 +239,12 @@ export function unlock(ctx: BaseAudioContext, out: AudioNode, t: number): void {
   [784, 988, 1175, 1568, 1976].forEach((f, i) => partial(ctx, out, t + 0.25 + i * 0.11, f, 0.08, 0.9));
 }
 
+/** A new best time: a short, bright rising chime (four notes), once. */
+export function newBest(ctx: BaseAudioContext, out: AudioNode, t: number): void {
+  burst(ctx, out, t, { type: 'bandpass', freq: 4200, q: 5, level: 0.18, attack: 0.001, hold: 0.01, release: 0.05 });
+  [1046.5, 1318.5, 1568, 2093].forEach((f, i) => partial(ctx, out, t + i * 0.09, f, 0.09, 0.6, 0.002));
+}
+
 /** Coins paid: a bright little jingle, two coins and a tinkle. */
 export function coins(ctx: BaseAudioContext, out: AudioNode, t: number): void {
   burst(ctx, out, t, { type: 'bandpass', freq: 5200, q: 6, level: 0.16, attack: 0.001, hold: 0.01, release: 0.06 });

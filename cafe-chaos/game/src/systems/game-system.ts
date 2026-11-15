@@ -41,6 +41,8 @@ import { BaristaSystem } from './barista-system.js';
 import { clockText } from '../game/clock.js';
 import { sketchFontReady } from '../ui/sketch.js';
 import { StripSystem } from './strip-system.js';
+import { SoundSystem } from './sound-system.js';
+import { LEVELS, MENU_SIZE, StartMenu } from '../ui/start-menu.js';
 import { CafeSystem } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
 import { HandleSystem } from './handle-system.js';
@@ -48,7 +50,7 @@ import { HoldSystem } from './hold-system.js';
 import { ScoreSystem } from './score-system.js';
 import { ShopSystem } from './shop-system.js';
 
-export type GamePhase = 'waiting' | 'title' | 'rules' | 'tutorial' | 'run' | 'paused' | 'closed' | 'test';
+export type GamePhase = 'waiting' | 'title' | 'opening' | 'rules' | 'tutorial' | 'run' | 'paused' | 'closed' | 'test';
 
 /**
  * The cards: the big one (title, pause, closing), How to play, and the
@@ -63,6 +65,8 @@ const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as cons
 /** The count back from a pause: 3, 2, 1 (seconds). */
 const RESUME_COUNT = 3;
 const TAB = { width: 0.045, height: 0.04 };
+/** The café's size in Settings (percent of what fits the table): the range and the step. */
+const SIZE = { min: 60, max: 140, step: 10 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
 
@@ -113,6 +117,14 @@ export class GameSystem extends createSystem({}) {
   baristas!: BaristaSystem;
   shop!: ShopSystem;
   /** The pause tab at the table's edge: the menu for those who never turn their palm. */
+  /** The start card and the card that opens in front of it (Settings, the New Game warning). */
+  readonly menu = new StartMenu();
+  /** What to start once the café is up (it rises after CONTINUE or NEW GAME). */
+  private opening: 'run' | 'tutorial' | null = null;
+  /** Where Settings was opened from. */
+  private settingsFrom: 'title' | 'pause' = 'title';
+  private sound: SoundSystem | null = null;
+  private readonly edge = new Vector3();
   readonly tab = new Panel('PauseTab', TAB.width, TAB.height);
   /** Times the wrist menu has been opened (WristMenuSystem counts them; the first run waits for one). */
   wristOpens = 0;
@@ -149,9 +161,9 @@ export class GameSystem extends createSystem({}) {
     this.strip = this.world.getSystem(StripSystem)!;
     this.hold = this.world.getSystem(HoldSystem) ?? null;
     this.handles = this.world.getSystem(HandleSystem) ?? null;
-    for (const panel of [this.card, this.how, this.coach]) this.cafe.cafe.add(panel.mesh);
+    for (const panel of [this.card, this.coach]) this.cafe.cafe.add(panel.mesh);
+    this.world.createTransformEntity(this.how.mesh);
     this.card.mesh.position.set(...CARD.position);
-    this.how.mesh.position.set(...HOW.position);
     MOVES.forEach((move, i) => {
       const image = new Image();
       image.onload = () => {
@@ -170,7 +182,17 @@ export class GameSystem extends createSystem({}) {
     this.tab.turn = 2.5;
     this.layoutTab();
     void sketchFontReady.then(() => this.layoutTab());
-    this.panels = [this.card, this.how, this.coach, this.tab];
+    // The start menu stands in the world (the café is hidden until it is opened).
+    this.world.createTransformEntity(this.menu.card.mesh);
+    this.world.createTransformEntity(this.menu.sheet.mesh);
+    this.hold?.claims.push((point) => this.menu.card.covers(point) || this.menu.sheet.covers(point));
+    this.cafe.hold = true;
+    this.applySettings();
+    void sketchFontReady.then(() => {
+      if (this.menu.card.open) this.menu.card.paint();
+      if (this.menu.sheet.open) this.menu.sheet.paint();
+    });
+    this.panels = [this.card, this.how, this.coach, this.tab, this.menu.card, this.menu.sheet];
     this.hovers.length = this.panels.length;
     this.shop.bought.push(() => this.keep());
     if (TEST_MODE) {
@@ -211,6 +233,17 @@ export class GameSystem extends createSystem({}) {
     this.coach.update(cardDelta, this.head);
     this.placeTab();
     this.tab.update(cardDelta, this.head);
+    if (!this.sound) this.applySettings();
+    this.placeMenu();
+    this.menu.tick(cardDelta);
+    this.menu.card.update(cardDelta, this.head);
+    this.menu.sheet.update(cardDelta, this.head);
+    if (this.opening && cafe.placed && !cafe.waiting && !cafe.arriving) {
+      const what = this.opening;
+      this.opening = null;
+      if (what === 'run') this.toRun();
+      else this.toTutorial();
+    }
     this.countDown(frameDelta);
     if (!cafe.placed || cafe.arriving) return;
     this.press();
@@ -226,27 +259,110 @@ export class GameSystem extends createSystem({}) {
     this.phase = 'title';
     this.quiet();
     this.coach.show(false);
+    this.card.show(false);
+    this.card.dimmed = false;
     this.score.clock = 0;
     this.tab.show(false);
     this.strip.best = this.save.bestSeconds;
     this.strip.live = false;
     this.strip.settle();
-    this.strip.panel.show(true);
+    // The scoreboard comes up with the café.
+    this.strip.panel.show(false);
     this.how.show(false);
-    const cw = this.card.width;
-    const ch = this.card.height;
-    this.card.set(
-      (ctx, w, h) => {
-        write(ctx, 'Café Chaos', w / 2, h * 0.2, 24 * MM, { weight: 800, font: 'Georgia, serif' });
-        write(ctx, 'How long can you keep the café open?', w / 2, h * 0.36, 6.5 * MM, { weight: 600, color: INK.inkSoft });
-        if (this.save.bestSeconds > 0) write(ctx, `Longest evening  ${clockText(this.save.bestSeconds)}`, w / 2, h * 0.47, 6.5 * MM, { weight: 800, color: INK.amberDeep });
-      },
-      [
-        { id: 'open', label: 'Open the café', x: cw * 0.2, y: ch * 0.56, w: cw * 0.6, h: 36 * MM, primary: true },
-        { id: 'rules', label: 'How to play', x: cw * 0.3, y: ch * 0.79, w: cw * 0.4, h: 26 * MM },
-      ],
-    );
-    this.card.show(true);
+    this.menu.closeSheet();
+    this.menu.card.dimmed = false;
+    this.menu.showStart({
+      kind: this.returning ? 'returning' : 'first',
+      coins: this.save.bank,
+      staff: 1 + this.save.hires,
+      best: this.save.bestSeconds > 0 ? clockText(this.save.bestSeconds) : null,
+    });
+  }
+
+  /** A save worth continuing: the first run done, or anything earned. */
+  private get returning(): boolean {
+    const s = this.save;
+    return s.tutorialDone || s.runs > 0 || s.bank > 0 || s.hires > 0;
+  }
+
+  /** CONTINUE or NEW GAME: the menu goes, the café rises (the outline, then the rise), then `what` starts. */
+  private openCafe(what: 'run' | 'tutorial'): void {
+    this.menu.hideAll();
+    this.menu.card.dimmed = false;
+    this.phase = 'opening';
+    this.opening = what;
+    this.cafe.release();
+  }
+
+  /** Where the start card and the card in front of it stand: at the café's front edge, or in front of the pause card. */
+  private placeMenu(): void {
+    const card = this.menu.card;
+    const sheet = this.menu.sheet;
+    // How to play stands where it always did over the café (it is in the world so it shows before the café is up).
+    if (this.how.open) this.cafe.cafe.localToWorld(this.how.mesh.position.set(...HOW.position));
+    if (!card.open && !sheet.open) return;
+    this.cafe.frontEdge(this.edge);
+    card.mesh.position.set(this.edge.x, this.edge.y + MENU_SIZE.height / 2 + 0.004, this.edge.z);
+    if (!sheet.open) return;
+    // In front of the card it was opened from: 5 cm toward the eyes, a little higher.
+    const from = this.settingsFrom === 'pause' ? this.card.mesh : card.mesh;
+    from.getWorldPosition(this.spot);
+    this.edge.copy(this.head).sub(this.spot).normalize();
+    sheet.mesh.position.copy(this.spot).addScaledVector(this.edge, 0.05);
+    sheet.mesh.position.y += 0.01;
+  }
+
+  /** Settings as the menu shows them. */
+  private settingsState(): { music: number; sounds: number; size: number; canGrow: boolean; canShrink: boolean; move: boolean } {
+    const s = this.save;
+    return { music: s.music, sounds: s.sounds, size: s.size, canGrow: s.size < SIZE.max, canShrink: s.size > SIZE.min, move: this.settingsFrom === 'title' };
+  }
+
+  private openSettings(from: 'title' | 'pause'): void {
+    this.settingsFrom = from;
+    (from === 'pause' ? this.card : this.menu.card).dimmed = true;
+    this.menu.openSettings(this.settingsState());
+  }
+
+  private closeSheet(): void {
+    this.menu.closeSheet();
+    this.menu.card.dimmed = false;
+    this.card.dimmed = false;
+  }
+
+  /** Music, sounds and the café's size, from the save. */
+  private applySettings(): void {
+    this.cafe.setSize(this.save.size / 100);
+    // The sound system starts after this one: found on first use.
+    this.sound ??= this.world.getSystem(SoundSystem) ?? null;
+    if (this.sound) {
+      this.sound.musicLevel = this.save.music;
+      this.sound.soundLevel = this.save.sounds;
+    }
+  }
+
+  /** A −/+ in Settings: one step, saved, heard at once. */
+  private stepSetting(id: string): void {
+    const s = this.save;
+    const up = id.endsWith('+');
+    if (id.startsWith('music')) s.music = Math.max(0, Math.min(LEVELS, s.music + (up ? 1 : -1)));
+    else if (id.startsWith('sounds')) s.sounds = Math.max(0, Math.min(LEVELS, s.sounds + (up ? 1 : -1)));
+    else s.size = Math.max(SIZE.min, Math.min(SIZE.max, s.size + (up ? SIZE.step : -SIZE.step)));
+    this.applySettings();
+    writeSave(s);
+    this.menu.updateSettings(this.settingsState());
+  }
+
+  /** DELETE AND START: everything earned goes (the settings stay), and a fresh evening opens. */
+  private startFresh(): void {
+    const keep = { music: this.save.music, sounds: this.save.sounds, size: this.save.size, tutorialDone: this.save.tutorialDone };
+    Object.assign(this.save, { bank: 0, hires: 0, bestSeconds: 0, bestCoins: 0, runs: 0 }, keep);
+    writeSave(this.save);
+    this.shop.restore(0);
+    this.score.bank = 0;
+    this.strip.best = 0;
+    this.closeSheet();
+    this.openCafe(this.save.tutorialDone ? 'run' : 'tutorial');
   }
 
   /** How to play: the game in three pictures, each with a line. */
@@ -254,6 +370,7 @@ export class GameSystem extends createSystem({}) {
     this.rulesFrom = this.phase;
     this.phase = 'rules';
     this.card.show(false);
+    this.menu.hideAll();
     const hw = this.how.width;
     const hh = this.how.height;
     this.how.set(
@@ -282,6 +399,7 @@ export class GameSystem extends createSystem({}) {
     this.unpause();
     this.phase = 'tutorial';
     this.card.show(false);
+    this.strip.panel.show(true);
     this.how.show(false);
     this.guests.clear();
     this.guests.arrivals = false;
@@ -346,7 +464,8 @@ export class GameSystem extends createSystem({}) {
       [
         { id: 'resume', label: 'Resume', x: w * 0.2, y: h * 0.35, w: w * 0.6, h: h * 0.13, primary: true },
         { id: 'hire', label: hire, x: w * 0.12, y: h * 0.51, w: w * 0.76, h: h * 0.12, primary: canPay },
-        { id: 'how', label: 'How to play', x: w * 0.24, y: h * 0.66, w: w * 0.52, h: h * 0.11 },
+        { id: 'how', label: 'How to play', x: w * 0.12, y: h * 0.66, w: w * 0.37, h: h * 0.11 },
+        { id: 'settings', label: 'Settings', x: w * 0.51, y: h * 0.66, w: w * 0.37, h: h * 0.11 },
         { id: 'end', label: 'End the evening', x: w * 0.27, y: h * 0.81, w: w * 0.46, h: h * 0.1 },
       ],
     );
@@ -613,8 +732,9 @@ export class GameSystem extends createSystem({}) {
       for (let i = 0; i < panels.length; i++) {
         const panel = panels[i];
         // The fingertip: every card keeps track of it, so a press needs a push through this card's own face.
-        const touch = panel.touch(hand, busy || !tip.tracked ? null : tip.point);
-        if (busy || done) continue;
+        const off = busy || panel.dimmed;
+        const touch = panel.touch(hand, off || !tip.tracked ? null : tip.point);
+        if (off || done) continue;
         const pinched = panel.hit(pinch.point);
         const over = touch.over ?? pinched;
         if (over) this.hovers[i] = over.id;
@@ -635,8 +755,49 @@ export class GameSystem extends createSystem({}) {
     this.clicks++;
     switch (id) {
       case 'open':
-        if (this.save.tutorialDone) this.toRun();
-        else this.toTutorial();
+        // The checks' shortcut: as CONTINUE (or NEW GAME the first time).
+        this.openCafe(this.save.tutorialDone ? 'run' : 'tutorial');
+        break;
+      case 'continue':
+        this.openCafe('run');
+        break;
+      case 'new':
+        if (this.returning) {
+          this.menu.card.dimmed = true;
+          this.menu.openWarn({ coins: this.save.bank, staff: 1 + this.save.hires, best: this.save.bestSeconds > 0 ? clockText(this.save.bestSeconds) : null });
+        } else this.openCafe('tutorial');
+        break;
+      case 'keep':
+        this.closeSheet();
+        break;
+      case 'fresh':
+        this.startFresh();
+        break;
+      case 'gear':
+        this.openSettings('title');
+        break;
+      case 'settings':
+        this.openSettings('pause');
+        break;
+      case 'close':
+        this.closeSheet();
+        break;
+      case 'music-':
+      case 'music+':
+      case 'sounds-':
+      case 'sounds+':
+      case 'size-':
+      case 'size+':
+        this.stepSetting(id);
+        break;
+      case 'move':
+        // Before a run: put the café down again where you look.
+        this.closeSheet();
+        this.menu.hideAll();
+        this.cafe.replace();
+        break;
+      case 'help':
+        this.toRules();
         break;
       case 'walkthrough':
         this.toTutorial();
@@ -655,9 +816,10 @@ export class GameSystem extends createSystem({}) {
         this.toTitle();
         break;
       case 'how':
-        // From the pause card (or the wrist menu): pause first, then How to play; Got it comes back to the pause.
+        // From the pause card, Settings or the wrist menu: pause first (in a run), then How to play; Got it comes back.
+        this.closeSheet();
         this.pause();
-        if (this.phase === 'paused') this.toRules();
+        if (this.phase === 'paused' || this.phase === 'title') this.toRules();
         break;
       case 'tab':
         if (this.phase === 'run' || this.resuming > 0) this.pause();
@@ -671,7 +833,12 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'skip':
       case 'start':
-        this.finishTutorial();
+        // Still opening (the café rising): it opens straight into a run.
+        if (this.opening) {
+          this.opening = 'run';
+          this.save.tutorialDone = true;
+          writeSave(this.save);
+        } else this.finishTutorial();
         break;
       case 'pause':
         this.pause();

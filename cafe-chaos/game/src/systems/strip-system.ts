@@ -23,7 +23,7 @@
  * whatever the café's scale (ui/panel.ts). GameSystem shows it.
  */
 
-import { createSystem, Vector3 } from '@iwsdk/core';
+import { Color, createSystem, DoubleSide, InstancedMesh, Matrix4, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3, Euler } from '@iwsdk/core';
 import { HAPPINESS } from '../game/rules.js';
 import { Panel } from '../ui/panel.js';
 import { line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
@@ -41,6 +41,10 @@ export const STRIP = { width: 0.58, height: 0.103, below: 0.03, clear: 0.03, bac
 /** How long a segment takes to drain or fill, and a coin pop lasts (seconds); the pulse under 30 % (times a second); how quickly it follows the eyes' height (per second). */
 const MOTION = { segment: 0.5, pop: 0.3, pulse: 1, follow: 1.2 };
 const SEGMENTS = 10;
+/** The confetti: how many scraps, how long they fly (seconds), how fast they leave (m/s), gravity (m/s²). */
+const CONFETTI = { count: 60, seconds: 1.6, speed: 0.55, gravity: 1.1 };
+/** The scraps' colours: the café's moss, lantern, koi and paper. */
+const CONFETTI_COLOURS = ['#3d6136', '#f0c987', '#9a2208', '#f2ebdd', '#66462f'];
 /**
  * Where it hangs: 'eye' (at eye level, the default), or 'low' (just above
  * the café's tallest point), for a narrow field of view where looking
@@ -54,6 +58,17 @@ export class StripSystem extends createSystem({}) {
   /** The longest evening before this run (seconds), and whether a run is on: the game sets them. */
   best = 0;
   live = false;
+  /** Times a new best time was celebrated (the sound system plays the chime). */
+  celebrations = 0;
+  /** True once this run has passed the best time (celebrated once). */
+  private celebrated = false;
+  /** The confetti: a burst of paper scraps from the board, once, when the best time is passed. */
+  private readonly confetti = new InstancedMesh(new PlaneGeometry(0.009, 0.005), new MeshBasicMaterial({ side: DoubleSide, toneMapped: false, transparent: true }), CONFETTI.count);
+  private readonly bits = Array.from({ length: CONFETTI.count }, () => ({ p: new Vector3(), v: new Vector3(), r: new Euler(), spin: new Vector3() }));
+  private confettiAge = Infinity;
+  private readonly m4 = new Matrix4();
+  private readonly q = new Quaternion();
+  private readonly one = new Vector3(1, 1, 1);
   private cafe!: CafeSystem;
   private score!: ScoreSystem;
   private readonly head = new Vector3();
@@ -76,6 +91,12 @@ export class StripSystem extends createSystem({}) {
     this.panel.turn = 2.5;
     this.bank = this.score.bank;
     this.panel.set((ctx, w, h) => this.draw(ctx, w, h));
+    const colour = new Color();
+    for (let i = 0; i < CONFETTI.count; i++) this.confetti.setColorAt(i, colour.set(CONFETTI_COLOURS[i % CONFETTI_COLOURS.length]));
+    this.confetti.visible = false;
+    this.confetti.frustumCulled = false;
+    this.confetti.renderOrder = 41;
+    this.world.createTransformEntity(this.confetti);
     void sketchFontReady.then(() => this.panel.paint());
   }
 
@@ -83,9 +104,16 @@ export class StripSystem extends createSystem({}) {
     const delta = Math.min(0.1, frameDelta);
     this.player.head.getWorldPosition(this.head);
     this.place(delta);
+    this.flyConfetti(delta);
     if (!this.panel.update(delta, this.head)) return;
     this.time += delta;
     const s = this.score;
+    // Past the best time: celebrate once (confetti and a chime), then only the green.
+    if (this.live && this.best > 0 && s.clock > this.best && !this.celebrated) {
+      this.celebrated = true;
+      this.celebrations++;
+      this.burst();
+    }
     const want = (s.happiness / HAPPINESS.max) * SEGMENTS;
     let moving = false;
     for (let i = 0; i < SEGMENTS; i++) {
@@ -117,6 +145,44 @@ export class StripSystem extends createSystem({}) {
     this.bank = this.score.bank;
     this.popAge = Infinity;
     this.height = NaN;
+    this.celebrated = false;
+  }
+
+  /** Throw the confetti from the board. */
+  private burst(): void {
+    this.panel.mesh.getWorldPosition(this.spot);
+    for (const b of this.bits) {
+      b.p.copy(this.spot);
+      const a = Math.random() * Math.PI * 2;
+      const up = 0.4 + Math.random() * 0.8;
+      const sp = CONFETTI.speed * (0.5 + Math.random() * 0.7);
+      b.v.set(Math.cos(a) * sp * 0.8, up * sp, Math.sin(a) * sp * 0.5);
+      b.r.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+      b.spin.set((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 16, (Math.random() - 0.5) * 16);
+    }
+    this.confettiAge = 0;
+    this.confetti.visible = true;
+  }
+
+  private flyConfetti(delta: number): void {
+    if (this.confettiAge >= CONFETTI.seconds) return;
+    this.confettiAge += delta;
+    if (this.confettiAge >= CONFETTI.seconds) {
+      this.confetti.visible = false;
+      return;
+    }
+    const mat = this.confetti.material as MeshBasicMaterial;
+    mat.opacity = Math.min(1, 3 * (1 - this.confettiAge / CONFETTI.seconds));
+    this.bits.forEach((b, i) => {
+      b.v.y -= CONFETTI.gravity * delta;
+      b.v.multiplyScalar(1 - 1.2 * delta);
+      b.p.addScaledVector(b.v, delta);
+      b.r.x += b.spin.x * delta;
+      b.r.y += b.spin.y * delta;
+      b.r.z += b.spin.z * delta;
+      this.confetti.setMatrixAt(i, this.m4.compose(b.p, this.q.setFromEuler(b.r), this.one));
+    });
+    this.confetti.instanceMatrix.needsUpdate = true;
   }
 
   /** Over the café's back edge, at (just under) eye height, but always clear above the café. */
@@ -153,7 +219,11 @@ export class StripSystem extends createSystem({}) {
     rc.line(cx, cy, cx, cy - icon * 0.32, line(13, lw * 0.9));
     rc.line(cx, cy, cx + icon * 0.24, cy + icon * 0.06, line(14, lw * 0.9));
     x += icon + inner;
-    scrawl(ctx, clockText(s.clock), x, h * 0.53, timeSize);
+    const record = this.live && this.best > 0 && s.clock > this.best;
+    if (this.best > 0) {
+      scrawl(ctx, clockText(s.clock), x, h * 0.4, h * 0.32, { color: record ? SKETCH.moss : SKETCH.ink });
+      scrawl(ctx, record ? 'NEW BEST!' : `BEST ${clockText(this.best)}`, x, h * 0.78, h * 0.18, { color: record ? SKETCH.moss : SKETCH.soft });
+    } else scrawl(ctx, clockText(s.clock), x, h * 0.53, timeSize);
     x += timeW + around;
     rc.line(x, h * 0.17, x + 2, h * 0.83, line(21, lw * 0.8));
     x += around;

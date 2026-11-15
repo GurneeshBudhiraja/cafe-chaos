@@ -124,7 +124,17 @@ export class CafeSystem extends createSystem({
   annex: { root: Group; rising: number } | null = null;
   /** The tables the extension brought. */
   readonly annexTables: { model: ModelName; piece: Object3D }[] = [];
+  /** -1 none, -2 waiting for the player (see `hold`), 0.. seconds into the arrival. */
   private arrival = -1;
+  /**
+   * Wait for the player before the café comes up: it is placed (its spot and
+   * size chosen, so the start card can stand at its front edge) but stays
+   * hidden until `release()`. The game turns this on (the start card).
+   */
+  hold = false;
+  /** The player's café size (Settings), times the size that fits the table. */
+  sizeFactor = 1;
+  private fitScale = CAFE_SCALE;
   /** The dotted outline of where the café lands (see ARRIVE). */
   readonly outline = new LandingOutline();
   private readonly landing = new Vector3();
@@ -137,6 +147,28 @@ export class CafeSystem extends createSystem({
   private readonly surfaces: Iterable<DetectedSurface> = { [Symbol.iterator]: () => this.surfaceList() };
 
   /** True during the pop-up, while the café's scale is animated. */
+  /** Placed, but waiting for the player to open the café (see `hold`). */
+  get waiting(): boolean {
+    return this.arrival === -2;
+  }
+
+  /** Bring the café up now (it was waiting): the outline, then the rise. */
+  release(): void {
+    if (this.arrival === -2) this.arrival = 0;
+  }
+
+  /** The middle of the café's front edge, on the table (world), into `out`. */
+  frontEdge(out: Vector3): Vector3 {
+    return this.cafe.localToWorld(out.set(0, 0, this.footprint.maxZ));
+  }
+
+  /** Set the player's size factor (Settings); applied now if the café is up. */
+  setSize(factor: number): void {
+    this.sizeFactor = factor;
+    this.targetScale = this.fitScale * factor;
+    if (this.placed && this.arrival === -1) this.cafe.scale.setScalar(this.targetScale);
+  }
+
   get arriving(): boolean {
     return this.arrival >= 0;
   }
@@ -353,11 +385,13 @@ export class CafeSystem extends createSystem({
     const surface = this.chosen.surface;
     const fit = this.onDesk && surface ? fitOnSurface(surface, this.head, yaw, this.footprint, this.fit) : null;
     if (fit) {
-      this.targetScale = fit.scale;
+      this.fitScale = fit.scale;
+      this.targetScale = fit.scale * this.sizeFactor;
       this.settle(fit.spot, fit.yaw);
       return;
     }
-    this.targetScale = CAFE_SCALE;
+    this.fitScale = CAFE_SCALE;
+    this.targetScale = CAFE_SCALE * this.sizeFactor;
     if (!this.onDesk) this.spot.set(this.head.x - Math.sin(yaw) * FLOAT_AHEAD_M, this.head.y - FLOAT_BELOW_M, this.head.z - Math.cos(yaw) * FLOAT_AHEAD_M);
     this.settle(this.spot, Math.atan2(this.head.x - this.spot.x, this.head.z - this.spot.z));
   }
@@ -374,7 +408,11 @@ export class CafeSystem extends createSystem({
     this.outline.show(0, 1);
     this.placed = true;
     this.placements++;
-    this.arrival = 0;
+    if (this.hold) {
+      // Waiting for the player: no outline yet, nothing to see.
+      this.outline.hide();
+      this.arrival = -2;
+    } else this.arrival = 0;
   }
 
   /** The arrival: the outline drawn, then the café rising gently into it (see ARRIVE). */

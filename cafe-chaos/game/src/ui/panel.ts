@@ -92,6 +92,13 @@ export class Panel {
    * fingertip turns slowly, so a nod of the head never swings its face through a finger held near it.
    */
   turn = Infinity;
+  /**
+   * Dimmed behind a card opened in front of it (true): it fades to about 60%
+   * brightness and takes no presses (the game skips it) until the card in
+   * front closes.
+   */
+  dimmed = false;
+  private dimNow = 0;
   /** Draw the paper card behind the content (false: the content draws its own). */
   frame = true;
   /** Draw over everything in the scene (nothing in front of it hides it). */
@@ -157,6 +164,8 @@ export class Panel {
     this.mesh.visible = this.shown > 0;
     if (!this.mesh.visible) return false;
     this.material.opacity = this.shown;
+    this.dimNow += ((this.dimmed ? 1 : 0) - this.dimNow) * (1 - Math.exp(-14 * delta));
+    this.material.color.setScalar(1 - 0.42 * this.dimNow);
     // Its size is in real metres, whatever the café's scale.
     const parent = this.mesh.parent ? this.mesh.parent.getWorldScale(this.scale).x : 1;
     const s = (0.9 + 0.1 * this.shown) / (parent || 1);

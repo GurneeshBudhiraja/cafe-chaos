@@ -20,6 +20,10 @@ export interface Save {
   /** The most coins taken in one run. */
   bestCoins: number;
   runs: number;
+  /** Settings: music and sound levels (0 off to 5), and the café's size (percent). */
+  music: number;
+  sounds: number;
+  size: number;
 }
 
 const KEY = 'cafe-chaos/save/v2';
@@ -28,7 +32,7 @@ const KEY = 'cafe-chaos/save/v2';
 export const TEST_MODE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('test');
 
 export function freshSave(): Save {
-  return { bank: 0, hires: 0, tutorialDone: false, bestSeconds: 0, bestCoins: 0, runs: 0 };
+  return { bank: 0, hires: 0, tutorialDone: false, bestSeconds: 0, bestCoins: 0, runs: 0, music: 2, sounds: 3, size: 100 };
 }
 
 export function loadSave(): Save {

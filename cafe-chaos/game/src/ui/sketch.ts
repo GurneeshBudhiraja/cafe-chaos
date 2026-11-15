@@ -4,7 +4,7 @@
  * its own fixed seed, so it is drawn the same way every time and never
  * wobbles. Only what changes is redrawn.
  *
- * The handwriting is Kalam (SIL Open Font License, public/fonts/OFL.txt),
+ * The lettering is Jost (SIL Open Font License, public/fonts/OFL-Jost.txt),
  * shipped with the game so it works with no network. `sketchFontReady`
  * resolves once it has loaded; panels drawn before that are drawn again.
  *
@@ -18,40 +18,49 @@ import rough from 'roughjs';
 import type { RoughCanvas } from 'roughjs/bin/canvas';
 import type { Options } from 'roughjs/bin/core';
 
+/**
+ * The café's own colours (taken from its materials): shoji paper (toned
+ * down to Meta's #DADADA limit for light backgrounds in passthrough),
+ * timber, roof-tile ink, moss, lantern light and koi red.
+ */
 export const SKETCH = {
-  // Kept under Meta's #DADADA limit for light backgrounds in passthrough.
-  paper: '#d6c7b4',
+  paper: '#d9cfbe',
+  timber: '#66462f',
+  lantern: '#f0c987',
+  moss: '#3d6136',
+  mossDeep: '#2f522d',
+  koi: '#9a2208',
   paperDeep: '#d1bfaa',
-  ink: '#1c2036',
-  soft: '#4a4160',
+  ink: '#16171d',
+  soft: '#5a4030',
   red: '#c9382a',
   redInk: '#7a1e14',
   gold: '#e2a83a',
   goldInk: '#7a5410',
-  calm: '#3f7f6a',
+  calm: '#3d6136',
   warn: '#c98a1e',
   danger: '#c9382a',
   empty: '#c4b29e',
 };
 
-/** The handwriting font's family name. */
-export const HAND_FONT = 'CafeKalam';
+/** The lettering's family name: Jost (OFL), heavy and friendly. */
+export const HAND_FONT = 'CafeJost';
 
 /** Resolves once the handwriting has loaded (or failed: then a fallback face is used). */
 export const sketchFontReady: Promise<void> = (async () => {
   if (typeof FontFace === 'undefined' || typeof document === 'undefined') return;
   const base = import.meta.env.BASE_URL;
   try {
-    const faces = [new FontFace(HAND_FONT, `url(${base}fonts/kalam-400.woff2)`, { weight: '400' }), new FontFace(HAND_FONT, `url(${base}fonts/kalam-700.woff2)`, { weight: '700' })];
+    const faces = [new FontFace(HAND_FONT, `url(${base}fonts/jost-600.woff2)`, { weight: '600' }), new FontFace(HAND_FONT, `url(${base}fonts/jost-800.woff2)`, { weight: '800' })];
     for (const face of await Promise.all(faces.map((f) => f.load()))) document.fonts.add(face);
   } catch {
     // No font: the fallback in `hand()` is used.
   }
 })();
 
-/** A font string for canvas text in the handwriting. */
+/** A font string for canvas text in the lettering: 700 is the heavy weight, 400 the lighter one. */
 export function hand(size: number, weight: 400 | 700 = 700): string {
-  return `${weight} ${Math.round(size)}px ${HAND_FONT}, 'Comic Sans MS', cursive`;
+  return `${weight === 700 ? 800 : 600} ${Math.round(size)}px ${HAND_FONT}, 'Trebuchet MS', sans-serif`;
 }
 
 /** The marker for a canvas. */

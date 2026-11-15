@@ -23,10 +23,11 @@
 
 import type { Theme } from '../audio/theme.js';
 import { createSystem, Vector3, type Object3D } from '@iwsdk/core';
-import { bubble, clink, closing, coins, cricket, espresso, furin, grumble, pop, refuse, roomTone, seated, tick, trayDown, trickle, unlock, voice } from '../audio/voices.js';
+import { bubble, clink, closing, coins, cricket, espresso, furin, grumble, pop, refuse, roomTone, seated, tick, trayDown, trickle, unlock, voice, newBest } from '../audio/voices.js';
 import { BaristaSystem } from './barista-system.js';
 import { CafeSystem } from './cafe-system.js';
 import { GameSystem } from './game-system.js';
+import { StripSystem } from './strip-system.js';
 import { ScoreSystem } from './score-system.js';
 import { GuestSystem } from './guest-system.js';
 import { ShopSystem } from './shop-system.js';
@@ -50,6 +51,9 @@ const NEAR_M = 0.35;
 export class SoundSystem extends createSystem({}) {
   /** The audio context, made when the session starts. */
   ctx: AudioContext | null = null;
+  /** Settings (0 off to 5): the theme's level (2 is its usual volume) and the café's own sounds (3 is usual). */
+  musicLevel = 2;
+  soundLevel = 3;
   /** The theme (index.ts hands it over), ducked while the game is paused. */
   theme: Theme | null = null;
   master: GainNode | null = null;
@@ -60,9 +64,10 @@ export class SoundSystem extends createSystem({}) {
   private baristas: BaristaSystem | null = null;
   private shop: ShopSystem | null = null;
   private readonly next: Record<keyof typeof EVERY, number> = { bubble: 0, espresso: 8, clink: 3, trickle: 0, cricket: 2 };
-  private seen = { arrived: 0, pickedUp: 0, seated: 0, gaveUp: 0, served: 0, purchases: 0, refused: 0, scored: 0, clicks: 0, closed: false, placements: -1 };
+  private seen = { arrived: 0, pickedUp: 0, seated: 0, gaveUp: 0, served: 0, purchases: 0, refused: 0, scored: 0, clicks: 0, closed: false, placements: -1, records: 0 };
   private score: ScoreSystem | null = null;
   private game: GameSystem | null = null;
+  private strip: StripSystem | null = null;
   private readonly at = new Vector3();
   private readonly forward = new Vector3();
   private readonly up = new Vector3();
@@ -74,6 +79,7 @@ export class SoundSystem extends createSystem({}) {
     this.shop = this.world.getSystem(ShopSystem) ?? null;
     this.score = this.world.getSystem(ScoreSystem) ?? null;
     this.game = this.world.getSystem(GameSystem) ?? null;
+    this.strip = this.world.getSystem(StripSystem) ?? null;
     const xr = this.world.renderer.xr;
     xr.addEventListener('sessionstart', () => {
       this.start();
@@ -87,9 +93,10 @@ export class SoundSystem extends createSystem({}) {
     // Paused: the theme and the café's own sounds both drop back, and come up again on resume.
     const paused = this.game?.phase === 'paused';
     this.theme?.duck(paused);
+    if (this.theme) this.theme.level = this.musicLevel / 2;
     const ctx = this.ctx;
     if (ctx && this.master) {
-      const want = SOUND.master * (paused ? PAUSED_SHARE : 1);
+      const want = SOUND.master * (paused ? PAUSED_SHARE : 1) * (this.soundLevel / 3);
       const g = this.master.gain.value;
       this.master.gain.value = g + (want - g) * Math.min(1, frameDelta * 3);
     }
@@ -265,6 +272,10 @@ export class SoundSystem extends createSystem({}) {
       if (closed && !seen.closed) this.emit('closing', card, SOUND.hands, 2, closing);
       seen.closed = closed;
     }
+    // A new best time: the chime, once.
+    const strip = this.strip;
+    if (strip && strip.celebrations > seen.records) this.emit('newBest', PLACES.room, SOUND.hands, 1.2, newBest);
+    if (strip) seen.records = strip.celebrations;
     void now;
   }
 }
