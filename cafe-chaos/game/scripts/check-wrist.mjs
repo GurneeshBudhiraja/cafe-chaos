@@ -5,8 +5,7 @@
  * 3. the right fingertip on Hire (with the money) hires a server;
  * 4. on Pause it pauses; the button reads resume; pressed again it resumes;
  * 5. on How to play it pauses and shows How to play; Got it returns to the pause;
- * 6. lowering the hand closes the menu (it stays while the hand is still with it);
- * 7. the pause tab at the table's edge pauses and resumes.
+ * 6. lowering the hand closes the menu (it stays while the hand is still with it).
  * Usage: dev server running, then `node scripts/check-wrist.mjs`.
  * Output: PASS/FAIL lines; artifacts/wrist-*.png.
  */
@@ -29,9 +28,12 @@ const check = (name, pass, detail) => { results.push(pass); console.log(`${pass 
 const send = (m, p) => page.evaluate(([m, p]) => window.IWER_DEVICE.remote.dispatch(m, p), [m, p]);
 const frames = (n) => page.evaluate((n) => new Promise((resolve) => { const info = window.__cafe.world.renderer.info.render; const target = info.frame + n; const t = setInterval(() => { if (info.frame >= target) { clearInterval(t); resolve(); } }, 8); }), n);
 const handTo = (hand, p, q = { x: 0, y: 0, z: 0, w: 1 }) => send('set_transform', { device: `hand-${hand}`, position: { x: p[0], y: p[1], z: p[2] }, orientation: q });
-const state = () => page.evaluate(() => { const { game, wrist, baristas, score } = window.__cafe; return { phase: game.phase, open: wrist.open, facing: +wrist.facing.toFixed(2), staff: baristas.staff.length, bank: score.bank, how: game.how.open, card: game.card.open, opens: game.wristOpens }; });
+const state = () => page.evaluate(() => { const { game, wrist, baristas, score } = window.__cafe; return { phase: game.phase, open: wrist.open, facing: +wrist.facing.toFixed(2), staff: baristas.staff.length, bank: score.bank, how: game.how.open, card: game.menu.card.open, opens: game.wristOpens }; });
 
-await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); game.click('skip'); window.__cafe.guests.patienceFrozen = true; });
+await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); game.click('skip'); });
+// The run starts once the café has risen; then nobody loses patience (the café must not close mid-check).
+await page.waitForFunction(() => window.__cafe.game.phase === 'run', null, { timeout: 60000 });
+await page.evaluate(() => (window.__cafe.guests.patienceFrozen = true));
 await frames(4);
 // Park the right hand out of the way.
 const AWAY_R = [-0.6, 0.95, 0.75];
@@ -118,17 +120,6 @@ await handTo('left', [-0.95, 0.65, 0.55], quat(worst.t));
 await page.waitForFunction(() => !window.__cafe.wrist.open, null, { timeout: 30000 }).catch(() => {});
 s = await state();
 check('lowering the hand closes the menu', !s.open, JSON.stringify(s));
-// 7. The pause tab.
-const tab = await page.evaluate(() => { const p = window.__cafe.game.tab; const V = p.mesh.position.constructor; const sc = p.mesh.getWorldScale(new V()).z; return [0.04, -0.004, 0.05].map((out) => p.mesh.localToWorld(new V(0, 0, out / sc)).toArray()); });
-for (const p of tab) { await handTo('right', p.map((v, i) => v - tipOff[i])); await frames(3); }
-const t1 = await state();
-await h.head(SEAT, LOOK, 200);
-await frames(3);
-await h.screenshot('artifacts/wrist-4-tab-paused.png');
-for (const p of tab) { await handTo('right', p.map((v, i) => v - tipOff[i])); await frames(3); }
-await page.waitForFunction(() => window.__cafe.game.phase === 'run', null, { timeout: 60000 }).catch(() => {});
-const t2 = await state();
-check('the pause tab at the table edge pauses and resumes', t1.phase === 'paused' && t2.phase === 'run', `${t1.phase} -> ${t2.phase}`);
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');
 console.log(`${results.filter(Boolean).length}/${results.length} checks passed`);

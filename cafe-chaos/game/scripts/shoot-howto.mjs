@@ -1,8 +1,8 @@
 /**
  * The pictures for How to play and the first run's coach card, taken from
  * the game itself: a hand over a guest at the gate (it glows); a guest
- * carried over a glowing seat; the scoreboard over a busy café; a
- * fingertip at the round pause button by the café.
+ * carried over a glowing seat; the scoreboard over a busy café; a hand
+ * pointed at the bar, its ray on Pause.
  * The cream model hands are drawn for these (`?hands=cream`), since the
  * player's real hands cannot be in a picture. The emulator's grey room is
  * hidden, so the café stands on a plain dark ground (in the headset, the
@@ -73,8 +73,8 @@ await page.evaluate(() => {
 await page.waitForFunction(() => !window.__cafe.system.waiting && !window.__cafe.system.arriving, null, { timeout: 60000 });
 await page.evaluate(() => window.__cafe.game.click('skip'));
 await page.waitForFunction(() => window.__cafe.game.phase === 'run', null, { timeout: 60000 });
-// The scoreboard and the pause button are put away for the first two pictures.
-const board = (on) => page.evaluate((on) => { window.__cafe.strip.panel.show(on); window.__cafe.game.tab.show(on); }, on);
+// The scoreboard is put away for the first two pictures.
+const board = (on) => page.evaluate((on) => window.__cafe.strip.panel.show(on), on);
 await board(false);
 await page.waitForFunction(() => window.__cafe.guests.line.filter((g) => g.state === 'queued' && !g.walk).length >= 3, null, { timeout: 180000 });
 await page.evaluate(() => (window.__cafe.guests.arrivals = false));
@@ -115,7 +115,6 @@ await page.evaluate(() => {
   score.bank = 45;
 });
 await board(true);
-await page.evaluate(() => window.__cafe.game.tab.show(false));
 await page.waitForFunction(() => window.__cafe.guests.seats.filter((s) => s.occupant !== 0).length >= 1 || true, null, { timeout: 5000 });
 const strip = await page.evaluate(() => window.__cafe.strip.panel.mesh.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
 const cafeAt = await page.evaluate(() => window.__cafe.system.cafe.position.toArray());
@@ -123,21 +122,29 @@ await h.head(P(add(cafeAt, [0.42, 0.42, 0.06])), P([(strip[0] + cafeAt[0]) / 2, 
 await frames(8);
 await shot('howto-happy');
 
-// 4. The pause button: the fingertip coming to the round button by the café.
-await page.evaluate(() => { window.__cafe.strip.panel.show(false); window.__cafe.game.tab.show(true); });
+// 4. The bar: the hand pointed at it, the ray on Pause (lit). Shop is at the other end.
+await page.evaluate(() => window.__cafe.strip.panel.show(true));
+const SEAT_VIEW = { x: -0.85, y: 1.22, z: 0.28 };
+const barMid = await page.evaluate(() => window.__cafe.strip.panel.mesh.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
+await h.head(SEAT_VIEW, { x: barMid[0] * 0.75 + SEAT_VIEW.x * 0.25, y: barMid[1] - 0.12, z: barMid[2] * 0.75 + SEAT_VIEW.z * 0.25 }, 300);
 await frames(6);
-const tab = await page.evaluate(() => window.__cafe.game.tab.mesh.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
-await h.head(P(add(tab, [0.26, 0.22, 0.08])), P(add(tab, [-0.04, 0, 0])), 300);
-await frames(6);
-for (const out of [0.06, 0.03]) {
-  const at = await page.evaluate((out) => {
-    const m = window.__cafe.game.tab.mesh;
-    const V = m.position.constructor;
-    return m.localToWorld(new V(0, 0, out / m.getWorldScale(new V()).z)).toArray();
-  }, out);
-  await handRaw(at.map((v, i) => v - tip[i]));
-  await frames(3);
-}
+const pauseAt = await page.evaluate(() => {
+  const p = window.__cafe.strip.panel;
+  const b = p.buttons.find((x) => x.id === 'bar-pause');
+  const g = p.mesh.geometry.parameters;
+  const V = p.mesh.position.constructor;
+  return p.mesh.localToWorld(new V(((b.x + b.w / 2) / p.width - 0.5) * g.width, (0.5 - (b.y + b.h / 2) / p.height) * g.height, 0)).toArray();
+});
+const from = [-1.1, 1.02, 0.12];
+const d = pauseAt.map((v, i) => v - from[i]);
+const len = Math.hypot(...d);
+const n = d.map((v) => v / len);
+// Turn the hand's -Z (its ray) to the button.
+const c = [n[1], -n[0], 0];
+const w = 1 - n[2];
+const ql = Math.hypot(c[0], c[1], c[2], w);
+await send('set_transform', { device: 'hand-right', position: { x: from[0], y: from[1], z: from[2] }, orientation: { x: c[0] / ql, y: c[1] / ql, z: c[2] / ql, w: w / ql } });
+await frames(10);
 await shot('howto-pause');
 
 const errors = await h.finish();

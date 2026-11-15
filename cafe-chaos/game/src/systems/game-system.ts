@@ -13,10 +13,13 @@
  *   come faster and wait less patiently as it goes on (game/rules.ts
  *   RAMP); the café closes when its happiness reaches zero. Coins go to
  *   the bank and hire servers (ShopSystem), who stay hired.
- * - Pause: everything in the café stops where it is (Resume, or End the
- *   run). Pause, hiring and How to play are on the wrist menu
- *   (WristMenuSystem: turn the left palm toward you); a small pause tab
- *   at the table's edge does the same for anyone who never tries it. The game pauses itself when the headset comes off or another
+ * - Pause and Shop are on the bar (the scoreboard over the café), out of
+ *   reach: the hand points at one and pinches (the hand ray, Meta's way to
+ *   reach what is far; near the café or a card the ray is off and hands
+ *   work directly). Pause stops everything in the café where it is and
+ *   puts the pause card in front of the eyes (Resume, How to play,
+ *   Settings, End the evening). Shop pauses too and shows the baristas to
+ *   hire. The game pauses itself when the headset comes off or another
  *   app takes over, and the bank is saved then too.
  * - Closing card: how long the café stayed open, the record, guests fed,
  *   coins earned; Play again or Menu.
@@ -29,12 +32,15 @@
  * game around the café.
  */
 
-import { createSystem, Quaternion, Vector3 } from '@iwsdk/core';
-import { arrivalPace, MEAL_SECONDS, patienceShare, WISH, wishChance } from '../game/rules.js';
+import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
+import { HandRays } from '../hands/hand-ray.js';
+import { arrivalPace, HIRE_PRICES, MEAL_SECONDS, patienceShare, STARTING_STAFF, WISH, wishChance } from '../game/rules.js';
+import { BARISTA_NAMES } from '../baristas/barista.js';
 import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS } from '../guests/rules.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
 import { coin, INK, moodFace, Panel, paragraph, roundRect, write, type Button } from '../ui/panel.js';
+import type { PlaneGeometry } from '@iwsdk/core';
 import { castLoaded } from '../guests/actor.js';
 import { randomLook } from '../guests/cast.js';
 import { BaristaSystem } from './barista-system.js';
@@ -61,10 +67,17 @@ export type GamePhase = 'waiting' | 'title' | 'opening' | 'rules' | 'tutorial' |
 const CARD = { width: 0.34, height: 0.24, position: [0, 0.22, 0.1] as const };
 const HOW = { width: 0.5, height: 0.255, position: [0, 0.23, 0.1] as const };
 const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as const };
-/** The pause button beside the grab pill: its card's size (real metres); the round button fills its height, 36 mm across. */
+/**
+ * The hand ray to the bar (Meta: rays for what is out of reach, direct
+ * touch for what is near, and near wins). A hand points at the bar only
+ * when it is this far (metres) from the café and not at a card in reach;
+ * the ray reaches this far at most; and a ray this close to the bar's
+ * edge (share of its height) still counts as on it, so a shaky hand does
+ * not flicker off.
+ */
+const RAY = { awayFromCafe: 0.04, reach: 4, edge: 0.15 };
 /** The count back from a pause: 3, 2, 1 (seconds). */
 const RESUME_COUNT = 3;
-const TAB = { width: 0.045, height: 0.04 };
 /** The café's size in Settings (percent of what fits the table): the range and the step. */
 const SIZE = { min: 60, max: 140, step: 10 };
 /**
@@ -87,7 +100,7 @@ const MOVES = [
   { picture: 'howto-seat.jpg', title: 'Seat the guest', text: 'Move the guest above the café. Open your fingers. The guest goes to the seat that glows.' },
   { picture: 'howto-happy.jpg', title: 'Keep guests happy', text: 'Seat guests quickly. The bar above the café shows how happy the guests are.' },
   // The coach card only (How to play shows the first three).
-  { picture: 'howto-pause.jpg', title: 'Pause and hire', text: 'Push the round button near the café to pause. You can hire baristas there.' },
+  { picture: 'howto-pause.jpg', title: 'Pause and shop', text: 'Point your hand at the bar and pinch. Pause is at the left end. Shop is at the right end.' },
 ];
 /** How many of the MOVES How to play shows. */
 const HOW_MOVES = 3;
@@ -127,13 +140,14 @@ export class GameSystem extends createSystem({}) {
   score!: ScoreSystem;
   baristas!: BaristaSystem;
   shop!: ShopSystem;
-  /** The pause tab at the table's edge: the menu for those who never turn their palm. */
   /** The start card and the card that opens in front of it (Settings, the New Game warning). */
   readonly menu = new StartMenu();
   /** What to start once the café is up (it rises after CONTINUE or NEW GAME). */
   private opening: 'run' | 'tutorial' | null = null;
   /** Where Settings was opened from. */
   private settingsFrom: 'title' | 'pause' = 'title';
+  /** Where the shop was opened from: CLOSE goes back there (a run counts back in). */
+  private shopFrom: 'run' | 'paused' = 'run';
   private sound: SoundSystem | null = null;
   private readonly edge = new Vector3();
   private readonly menuSpot = new Vector3();
@@ -143,7 +157,6 @@ export class GameSystem extends createSystem({}) {
   private readonly headQ = new Quaternion();
   private menuPlaced = false;
   private menuFollowing = false;
-  readonly tab = new Panel('PauseTab', TAB.width, TAB.height);
   /** Times the wrist menu has been opened (WristMenuSystem counts them; the first run waits for one). */
   wristOpens = 0;
   /** Where How to play was opened from: back there when it is closed. */
@@ -169,6 +182,16 @@ export class GameSystem extends createSystem({}) {
   /** Every card with buttons, and the button lit on each this frame. */
   private panels: Panel[] = [];
   private readonly hovers: (string | null)[] = [];
+  /** Each hand's ray to the bar, as drawn. */
+  readonly rays = new HandRays();
+  /** Each hand's ray is on the bar this frame (for the checks), and the button under it. */
+  readonly aim: Record<Hand, string | null> = { left: null, right: null };
+  private readonly rayFrom = new Vector3();
+  private readonly rayDir = new Vector3();
+  private readonly rayHit = new Vector3();
+  private readonly barNormal = new Vector3();
+  private readonly rayMatrix = new Matrix4();
+  private readonly shoulder = new Vector3();
 
   init(): void {
     this.cafe = this.world.getSystem(CafeSystem)!;
@@ -195,11 +218,7 @@ export class GameSystem extends createSystem({}) {
     this.coach.mesh.position.set(...COACH.position);
     // A pinch on a card is the card's, never the café's or a guest's.
     this.hold?.claims.push((point) => this.card.covers(point) || this.how.covers(point) || this.coach.covers(point));
-    this.cafe.cafe.add(this.tab.mesh);
-    this.tab.frame = false;
-    this.tab.turn = 2.5;
-    this.layoutTab();
-    void sketchFontReady.then(() => this.layoutTab());
+    this.world.createTransformEntity(this.rays.group);
     // The start menu stands in the world (the café is hidden until it is opened).
     this.world.createTransformEntity(this.menu.card.mesh);
     this.world.createTransformEntity(this.menu.sheet.mesh);
@@ -210,7 +229,7 @@ export class GameSystem extends createSystem({}) {
       if (this.menu.card.open) this.menu.card.paint();
       if (this.menu.sheet.open) this.menu.sheet.paint();
     });
-    this.panels = [this.card, this.how, this.coach, this.tab, this.menu.card, this.menu.sheet];
+    this.panels = [this.card, this.how, this.coach, this.menu.card, this.menu.sheet, this.strip.panel];
     this.hovers.length = this.panels.length;
     this.shop.bought.push(() => this.keep());
     if (TEST_MODE) {
@@ -227,7 +246,11 @@ export class GameSystem extends createSystem({}) {
     const onVisibility = (): void => {
       if (xr.getSession()?.visibilityState !== 'visible') this.pause();
     };
-    xr.addEventListener('sessionstart', () => xr.getSession()?.addEventListener('visibilitychange', onVisibility));
+    xr.addEventListener('sessionstart', () => {
+      xr.getSession()?.addEventListener('visibilitychange', onVisibility);
+      // Back in the headset mid-run: the pause card is there again.
+      if (this.phase === 'paused' && this.resuming <= 0) this.showPauseCard();
+    });
     xr.addEventListener('sessionend', () => {
       this.pause();
       this.menu.hideAll();
@@ -252,8 +275,6 @@ export class GameSystem extends createSystem({}) {
     this.card.update(cardDelta, this.head);
     this.how.update(cardDelta, this.head);
     this.coach.update(cardDelta, this.head);
-    this.placeTab();
-    this.tab.update(cardDelta, this.head);
     if (!this.sound) this.applySettings();
     this.placeMenu(cardDelta);
     this.menu.tick(cardDelta);
@@ -267,8 +288,12 @@ export class GameSystem extends createSystem({}) {
       else this.toTutorial();
     }
     this.countDown(frameDelta);
-    if (!cafe.placed || cafe.arriving) return;
-    this.press();
+    this.strip.controls = this.phase === 'run' || this.resuming > 0 ? 'live' : this.phase === 'paused' ? 'paused' : 'off';
+    if (!cafe.placed || cafe.arriving) {
+      for (const hand of HANDS) this.rays.update(hand, null, null, null, cardDelta);
+      return;
+    }
+    this.press(cardDelta);
     if (this.phase === 'tutorial') this.coachTick();
     if (this.phase === 'run') this.runTick(delta);
   }
@@ -284,7 +309,6 @@ export class GameSystem extends createSystem({}) {
     this.card.show(false);
     this.card.dimmed = false;
     this.score.clock = 0;
-    this.tab.show(false);
     this.strip.best = this.save.bestSeconds;
     this.strip.live = false;
     this.strip.settle();
@@ -334,7 +358,7 @@ export class GameSystem extends createSystem({}) {
     const sheet = this.menu.sheet;
     // How to play stands where it always did over the café (it is in the world so it shows before the café is up).
     if (this.how.open) this.cafe.cafe.localToWorld(this.how.mesh.position.set(...HOW.position));
-    const onMenu = card.open || (sheet.open && this.settingsFrom === 'title');
+    const onMenu = card.open || sheet.open;
     if (!onMenu && !sheet.open) {
       this.menuPlaced = false;
       return;
@@ -373,9 +397,8 @@ export class GameSystem extends createSystem({}) {
     }
     if (!sheet.open) return;
     // In front of the card it was opened from, 4 cm nearer the eyes, turned the same way.
-    const from = this.settingsFrom === 'pause' ? this.card.mesh : card.mesh;
-    from.getWorldPosition(this.spot);
-    from.getWorldQuaternion(this.headQ);
+    card.mesh.getWorldPosition(this.spot);
+    card.mesh.getWorldQuaternion(this.headQ);
     this.toMenu.set(0, 0, 1).applyQuaternion(this.headQ);
     sheet.mesh.position.copy(this.spot).addScaledVector(this.toMenu, 0.04);
   }
@@ -384,8 +407,7 @@ export class GameSystem extends createSystem({}) {
   private turnSheet(): void {
     const sheet = this.menu.sheet;
     if (!sheet.open) return;
-    const from = this.settingsFrom === 'pause' ? this.card.mesh : this.menu.card.mesh;
-    from.getWorldQuaternion(sheet.mesh.quaternion);
+    this.menu.card.mesh.getWorldQuaternion(sheet.mesh.quaternion);
   }
 
   /** Settings as the menu shows them. */
@@ -395,7 +417,7 @@ export class GameSystem extends createSystem({}) {
 
   private openSettings(from: 'title' | 'pause'): void {
     this.settingsFrom = from;
-    (from === 'pause' ? this.card : this.menu.card).dimmed = true;
+    this.menu.card.dimmed = true;
     this.menu.openSettings(this.settingsState());
   }
 
@@ -499,8 +521,7 @@ export class GameSystem extends createSystem({}) {
     this.pace();
     this.score.startRun();
     this.score.clock = 0;
-    this.tab.show(true);
-    this.layoutTab();
+    this.menu.hideAll();
     this.strip.best = this.save.bestSeconds;
     this.strip.live = true;
     this.strip.settle();
@@ -517,34 +538,55 @@ export class GameSystem extends createSystem({}) {
     this.guests.handsOff = true;
     this.keep();
     this.showPauseCard();
-    this.layoutTab();
   }
 
   /**
-   * The pause card over the café: Resume first, then Hire a server (its
-   * price, or full staff; dimmed while the bank is short), How to play,
-   * and End the evening last and smallest.
+   * The pause card, in front of the eyes like the start card: Paused, the
+   * time open (and the best), RESUME, How to play and Settings, and End the
+   * evening. Hiring is in the shop (the bar's Shop button).
    */
   private showPauseCard(): void {
-    const { width: w, height: h } = this.card;
-    const price = this.shop.price;
-    const canPay = price !== null && this.score.bank >= price;
-    const hire = price === null ? 'Full staff' : canPay ? `Hire a server · ${price}` : `Hire at ${price} coins`;
-    this.card.set(
-      (ctx) => {
-        write(ctx, 'Paused', w / 2, h * 0.12, h * 0.1, { weight: 800, font: 'Georgia, serif' });
-        write(ctx, `Open for ${clockText(this.clock)}`, w / 2, h * 0.22, h * 0.05, { weight: 600, color: INK.inkSoft });
-        if (this.save.bestSeconds > 0) write(ctx, `Longest evening ${clockText(this.save.bestSeconds)}`, w / 2, h * 0.29, h * 0.045, { weight: 600, color: INK.amberDeep });
-      },
-      [
-        { id: 'resume', label: 'Resume', x: w * 0.2, y: h * 0.35, w: w * 0.6, h: h * 0.13, primary: true },
-        { id: 'hire', label: hire, x: w * 0.12, y: h * 0.51, w: w * 0.76, h: h * 0.12, primary: canPay },
-        { id: 'how', label: 'How to play', x: w * 0.12, y: h * 0.66, w: w * 0.37, h: h * 0.11 },
-        { id: 'settings', label: 'Settings', x: w * 0.51, y: h * 0.66, w: w * 0.37, h: h * 0.11 },
-        { id: 'end', label: 'End the evening', x: w * 0.27, y: h * 0.81, w: w * 0.46, h: h * 0.1 },
-      ],
-    );
-    this.card.show(true);
+    if (!this.menu.card.open) this.menuPlaced = false;
+    this.menu.card.dimmed = false;
+    this.menu.showPause({ time: clockText(this.clock), best: this.save.bestSeconds > 0 ? clockText(this.save.bestSeconds) : null });
+  }
+
+  /**
+   * The shop, on the same card: the bank and the three baristas (working,
+   * hire now, or not yet). Opened from the bar in a run, it pauses first;
+   * CLOSE then counts back in. Opened while paused, CLOSE goes back to the
+   * pause card.
+   */
+  private openShop(): void {
+    if (this.phase === 'run') {
+      this.pause();
+      this.shopFrom = 'run';
+    } else if (this.phase === 'paused') {
+      if (this.resuming > 0) this.resuming = 0;
+      this.shopFrom = this.menu.cardKind === 'shop' ? this.shopFrom : 'paused';
+    } else return;
+    this.closeSheet();
+    this.showShop();
+  }
+
+  private showShop(): void {
+    if (!this.menu.card.open) this.menuPlaced = false;
+    const staff = this.shop.staff;
+    this.menu.showShop({
+      coins: this.score.bank,
+      rows: BARISTA_NAMES.map((name, i) => {
+        const label = name.charAt(0).toUpperCase() + name.slice(1);
+        if (i < staff) return { name: label, status: 'working' as const };
+        const price = HIRE_PRICES[i - STARTING_STAFF];
+        if (i > staff) return { name: label, status: 'later' as const, price };
+        return { name: label, status: this.score.bank >= price ? ('hire' as const) : ('short' as const), price };
+      }),
+    });
+  }
+
+  private closeShop(): void {
+    if (this.shopFrom === 'run') this.resume();
+    else this.showPauseCard();
   }
 
   /**
@@ -563,8 +605,7 @@ export class GameSystem extends createSystem({}) {
     this.resuming = 0;
     this.unpause();
     this.phase = 'run';
-    this.card.show(false);
-    this.layoutTab();
+    this.menu.hideAll();
   }
 
   /** Back to the pause card from the middle of a count. */
@@ -572,19 +613,14 @@ export class GameSystem extends createSystem({}) {
     if (this.phase !== 'paused' || this.resuming <= 0) return;
     this.resuming = 0;
     this.showPauseCard();
-    this.layoutTab();
   }
 
-  /** The count on the card (one big number) and on the pause button. */
+  /** The count on the card: one big number. */
   private showCount(): void {
     const n = Math.ceil(this.resuming);
     this.shownCount = n;
-    this.card.set((ctx, w, h) => {
-      write(ctx, 'Back in', w / 2, h * 0.24, h * 0.08, { weight: 600, color: INK.inkSoft });
-      write(ctx, `${n}`, w / 2, h * 0.6, h * 0.4, { weight: 800, font: 'Georgia, serif', color: INK.amberDeep });
-    });
-    this.card.show(true);
-    this.layoutTab();
+    this.closeSheet();
+    this.menu.showCount(n);
   }
 
   /** Each frame of a count: on real time (the café's own clock is stopped). */
@@ -599,7 +635,7 @@ export class GameSystem extends createSystem({}) {
   toClosed(): void {
     this.unpause();
     this.phase = 'closed';
-    this.tab.show(false);
+    this.menu.hideAll();
     this.strip.live = false;
     this.quiet();
     const s = this.score;
@@ -728,74 +764,17 @@ export class GameSystem extends createSystem({}) {
   // ---------------------------------------------------------------- buttons
 
   /**
-   * The pause button: a round cream button, dark pause bars while the café
-   * is open, a play arrow while it is paused, the number while counting
-   * back in (3, 2, 1), no words. It stands beside
-   * the grab pill (placeTab), the pair centred on the café's edge.
+   * Buttons. On the cards in reach: an index fingertip near one lights it,
+   * and pushing through the card's face presses it; a pinch closing on one
+   * presses it too. On the bar, out of reach: the hand ray (`aimAtBar`)
+   * lights the button it points at, and a pinch presses it. A hand
+   * carrying a guest or the café presses nothing and has no ray.
    */
-  private layoutTab(): void {
-    const tab = this.tab;
-    const paused = this.phase === 'paused';
-    const count = this.resuming > 0 ? Math.ceil(this.resuming) : 0;
-    const { width: w, height: h } = tab;
-    const draw = (ctx: CanvasRenderingContext2D, b: Button, hover?: boolean, pressed?: boolean): void => {
-      const cx = b.x + b.w / 2;
-      const cy = b.y + b.h / 2;
-      const r = b.h * 0.45 * (pressed ? 0.93 : 1);
-      ctx.fillStyle = hover ? '#fff4e4' : '#f7e9d3';
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineWidth = r * 0.08;
-      ctx.strokeStyle = '#e3c9a4';
-      ctx.stroke();
-      ctx.fillStyle = '#1c2036';
-      if (count > 0) {
-        // Mid-count: the number, in the same ink.
-        ctx.font = `800 ${Math.round(r * 1.25)}px Georgia, serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`${count}`, cx, cy + r * 0.06);
-        return;
-      }
-      ctx.beginPath();
-      if (paused) {
-        ctx.moveTo(cx - r * 0.28, cy - r * 0.42);
-        ctx.lineTo(cx + r * 0.42, cy);
-        ctx.lineTo(cx - r * 0.28, cy + r * 0.42);
-      } else {
-        const bw = r * 0.2;
-        const bh = r * 0.84;
-        ctx.rect(cx - bw * 1.6, cy - bh / 2, bw, bh);
-        ctx.rect(cx + bw * 0.6, cy - bh / 2, bw, bh);
-      }
-      ctx.fill();
-    };
-    tab.set(() => {}, [{ id: 'tab', label: '', x: (w - h) / 2, y: 0, w: h, h, bare: true, draw }]);
-  }
-
-  /** Each frame: the pause button stands beside the pill, wherever the pill is. */
-  private placeTab(): void {
-    const handles = this.handles;
-    const showing = this.tab.open;
-    if (!handles) return;
-    handles.paired = showing;
-    if (!showing) return;
-    const spot = handles.pairSpot(this.spot);
-    spot.y += TAB.height / 2 + 0.004;
-    this.tab.mesh.position.copy(this.cafe.cafe.worldToLocal(spot));
-  }
-
-  /**
-   * Buttons, on the cards and the side board: an index fingertip near
-   * one lights it, and pushing through the card's face presses it; a
-   * pinch closing on one presses it too. A hand carrying a guest or the
-   * café presses nothing.
-   */
-  private press(): void {
+  private press(delta: number): void {
     const hold = this.hold;
     if (!hold) return;
     const panels = this.panels;
+    const bar = panels.indexOf(this.strip.panel);
     for (let i = 0; i < panels.length; i++) this.hovers[i] = null;
     for (const hand of HANDS) {
       const pinch = hold.pinch[hand];
@@ -804,12 +783,14 @@ export class GameSystem extends createSystem({}) {
       const busy = pinch.gap === Infinity || pinch.ghost || hold.holding.includes(hand) || !!this.guests.carriedBy(hand);
       const tip = hold.tip[hand];
       let done = false;
+      let near = false;
       for (let i = 0; i < panels.length; i++) {
         const panel = panels[i];
         // The fingertip: every card keeps track of it, so a press needs a push through this card's own face.
         const off = busy || panel.dimmed;
         const touch = panel.touch(hand, off || !tip.tracked ? null : tip.point);
         if (off || done) continue;
+        if (tip.tracked && panel.covers(tip.point)) near = true;
         const pinched = panel.hit(pinch.point);
         const over = touch.over ?? pinched;
         if (over) this.hovers[i] = over.id;
@@ -821,8 +802,63 @@ export class GameSystem extends createSystem({}) {
           done = true;
         }
       }
+      // The ray: only for a free hand away from the café and from every card in reach.
+      const aimed = !busy && !done && !near && this.strip.controls !== 'off' && !hold.nearCafe(pinch.point, RAY.awayFromCafe) ? this.aimAtBar(hand) : null;
+      this.aim[hand] = aimed ? (aimed.button?.id ?? '') : null;
+      this.rays.update(hand, aimed ? this.rayFrom : null, aimed ? this.rayHit : null, aimed ? this.barNormal : null, delta);
+      if (!aimed?.button) continue;
+      this.hovers[bar] = aimed.button.id;
+      if (fresh) {
+        this.strip.panel.press(aimed.button.id);
+        this.click(aimed.button.id);
+      }
     }
     for (let i = 0; i < panels.length; i++) panels[i].setHover(this.hovers[i]);
+  }
+
+  /**
+   * Where a hand's ray meets the bar: the headset's own pointer for the hand
+   * (its target ray, steadied by the system as in its own menus), or, where
+   * there is none, a line from the shoulder through the pinch. Null when it
+   * does not meet the bar; else the button under it (null between buttons).
+   * Sets rayFrom (at the hand), rayHit and barNormal.
+   */
+  private aimAtBar(hand: Hand): { button: Button | null } | null {
+    const panel = this.strip.panel;
+    if (!panel.open) return null;
+    const pinch = this.hold!.pinch[hand];
+    const source = this.world.input.xr.getPrimaryInputSource(hand) as XRInputSource | undefined;
+    const frame = this.xrFrame as XRFrame | undefined;
+    const space = this.xrManager.getReferenceSpace();
+    const pose = source?.targetRaySpace && frame && space ? frame.getPose(source.targetRaySpace, space) : null;
+    if (pose) {
+      this.rayMatrix.fromArray(pose.transform.matrix).premultiply(this.player.matrixWorld);
+      this.rayFrom.setFromMatrixPosition(this.rayMatrix);
+      this.rayDir.set(0, 0, -1).transformDirection(this.rayMatrix);
+    } else {
+      // About where the shoulder is: below the eyes, to the hand's side.
+      this.player.head.getWorldQuaternion(this.headQ);
+      this.forward.set(1, 0, 0).applyQuaternion(this.headQ).setY(0).normalize();
+      this.shoulder.copy(this.head).addScaledVector(this.forward, hand === 'right' ? 0.17 : -0.17);
+      this.shoulder.y -= 0.2;
+      this.rayFrom.copy(pinch.point);
+      this.rayDir.copy(pinch.point).sub(this.shoulder).normalize();
+    }
+    const mesh = panel.mesh;
+    mesh.getWorldPosition(this.spot);
+    mesh.getWorldQuaternion(this.headQ);
+    this.barNormal.set(0, 0, 1).applyQuaternion(this.headQ);
+    const facing = this.rayDir.dot(this.barNormal);
+    // It must come at the bar's face from the front.
+    if (facing > -0.05) return null;
+    const t = this.wanted.copy(this.spot).sub(this.rayFrom).dot(this.barNormal) / facing;
+    if (t <= 0 || t > RAY.reach) return null;
+    this.rayHit.copy(this.rayFrom).addScaledVector(this.rayDir, t);
+    const local = mesh.worldToLocal(this.wanted.copy(this.rayHit));
+    const g = (mesh.geometry as PlaneGeometry).parameters;
+    const edge = g.height * RAY.edge;
+    if (Math.abs(local.x) > g.width / 2 + edge || Math.abs(local.y) > g.height / 2 + edge) return null;
+    return { button: panel.hit(this.rayHit) };
   }
 
   /** What a button does (the checks call this directly too). */
@@ -896,9 +932,20 @@ export class GameSystem extends createSystem({}) {
         this.pause();
         if (this.phase === 'paused' || this.phase === 'title') this.toRules();
         break;
-      case 'tab':
+      case 'bar-pause':
+        // The bar's Pause: pauses a run; while paused (the card up) it carries on, as RESUME does.
         if (this.phase === 'run' || this.resuming > 0) this.pause();
         else if (this.phase === 'paused') this.resume();
+        break;
+      case 'bar-shop':
+        this.openShop();
+        break;
+      case 'shop-close':
+        this.closeShop();
+        break;
+      case 'hire-later':
+        // Not yet: the bank cannot pay, or another comes first. The shop says no.
+        this.shop.refused++;
         break;
       case 'again':
         this.toRun();
@@ -926,8 +973,8 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'hire':
         this.shop.hire();
-        // From the pause card: show the new price (or full staff).
-        if (this.phase === 'paused' && this.resuming <= 0) this.showPauseCard();
+        // In the shop: show the new staff and bank.
+        if (this.menu.cardKind === 'shop' && this.menu.card.open) this.showShop();
         break;
     }
   }

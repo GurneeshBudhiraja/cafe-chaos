@@ -1,0 +1,131 @@
+/**
+ * Bar check: Pause and Shop on the scoreboard, pressed with the hand ray.
+ * In a run, with the viewer seated at the emulated table, it checks that:
+ * 1. the bar shows Pause and Shop, live in a run; no round pause tab;
+ * 2. a hand away from the café, pointed at Pause, shows the ray and lights
+ *    the button; a pinch pauses, and the pause card stands in front of the
+ *    eyes (RESUME, How to play, Settings, END THE EVENING; no Hire);
+ * 3. pointed at Pause again (now a play arrow) and pinched: 3, 2, 1, run;
+ * 4. with the coins, Shop pauses and opens the shop; HIRE hires the next
+ *    barista (the price taken); CLOSE counts back into the run;
+ * 5. a hand over the café has no ray, and its pinch presses nothing;
+ * 6. nothing on the console.
+ *
+ * Usage: dev server running, then `node scripts/check-bar.mjs`.
+ * Output: artifacts/bar-*.png, and a pass/fail line.
+ */
+
+process.env.APP_URL = process.env.APP_URL_GAME ?? 'https://localhost:8082/';
+const { startHeadset } = await import('./lib/headset.mjs');
+
+const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
+const LOOK = { x: -1.3, y: 0.79, z: 0.28 };
+const results = [];
+const check = (name, ok, detail) => {
+  results.push({ name, ok, detail });
+  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+};
+
+const h = await startHeadset({
+  async prepare(h) {
+    await h.head(SEAT, LOOK);
+    await h.page.evaluate(() => window.__cafe.system.replace());
+    await h.page.waitForFunction(() => window.__cafe.system.placed && !window.__cafe.system.arriving && window.__cafe.game.phase === 'title', null, { timeout: 60000 });
+  },
+});
+const { page } = h;
+const until = (fn, arg, timeout = 30000) => page.waitForFunction(fn, arg, { timeout, polling: 100 }).then(() => true, () => false);
+const send = (m, p) => page.evaluate(([m, p]) => window.IWER_DEVICE.remote.dispatch(m, p), [m, p]);
+const frames = (n) => page.evaluate((n) => new Promise((resolve) => { const info = window.__cafe.world.renderer.info.render; const target = info.frame + n; const t = setInterval(() => { if (info.frame >= target) { clearInterval(t); resolve(); } }, 8); }), n);
+const pinch = (value) => send('set_select_value', { device: 'hand-right', value });
+
+// Into a run (straight past the first-run steps).
+await page.evaluate(() => window.__cafe.game.click('open'));
+await until(() => !window.__cafe.system.waiting && !window.__cafe.system.arriving, null, 60000);
+await page.evaluate(() => window.__cafe.game.click('skip'));
+await until(() => window.__cafe.game.phase === 'run', null, 60000);
+await page.waitForTimeout(800);
+
+let s = await page.evaluate(() => ({ controls: window.__cafe.strip.controls, buttons: window.__cafe.strip.panel.buttons.map((b) => b.id), tab: !!window.__cafe.game.tab }));
+check('the bar has Pause and Shop, live in a run; no pause tab', s.controls === 'live' && s.buttons.join() === 'bar-pause,bar-shop' && !s.tab, JSON.stringify(s));
+
+/** Hold the right hand at `from` (world), turned so its ray points at a bar button's centre. */
+const aimAt = async (id, from = [-1.08, 1.0, 0.1]) => {
+  const target = await page.evaluate((id) => {
+    const p = window.__cafe.strip.panel;
+    const b = p.buttons.find((x) => x.id === id);
+    const g = p.mesh.geometry.parameters;
+    const V = p.mesh.position.constructor;
+    const s = p.mesh.getWorldScale(new V()).z;
+    return p.mesh.localToWorld(new V(((b.x + b.w / 2) / p.width - 0.5) * g.width, (0.5 - (b.y + b.h / 2) / p.height) * g.height, 0.0 / s)).toArray();
+  }, id);
+  // A quaternion turning -Z to the direction from the hand to the target.
+  const d = target.map((v, i) => v - from[i]);
+  const len = Math.hypot(...d);
+  const n = d.map((v) => v / len);
+  const a = [0, 0, -1];
+  const dot = a[0] * n[0] + a[1] * n[1] + a[2] * n[2];
+  const c = [a[1] * n[2] - a[2] * n[1], a[2] * n[0] - a[0] * n[2], a[0] * n[1] - a[1] * n[0]];
+  const w = 1 + dot;
+  const ql = Math.hypot(c[0], c[1], c[2], w);
+  await send('set_transform', { device: 'hand-right', position: { x: from[0], y: from[1], z: from[2] }, orientation: { x: c[0] / ql, y: c[1] / ql, z: c[2] / ql, w: w / ql } });
+  await frames(6);
+};
+const tap = async () => {
+  await pinch(1);
+  await frames(4);
+  await pinch(0);
+  await frames(4);
+};
+const state = () => page.evaluate(() => { const { game, strip, shop, score } = window.__cafe; return { phase: game.phase, aim: game.aim.right, ray: game.rays.showing('right'), hover: strip.panel.hover, kind: game.menu.cardKind, card: game.menu.card.open, cardButtons: game.menu.card.buttons.map((b) => b.id), resuming: game.resuming, hires: shop.hires, bank: score.bank, controls: strip.controls }; });
+
+// 2. Point at Pause: the ray shows, the button lights; pinch: paused, the card in front.
+await aimAt('bar-pause');
+s = await state();
+check('a hand pointed at Pause shows the ray and lights it', s.aim === 'bar-pause' && s.ray && s.hover === 'bar-pause', JSON.stringify({ aim: s.aim, ray: s.ray, hover: s.hover }));
+await page.screenshot({ path: 'artifacts/bar-aim.png' });
+await tap();
+s = await state();
+const spot = await page.evaluate(() => { const { game } = window.__cafe; const m = game.menu.card.mesh; return { d: m.position.distanceTo(game.head), below: game.head.y - m.position.y }; });
+check('a pinch pauses; the pause card stands in front of the eyes, without Hire', s.phase === 'paused' && s.kind === 'pause' && s.card && s.cardButtons.join() === 'resume,how,settings,end' && spot.d < 0.5 && spot.below > 0.08, `${JSON.stringify({ phase: s.phase, kind: s.kind, buttons: s.cardButtons })}, ${(spot.d * 100).toFixed(0)} cm away, ${(spot.below * 100).toFixed(0)} cm below the eyes`);
+await page.waitForTimeout(600);
+await page.screenshot({ path: 'artifacts/bar-paused.png' });
+
+// 3. Pause again (now play): 3, 2, 1, run.
+await aimAt('bar-pause');
+await tap();
+s = await state();
+const counting = s.resuming > 0 && s.kind === 'count';
+const back = await until(() => window.__cafe.game.phase === 'run' && !window.__cafe.game.menu.card.open, null, 15000);
+check('Pause while paused counts back in, then the run goes on', counting && back, `counting ${counting} (${s.kind}), back ${back}`);
+
+// 4. Shop: pauses and opens the shop; HIRE; CLOSE counts back in.
+await page.evaluate(() => (window.__cafe.score.bank = 75));
+await frames(4);
+const badge = await page.evaluate(() => window.__cafe.shop.affordable);
+await aimAt('bar-shop');
+await tap();
+s = await state();
+check('Shop pauses and opens the shop', s.phase === 'paused' && s.kind === 'shop' && s.cardButtons.includes('hire') && s.cardButtons.includes('shop-close') && badge, JSON.stringify({ phase: s.phase, kind: s.kind, buttons: s.cardButtons, affordable: badge }));
+await page.waitForTimeout(600);
+await page.screenshot({ path: 'artifacts/bar-shop.png' });
+await page.evaluate(() => window.__cafe.game.click('hire'));
+s = await state();
+check('HIRE hires the next barista, the price taken; the shop shows it', s.hires === 1 && s.bank === 15 && s.kind === 'shop' && s.cardButtons.includes('hire-later'), JSON.stringify({ hires: s.hires, bank: s.bank, buttons: s.cardButtons }));
+await page.evaluate(() => window.__cafe.game.click('shop-close'));
+const closed = await until(() => window.__cafe.game.phase === 'run' && !window.__cafe.game.menu.card.open, null, 15000);
+check('CLOSE counts back into the run', closed, `${closed}`);
+
+// 5. A hand over the café: no ray, and a pinch presses nothing on the bar.
+const cafeTop = await page.evaluate(() => { const c = window.__cafe.system.cafe.position; return [c.x, c.y + 0.08, c.z]; });
+await aimAt('bar-pause', cafeTop);
+s = await state();
+await tap();
+const after = await state();
+check('a hand over the café has no ray; its pinch does not pause', s.aim === null && !s.ray && after.phase === 'run', JSON.stringify({ aim: s.aim, ray: s.ray, phase: after.phase }));
+
+const errors = await h.finish();
+check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');
+const failed = results.filter((r) => !r.ok).length;
+console.log(failed ? `${failed} FAILED` : `${results.length}/${results.length} checks passed`);
+process.exit(failed ? 1 : 0);

@@ -25,7 +25,7 @@
 import type { RoughCanvas } from 'roughjs/bin/canvas';
 import type { Options } from 'roughjs/bin/core';
 import { Panel, type Button } from './panel.js';
-import { hand, pen, SKETCH } from './sketch.js';
+import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
 
 /** The two cards' sizes (metres). The start card is 24 cm across; the sheet the same width. */
 export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.21 };
@@ -51,6 +51,21 @@ export interface StartState {
 export interface SettingsState {
   music: number;
   sounds: number;
+}
+/** The pause card: the time open, and the best time (m:ss, or null). */
+export interface PauseState {
+  time: string;
+  best: string | null;
+}
+/** The shop: the bank, and each barista in hiring order. */
+export interface ShopState {
+  coins: number;
+  rows: {
+    name: string;
+    /** 'working': hired (or the first). 'hire': next, and the bank can pay. 'short': next, and it cannot. 'later': after the next. */
+    status: 'working' | 'hire' | 'short' | 'later';
+    price?: number;
+  }[];
 }
 export interface WarnState {
   coins: number;
@@ -85,6 +100,8 @@ export class StartMenu {
   readonly sheet = new Panel('MenuSheet', MENU_SIZE.width, MENU_SIZE.sheetHeight);
   /** What the sheet shows ('none' when it is closed). */
   sheetKind: 'none' | 'settings' | 'warn' = 'none';
+  /** What the card shows: the start menu, or (in a run) the pause card, the shop, or the count back in. */
+  cardKind: 'start' | 'pause' | 'shop' | 'count' = 'start';
   private seed = 1;
   private clock = 0;
   private start: StartState = { kind: 'first', coins: 0, staff: 1, best: null };
@@ -103,8 +120,30 @@ export class StartMenu {
 
   /** Draw the start card for this state (and put it up). */
   showStart(state: StartState): void {
+    this.cardKind = 'start';
     this.start = state;
     this.layoutStart();
+    this.card.show(true);
+  }
+
+  /** The pause card (in a run). */
+  showPause(state: PauseState): void {
+    this.cardKind = 'pause';
+    this.layoutPause(state);
+    this.card.show(true);
+  }
+
+  /** The shop (in a run, paused). Shown again after each hire. */
+  showShop(state: ShopState): void {
+    this.cardKind = 'shop';
+    this.layoutShop(state);
+    this.card.show(true);
+  }
+
+  /** The count back in from a pause: one big number, on the pause card's paper. */
+  showCount(n: number): void {
+    this.cardKind = 'count';
+    this.layoutCount(n);
     this.card.show(true);
   }
 
@@ -342,6 +381,130 @@ export class StartMenu {
       }
       lines.push(line);
       lines.forEach((l, i) => text(ctx, l, W / 2, 160 + i * 48, 34, SKETCH.soft, 'center', false));
+      ctx.restore();
+    }, buttons);
+  }
+
+  /** A button with a price: the word, a coin and the number ('primary' to buy now, 'off' when the bank cannot pay yet). */
+  private priceButton(panel: Panel, id: string, x: number, y: number, w: number, h: number, kind: 'primary' | 'off', word: string, price: number): Button {
+    const k = this.k;
+    return {
+      id, label: `${word} ${price}`, x: x * k, y: y * k, w: w * k, h: h * k, bare: true, off: kind === 'off',
+      draw: (ctx, _b, hover, pressed) => {
+        const rc = pen(panel.canvas);
+        ctx.save();
+        ctx.scale(k, k);
+        const dip = pressed ? 6 : 0;
+        const live = kind === 'primary';
+        rc.rectangle(x, y + dip, w, h, this.o({ fill: live ? SKETCH.moss : SKETCH.paper, fillStyle: 'solid', stroke: live ? SKETCH.mossDeep : '#b6a993', seed: this.seed + Math.round(x + y) }));
+        if (hover && live) this.lantern(ctx, x, y + dip, w, h);
+        const ink = live ? '#f2ebdd' : '#b6a993';
+        const size = 38;
+        ctx.font = font(size);
+        const ww = ctx.measureText(word).width;
+        const pw = ctx.measureText(`${price}`).width;
+        const cd = size * 0.9;
+        const total = ww + 24 + cd + 10 + pw;
+        let lx = x + (w - total) / 2;
+        const cy = y + h / 2 + dip;
+        text(ctx, word, lx, cy + 2, size, ink, 'left');
+        lx += ww + 24;
+        if (live) sketchCoin(rc, lx + cd / 2, cy, cd, this.seed + 7, 2.5);
+        else rc.circle(lx + cd / 2, cy, cd, this.o({ stroke: '#b6a993', strokeWidth: 2.5 }));
+        lx += cd + 10;
+        text(ctx, `${price}`, lx, cy + 2, size, ink, 'left');
+        ctx.restore();
+      },
+    };
+  }
+
+  /** The pause card's measures (design units), shared with the count so the card does not jump between them. */
+  private static readonly PAUSE_H = PAD + 174 + 140 + TOUCH_GAP + 96 + TOUCH_GAP + 96 + PAD + 14;
+
+  private layoutPause(s: PauseState): void {
+    const H = Math.round(this.card.height / this.k);
+    const top = H - StartMenu.PAUSE_H;
+    let y = top + PAD + 174;
+    const buttons: Button[] = [this.button(this.card, 'resume', PAD, y, W - PAD * 2, 140, 'primary', 'RESUME')];
+    y += 140 + TOUCH_GAP;
+    const half = (W - PAD * 2 - TOUCH_GAP) / 2;
+    buttons.push(this.button(this.card, 'how', PAD, y, half, 96, 'secondary', '? How to play'));
+    buttons.push(this.button(this.card, 'settings', PAD + half + TOUCH_GAP, y, half, 96, 'secondary', '⚙ Settings'));
+    y += 96 + TOUCH_GAP;
+    buttons.push(this.button(this.card, 'end', PAD, y, W - PAD * 2, 96, 'danger', 'END THE EVENING'));
+    this.card.set((ctx) => {
+      ctx.clearRect(0, 0, this.card.width, this.card.height);
+      ctx.save();
+      ctx.scale(this.k, this.k);
+      this.paper(ctx, pen(this.card.canvas), top, H);
+      text(ctx, 'Paused', W / 2, top + PAD + 64, 64, SKETCH.ink);
+      text(ctx, s.best ? `${s.time}   ·   BEST ${s.best}` : s.time, W / 2, top + PAD + 136, 34, SKETCH.soft, 'center', false);
+      ctx.restore();
+    }, buttons);
+  }
+
+  private layoutCount(n: number): void {
+    const H = Math.round(this.card.height / this.k);
+    const top = H - StartMenu.PAUSE_H;
+    this.card.set((ctx) => {
+      ctx.clearRect(0, 0, this.card.width, this.card.height);
+      ctx.save();
+      ctx.scale(this.k, this.k);
+      this.paper(ctx, pen(this.card.canvas), top, H);
+      text(ctx, 'Back in', W / 2, top + PAD + 90, 44, SKETCH.soft, 'center', false);
+      text(ctx, `${n}`, W / 2, top + StartMenu.PAUSE_H * 0.58, 260, SKETCH.moss);
+      ctx.restore();
+    }, []);
+  }
+
+  /** A barista's place in the shop: a round frame with a steaming cup in their colour. */
+  private portrait(rc: RoughCanvas, x: number, y: number, d: number, tint: string, seed: number): void {
+    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
+    rc.rectangle(x - d * 0.2, y - d * 0.08, d * 0.4, d * 0.3, this.o({ seed: seed + 1, strokeWidth: 2.5, fill: tint, fillStyle: 'solid' }));
+    rc.arc(x + d * 0.21, y + d * 0.06, d * 0.16, d * 0.16, -Math.PI / 2, Math.PI / 2, false, this.o({ seed: seed + 2, strokeWidth: 2.5 }));
+    for (const side of [-1, 0, 1]) {
+      const sx = x + side * d * 0.1;
+      rc.curve([[sx, y - d * 0.16], [sx + d * 0.04, y - d * 0.24], [sx, y - d * 0.32]], this.o({ seed: seed + 4 + side, strokeWidth: 2, stroke: SKETCH.soft }));
+    }
+  }
+
+  private layoutShop(s: ShopState): void {
+    const H = Math.round(this.card.height / this.k);
+    const ROW = 124;
+    const ROW_GAP = 20;
+    const used = PAD + 180 + s.rows.length * (ROW + ROW_GAP) - ROW_GAP + TOUCH_GAP + 110 + PAD + 14;
+    const top = Math.max(0, H - used);
+    const buttons: Button[] = [];
+    let y = top + PAD + 180;
+    const bw = 290;
+    const bh = 100;
+    s.rows.forEach((r) => {
+      if (r.status !== 'working' && r.price !== undefined) {
+        buttons.push(this.priceButton(this.card, r.status === 'hire' ? 'hire' : 'hire-later', W - PAD - bw, y + (ROW - bh) / 2, bw, bh, r.status === 'hire' ? 'primary' : 'off', 'HIRE', r.price));
+      }
+      y += ROW + ROW_GAP;
+    });
+    buttons.push(this.button(this.card, 'shop-close', PAD, y - ROW_GAP + TOUCH_GAP, W - PAD * 2, 110, 'secondary', 'CLOSE'));
+    const tints = ['#7a9a6e', '#d48a8a', '#8aa3c9'];
+    this.card.set((ctx) => {
+      ctx.clearRect(0, 0, this.card.width, this.card.height);
+      ctx.save();
+      ctx.scale(this.k, this.k);
+      const rc = pen(this.card.canvas);
+      this.paper(ctx, rc, top, H);
+      text(ctx, 'Hire baristas', W / 2, top + PAD + 56, 56, SKETCH.ink);
+      const coins = `${s.coins.toLocaleString('en')} coins`;
+      ctx.font = font(36);
+      const cw = ctx.measureText(coins).width;
+      sketchCoin(rc, W / 2 - cw / 2 - 24, top + PAD + 128, 38, this.seed + 3, 2.5);
+      text(ctx, coins, W / 2 - cw / 2 + 6, top + PAD + 130, 36, SKETCH.ink, 'left');
+      let ry = top + PAD + 180;
+      s.rows.forEach((r, i) => {
+        this.portrait(rc, PAD + 58, ry + ROW / 2, 100, tints[i % tints.length], this.seed + 100 + i * 10);
+        text(ctx, r.name, PAD + 132, ry + ROW / 2 + 2, 44, SKETCH.ink, 'left');
+        if (r.status === 'working') text(ctx, 'Works for you', W - PAD - 14, ry + ROW / 2 + 2, 32, SKETCH.moss, 'right');
+        ry += ROW + ROW_GAP;
+      });
       ctx.restore();
     }, buttons);
   }

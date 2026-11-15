@@ -60,7 +60,7 @@ await frames(3);
 const tipOffset = (await page.evaluate(() => window.__cafe.hold.tip.right.point.toArray())).map((v, i) => v - AWAY[i]);
 const pinchAt = (p) => handTo(p.map((v, i) => v - offset[i]));
 const tipTo = (p) => handTo(p.map((v, i) => v - tipOffset[i]));
-/** A point `out` metres in front of a button on one of the game's cards ('card', 'coach') or the pause button ('tab'). */
+/** A point `out` metres in front of a button on one of the game's cards ('card', 'coach', 'menu': the start, pause and shop card). */
 const buttonAt = (panel, id, out) =>
   page.evaluate(([panel, id, out]) => {
     const p = (panel === 'menu' ? window.__cafe.game.menu.card : window.__cafe.game[panel]);
@@ -210,15 +210,17 @@ const savedHire = await page.evaluate(() => JSON.parse(localStorage.getItem('caf
 check('with the money a server is hired, the price taken, and it is saved', s.staff === 2 && s.bank === 40 && s.price === 120 && savedHire?.hires === 1 && savedHire.bank === 40, `staff ${s.staff}, bank ${s.bank}, next ${s.price}, saved ${JSON.stringify(savedHire)}`);
 await h.screenshot('artifacts/game-hired.png');
 
-// 8. Pause (the pause button beside the pill) and Resume.
-await poke('tab', 'tab');
+// 8. Pause (the bar's Pause; check-bar.mjs presses it with the hand ray) and Resume.
+await page.evaluate(() => window.__cafe.game.click('bar-pause'));
+await frames(4);
 s = await state();
 const pausedAt = s.clock;
 await page.waitForTimeout(4000);
 const stillAt = (await state()).clock;
 check('Pause stops the clock', s.phase === 'paused' && s.card && stillAt === pausedAt, `phase ${s.phase}, clock ${pausedAt.toFixed(2)} -> ${stillAt.toFixed(2)}`);
 await h.screenshot('artifacts/game-paused.png');
-await poke('card', 'resume');
+await page.waitForTimeout(1000);
+await poke('menu', 'resume');
 // Resume counts 3, 2, 1 first (on real time), then the café moves again.
 await until(() => window.__cafe.game.phase === 'run', null, 60000);
 await page.waitForTimeout(3000);

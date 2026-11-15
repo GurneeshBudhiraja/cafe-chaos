@@ -227,6 +227,17 @@ export class HoldSystem extends createSystem({}) {
     return this.v.x > b.min.x - m && this.v.x < b.max.x + m && this.v.z > b.min.z - m && this.v.z < b.max.z + m && this.v.y > b.min.y - m && this.v.y < b.max.y + m;
   }
 
+  /** Is a world point on or near the café: within `margin` metres (real) of its bounds? */
+  nearCafe(point: Vector3, margin = HOLD_MARGIN_M): boolean {
+    if (!this.cafe) return false;
+    const cafe = this.cafe.cafe;
+    this.v.copy(point);
+    cafe.worldToLocal(this.v);
+    const m = margin / cafe.scale.x;
+    const b = this.bounds;
+    return this.v.x > b.min.x - m && this.v.x < b.max.x + m && this.v.z > b.min.z - m && this.v.z < b.max.z + m && this.v.y > b.min.y - m && this.v.y < b.max.y + m;
+  }
+
   /** Hands that let go (or were lost) stop holding; a remaining hand carries on alone. */
   private release(): void {
     for (let i = this.holding.length - 1; i >= 0; i--) {

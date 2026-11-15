@@ -4,10 +4,12 @@
  *    when it is gone the game stays paused until the player resumes;
  * 2. while paused the café is still (clock stopped, hands kept off the guests),
  *    its lamps go down and the theme is turned down;
- * 3. Resume counts 3, 2, 1 on the card and the pause button with the café still
- *    frozen, then the café moves again and the lamps and theme come back up;
- * 4. pressing pause during the count holds the pause (the pause card is back);
- * 5. the pause card has Hire (which hires) and How to play.
+ * 3. Resume counts 3, 2, 1 on the card with the café still frozen, then the
+ *    café moves again and the lamps and theme come back up;
+ * 4. pressing the bar's Pause during the count holds the pause (the pause card is back);
+ * 5. the pause card has Resume, How to play, Settings and End (no Hire); the
+ *    bar's Shop, while paused, opens the shop; HIRE there hires and shows the
+ *    next price; CLOSE goes back to the pause card.
  * Usage: dev server running, then `node scripts/check-pause.mjs`.
  * Output: PASS/FAIL lines; artifacts/pause-*.png.
  */
@@ -29,7 +31,7 @@ const check = (name, pass, detail) => { results.push(pass); console.log(`${pass 
 const until = (fn, timeout = 60000) => page.waitForFunction(fn, null, { timeout, polling: 200 }).then(() => true, () => false);
 const state = () => page.evaluate(() => {
   const { game, mood, theme, guests } = window.__cafe;
-  return { phase: game.phase, resuming: +game.resuming.toFixed(2), clock: +game.clock.toFixed(2), card: game.card.open, dim: +mood.paused.toFixed(2), handsOff: guests.handsOff, duck: theme.ducked, tabPressed: null };
+  return { phase: game.phase, resuming: +game.resuming.toFixed(2), clock: +game.clock.toFixed(2), card: game.menu.card.open, dim: +mood.paused.toFixed(2), handsOff: guests.handsOff, duck: theme.ducked, tabPressed: null };
 });
 for (const k of ['left', 'right']) await page.evaluate((k) => window.IWER_DEVICE.remote.dispatch('set_transform', { device: `hand-${k}`, position: { x: k === 'left' ? -1.4 : -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } }), k);
 await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); game.click('skip'); });
@@ -61,16 +63,23 @@ check('Resume starts a 3-2-1 with the café still frozen', s.phase === 'paused' 
 await until(() => Math.ceil(window.__cafe.game.resuming) === 2, 30000);
 await h.screenshot('artifacts/pause-2-count.png');
 // 4. Pause during the count: held.
-await page.evaluate(() => window.__cafe.game.click('tab'));
+await page.evaluate(() => window.__cafe.game.click('bar-pause'));
 await page.waitForTimeout(1500);
 s = await state();
 check('pressing pause during the count holds the pause', s.phase === 'paused' && s.resuming === 0 && s.card && s.clock === at, JSON.stringify(s));
-// 5. The pause card has Hire and How to play (the wrist menu is off by default).
-const ids = await page.evaluate(() => window.__cafe.game.card.buttons.map((b) => `${b.id}:${b.label}`));
-await page.evaluate(() => { window.__cafe.score.bank = 100; window.__cafe.game.click('hire'); });
+// 5. The pause card (no Hire); the shop from the bar, while paused.
+const ids = await page.evaluate(() => window.__cafe.game.menu.card.buttons.map((b) => b.id));
+await page.evaluate(() => { window.__cafe.score.bank = 100; window.__cafe.game.click('bar-shop'); });
+const shopOpen = await page.evaluate(() => ({ kind: window.__cafe.game.menu.cardKind, phase: window.__cafe.game.phase }));
+await page.evaluate(() => window.__cafe.game.click('hire'));
 await page.waitForTimeout(800);
-const after = await page.evaluate(() => ({ staff: window.__cafe.shop.staff, phase: window.__cafe.game.phase, hire: window.__cafe.game.card.buttons.find((b) => b.id === 'hire')?.label, wrist: window.__cafe.wrist.open }));
-check('the pause card offers Resume, Hire, How to play, Settings and End; Hire there hires and shows the next price', ids.map((x) => x.split(':')[0]).join(',') === 'resume,hire,how,settings,end' && after.staff === 2 && after.phase === 'paused' && /120/.test(after.hire ?? ''), `${ids.join(' | ')} -> ${JSON.stringify(after)}`);
+const after = await page.evaluate(() => ({ staff: window.__cafe.shop.staff, phase: window.__cafe.game.phase, next: window.__cafe.game.menu.card.buttons.find((b) => b.id.startsWith('hire'))?.label, wrist: window.__cafe.wrist.open }));
+await h.screenshot('artifacts/pause-shop.png');
+await page.evaluate(() => window.__cafe.game.click('shop-close'));
+const backTo = await page.evaluate(() => ({ kind: window.__cafe.game.menu.cardKind, phase: window.__cafe.game.phase, resuming: window.__cafe.game.resuming }));
+check('the pause card offers Resume, How to play, Settings and End; Shop opens the shop, HIRE hires and shows the next price, CLOSE goes back to the pause card',
+  ids.join(',') === 'resume,how,settings,end' && shopOpen.kind === 'shop' && shopOpen.phase === 'paused' && after.staff === 2 && after.phase === 'paused' && /120/.test(after.next ?? '') && backTo.kind === 'pause' && backTo.phase === 'paused' && backTo.resuming === 0,
+  `${ids.join(',')} | shop ${JSON.stringify(shopOpen)} -> ${JSON.stringify(after)} -> ${JSON.stringify(backTo)}`);
 await h.screenshot('artifacts/pause-card.png');
 // Then all the way through.
 await page.evaluate(() => window.__cafe.game.click('resume'));

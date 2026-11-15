@@ -1,11 +1,12 @@
 /**
  * ShopSystem: hiring. The café opens with one server; each further one
- * (up to all six baristas) is hired with coins from the bank, at a price
+ * (up to all three baristas) is hired with coins from the bank, at a price
  * that rises with each hire (game/rules.ts HIRE_PRICES), and stays hired.
  *
- * It has no objects of its own: the side board shows the price and its
- * Hire button calls `hire()`. A hire the bank cannot pay for is refused
- * (counted, so the board can shake its button and the sound can say no).
+ * It has no objects of its own: the shop card (the bar's Shop button)
+ * shows the baristas and their prices, and its HIRE calls `hire()`. A
+ * hire the bank cannot pay for is refused (counted, so the sound can say
+ * no).
  * The new server appears behind the counter and waves (BaristaSystem).
  */
 
@@ -35,7 +36,7 @@ export class ShopSystem extends createSystem({}) {
     return STARTING_STAFF + this.hires;
   }
 
-  /** What the next server costs; null when all six are hired. */
+  /** What the next server costs; null when all three are hired. */
   get price(): number | null {
     return this.hires < HIRE_PRICES.length ? HIRE_PRICES[this.hires] : null;
   }

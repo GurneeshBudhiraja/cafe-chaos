@@ -3,8 +3,14 @@
  * player's eye level, above the back of the café, turned to the player. It
  * is the one place to read how the evening is going:
  *
- *   open 3:42  |  (face) [▨▨▨▨▨▨▨□□□] 70%  |  (coin) 46
+ *   [⏸] | (clock) 3:42 | (face) [▨▨▨▨▨▨▨□□□] | (coin) 46 [shop]
  *
+ * - Pause, at the left end, and Shop, at the right end by the coins: the
+ *   bar is out of reach, so they are pressed with the hand ray (point and
+ *   pinch, GameSystem and hands/hand-ray.ts), or a fingertip if it is near.
+ *   Each lights from inside when aimed at. Shop has a lantern dot with a +
+ *   while the bank can pay for the next barista, and a moss check once all
+ *   three work. Both are pale (and do nothing) outside a run.
  * - The clock, counting up, with the longest evening under it ("new
  *   record!" once this run has passed it).
  * - Happiness: a face and ten hatched segments, calm above 60 %, warn
@@ -25,11 +31,12 @@
 
 import { Color, createSystem, DoubleSide, InstancedMesh, Matrix4, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3, Euler } from '@iwsdk/core';
 import { HAPPINESS } from '../game/rules.js';
-import { Panel } from '../ui/panel.js';
+import { Panel, type Button } from '../ui/panel.js';
 import { line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
 import { clockText } from '../game/clock.js';
 import { CafeSystem } from './cafe-system.js';
 import { ScoreSystem } from './score-system.js';
+import { ShopSystem } from './shop-system.js';
 
 /**
  * Its size (real metres), and where it hangs: over the café's back edge,
@@ -37,10 +44,16 @@ import { ScoreSystem } from './score-system.js';
  * never lower than `clear` above the café's tallest point (the cherry
  * tree, 0.405 m in café space) so nothing of the café hides it.
  */
-export const STRIP = { width: 0.58, height: 0.103, below: 0.03, clear: 0.03, back: -0.33, top: 0.405 };
+export const STRIP = { width: 0.72, height: 0.103, below: 0.03, clear: 0.03, back: -0.33, top: 0.405 };
 /** How long a segment takes to drain or fill, and a coin pop lasts (seconds); the pulse under 30 % (times a second); how quickly it follows the eyes' height (per second). */
 const MOTION = { segment: 0.5, pop: 0.3, pulse: 1, follow: 1.2 };
 const SEGMENTS = 10;
+/**
+ * The bar's two buttons (Pause, Shop): their side as a share of the bar's
+ * height (6.8 cm: about 4.6 degrees at the bar's distance, over Meta's 2.5 to
+ * 3 degrees for a ray), and the margin at each end.
+ */
+const BAR_BUTTON = { size: 0.66, pad: 0.14 };
 /** The confetti: how many scraps, how long they fly (seconds), how fast they leave (m/s), gravity (m/s²). */
 const CONFETTI = { count: 60, seconds: 1.6, speed: 0.55, gravity: 1.1 };
 /** The scraps' colours: the café's moss, lantern, koi and paper. */
@@ -58,6 +71,8 @@ export class StripSystem extends createSystem({}) {
   /** The longest evening before this run (seconds), and whether a run is on: the game sets them. */
   best = 0;
   live = false;
+  /** What the bar's buttons do now (the game sets it): 'live' in a run, 'paused' while paused (Pause shows play), 'off' otherwise (pale). */
+  controls: 'live' | 'paused' | 'off' = 'off';
   /** Times a new best time was celebrated (the sound system plays the chime). */
   celebrations = 0;
   /** True once this run has passed the best time (celebrated once). */
@@ -71,6 +86,7 @@ export class StripSystem extends createSystem({}) {
   private readonly one = new Vector3(1, 1, 1);
   private cafe!: CafeSystem;
   private score!: ScoreSystem;
+  private shop!: ShopSystem;
   private readonly head = new Vector3();
   private readonly spot = new Vector3();
   /** The height it hangs at (world), eased toward the eyes. */
@@ -85,12 +101,13 @@ export class StripSystem extends createSystem({}) {
   init(): void {
     this.cafe = this.world.getSystem(CafeSystem)!;
     this.score = this.world.getSystem(ScoreSystem)!;
+    this.shop = this.world.getSystem(ShopSystem)!;
     this.cafe.cafe.add(this.panel.mesh);
     this.panel.frame = false;
     this.panel.onTop = true;
     this.panel.turn = 2.5;
     this.bank = this.score.bank;
-    this.panel.set((ctx, w, h) => this.draw(ctx, w, h));
+    this.panel.set((ctx, w, h) => this.draw(ctx, w, h), this.barButtons());
     const colour = new Color();
     for (let i = 0; i < CONFETTI.count; i++) this.confetti.setColorAt(i, colour.set(CONFETTI_COLOURS[i % CONFETTI_COLOURS.length]));
     this.confetti.visible = false;
@@ -131,7 +148,8 @@ export class StripSystem extends createSystem({}) {
       moving = true;
     }
     const low = this.live && s.happiness / HAPPINESS.max <= 0.3 && s.happiness > 0;
-    const now = `${Math.round(s.happiness)}|${s.bank}|${Math.floor(s.clock)}|${this.best}|${this.live}`;
+    const shopNow = this.shop.price === null ? 'full' : this.shop.affordable ? 'can' : 'not';
+    const now = `${Math.round(s.happiness)}|${s.bank}|${Math.floor(s.clock)}|${this.best}|${this.live}|${this.controls}|${shopNow}`;
     if (moving || low || now !== this.shown) {
       this.shown = now;
       this.panel.paint();
@@ -207,12 +225,16 @@ export class StripSystem extends createSystem({}) {
     // The paper, with a marker border.
     rc.rectangle(lw * 2, lw * 2, w - lw * 4, h - lw * 4, line(11, lw * 1.2, { fill: SKETCH.paper, fillStyle: 'solid', roughness: 1.3 }));
     // Laid out left to right with room between every part; the time and the bank are given room for their widest so nothing shifts as they change.
-    const pad = h * 0.22, inner = h * 0.12, around = h * 0.2;
+    const inner = h * 0.12, around = h * 0.15;
     const icon = h * 0.36, timeSize = h * 0.36, bankSize = h * 0.34;
     // The widest time ('59:59') and bank ('9999') in the hand font, as drawn on the headset.
     const timeW = h * 0.9;
     const bankW = h * 0.72;
-    let x = pad;
+    // Pause at the left end: the clock starts after it and a divider.
+    const btn = h * BAR_BUTTON.size;
+    let x = h * BAR_BUTTON.pad + btn + around;
+    rc.line(x, h * 0.17, x + 2, h * 0.83, line(20, lw * 0.8));
+    x += around;
     // The clock: a drawn clock face and the time.
     const cx = x + icon / 2, cy = h * 0.5;
     rc.circle(cx, cy, icon, line(12, lw, { fill: SKETCH.paper, fillStyle: 'solid' }));
@@ -231,7 +253,8 @@ export class StripSystem extends createSystem({}) {
     const face = h * 0.4;
     sketchFace(rc, x + face / 2, h * 0.5, face, mood, 31, lw);
     x += face + inner;
-    const right = w - pad - bankW - inner - icon - around;
+    // Shop at the right end, after the coins.
+    const right = w - h * BAR_BUTTON.pad - btn - around - bankW - inner - icon - around;
     rc.line(right, h * 0.17, right - 2, h * 0.83, line(22, lw * 0.8));
     const x0 = x;
     const span = right - around - x0;
@@ -261,5 +284,77 @@ export class StripSystem extends createSystem({}) {
     const coinX = right + around + icon / 2;
     sketchCoin(rc, coinX, h * 0.5, icon * pop, 41, lw);
     scrawl(ctx, `${s.bank}`, coinX + icon / 2 + inner, h * 0.53, bankSize * pop);
+  }
+
+  /** The bar's two buttons: they draw themselves (Panel calls `draw` with the hover and the press). */
+  private barButtons(): Button[] {
+    const w = this.panel.width;
+    const h = this.panel.height;
+    const size = h * BAR_BUTTON.size;
+    const y = (h - size) / 2;
+    const pad = h * BAR_BUTTON.pad;
+    return [
+      { id: 'bar-pause', label: 'Pause', x: pad, y, w: size, h: size, bare: true, draw: (ctx, b, hover, pressed) => this.drawPause(ctx, b, !!hover, !!pressed) },
+      { id: 'bar-shop', label: 'Shop', x: w - pad - size, y, w: size, h: size, bare: true, draw: (ctx, b, hover, pressed) => this.drawShop(ctx, b, !!hover, !!pressed) },
+    ];
+  }
+
+  /** A bar button's square: paper, ink rim (pale when off), lit from inside when aimed at, a little down when pressed. */
+  private square(ctx: CanvasRenderingContext2D, b: Button, hover: boolean, pressed: boolean, seed: number): { cx: number; cy: number; s: number; ink: string } {
+    const rc = pen(this.panel.canvas);
+    const lw = Math.max(2, this.panel.height * 0.016);
+    const off = this.controls === 'off';
+    const dip = pressed ? b.h * 0.04 : 0;
+    rc.rectangle(b.x, b.y + dip, b.w, b.h, line(seed, lw * 1.1, { fill: hover && !off ? '#e4d9c6' : SKETCH.paper, fillStyle: 'solid', roughness: 1.2, stroke: off ? SKETCH.empty : SKETCH.ink }));
+    if (hover && !off) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(b.x + 3, b.y + dip + 3, b.w - 6, b.h - 6);
+      ctx.clip();
+      const g = ctx.createRadialGradient(b.x + b.w / 2, b.y + dip + b.h / 2, 0, b.x + b.w / 2, b.y + dip + b.h / 2, b.w * 0.62);
+      g.addColorStop(0, 'rgba(255,214,140,.55)');
+      g.addColorStop(1, 'rgba(255,214,140,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(b.x, b.y + dip, b.w, b.h);
+      ctx.restore();
+    }
+    return { cx: b.x + b.w / 2, cy: b.y + dip + b.h / 2, s: b.w, ink: off ? SKETCH.empty : SKETCH.ink };
+  }
+
+  /** Pause: two bars; a play arrow while paused (it carries on). */
+  private drawPause(ctx: CanvasRenderingContext2D, b: Button, hover: boolean, pressed: boolean): void {
+    const rc = pen(this.panel.canvas);
+    const lw = Math.max(2, this.panel.height * 0.016);
+    const { cx, cy, s, ink } = this.square(ctx, b, hover, pressed, 70);
+    if (this.controls === 'paused') {
+      rc.polygon([[cx - s * 0.16, cy - s * 0.24], [cx + s * 0.24, cy], [cx - s * 0.16, cy + s * 0.24]], line(71, lw * 0.9, { fill: ink, fillStyle: 'solid', stroke: ink }));
+      return;
+    }
+    for (const side of [-1, 1]) rc.rectangle(cx + side * s * 0.12 - s * 0.06, cy - s * 0.22, s * 0.12, s * 0.44, line(72 + side, lw * 0.9, { fill: ink, fillStyle: 'solid', stroke: ink }));
+  }
+
+  /** Shop: a shopping bag; a lantern dot with + while a hire is affordable, a moss check once all are hired. */
+  private drawShop(ctx: CanvasRenderingContext2D, b: Button, hover: boolean, pressed: boolean): void {
+    const rc = pen(this.panel.canvas);
+    const lw = Math.max(2, this.panel.height * 0.016);
+    const { cx, cy, s, ink } = this.square(ctx, b, hover, pressed, 80);
+    const off = this.controls === 'off';
+    const bw = s * 0.5;
+    const bh = s * 0.42;
+    const top = cy - s * 0.1;
+    rc.arc(cx, top, bw * 0.5, bw * 0.62, Math.PI, Math.PI * 2, false, line(82, lw * 1.2, { stroke: ink }));
+    rc.rectangle(cx - bw / 2, top, bw, bh, line(83, lw * 1.1, { fill: off ? SKETCH.paper : SKETCH.lantern, fillStyle: 'solid', stroke: ink }));
+    rc.line(cx - bw / 2, top + bh * 0.22, cx + bw / 2, top + bh * 0.22, line(84, lw * 0.7, { stroke: ink }));
+    if (off) return;
+    const r = s * 0.13;
+    const bx = b.x + b.w - r - s * 0.06;
+    const by = b.y + r + s * 0.06 + (pressed ? b.h * 0.04 : 0);
+    if (this.shop.price === null) {
+      rc.circle(bx, by, r * 2, line(92, lw * 0.9, { fill: SKETCH.moss, fillStyle: 'solid', stroke: SKETCH.mossDeep }));
+      rc.linearPath([[bx - r * 0.45, by], [bx - r * 0.1, by + r * 0.4], [bx + r * 0.5, by - r * 0.4]], line(93, lw * 1.1, { stroke: '#f2ebdd' }));
+    } else if (this.shop.affordable) {
+      rc.circle(bx, by, r * 2, line(94, lw * 0.9, { fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber }));
+      scrawl(ctx, '+', bx, by + 2, r * 1.6, { align: 'center' });
+    }
   }
 }
