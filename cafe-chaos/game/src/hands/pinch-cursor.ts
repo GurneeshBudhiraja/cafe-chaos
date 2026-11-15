@@ -1,11 +1,10 @@
 /**
  * The pinch cursor: with no hand model drawn (HAND.style 'real'), this is
  * the one thing that shows what the headset sees of a hand. A small dot
- * sits between the thumb and index tips of each tracked hand: faint
- * cream while the fingers are open, mint and a little larger while a
- * guest is lit under them (a pinch now would take it), amber and larger
- * still while they are pinched, and gone the moment the hand drops out
- * of tracking.
+ * sits between the thumb and index tips of each tracked hand: hidden
+ * while the fingers are open, a small soft mint while a guest is lit
+ * under them (a pinch now would take it), a small soft cream while they
+ * are pinched, and gone the moment the hand drops out of tracking.
  * So a pinch that did not register, and a hand the headset has lost,
  * both show at once. Drawn over everything, so it is never hidden by
  * the café or the player's own hand.
@@ -17,12 +16,13 @@ import type { Hand } from '../lib/hand-pinch.js';
 export const CURSOR = {
   enabled: true,
   /** The dot's radius (metres), and how much larger it is while pinched. */
-  radius: 0.0045,
-  grow: 1.6,
-  open: { color: 0xf7e9d3, opacity: 0.55 },
+  // Kept small and quiet: hidden while the hand is open, a small soft dot only while it matters.
+  radius: 0.0028,
+  grow: 1,
+  open: { color: 0xf2ebdd, opacity: 0 },
   /** While a guest is lit under the open hand: the colour, the opacity, and how much larger the dot is. */
-  aim: { color: 0x7fe0a6, opacity: 0.95, grow: 1.35 },
-  closed: { color: 0xffb46a, opacity: 1 },
+  aim: { color: 0xa9d8b8, opacity: 0.85, grow: 1.1 },
+  closed: { color: 0xf2ebdd, opacity: 0.8 },
   /** How quickly it changes between the two (per second). */
   fade: 16,
 };

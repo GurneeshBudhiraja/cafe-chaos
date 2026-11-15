@@ -28,11 +28,13 @@ import { Panel, type Button } from './panel.js';
 import { hand, pen, SKETCH } from './sketch.js';
 
 /** The two cards' sizes (metres). The start card is 24 cm across; the sheet the same width. */
-export const MENU_SIZE = { width: 0.24, height: 0.267, sheetHeight: 0.22 };
+export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.245 };
 /** Design units across. */
 const W = 720;
 const PAD = 36;
 const GAP = 24;
+/** Between two things you press: 40 design units (about 13 mm), over Meta's 12 mm. */
+const TOUCH_GAP = 40;
 const ART_H = 330;
 const BOIL_HZ = 10;
 /** Volume and size steps. */
@@ -226,7 +228,7 @@ export class StartMenu {
   private layoutStart(): void {
     const s = this.start;
     const returning = s.kind === 'returning';
-    const used = PAD + ART_H + GAP + 150 + (returning ? GAP + 100 : 0) + GAP + 72 + PAD;
+    const used = PAD + ART_H + GAP + 150 + (returning ? TOUCH_GAP + 100 : 0) + TOUCH_GAP + 72 + PAD;
     const H = Math.round(this.card.height / this.k);
     const top = H - used;
     const buttons: Button[] = [];
@@ -239,11 +241,11 @@ export class StartMenu {
     else buttons.push(this.button(this.card, 'new', PAD, y, W - PAD * 2, 150, 'primary', 'NEW GAME'));
     y += 150;
     if (returning) {
-      y += GAP;
+      y += TOUCH_GAP;
       buttons.push(this.button(this.card, 'new', PAD, y, W - PAD * 2, 100, 'secondary', 'NEW GAME'));
       y += 100;
     }
-    y += GAP;
+    y += TOUCH_GAP;
     const helpY = y;
     const k = this.k;
     buttons.push({
@@ -332,19 +334,19 @@ export class StartMenu {
   private layoutSettings(): void {
     const s = this.settings;
     const H = Math.round(this.sheet.height / this.k);
-    const rows = { music: 150, sounds: 250, size: 350 };
+    const rows = { music: 150, sounds: 150 + 84 + TOUCH_GAP, size: 150 + 2 * (84 + TOUCH_GAP) };
     const buttons: Button[] = [];
     this.stepper(buttons, null, null, 'music', rows.music, 'Music', s.music);
     this.stepper(buttons, null, null, 'sounds', rows.sounds, 'Sounds', s.sounds);
     this.stepper(buttons, null, null, 'size', rows.size, 'Café size', s.canShrink ? 1 : 0, s.canGrow ? 2 : 1);
     // The size buttons are − and + only: off at the ends.
-    const half = (W - PAD * 2 - GAP) / 2;
-    const actionsY = 418;
+    const half = (W - PAD * 2 - TOUCH_GAP) / 2;
+    const actionsY = rows.size + 42 + TOUCH_GAP;
     if (s.move) {
       buttons.push(this.button(this.sheet, 'move', PAD, actionsY, half, 84, 'secondary', 'Move the café'));
-      buttons.push(this.button(this.sheet, 'how', PAD + half + GAP, actionsY, half, 84, 'secondary', 'How to play'));
+      buttons.push(this.button(this.sheet, 'how', PAD + half + TOUCH_GAP, actionsY, half, 84, 'secondary', 'How to play'));
     } else buttons.push(this.button(this.sheet, 'how', PAD, actionsY, W - PAD * 2, 84, 'secondary', 'How to play'));
-    buttons.push(this.button(this.sheet, 'close', PAD, actionsY + 84 + GAP, W - PAD * 2, 84, 'primary', 'CLOSE'));
+    buttons.push(this.button(this.sheet, 'close', PAD, actionsY + 84 + TOUCH_GAP, W - PAD * 2, 84, 'primary', 'CLOSE'));
     this.sheet.set((ctx) => {
       ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
       ctx.save();
@@ -366,7 +368,7 @@ export class StartMenu {
     const sentence = `This deletes your ${lost.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
     const buttons: Button[] = [
       this.button(this.sheet, 'keep', PAD, 300, W - PAD * 2, 150, 'primary', 'KEEP MY CAFÉ'),
-      this.button(this.sheet, 'fresh', PAD, 300 + 150 + GAP, W - PAD * 2, 100, 'danger', 'DELETE AND START'),
+      this.button(this.sheet, 'fresh', PAD, 300 + 150 + TOUCH_GAP, W - PAD * 2, 100, 'danger', 'DELETE AND START'),
     ];
     this.sheet.set((ctx) => {
       ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
