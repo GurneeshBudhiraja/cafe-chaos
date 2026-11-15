@@ -79,14 +79,18 @@ const MM = 2.4;
 
 /**
  * The game in three pictures, taken from the game itself
- * (scripts/shoot-howto.mjs). How to play shows all three; the first run's
+ * (scripts/shoot-howto.mjs). How to play shows the first three; the first run's
  * coach card shows the one for the step in hand.
  */
 const MOVES = [
-  { picture: 'howto-pinch.jpg', title: 'Pinch a guest', text: 'Hold your fingers over a guest at the gate. When it lights up, pinch.' },
-  { picture: 'howto-seat.jpg', title: 'Seat them', text: 'Carry them over the café and let go. They take the glowing seat.' },
-  { picture: 'howto-hire.jpg', title: 'Pause & hire', text: 'Press the round button by the café to pause. Hire servers there too.' },
+  { picture: 'howto-pinch.jpg', title: 'Pinch a guest', text: 'Put your fingers above a guest at the gate. When the guest glows, pinch.' },
+  { picture: 'howto-seat.jpg', title: 'Seat the guest', text: 'Move the guest above the café. Open your fingers. The guest goes to the seat that glows.' },
+  { picture: 'howto-happy.jpg', title: 'Keep guests happy', text: 'Seat guests quickly. The bar above the café shows how happy the guests are.' },
+  // The coach card only (How to play shows the first three).
+  { picture: 'howto-pause.jpg', title: 'Pause and hire', text: 'Push the round button near the café to pause. You can hire baristas there.' },
 ];
+/** How many of the MOVES How to play shows. */
+const HOW_MOVES = 3;
 /** The bank is saved this often during a run (seconds), so little is lost if the page is closed. */
 const AUTOSAVE_SECONDS = 20;
 
@@ -452,7 +456,7 @@ export class GameSystem extends createSystem({}) {
         const gap = w * 0.025;
         const x0 = (w - 3 * pw - 2 * gap) / 2;
         const y0 = h * 0.18;
-        MOVES.forEach((move, i) => {
+        MOVES.slice(0, HOW_MOVES).forEach((move, i) => {
           const x = x0 + i * (pw + gap);
           picture(ctx, this.pictures[i], x, y0, pw, ph, 5 * MM);
           badge(ctx, i + 1, x + 6.5 * MM, y0 + 6.5 * MM, 6.5 * MM);
@@ -936,10 +940,10 @@ export class GameSystem extends createSystem({}) {
  */
 function firstRun(): Step[] {
   return [
-    { picture: 0, title: MOVES[0].title, text: 'Hold your fingers over the guest at the gate. When it lights up, pinch.', done: (g) => g.guests.pickedUp > g.mark.pickedUp },
-    { picture: 1, title: MOVES[1].title, text: 'Carry them over the café and let go. They take the glowing seat.', done: (g) => g.guests.seated > g.mark.seated },
-    { picture: 2, title: 'Here comes their tea', text: 'Fed guests pay. Keep them happy: the board above the café shows how they feel.', done: (g) => g.baristas.servedCount > g.mark.served },
-    { picture: 2, title: 'Pause & hire', text: 'The round button by the café pauses it. Hire servers and see how to play there too.', next: true, done: () => false },
+    { picture: 0, title: MOVES[0].title, text: 'Put your fingers above the guest at the gate. When the guest glows, pinch.', done: (g) => g.guests.pickedUp > g.mark.pickedUp },
+    { picture: 1, title: MOVES[1].title, text: MOVES[1].text, done: (g) => g.guests.seated > g.mark.seated },
+    { picture: 2, title: 'The guest gets tea', text: 'Guests pay when they get their tea. The bar above the café shows how happy the guests are.', done: (g) => g.baristas.servedCount > g.mark.served },
+    { picture: 3, title: MOVES[3].title, text: MOVES[3].text, next: true, done: () => false },
   ];
 }
 

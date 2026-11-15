@@ -1,12 +1,15 @@
 /**
  * The pictures for How to play and the first run's coach card, taken from
- * the game itself: a hand pinching a guest at the gate; a guest carried
- * over a glowing seat; a fingertip on the side board's Hire button.
+ * the game itself: a hand over a guest at the gate (it glows); a guest
+ * carried over a glowing seat; the scoreboard over a busy café; a
+ * fingertip at the round pause button by the café.
  * The cream model hands are drawn for these (`?hands=cream`), since the
- * player's real hands cannot be in a picture.
+ * player's real hands cannot be in a picture. The emulator's grey room is
+ * hidden, so the café stands on a plain dark ground (in the headset, the
+ * player's own room is there).
  *
  * Usage: dev server running, then `node scripts/shoot-howto.mjs`.
- * Output: public/ui/howto-pinch.jpg, howto-seat.jpg, howto-hire.jpg.
+ * Output: public/ui/howto-pinch.jpg, howto-seat.jpg, howto-happy.jpg, howto-pause.jpg.
  */
 
 import { mkdirSync } from 'node:fs';
@@ -25,6 +28,13 @@ const h = await startHeadset({
   },
 });
 const { page } = h;
+// The emulator's room is drawn on its own canvas, under the app's: hide it, leaving the page's dark ground.
+await page.evaluate(() => {
+  for (const c of document.querySelectorAll('canvas')) if (getComputedStyle(c).zIndex === '1') c.style.visibility = 'hidden';
+  document.body.style.background = '#241d19';
+  // The name cards of held guests are left out (they would cover the moves).
+  for (const c of window.__cafe.guests.cards.cards) c.mesh.layers.set(7);
+});
 const send = (m, p) => page.evaluate(([m, p]) => window.IWER_DEVICE.remote.dispatch(m, p), [m, p]);
 const Q = { x: 0, y: 0, z: 0, w: 1 };
 const handRaw = (p) => send('set_transform', { device: 'hand-right', position: { x: p[0], y: p[1], z: p[2] }, orientation: Q });
@@ -56,13 +66,15 @@ const pinchAt = (p, isOpen) => handRaw(p.map((v, i) => v - (isOpen ? open : clos
 await page.evaluate(() => {
   const { game, guests } = window.__cafe;
   game.click('open');
-  game.click('skip');
   guests.spawnSeconds = [0.5, 1];
   guests.spawnPace = 1;
   guests.patienceFrozen = true;
 });
-// The side board is put away for the first two pictures (it stands by the line).
-const board = (on) => page.evaluate((on) => window.__cafe.board.panel.show(on), on);
+await page.waitForFunction(() => !window.__cafe.system.waiting && !window.__cafe.system.arriving, null, { timeout: 60000 });
+await page.evaluate(() => window.__cafe.game.click('skip'));
+await page.waitForFunction(() => window.__cafe.game.phase === 'run', null, { timeout: 60000 });
+// The scoreboard and the pause button are put away for the first two pictures.
+const board = (on) => page.evaluate((on) => { window.__cafe.strip.panel.show(on); window.__cafe.game.tab.show(on); }, on);
 await board(false);
 await page.waitForFunction(() => window.__cafe.guests.line.filter((g) => g.state === 'queued' && !g.walk).length >= 3, null, { timeout: 180000 });
 await page.evaluate(() => (window.__cafe.guests.arrivals = false));
@@ -94,35 +106,41 @@ await shot('howto-seat');
 await pinch(0);
 await frames(3);
 
-// 3. The side board: enough in the bank, the fingertip coming to Hire.
-await board(true);
+// 3. Keep guests happy: a few guests seated, the scoreboard over the café, seen from the seat.
 await handRaw(AWAY);
-await frames(4);
-await page.evaluate(() => (window.__cafe.score.bank = 75));
-await frames(2);
-const hire = await page.evaluate(() => {
-  const p = window.__cafe.board.panel;
-  const b = p.buttons.find((x) => x.id === 'hire');
-  const g = p.mesh.geometry.parameters;
-  const V = p.mesh.position.constructor;
-  const s = p.mesh.getWorldScale(new V()).z;
-  return { button: p.mesh.localToWorld(new V(((b.x + b.w / 2) / p.width - 0.5) * g.width, (0.5 - (b.y + b.h * 0.8) / p.height) * g.height, 0.035 / s)).toArray(), centre: p.mesh.getWorldPosition(new V()).toArray() };
+await page.evaluate(() => {
+  const { guests, score } = window.__cafe;
+  guests.arrivals = true;
+  score.happiness = 72;
+  score.bank = 45;
 });
-// Look first (the board turns to the eyes), then bring the finger up to it.
-await h.head(P(add(hire.centre, [0.3, 0.1, 0.06])), P(hire.centre), 300);
+await board(true);
+await page.evaluate(() => window.__cafe.game.tab.show(false));
+await page.waitForFunction(() => window.__cafe.guests.seats.filter((s) => s.occupant !== 0).length >= 1 || true, null, { timeout: 5000 });
+const strip = await page.evaluate(() => window.__cafe.strip.panel.mesh.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
+const cafeAt = await page.evaluate(() => window.__cafe.system.cafe.position.toArray());
+await h.head(P(add(cafeAt, [0.42, 0.42, 0.06])), P([(strip[0] + cafeAt[0]) / 2, (strip[1] + cafeAt[1]) / 2 - 0.02, (strip[2] + cafeAt[2]) / 2]), 300);
+await frames(8);
+await shot('howto-happy');
+
+// 4. The pause button: the fingertip coming to the round button by the café.
+await page.evaluate(() => { window.__cafe.strip.panel.show(false); window.__cafe.game.tab.show(true); });
 await frames(6);
-const at = await page.evaluate(() => {
-  const p = window.__cafe.board.panel;
-  const b = p.buttons.find((x) => x.id === 'hire');
-  const g = p.mesh.geometry.parameters;
-  const V = p.mesh.position.constructor;
-  const s = p.mesh.getWorldScale(new V()).z;
-  return [0.09, 0.035].map((out) => p.mesh.localToWorld(new V(((b.x + b.w / 2) / p.width - 0.5) * g.width, (0.5 - (b.y + b.h * 0.8) / p.height) * g.height, out / s)).toArray());
-});
-for (const p of at) { await handRaw(p.map((v, i) => v - tip[i])); await frames(3); }
-await shot('howto-hire');
+const tab = await page.evaluate(() => window.__cafe.game.tab.mesh.getWorldPosition(new window.__cafe.system.cafe.position.constructor()).toArray());
+await h.head(P(add(tab, [0.26, 0.22, 0.08])), P(add(tab, [-0.04, 0, 0])), 300);
+await frames(6);
+for (const out of [0.06, 0.03]) {
+  const at = await page.evaluate((out) => {
+    const m = window.__cafe.game.tab.mesh;
+    const V = m.position.constructor;
+    return m.localToWorld(new V(0, 0, out / m.getWorldScale(new V()).z)).toArray();
+  }, out);
+  await handRaw(at.map((v, i) => v - tip[i]));
+  await frames(3);
+}
+await shot('howto-pause');
 
 const errors = await h.finish();
 console.log(errors.length ? errors.slice(0, 5).join('\n') : 'no console errors');
-console.log('public/ui/howto-pinch.jpg, howto-seat.jpg, howto-hire.jpg');
+console.log('public/ui/howto-pinch.jpg, howto-seat.jpg, howto-happy.jpg, howto-pause.jpg');
 process.exit(0);
