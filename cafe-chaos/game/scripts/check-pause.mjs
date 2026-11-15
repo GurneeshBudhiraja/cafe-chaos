@@ -70,7 +70,7 @@ const ids = await page.evaluate(() => window.__cafe.game.card.buttons.map((b) =>
 await page.evaluate(() => { window.__cafe.score.bank = 100; window.__cafe.game.click('hire'); });
 await page.waitForTimeout(800);
 const after = await page.evaluate(() => ({ staff: window.__cafe.shop.staff, phase: window.__cafe.game.phase, hire: window.__cafe.game.card.buttons.find((b) => b.id === 'hire')?.label, wrist: window.__cafe.wrist.open }));
-check('the pause card offers Resume, Hire, How to play and End; Hire there hires and shows the next price', ids.map((x) => x.split(':')[0]).join(',') === 'resume,hire,how,end' && after.staff === 2 && after.phase === 'paused' && /120/.test(after.hire ?? ''), `${ids.join(' | ')} -> ${JSON.stringify(after)}`);
+check('the pause card offers Resume, Hire, How to play, Settings and End; Hire there hires and shows the next price', ids.map((x) => x.split(':')[0]).join(',') === 'resume,hire,how,settings,end' && after.staff === 2 && after.phase === 'paused' && /120/.test(after.hire ?? ''), `${ids.join(' | ')} -> ${JSON.stringify(after)}`);
 await h.screenshot('artifacts/pause-card.png');
 // Then all the way through.
 await page.evaluate(() => window.__cafe.game.click('resume'));
