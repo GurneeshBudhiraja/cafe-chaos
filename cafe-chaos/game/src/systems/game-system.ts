@@ -29,7 +29,7 @@
  * game around the café.
  */
 
-import { createSystem, Vector3 } from '@iwsdk/core';
+import { createSystem, Quaternion, Vector3 } from '@iwsdk/core';
 import { arrivalPace, MEAL_SECONDS, patienceShare, WISH, wishChance } from '../game/rules.js';
 import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS } from '../guests/rules.js';
@@ -67,6 +67,13 @@ const RESUME_COUNT = 3;
 const TAB = { width: 0.045, height: 0.04 };
 /** The café's size in Settings (percent of what fits the table): the range and the step. */
 const SIZE = { min: 60, max: 140, step: 10 };
+/**
+ * The start card: this far from the eyes along the gaze (metres) and this
+ * much below the line of sight, so it is centred in view and pressed
+ * without reaching (Meta's direct touch range is about 42 to 46 cm).
+ * It glides back in front when the player turns more than `follow` degrees away.
+ */
+const MENU_SPOT = { ahead: 0.4, below: 0.03, follow: 35, glide: 4 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
 
@@ -125,6 +132,13 @@ export class GameSystem extends createSystem({}) {
   private settingsFrom: 'title' | 'pause' = 'title';
   private sound: SoundSystem | null = null;
   private readonly edge = new Vector3();
+  private readonly menuSpot = new Vector3();
+  private readonly wanted = new Vector3();
+  private readonly forward = new Vector3();
+  private readonly toMenu = new Vector3();
+  private readonly headQ = new Quaternion();
+  private menuPlaced = false;
+  private menuFollowing = false;
   readonly tab = new Panel('PauseTab', TAB.width, TAB.height);
   /** Times the wrist menu has been opened (WristMenuSystem counts them; the first run waits for one). */
   wristOpens = 0;
@@ -210,7 +224,10 @@ export class GameSystem extends createSystem({}) {
       if (xr.getSession()?.visibilityState !== 'visible') this.pause();
     };
     xr.addEventListener('sessionstart', () => xr.getSession()?.addEventListener('visibilitychange', onVisibility));
-    xr.addEventListener('sessionend', () => this.pause());
+    xr.addEventListener('sessionend', () => {
+      this.pause();
+      this.menu.hideAll();
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.pause();
     });
@@ -234,7 +251,7 @@ export class GameSystem extends createSystem({}) {
     this.placeTab();
     this.tab.update(cardDelta, this.head);
     if (!this.sound) this.applySettings();
-    this.placeMenu();
+    this.placeMenu(cardDelta);
     this.menu.tick(cardDelta);
     this.menu.card.update(cardDelta, this.head);
     this.menu.sheet.update(cardDelta, this.head);
@@ -271,6 +288,7 @@ export class GameSystem extends createSystem({}) {
     this.how.show(false);
     this.menu.closeSheet();
     this.menu.card.dimmed = false;
+    this.menuPlaced = false;
     this.menu.showStart({
       kind: this.returning ? 'returning' : 'first',
       coins: this.save.bank,
@@ -294,28 +312,60 @@ export class GameSystem extends createSystem({}) {
     this.cafe.release();
   }
 
-  /** Where the start card and the card in front of it stand: at the café's front edge, or in front of the pause card. */
-  private placeMenu(): void {
+  /**
+   * Where the start card stands: centred in front of the eyes, close enough
+   * to press without reaching (MENU_SPOT), a little below eye level, facing
+   * the player. It stays put while used; if the player turns well away
+   * (over MENU_SPOT.follow degrees) and no fingertip is near it, it glides
+   * back in front of them (a lazy follow, never stuck to the head). The card
+   * opened in front of it (Settings, the warning) stands 4 cm nearer.
+   */
+  private placeMenu(delta: number): void {
     const card = this.menu.card;
     const sheet = this.menu.sheet;
     // How to play stands where it always did over the café (it is in the world so it shows before the café is up).
     if (this.how.open) this.cafe.cafe.localToWorld(this.how.mesh.position.set(...HOW.position));
-    if (!card.open && !sheet.open) return;
-    this.cafe.frontEdge(this.edge);
-    card.mesh.position.set(this.edge.x, this.edge.y + MENU_SIZE.height / 2 + 0.004, this.edge.z);
+    const onMenu = card.open || (sheet.open && this.settingsFrom === 'title');
+    if (!onMenu && !sheet.open) {
+      this.menuPlaced = false;
+      return;
+    }
+    if (onMenu) {
+      this.player.head.getWorldQuaternion(this.headQ);
+      // Where the eyes look (pitch included, so it is centred in view), a little below the line of sight, never above the eyes.
+      this.wanted.set(0, 0, -1).applyQuaternion(this.headQ);
+      this.wanted.multiplyScalar(MENU_SPOT.ahead).add(this.head);
+      this.wanted.y = Math.min(this.wanted.y - MENU_SPOT.below, this.head.y - 0.06);
+      this.forward.set(0, 0, -1).applyQuaternion(this.headQ).setY(0).normalize();
+      if (!this.menuPlaced) {
+        this.menuSpot.copy(this.wanted);
+        this.menuPlaced = true;
+        this.menuFollowing = false;
+      } else {
+        // Turned well away, and no finger at the card: glide back in front.
+        this.toMenu.copy(this.menuSpot).sub(this.head).setY(0).normalize();
+        const off = (Math.acos(Math.max(-1, Math.min(1, this.toMenu.dot(this.forward)))) * 180) / Math.PI;
+        const tips = this.hold?.tip;
+        const fingerNear = !!tips && HANDS.some((h) => tips[h].tracked && tips[h].point.distanceTo(this.menuSpot) < 0.15);
+        if (off > MENU_SPOT.follow && !fingerNear) this.menuFollowing = true;
+        if (this.menuFollowing) {
+          this.menuSpot.lerp(this.wanted, 1 - Math.exp(-MENU_SPOT.glide * delta));
+          if (this.menuSpot.distanceTo(this.wanted) < 0.01) this.menuFollowing = false;
+        }
+      }
+      card.mesh.position.copy(this.menuSpot);
+    }
     if (!sheet.open) return;
-    // In front of the card it was opened from: 5 cm toward the eyes, a little higher.
+    // In front of the card it was opened from, 4 cm nearer the eyes.
     const from = this.settingsFrom === 'pause' ? this.card.mesh : card.mesh;
     from.getWorldPosition(this.spot);
-    this.edge.copy(this.head).sub(this.spot).normalize();
-    sheet.mesh.position.copy(this.spot).addScaledVector(this.edge, 0.05);
-    sheet.mesh.position.y += 0.01;
+    this.toMenu.copy(this.head).sub(this.spot).normalize();
+    sheet.mesh.position.copy(this.spot).addScaledVector(this.toMenu, 0.04);
   }
 
   /** Settings as the menu shows them. */
-  private settingsState(): { music: number; sounds: number; size: number; canGrow: boolean; canShrink: boolean; move: boolean } {
-    const s = this.save;
-    return { music: s.music, sounds: s.sounds, size: s.size, canGrow: s.size < SIZE.max, canShrink: s.size > SIZE.min, move: this.settingsFrom === 'title' };
+  private settingsState(): { music: number; sounds: number } {
+    return { music: this.save.music, sounds: this.save.sounds };
   }
 
   private openSettings(from: 'title' | 'pause'): void {

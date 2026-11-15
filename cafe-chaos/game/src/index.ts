@@ -52,6 +52,11 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   // cost of every pixel is what pulls the frame rate down. Set before any session starts.
   const res = Number(new URLSearchParams(location.search).get('res'));
   world.renderer.xr.setFramebufferScaleFactor(res > 0.3 && res <= 1 ? res : 0.85);
+  // The page before the headset view (index.html): hidden while in the headset; START enters it.
+  const xr = world.renderer.xr;
+  xr.addEventListener('sessionstart', () => document.body.classList.add('in-xr'));
+  xr.addEventListener('sessionend', () => document.body.classList.remove('in-xr'));
+  document.getElementById('start')?.addEventListener('click', () => world.launchXR());
   const lights = setUpLighting(world, system.cafe);
   const mood = world.getSystem(MoodSystem)!;
   const hold = world.getSystem(HoldSystem)!;

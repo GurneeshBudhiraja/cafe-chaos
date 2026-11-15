@@ -28,7 +28,7 @@ import { Panel, type Button } from './panel.js';
 import { hand, pen, SKETCH } from './sketch.js';
 
 /** The two cards' sizes (metres). The start card is 24 cm across; the sheet the same width. */
-export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.245 };
+export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.21 };
 /** Design units across. */
 const W = 720;
 const PAD = 36;
@@ -51,12 +51,6 @@ export interface StartState {
 export interface SettingsState {
   music: number;
   sounds: number;
-  /** Café size as a percentage. */
-  size: number;
-  canGrow: boolean;
-  canShrink: boolean;
-  /** Offer "Move the café" (before a run only). */
-  move: boolean;
 }
 export interface WarnState {
   coins: number;
@@ -94,7 +88,7 @@ export class StartMenu {
   private seed = 1;
   private clock = 0;
   private start: StartState = { kind: 'first', coins: 0, staff: 1, best: null };
-  private settings: SettingsState = { music: 2, sounds: 3, size: 100, canGrow: true, canShrink: true, move: true };
+  private settings: SettingsState = { music: 2, sounds: 3 };
   private warn: WarnState = { coins: 0, staff: 1, best: null };
   private readonly k: number;
 
@@ -209,33 +203,16 @@ export class StartMenu {
     };
   }
 
-  private round(panel: Panel, id: string, cx: number, cy: number, r: number, glyph: string): Button {
-    const k = this.k;
-    return {
-      id, label: glyph, x: (cx - r) * k, y: (cy - r) * k, w: 2 * r * k, h: 2 * r * k, bare: true,
-      draw: (ctx, _b, hover, pressed) => {
-        const rc = pen(panel.canvas);
-        ctx.save();
-        ctx.scale(k, k);
-        const dip = pressed ? 4 : 0;
-        rc.circle(cx, cy + dip, 2 * r, this.o({ fill: hover ? SKETCH.lantern : SKETCH.paper, fillStyle: 'solid', seed: this.seed + cx }));
-        text(ctx, glyph, cx, cy + 2 + dip, Math.round(r * 1.1), SKETCH.ink);
-        ctx.restore();
-      },
-    };
-  }
-
   private layoutStart(): void {
     const s = this.start;
     const returning = s.kind === 'returning';
-    const used = PAD + ART_H + GAP + 150 + (returning ? TOUCH_GAP + 100 : 0) + TOUCH_GAP + 72 + PAD;
+    const used = PAD + ART_H + GAP + 150 + (returning ? TOUCH_GAP + 100 : 0) + TOUCH_GAP + 84 + PAD;
     const H = Math.round(this.card.height / this.k);
     const top = H - used;
     const buttons: Button[] = [];
     const ax = PAD;
     const ay = top + PAD;
     const aw = W - PAD * 2;
-    buttons.push(this.round(this.card, 'gear', ax + aw - 56, ay + 56, 38, '⚙'));
     let y = ay + ART_H + GAP;
     if (returning) buttons.push(this.button(this.card, 'continue', PAD, y, W - PAD * 2, 150, 'primary', 'CONTINUE', `${s.coins.toLocaleString('en')} coins · ${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`));
     else buttons.push(this.button(this.card, 'new', PAD, y, W - PAD * 2, 150, 'primary', 'NEW GAME'));
@@ -246,22 +223,10 @@ export class StartMenu {
       y += 100;
     }
     y += TOUCH_GAP;
-    const helpY = y;
-    const k = this.k;
-    buttons.push({
-      id: 'help', label: 'How to play', x: (W / 2 - 160) * k, y: helpY * k, w: 320 * k, h: 72 * k, bare: true,
-      draw: (ctx, _b, hover, pressed) => {
-        const rc = pen(this.card.canvas);
-        ctx.save();
-        ctx.scale(k, k);
-        const dip = pressed ? 4 : 0;
-        if (hover) this.lantern(ctx, W / 2 - 160, helpY, 320, 72);
-        rc.circle(W / 2 - 112, helpY + 36 + dip, 52, this.o({ fill: SKETCH.paper, fillStyle: 'solid', strokeWidth: 3, seed: this.seed + 99 }));
-        text(ctx, '?', W / 2 - 112, helpY + 38 + dip, 32, SKETCH.ink);
-        text(ctx, 'How to play', W / 2 - 72, helpY + 37 + dip, 34, SKETCH.ink, 'left');
-        ctx.restore();
-      },
-    });
+    // How to play and Settings side by side, near the middle (little reach).
+    const half = (W - PAD * 2 - TOUCH_GAP) / 2;
+    buttons.push(this.button(this.card, 'help', PAD, y, half, 84, 'secondary', '? How to play'));
+    buttons.push(this.button(this.card, 'gear', PAD + half + TOUCH_GAP, y, half, 84, 'secondary', '⚙ Settings'));
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
@@ -304,59 +269,47 @@ export class StartMenu {
     }, buttons);
   }
 
-  /** A row of −, a five-step bar and +. */
-  private stepper(buttons: Button[], ctx: CanvasRenderingContext2D | null, rc: RoughCanvas | null, id: string, y: number, label: string, level: number, max = LEVELS, readout?: string): void {
-    const bx = 250;
+  /** A row: the label above, then −, a five-step bar and + close together in the middle (little reach). */
+  private stepper(buttons: Button[], ctx: CanvasRenderingContext2D | null, rc: RoughCanvas | null, id: string, y: number, label: string, level: number): void {
     const size = 84;
-    const right = W - PAD - size;
+    const barW = 300;
+    const gap = TOUCH_GAP;
+    const left = (W - (size + gap + barW + gap + size)) / 2;
+    const right = left + size + gap + barW + gap;
     if (!ctx || !rc) {
-      buttons.push(this.button(this.sheet, `${id}-`, bx, y - size / 2, size, size, level <= 0 ? 'off' : 'secondary', '−', undefined, true));
-      buttons.push(this.button(this.sheet, `${id}+`, right, y - size / 2, size, size, level >= max ? 'off' : 'secondary', '+', undefined, true));
+      buttons.push(this.button(this.sheet, `${id}-`, left, y, size, size, level <= 0 ? 'off' : 'secondary', '−', undefined, true));
+      buttons.push(this.button(this.sheet, `${id}+`, right, y, size, size, level >= LEVELS ? 'off' : 'secondary', '+', undefined, true));
       return;
     }
-    text(ctx, label, PAD, y, 34, SKETCH.ink, 'left');
-    const x0 = bx + size + 18;
-    const x1 = right - 18;
-    if (readout) {
-      text(ctx, readout, (x0 + x1) / 2, y + 2, 40, SKETCH.ink);
-      return;
-    }
+    text(ctx, label, W / 2, y - 34, 36, SKETCH.ink);
+    const x0 = left + size + gap;
     const n = LEVELS;
-    const gap = 10;
-    const sw = (x1 - x0 - gap * (n - 1)) / n;
+    const sg = 10;
+    const sw = (barW - sg * (n - 1)) / n;
     for (let i = 0; i < n; i++) {
       const on = i < level;
-      rc.rectangle(x0 + i * (sw + gap), y - 26, sw, 52, this.o({ fill: on ? SKETCH.moss : '#cfc3ae', fillStyle: 'solid', stroke: on ? SKETCH.mossDeep : '#b6a993', seed: this.seed + y + i }));
+      rc.rectangle(x0 + i * (sw + sg), y + 16, sw, 52, this.o({ fill: on ? SKETCH.moss : '#cfc3ae', fillStyle: 'solid', stroke: on ? SKETCH.mossDeep : '#b6a993', seed: this.seed + y + i }));
     }
-    if (level === 0) text(ctx, 'OFF', (x0 + x1) / 2, y + 2, 30, SKETCH.soft);
+    if (level === 0) text(ctx, 'OFF', x0 + barW / 2, y + 44, 30, SKETCH.soft);
   }
 
   private layoutSettings(): void {
     const s = this.settings;
     const H = Math.round(this.sheet.height / this.k);
-    const rows = { music: 150, sounds: 150 + 84 + TOUCH_GAP, size: 150 + 2 * (84 + TOUCH_GAP) };
+    const rows = { music: 170, sounds: 170 + 84 + 100 };
     const buttons: Button[] = [];
     this.stepper(buttons, null, null, 'music', rows.music, 'Music', s.music);
     this.stepper(buttons, null, null, 'sounds', rows.sounds, 'Sounds', s.sounds);
-    this.stepper(buttons, null, null, 'size', rows.size, 'Café size', s.canShrink ? 1 : 0, s.canGrow ? 2 : 1);
-    // The size buttons are − and + only: off at the ends.
-    const half = (W - PAD * 2 - TOUCH_GAP) / 2;
-    const actionsY = rows.size + 42 + TOUCH_GAP;
-    if (s.move) {
-      buttons.push(this.button(this.sheet, 'move', PAD, actionsY, half, 84, 'secondary', 'Move the café'));
-      buttons.push(this.button(this.sheet, 'how', PAD + half + TOUCH_GAP, actionsY, half, 84, 'secondary', 'How to play'));
-    } else buttons.push(this.button(this.sheet, 'how', PAD, actionsY, W - PAD * 2, 84, 'secondary', 'How to play'));
-    buttons.push(this.button(this.sheet, 'close', PAD, actionsY + 84 + TOUCH_GAP, W - PAD * 2, 84, 'primary', 'CLOSE'));
+    buttons.push(this.button(this.sheet, 'close', PAD, rows.sounds + 84 + TOUCH_GAP + 8, W - PAD * 2, 90, 'primary', 'CLOSE'));
     this.sheet.set((ctx) => {
       ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
       ctx.save();
       ctx.scale(this.k, this.k);
       const rc = pen(this.sheet.canvas);
       this.paper(ctx, rc, 0, H);
-      text(ctx, 'Settings', PAD, 70, 56, SKETCH.ink, 'left');
+      text(ctx, 'Settings', W / 2, 74, 56, SKETCH.ink);
       this.stepper([], ctx, rc, 'music', rows.music, 'Music', s.music);
       this.stepper([], ctx, rc, 'sounds', rows.sounds, 'Sounds', s.sounds);
-      this.stepper([], ctx, rc, 'size', rows.size, 'Café size', 0, LEVELS, `${s.size}%`);
       ctx.restore();
     }, buttons);
   }
@@ -367,8 +320,8 @@ export class StartMenu {
     const lost = [`${s.coins.toLocaleString('en')} coins`, `${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`].concat(s.best ? [`best time (${s.best})`] : []);
     const sentence = `This deletes your ${lost.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
     const buttons: Button[] = [
-      this.button(this.sheet, 'keep', PAD, 300, W - PAD * 2, 150, 'primary', 'KEEP MY CAFÉ'),
-      this.button(this.sheet, 'fresh', PAD, 300 + 150 + TOUCH_GAP, W - PAD * 2, 100, 'danger', 'DELETE AND START'),
+      this.button(this.sheet, 'fresh', PAD, 300, W - PAD * 2, 120, 'danger', 'DELETE AND START'),
+      this.button(this.sheet, 'keep', PAD, 300 + 120 + TOUCH_GAP, W - PAD * 2, 120, 'secondary', 'GO BACK'),
     ];
     this.sheet.set((ctx) => {
       ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
@@ -376,7 +329,7 @@ export class StartMenu {
       ctx.scale(this.k, this.k);
       const rc = pen(this.sheet.canvas);
       this.paper(ctx, rc, 0, H);
-      text(ctx, 'Start a new café?', PAD, 80, 54, SKETCH.ink, 'left');
+      text(ctx, 'Start a new café?', W / 2, 80, 54, SKETCH.ink);
       ctx.font = font(34, false);
       const lines: string[] = [];
       let line = '';
@@ -388,7 +341,7 @@ export class StartMenu {
         } else line = next;
       }
       lines.push(line);
-      lines.forEach((l, i) => text(ctx, l, PAD, 160 + i * 48, 34, SKETCH.soft, 'left', false));
+      lines.forEach((l, i) => text(ctx, l, W / 2, 160 + i * 48, 34, SKETCH.soft, 'center', false));
       ctx.restore();
     }, buttons);
   }
