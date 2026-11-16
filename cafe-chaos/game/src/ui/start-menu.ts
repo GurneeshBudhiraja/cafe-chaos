@@ -29,6 +29,19 @@ import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
 
 /** The two cards' sizes (metres). The start card is 24 cm across; the sheet the same width. */
 export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.21 };
+/**
+ * How to play: the same card as on the web page (index.html #how), wider for
+ * its three steps side by side: 33 cm across, drawn in 1080 design units.
+ * Its paper is centred on the panel and only as tall as what is on it (the
+ * panel leaves room for longer text).
+ */
+export const HOW_SIZE = { width: 0.33, height: 0.32 };
+const HW = 1080;
+/** One step of How to play: a picture (drawn once loaded), a title and a line. */
+export interface HowStep {
+  title: string;
+  text: string;
+}
 /** Design units across. */
 const W = 720;
 const PAD = 36;
@@ -98,6 +111,10 @@ function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, si
 export class StartMenu {
   readonly card = new Panel('StartCard', MENU_SIZE.width, MENU_SIZE.height);
   readonly sheet = new Panel('MenuSheet', MENU_SIZE.width, MENU_SIZE.sheetHeight);
+  readonly how = new Panel('HowCard', HOW_SIZE.width, HOW_SIZE.height);
+  /** How to play's pictures, by step, once loaded (the game loads them; set one and paint `how`). */
+  readonly howPictures: (HTMLImageElement | null)[] = [];
+  private howSteps: HowStep[] = [];
   /** What the sheet shows ('none' when it is closed). */
   sheetKind: 'none' | 'settings' | 'warn' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card, the shop, or the count back in. */
@@ -108,14 +125,24 @@ export class StartMenu {
   private settings: SettingsState = { music: 2, sounds: 3 };
   private warn: WarnState = { coins: 0, staff: 1, best: null };
   private readonly k: number;
+  /** How to play's scale (metres per design unit). */
+  private readonly kh: number;
 
   constructor() {
-    for (const p of [this.card, this.sheet]) {
+    for (const p of [this.card, this.sheet, this.how]) {
       p.frame = false;
       p.turn = 3;
     }
     this.k = this.card.width / W;
+    this.kh = this.how.width / HW;
     coverListeners.push(() => this.card.paint());
+  }
+
+  /** How to play, in front of the eyes where the start card stands (the game hides the card behind). */
+  showHow(steps: HowStep[]): void {
+    this.howSteps = steps;
+    this.layoutHow();
+    this.how.show(true);
   }
 
   /** Draw the start card for this state (and put it up). */
@@ -185,6 +212,7 @@ export class StartMenu {
     this.seed = seed;
     if (this.card.open) this.card.paint();
     if (this.sheet.open) this.sheet.paint();
+    if (this.how.open) this.how.paint();
   }
 
   // ----------------------------------------------------------- drawing
@@ -194,10 +222,11 @@ export class StartMenu {
   }
 
   /** A card's paper: a timber frame round shoji paper, from `top` (design units) down to `h`. */
-  private paper(ctx: CanvasRenderingContext2D, rc: RoughCanvas, top: number, h: number): void {
+  private paper(ctx: CanvasRenderingContext2D, rc: RoughCanvas, top: number, h: number, w = W): void {
+    const f = Math.round((14 * w) / W);
     ctx.fillStyle = SKETCH.timber;
-    ctx.fillRect(0, top, W, h - top);
-    rc.rectangle(14, top + 14, W - 28, h - top - 28, this.o({ fill: SKETCH.paper, fillStyle: 'solid', stroke: SKETCH.timber, strokeWidth: 3 }));
+    ctx.fillRect(0, top, w, h - top);
+    rc.rectangle(f, top + f, w - f * 2, h - top - f * 2, this.o({ fill: SKETCH.paper, fillStyle: 'solid', stroke: SKETCH.timber, strokeWidth: 3 }));
   }
 
   /** Light from inside the button, like a paper lantern (a finger is near). */
@@ -220,7 +249,7 @@ export class StartMenu {
    * inside when a finger is near and moves down when pressed.
    */
   private button(panel: Panel, id: string, x: number, y: number, w: number, h: number, kind: 'primary' | 'secondary' | 'danger' | 'off', label: string, sub?: string, glyph = false): Button {
-    const k = this.k;
+    const k = panel === this.how ? this.kh : this.k;
     return {
       id, label, x: x * k, y: y * k, w: w * k, h: h * k, bare: true,
       draw: (ctx, _b, hover, pressed) => {
@@ -305,6 +334,92 @@ export class StartMenu {
         text(ctx, s.best, bx + bw - 22, by + 44, 44, SKETCH.ink, 'right');
       }
       ctx.restore();
+    }, buttons);
+  }
+
+  /** Lines of `s` that fit `width` (design units) at this size. */
+  private wrap(ctx: CanvasRenderingContext2D, s: string, size: number, heavy: boolean, width: number): string[] {
+    ctx.font = font(size, heavy);
+    const lines: string[] = [];
+    let line = '';
+    for (const word of s.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(next).width > width) {
+        lines.push(line);
+        line = word;
+      } else line = next;
+    }
+    lines.push(line);
+    return lines;
+  }
+
+  /**
+   * How to play, laid out as on the web page: the title; two notes for
+   * before you start (sit at a table, put down your controllers); the three
+   * steps side by side, each a picture, a numbered title and a line; CLOSE.
+   */
+  private layoutHow(): void {
+    const ctx = this.how.ctx;
+    const H = Math.round(this.how.height / this.kh);
+    const P = 54;
+    const CW = HW - P * 2;
+    const GAP_H = 24;
+    const before = ['Sit at a table. The café stands on the table.', 'Put down your controllers. Use only your hands.'];
+    const bw = (CW - 18) / 2;
+    const beforeLines = before.map((b) => this.wrap(ctx, b, 30, false, bw - 36));
+    const bh = Math.max(...beforeLines.map((l) => l.length)) * 40 + 30;
+    const sw = (CW - GAP_H * 2) / 3;
+    const ph = Math.round(sw * 0.75);
+    const BADGE = 48;
+    const steps = this.howSteps.map((st) => ({
+      title: this.wrap(ctx, st.title, 33, true, sw - BADGE - 14),
+      text: this.wrap(ctx, st.text, 27, false, sw),
+    }));
+    const titleH = Math.max(BADGE, ...steps.map((st) => st.title.length * 38));
+    const textH = Math.max(0, ...steps.map((st) => st.text.length * 37));
+    const CLOSE_H = 104;
+    const used = P + 60 + 20 + bh + GAP_H + ph + 16 + titleH + 12 + textH + 30 + CLOSE_H + P;
+    const top = Math.max(0, Math.round((H - used) / 2));
+    const yBefore = top + P + 80;
+    const ySteps = yBefore + bh + GAP_H;
+    const yClose = top + used - P - CLOSE_H;
+    const buttons = [this.button(this.how, 'back', P, yClose, CW, CLOSE_H, 'primary', 'CLOSE')];
+    this.how.set((c) => {
+      c.clearRect(0, 0, this.how.canvas.width, this.how.canvas.height);
+      c.save();
+      c.scale(this.kh, this.kh);
+      const rc = pen(this.how.canvas);
+      this.paper(c, rc, top, H, HW);
+      text(c, 'How to play', HW / 2, top + P + 30, 52, SKETCH.ink);
+      beforeLines.forEach((lines, i) => {
+        const x = P + i * (bw + 18);
+        rc.rectangle(x, yBefore, bw, bh, this.o({ fill: '#e4d9c6', fillStyle: 'solid', strokeWidth: 3, seed: this.seed + 20 + i }));
+        const y0 = yBefore + bh / 2 - ((lines.length - 1) * 40) / 2;
+        lines.forEach((l, j) => text(c, l, x + bw / 2, y0 + j * 40, 30, SKETCH.ink, 'center', false));
+      });
+      steps.forEach((st, i) => {
+        const x = P + i * (sw + GAP_H);
+        const img = this.howPictures[i];
+        c.fillStyle = '#2a2420';
+        c.fillRect(x, ySteps, sw, ph);
+        if (img) {
+          // Cover the frame (crop, never stretch).
+          const s = Math.max(sw / img.width, ph / img.height);
+          const iw = sw / s;
+          const ih = ph / s;
+          c.drawImage(img, (img.width - iw) / 2, (img.height - ih) / 2, iw, ih, x, ySteps, sw, ph);
+        }
+        rc.rectangle(x, ySteps, sw, ph, this.o({ strokeWidth: 3, seed: this.seed + 30 + i }));
+        const yt = ySteps + ph + 16;
+        c.fillStyle = SKETCH.moss;
+        c.fillRect(x, yt, BADGE, BADGE);
+        text(c, `${i + 1}`, x + BADGE / 2, yt + BADGE / 2 + 2, 30, '#f2ebdd');
+        const ty = yt + (st.title.length === 1 ? BADGE / 2 : 19);
+        st.title.forEach((l, j) => text(c, l, x + BADGE + 14, ty + j * 38 + 2, 33, SKETCH.ink, 'left'));
+        const py = yt + titleH + 12 + 18;
+        st.text.forEach((l, j) => text(c, l, x, py + j * 37, 27, SKETCH.soft, 'left', false));
+      });
+      c.restore();
     }, buttons);
   }
 

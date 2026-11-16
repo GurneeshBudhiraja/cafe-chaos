@@ -65,7 +65,6 @@ export type GamePhase = 'waiting' | 'title' | 'opening' | 'rules' | 'tutorial' |
  * clear of the gate and the seats the player is working at.
  */
 const CARD = { width: 0.34, height: 0.24, position: [0, 0.22, 0.1] as const };
-const HOW = { width: 0.5, height: 0.255, position: [0, 0.23, 0.1] as const };
 const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as const };
 /**
  * The hand ray to the bar (Meta: rays for what is out of reach, direct
@@ -86,7 +85,7 @@ const SIZE = { min: 60, max: 140, step: 10 };
  * without reaching (Meta's direct touch range is about 42 to 46 cm).
  * It glides back in front when the player turns more than `follow` degrees away.
  */
-const MENU_SPOT = { ahead: 0.38, drop: 0.15, follow: 35, glide: 4 };
+const MENU_SPOT = { ahead: 0.36, drop: 0.24, follow: 35, glide: 4 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
 
@@ -129,7 +128,6 @@ export class GameSystem extends createSystem({}) {
   record = false;
   readonly save: Save = loadSave();
   readonly card = new Panel('GameCard', CARD.width, CARD.height);
-  readonly how = new Panel('HowCard', HOW.width, HOW.height);
   readonly coach = new Panel('CoachCard', COACH.width, COACH.height);
   /** The MOVES pictures, once loaded. */
   private readonly pictures: (HTMLImageElement | null)[] = MOVES.map(() => null);
@@ -142,6 +140,12 @@ export class GameSystem extends createSystem({}) {
   shop!: ShopSystem;
   /** The start card and the card that opens in front of it (Settings, the New Game warning). */
   readonly menu = new StartMenu();
+  /** How to play: the menu's card (ui/start-menu.ts), shown where the start card stands. */
+  get how(): Panel {
+    return this.menu.how;
+  }
+  /** The menu card in front just now (the start or pause card, or How to play): a new one is placed afresh. */
+  private menuFront: Panel | null = null;
   /** What to start once the café is up (it rises after CONTINUE or NEW GAME). */
   private opening: 'run' | 'tutorial' | null = null;
   /** Where Settings was opened from. */
@@ -209,6 +213,7 @@ export class GameSystem extends createSystem({}) {
       const image = new Image();
       image.onload = () => {
         this.pictures[i] = image;
+        if (i < HOW_MOVES) this.menu.howPictures[i] = image;
         // Cards already up are drawn again with it.
         this.how.paint();
         this.coach.paint();
@@ -344,8 +349,8 @@ export class GameSystem extends createSystem({}) {
   /**
    * Where the start card stands: straight ahead (by the way the head points,
    * not by how it tilts), MENU_SPOT.ahead out and MENU_SPOT.drop below the
-   * eyes, so its top edge is a little under eye level and the eyes look down
-   * at it (about 20 degrees), tilted back to face them. It faces the player
+   * eyes, so it lies low in front like a tablet held on a desk and the eyes
+   * look down at it (about 34 degrees), tilted back to face them. It faces the player
    * once, when it is put there, and then stays still: a nod or a lean while a
    * finger presses does not move or turn it. Only if the player turns well
    * away (over MENU_SPOT.follow degrees) with no fingertip near does it glide
@@ -354,10 +359,13 @@ export class GameSystem extends createSystem({}) {
    * stands 4 cm nearer, turned the same way.
    */
   private placeMenu(delta: number): void {
-    const card = this.menu.card;
+    // How to play stands where the start card does, in its place.
+    const card = this.how.open ? this.how : this.menu.card;
     const sheet = this.menu.sheet;
-    // How to play stands where it always did over the café (it is in the world so it shows before the café is up).
-    if (this.how.open) this.cafe.cafe.localToWorld(this.how.mesh.position.set(...HOW.position));
+    if (card !== this.menuFront) {
+      this.menuFront = card;
+      this.menuPlaced = false;
+    }
     const onMenu = card.open || sheet.open;
     if (!onMenu && !sheet.open) {
       this.menuPlaced = false;
@@ -468,27 +476,7 @@ export class GameSystem extends createSystem({}) {
     this.phase = 'rules';
     this.card.show(false);
     this.menu.hideAll();
-    const hw = this.how.width;
-    const hh = this.how.height;
-    this.how.set(
-      (ctx, w, h) => {
-        write(ctx, 'How to play', w / 2, h * 0.1, 11.5 * MM, { weight: 800, font: 'Georgia, serif' });
-        const pw = w * 0.285;
-        const ph = pw * 0.72;
-        const gap = w * 0.025;
-        const x0 = (w - 3 * pw - 2 * gap) / 2;
-        const y0 = h * 0.18;
-        MOVES.slice(0, HOW_MOVES).forEach((move, i) => {
-          const x = x0 + i * (pw + gap);
-          picture(ctx, this.pictures[i], x, y0, pw, ph, 5 * MM);
-          badge(ctx, i + 1, x + 6.5 * MM, y0 + 6.5 * MM, 6.5 * MM);
-          write(ctx, move.title, x + pw / 2, y0 + ph + 10 * MM, 8.5 * MM, { weight: 800 });
-          paragraph(ctx, move.text, x + pw / 2, y0 + ph + 20 * MM, pw * 0.98, 6.2 * MM, { align: 'center', color: INK.inkSoft });
-        });
-      },
-      [{ id: 'back', label: 'Got it', x: hw / 2 - 40 * MM, y: hh - 37 * MM, w: 80 * MM, h: 28 * MM, primary: true }],
-    );
-    this.how.show(true);
+    this.menu.showHow(MOVES.slice(0, HOW_MOVES));
   }
 
   /** The first run's teaching: a guest waits at the gate, its patience held, and the coach card says what to do. */
