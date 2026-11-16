@@ -276,6 +276,8 @@ export class GameSystem extends createSystem({}) {
     };
     xr.addEventListener('sessionstart', () => {
       xr.getSession()?.addEventListener('visibilitychange', onVisibility);
+      // Look and pinch (Meta VR Glasses): the pinch's gaze ray presses the button looked at.
+      xr.getSession()?.addEventListener('selectstart', (e) => this.lookAndPinch(e as XRInputSourceEvent));
       // The card was put from the page's head: put it again from the real one once tracking settles.
       this.menuSettle = GameSystem.MENU_SETTLE_S;
       this.menuPlaced = false;
@@ -821,7 +823,7 @@ export class GameSystem extends createSystem({}) {
       this.rays.update(hand, aimed ? this.rayFrom : null, aimed ? this.rayHit : null, aimed ? this.barNormal : null, delta);
       if (!aimed?.button) continue;
       this.hovers[panels.indexOf(aimed.panel)] = aimed.button.id;
-      if (fresh) {
+      if (fresh && performance.now() - this.gazePressAt > 250) {
         aimed.panel.press(aimed.button.id);
         this.click(aimed.button.id);
       }
@@ -904,6 +906,39 @@ export class GameSystem extends createSystem({}) {
     if (Math.abs(local.x) > g.width / 2 + edge || Math.abs(local.y) > g.height / 2 + edge) return null;
     return { t, button: panel.hit(this.rayHit) };
   }
+
+  /**
+   * Look and pinch, the main input on Meta VR Glasses ("eyes and hands are
+   * the primary inputs"): a browser with eye tracking gives a pinch as a
+   * transient pointer whose ray runs from the eyes to where they look. It
+   * presses the menu card or bar button under that ray, as the hand ray
+   * does. Quest sends no transient pointers (its hands are tracked
+   * pointers), so there nothing changes. A hand-ray press in the same moment
+   * is skipped (`gazePressAt`), so one pinch never presses twice.
+   */
+  private lookAndPinch(e: XRInputSourceEvent): void {
+    if (e.inputSource.targetRayMode !== 'transient-pointer') return;
+    const space = this.xrManager.getReferenceSpace();
+    const pose = space ? e.frame.getPose(e.inputSource.targetRaySpace, space) : null;
+    if (!pose) return;
+    this.rayMatrix.fromArray(pose.transform.matrix).premultiply(this.player.matrixWorld);
+    this.rayFrom.setFromMatrixPosition(this.rayMatrix);
+    this.rayDir.set(0, 0, -1).transformDirection(this.rayMatrix);
+    const m = this.menu;
+    const targets = [m.sheet, m.how, m.card].filter((p) => p.open && !p.dimmed);
+    if (this.strip.panel.open && !this.cafeAway && this.strip.controls !== 'off') targets.push(this.strip.panel);
+    let best: { panel: Panel; button: Button; t: number } | null = null;
+    for (const panel of targets) {
+      const hit = this.rayAt(panel);
+      if (hit?.button && (!best || hit.t < best.t)) best = { panel, button: hit.button, t: hit.t };
+    }
+    if (!best) return;
+    this.gazePressAt = performance.now();
+    best.panel.press(best.button.id);
+    this.click(best.button.id);
+  }
+  /** When look and pinch last pressed a button (ms): a hand-ray press in the same moment is the same pinch. */
+  private gazePressAt = -Infinity;
 
   /** What a button does (the checks call this directly too). */
   click(id: string): void {

@@ -34,6 +34,7 @@ import { HAPPINESS } from '../game/rules.js';
 import { Panel, type Button } from '../ui/panel.js';
 import { hand, line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
 import { clockText } from '../game/clock.js';
+import { narrowView } from '../lib/view-fit.js';
 import { CafeSystem } from './cafe-system.js';
 import { ScoreSystem } from './score-system.js';
 import { ShopSystem } from './shop-system.js';
@@ -56,6 +57,14 @@ const SEGMENTS = 10;
 const BAR_BUTTON = { size: 0.66, pad: 0.14 };
 /** The tag over a lit bar button: its size (metres) and how far its middle stands above the bar's top edge. */
 const BAR_TAG = { width: 0.15, height: 0.05, above: 0.034 };
+/**
+ * On a narrow view: the bar hangs over the café's back wall, its middle `y`
+ * up (café space) over the back edge, at `size` of the full bar, so it
+ * stays inside the Glasses' design area while the player looks at the café,
+ * over the roof and the back wall, never over a table, a guest or the
+ * counter.
+ */
+const STRIP_NARROW = { y: 0.3, size: 0.8 };
 /** The confetti: how many scraps, how long they fly (seconds), how fast they leave (m/s), gravity (m/s²). */
 const CONFETTI = { count: 60, seconds: 1.6, speed: 0.55, gravity: 1.1 };
 /** The scraps' colours: the café's moss, lantern, koi and paper. */
@@ -77,6 +86,8 @@ export class StripSystem extends createSystem({}) {
    */
   readonly tag = new Panel('BarTag', BAR_TAG.width, BAR_TAG.height);
   private tagText = '';
+  /** True on a narrow view: the bar lower and smaller over the café's back wall, its tag below the button. */
+  narrow = false;
   /** The longest evening before this run (seconds), and whether a run is on: the game sets them. */
   best = 0;
   live = false;
@@ -217,10 +228,22 @@ export class StripSystem extends createSystem({}) {
     this.confetti.instanceMatrix.needsUpdate = true;
   }
 
-  /** Over the café's back edge, at (just under) eye height, but always clear above the café. */
+  /**
+   * Over the café's back edge, at (just under) eye height, but always clear
+   * above the café. On a narrow view (Meta VR Glasses, lib/view-fit.ts) that
+   * is out of sight while the player looks at the café (30 to 36 degrees over
+   * the gaze; the Glasses' design area reaches 27), so there it hangs lower
+   * and smaller, over the café's back wall (STRIP_NARROW).
+   */
   private place(delta: number): void {
     const cafe = this.cafe.cafe;
     const scale = cafe.scale.x || 1;
+    this.narrow = narrowView(this.world.renderer);
+    this.panel.size = this.narrow ? STRIP_NARROW.size : 1;
+    if (this.narrow) {
+      this.panel.mesh.position.set(0, STRIP_NARROW.y, STRIP.back);
+      return;
+    }
     // The world height the eyes want, eased so a nod or a lean does not move it.
     const eyes = this.head.y - STRIP.below;
     this.height = Number.isNaN(this.height) ? eyes : this.height + (eyes - this.height) * (1 - Math.exp(-MOTION.follow * delta));
@@ -318,7 +341,8 @@ export class StripSystem extends createSystem({}) {
         scrawl(ctx, word, w / 2, h * 0.56, h * 0.56, { align: 'center' });
       });
     }
-    if (b) this.tag.mesh.position.set(((b.x + b.w / 2) / this.panel.width - 0.5) * STRIP.width, STRIP.height / 2 + BAR_TAG.above, 0.002);
+    // Above the button; on a narrow view (the bar lower, by the top of the view) below it, over the café's back wall.
+    if (b) this.tag.mesh.position.set(((b.x + b.w / 2) / this.panel.width - 0.5) * STRIP.width, (this.narrow ? -1 : 1) * (STRIP.height / 2 + BAR_TAG.above), 0.002);
     this.tag.show(!!b);
     this.tag.update(delta, this.head);
   }
