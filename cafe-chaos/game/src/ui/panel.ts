@@ -62,8 +62,16 @@ const REACH_M = 0.035;
  * button from `hover` away, presses on coming within `press`, and can
  * press again once it has drawn back past `rearm`. One that is more
  * than `behind` past the face is not touching the card at all.
+ *
+ * The hand tracking gives the index tip joint, which is inside the
+ * finger, about `FINGER_RADIUS` behind the pad that touches. So the
+ * press is at the pad meeting the face, as Meta's poke interactions do
+ * (they offset the tip by the finger's radius): the button goes the
+ * moment the finger touches it, never only once it has been pushed a
+ * centimetre past. Drawing back 1.4 cm from there lets it press again.
  */
-const TOUCH = { hover: 0.05, press: 0.004, rearm: 0.018, behind: 0.03 };
+const FINGER_RADIUS = 0.009;
+const TOUCH = { hover: 0.05, press: FINGER_RADIUS + 0.002, rearm: FINGER_RADIUS + 0.014, behind: 0.03 };
 /** Pixels per metre of panel (café space). */
 const PPM = 2400;
 

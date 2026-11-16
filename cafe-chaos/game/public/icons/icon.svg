@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Café Chaos app icon: a cream cup of coffee on moss green, steam rising, in the café's own colours. -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="70%">
+      <stop offset="0" stop-color="#4f7a45"/>
+      <stop offset="1" stop-color="#2f522d"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g id="mark">
+    <g fill="none" stroke="#f2ebdd" stroke-width="18" stroke-linecap="round">
+      <path d="M206 176 C186 152 226 136 206 108 C192 90 210 76 214 70"/>
+      <path d="M256 168 C236 140 278 124 256 92 C242 72 260 58 264 52"/>
+      <path d="M306 176 C286 152 326 136 306 108 C292 90 310 76 314 70"/>
+    </g>
+    <ellipse cx="256" cy="384" rx="168" ry="36" fill="#d9cfbe" stroke="#16171d" stroke-width="12"/>
+    <path d="M358 236 C430 226 432 330 344 322" fill="none" stroke="#16171d" stroke-width="40" stroke-linecap="round"/>
+    <path d="M358 236 C430 226 432 330 344 322" fill="none" stroke="#f2ebdd" stroke-width="18" stroke-linecap="round"/>
+    <path d="M132 214 H380 C380 316 338 372 256 372 C174 372 132 316 132 214 Z" fill="#f2ebdd" stroke="#16171d" stroke-width="12" stroke-linejoin="round"/>
+    <path d="M150 262 H362" stroke="#66462f" stroke-width="14" stroke-linecap="round"/>
+    <ellipse cx="256" cy="214" rx="124" ry="24" fill="#5a4030" stroke="#16171d" stroke-width="12"/>
+    <ellipse cx="236" cy="210" rx="40" ry="7" fill="#f0c987" opacity=".55"/>
+  </g>
+</svg>

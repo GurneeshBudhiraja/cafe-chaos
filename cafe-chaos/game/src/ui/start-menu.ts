@@ -6,7 +6,7 @@
  * a second) while it is up.
  *
  *   ┌────────────────────────────┐
- *   │ [BEST 6:12]   cover art  ⚙ │
+ *   │ [BEST 6:12]  cover art [Quit]│
  *   │        CAFÉ CHAOS          │
  *   │ [        CONTINUE        ] │   40 coins · 2 baristas
  *   │ [        NEW GAME        ] │
@@ -15,7 +15,9 @@
  *
  * The first time (no save) there is only NEW GAME, and the card is shorter
  * (it stands on the table, so it is drawn from the bottom up). With no best
- * time there is no badge. Settings and the New Game warning open on a
+ * time there is no badge. Quit sits in the cover art's top corner, out of
+ * the way of the buttons pressed often, and asks first. Settings, the New
+ * Game warning and the Quit question open on a
  * second card in front of it (`sheet`): the card behind is dimmed and does
  * not take presses until the sheet closes.
  *
@@ -116,7 +118,7 @@ export class StartMenu {
   readonly howPictures: (HTMLImageElement | null)[] = [];
   private howSteps: HowStep[] = [];
   /** What the sheet shows ('none' when it is closed). */
-  sheetKind: 'none' | 'settings' | 'warn' = 'none';
+  sheetKind: 'none' | 'settings' | 'warn' | 'quit' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card, the shop, or the count back in. */
   cardKind: 'start' | 'pause' | 'shop' | 'count' = 'start';
   private seed = 1;
@@ -191,6 +193,13 @@ export class StartMenu {
     this.warn = state;
     this.sheetKind = 'warn';
     this.layoutWarn();
+    this.sheet.show(true);
+  }
+
+  /** Are you sure? before leaving the headset view. */
+  openQuit(): void {
+    this.sheetKind = 'quit';
+    this.layoutQuit();
     this.sheet.show(true);
   }
 
@@ -295,6 +304,9 @@ export class StartMenu {
     const half = (W - PAD * 2 - TOUCH_GAP) / 2;
     buttons.push(this.button(this.card, 'help', PAD, y, half, 84, 'secondary', '? How to play'));
     buttons.push(this.button(this.card, 'gear', PAD + half + TOUCH_GAP, y, half, 84, 'secondary', '⚙ Settings'));
+    // Quit: in the cover art's top corner, away from the buttons pressed often (it asks first).
+    const qw = 170;
+    buttons.push(this.button(this.card, 'quit', ax + aw - 18 - qw, ay + 18, qw, 84, 'secondary', 'Quit'));
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
@@ -496,6 +508,23 @@ export class StartMenu {
       }
       lines.push(line);
       lines.forEach((l, i) => text(ctx, l, W / 2, 160 + i * 48, 34, SKETCH.soft, 'center', false));
+      ctx.restore();
+    }, buttons);
+  }
+
+  private layoutQuit(): void {
+    const H = Math.round(this.sheet.height / this.k);
+    const buttons: Button[] = [
+      this.button(this.sheet, 'quit-no', PAD, 260, W - PAD * 2, 120, 'primary', 'KEEP PLAYING'),
+      this.button(this.sheet, 'quit-yes', PAD, 260 + 120 + TOUCH_GAP, W - PAD * 2, 120, 'danger', 'QUIT'),
+    ];
+    this.sheet.set((ctx) => {
+      ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
+      ctx.save();
+      ctx.scale(this.k, this.k);
+      this.paper(ctx, pen(this.sheet.canvas), 0, H);
+      text(ctx, 'Quit Café Chaos?', W / 2, 90, 54, SKETCH.ink);
+      text(ctx, 'Your coins and baristas are saved.', W / 2, 170, 34, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
   }

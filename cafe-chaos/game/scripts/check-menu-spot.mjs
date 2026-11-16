@@ -2,9 +2,12 @@
  * Start card check: where the card stands and that it keeps still.
  * 1. it stands below the eyes (its top edge under eye level), about 40 cm
  *    away, straight ahead, facing the eyes;
- * 2. looking up when it is put there does not put it higher;
+ * 2. looking up when it is put there does not put it higher; a fingertip
+ *    presses a button as soon as it touches it, and only lights it from 3 cm;
  * 3. a nod, a lean and a small turn of the head do not move or turn it;
- * 4. turning well away brings it back in front, below the eyes again.
+ * 4. leaning well in and staying there brings it along, and sitting back
+ *    brings it back;
+ * 5. turning well away brings it back in front, below the eyes again.
  *
  * Usage: dev server running, then `node scripts/check-menu-spot.mjs`.
  * Output: artifacts/menu-spot.png, and a pass/fail line.
@@ -52,6 +55,27 @@ const facing = (Math.acos(toEye.reduce((s, v, i) => s + (v / len) * a.n[i], 0)) 
 check('faces the eyes', facing < 3, `${facing.toFixed(1)}° off`);
 await page.screenshot({ path: 'artifacts/menu-spot.png' });
 
+// A fingertip on a button: hovering 3 cm off lights it without pressing; the pad touching the face
+// (the tip joint 1 cm out, a finger's radius) presses it at once, with no push past the face.
+const poke = await page.evaluate(() => {
+  const card = window.__cafe.game.menu.card;
+  const m = card.mesh;
+  m.updateWorldMatrix(true, false);
+  const b = card.buttons[0];
+  const g = m.geometry.parameters;
+  const s = m.getWorldScale(m.position.clone());
+  const at = (cm) => m.localToWorld(m.position.clone().set(((b.x + b.w / 2) / card.width - 0.5) * g.width, (0.5 - (b.y + b.h / 2) / card.height) * g.height, cm / 100 / s.z));
+  const out = [];
+  for (const cm of [6, 3, 1]) {
+    const t = card.touch('check', at(cm));
+    out.push({ cm, over: t.over?.id ?? null, pressed: t.pressed?.id ?? null });
+  }
+  card.touch('check', null);
+  return out;
+});
+const [, hover3, touch1] = poke;
+check('a fingertip touching presses at once', hover3.over && !hover3.pressed && touch1.pressed === touch1.over, JSON.stringify(poke));
+
 // A nod down, a lean in, a small turn: it stays where it is, turned as it was.
 await h.head(SEAT, { x: -1.85, y: 0.7, z: 0.28 }, 400);
 await h.head({ x: -0.92, y: 1.17, z: 0.3 }, { x: -1.85, y: 0.9, z: 0.45 }, 400);
@@ -61,6 +85,18 @@ const moved = Math.hypot(...a.p.map((v, i) => v - b.p[i]));
 const dot = Math.abs(a.q.reduce((s, v, i) => s + v * b.q[i], 0));
 const turned = (2 * Math.acos(Math.min(1, dot)) * 180) / Math.PI;
 check('keeps still while used', moved < 0.002 && turned < 0.5, `moved ${(moved * 1000).toFixed(1)} mm, turned ${turned.toFixed(2)}°`);
+
+// Lean well in (20 cm) and stay there: it comes along; sit back: it comes back.
+const LEAN = { x: SEAT.x - 0.2, y: SEAT.y - 0.03, z: SEAT.z };
+await h.head(LEAN, { x: LEAN.x - 1, y: LEAN.y, z: LEAN.z }, 400);
+await page.waitForTimeout(2500);
+const l1 = await pose();
+await h.head(SEAT, AHEAD, 400);
+await page.waitForTimeout(2500);
+const l2 = await pose();
+const along = a.p[0] - l1.p[0];
+const home = Math.hypot(...a.p.map((v, i) => v - l2.p[i]));
+check('follows a lean and comes back', along > 0.15 && home < 0.02, `leaned 20 cm: card moved ${(along * 100).toFixed(1)} cm along; sat back: ${(home * 100).toFixed(1)} cm from where it started`);
 
 // Turn well away: it glides back in front, below the eyes.
 await h.head(SEAT, { x: -0.85, y: 1.22, z: -0.72 }, 600);
