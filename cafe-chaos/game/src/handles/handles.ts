@@ -3,8 +3,10 @@
  * lying on the table just outside the edge of the base that faces the
  * player (pinch it and drag to move the café), and a bracket at each
  * corner of the base (pinch one and pull it out or in to resize, swing it
- * round to turn). Always visible, lit in the café's paper-lantern cream,
- * brighter as a hand comes near and while held. They are low blocks
+ * round to turn). Lit in the café's paper-lantern cream: the pill clearly,
+ * the brackets faintly (so the café's front stays tidy, but resizing is
+ * never hidden), each brightening, with a soft amber glow, as a hand comes
+ * near and while held. They are low blocks
  * standing on the table rather than flat marks, so they still read when
  * the player looks across the table at a shallow angle, and they grow
  * with the café (within limits) so they stay in proportion to it.
@@ -30,8 +32,18 @@ export const LIFT_M = 0.0025;
 export const CREAM = 0xf7e9d3;
 export const CREAM_SIDE = 0xe3c9a4;
 export const AMBER = 0xffb46a;
-/** Brightness (opacity) at rest, with a hand near, and held; and the glow's share of it. */
-export const SHOW = { rest: 0.8, near: 0.95, held: 1, glowShare: 0.45, fade: 10 };
+/**
+ * Brightness (opacity) at rest (the pill, the brackets), with a hand near,
+ * and held; and the glow's share of it, which only shows above rest.
+ */
+export const SHOW = { rest: 0.8, bracketRest: 0.3, near: 0.95, held: 1, glowShare: 0.35, fade: 10 };
+/**
+ * The pause button sits beside the pill, the pair centred on the edge:
+ * the pill moves this far back along the edge, and the button's centre is
+ * this far past the pill's end (metres; past the pill's 4 cm reach, so a
+ * pinch on the button never takes the café).
+ */
+export const PAIR = { shift: 0.04, beyond: 0.045 };
 
 /** How much the handles are scaled for a café at scale `s`. */
 export function growFor(s: number): number {
@@ -98,7 +110,7 @@ function standingHandle(shape: Shape, height: number, glowScale: number, name: s
   glowMesh.position.y = -0.0005;
   glowMesh.renderOrder = 19;
   group.add(glowMesh, bodyMesh);
-  return { group, body, side, glow, show: SHOW.rest };
+  return { group, body, side, glow, show: 0 };
 }
 
 /** The grab pill, lying along X. */

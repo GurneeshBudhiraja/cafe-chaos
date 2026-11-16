@@ -23,7 +23,8 @@ export interface BatchReport {
 
 /** True if `node` or any ancestor up to `root` is marked dynamic. */
 function isDynamic(node: Object3D, root: Object3D): boolean {
-  for (let n: Object3D | null = node; n && n !== root; n = n.parent) if (n.userData.dynamic) return true;
+  // `keepApart`: a part of the shell the game shows or hides (the left wall, the left garden), kept as its own meshes.
+  for (let n: Object3D | null = node; n && n !== root; n = n.parent) if (n.userData.dynamic || n.userData.keepApart) return true;
   return false;
 }
 

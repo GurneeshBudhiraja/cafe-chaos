@@ -7,11 +7,18 @@
  * preview) the lamps are simply on and nothing is dimmed.
  */
 
-import { createSystem, Vector3 } from '@iwsdk/core';
-import type { CafeLights } from '../light/cafe-lights.js';
+import { createSystem, PointLight, Vector3, type Object3D, type Sprite } from '@iwsdk/core';
+import { makeHalo } from '../light/halo.js';
+import { lightAddition, type CafeLights } from '../light/cafe-lights.js';
 import { PassthroughDimmer } from '../light/dimmer.js';
-import { BREATH, DIM_FADE_SECONDS, DIM_LEVEL, HALOS, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS } from '../light/mood.js';
+import { fitSpill } from '../light/spill.js';
+import { ANNEX_LAMP, ANNEX_LANTERNS_X, ANNEX_LIGHT, BREATH, DIM_FADE_SECONDS, DIM_LEVEL, HALOS, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS, ROOM_LAMP } from '../light/mood.js';
 import { CafeSystem } from './cafe-system.js';
+
+/** How much the café's lamps go down while the game is paused. */
+const PAUSE_DIM = 0.45;
+/** How often the light spill is checked against the real table (seconds). */
+const SPILL_REFIT_S = 0.2;
 
 export class MoodSystem extends createSystem({}) {
   readonly dimmer = new PassthroughDimmer();
@@ -21,8 +28,20 @@ export class MoodSystem extends createSystem({}) {
   lampsUp = 1;
   private sinceDusk = -1;
   private time = 0;
+  private sinceFit = Infinity;
+  private fitKey = '';
+  private readonly outline: { x: number; z: number }[] = [];
+  /** 0 to 1: how far the lamps are turned down for a pause (the café is still while paused). */
+  paused = 0;
   private placement = 0;
   private readonly head = new Vector3();
+  /** The annex whose furniture has been lit (see `growLight`). */
+  private litAnnex: object | null = null;
+  /** How far the light has grown with the annex, 0 to 1. */
+  private grown = 0;
+  /** The annex lanterns' lights and halos (made when the annex opens). */
+  readonly annexLamps: PointLight[] = [];
+  private readonly annexHalos: Sprite[] = [];
 
   init(): void {
     this.world.createTransformEntity(this.dimmer.mesh);
@@ -58,7 +77,63 @@ export class MoodSystem extends createSystem({}) {
       this.sinceDusk = -1;
       this.lampsUp = presenting ? 0 : 1;
     }
+    this.growLight(cafe);
+    // Paused (the café's clock stopped): the lamps go down a little, so the pause is plain to see; eased on real time.
+    const pausedNow = cafe?.timeScale === 0 ? 1 : 0;
+    this.paused += (pausedNow - this.paused) * Math.min(1, frameDelta * 4);
+    this.fitSpill(cafe, frameDelta);
     this.light();
+  }
+
+  /**
+   * Keep the light spill to the real table (see light/spill.ts): re-cut when
+   * the café or the table has moved, a few times a second at most.
+   */
+  private fitSpill(cafe: CafeSystem | undefined, frameDelta: number): void {
+    const spill = this.lights?.spill;
+    if (!spill || !cafe) return;
+    this.sinceFit += frameDelta;
+    if (this.sinceFit < SPILL_REFIT_S) return;
+    this.sinceFit = 0;
+    const on = cafe.tableOutline(this.outline);
+    const key = on ? this.outline.map((p) => `${p.x.toFixed(3)},${p.z.toFixed(3)}`).join(';') : 'none';
+    if (key === this.fitKey) return;
+    this.fitKey = key;
+    fitSpill(spill, on ? this.outline : null);
+  }
+
+  /** The light follows the café as it grows: the annex lit like the rest, and the room light and house light moved over it. */
+  private growLight(cafe: CafeSystem | undefined): void {
+    const lights = this.lights;
+    const annex = cafe?.annex ?? null;
+    if (!lights) return;
+    if (annex && this.litAnnex !== annex) {
+      this.litAnnex = annex;
+      lightAddition(annex.root);
+      this.lightLanterns(annex.root);
+    }
+    const grown = annex ? ease(Math.min(1, annex.rising)) : 0;
+    if (grown === this.grown) return;
+    this.grown = grown;
+    const room = lights.lamps[ROOM_LAMP];
+    const from = LAMPS[ROOM_LAMP];
+    const to = ANNEX_LIGHT.room;
+    room.position.set(...mix(from.position, to.position, grown));
+    room.distance = from.distance + (to.distance - from.distance) * grown;
+  }
+
+  /** A warm light and a halo at each of the annex's lanterns; they rise with the annex (they are its children). */
+  private lightLanterns(root: Object3D): void {
+    for (const x of ANNEX_LANTERNS_X) {
+      const light = new PointLight(ANNEX_LAMP.color, 0, ANNEX_LAMP.distance, 2);
+      light.name = 'AnnexLamp';
+      light.position.set(x, ANNEX_LAMP.y, ANNEX_LAMP.z);
+      const halo = makeHalo(ANNEX_LAMP.halo.size, ANNEX_LAMP.color, 0);
+      halo.position.set(x, ANNEX_LAMP.y + 0.006, ANNEX_LAMP.z);
+      root.add(light, halo);
+      this.annexLamps.push(light);
+      this.annexHalos.push(halo);
+    }
   }
 
   /** Apply the lamps' level and the lanterns' breath to the lights and halos. */
@@ -66,14 +141,27 @@ export class MoodSystem extends createSystem({}) {
     if (!this.lights) return;
     const { lamps, halos } = this.lights;
     // Each lantern breathes on its own phase; the gate lamps and the room light hold steady.
-    const breath = (breathes: boolean, phase: number): number => (breathes ? 1 + BREATH.depth * Math.sin(this.time * BREATH.rate * Math.PI * 2 + phase * 1.7) : 1);
+    const dim = 1 - PAUSE_DIM * this.paused;
+    const breath = (breathes: boolean, phase: number): number => dim * (breathes ? 1 + BREATH.depth * Math.sin(this.time * BREATH.rate * Math.PI * 2 + phase * 1.7) : 1);
     lamps.forEach((lamp, i) => {
-      lamp.intensity = LAMPS[i].intensity * this.lampsUp * breath(LAMPS[i].breathes, i);
+      const grow = i === ROOM_LAMP ? 1 + (ANNEX_LIGHT.room.strength - 1) * this.grown : 1;
+      lamp.intensity = LAMPS[i].intensity * grow * this.lampsUp * breath(LAMPS[i].breathes, i);
     });
     halos.forEach((halo, i) => {
       halo.material.opacity = HALOS[i].opacity * this.lampsUp * breath(HALOS[i].breathes, i);
     });
+    // The annex's lanterns breathe as the main room's do, out of step with them, and come up as it rises.
+    this.annexLamps.forEach((lamp, i) => {
+      const b = breath(true, LAMPS.length + i);
+      lamp.intensity = ANNEX_LAMP.intensity * this.grown * this.lampsUp * b;
+      this.annexHalos[i].material.opacity = ANNEX_LAMP.halo.opacity * this.grown * this.lampsUp * b;
+    });
   }
+}
+
+/** Between two points, `t` of the way. */
+function mix(a: readonly [number, number, number], b: readonly [number, number, number], t: number): [number, number, number] {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
 
 /** Ease in and out (smoothstep). */

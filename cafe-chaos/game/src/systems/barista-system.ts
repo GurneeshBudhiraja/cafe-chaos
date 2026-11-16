@@ -10,7 +10,7 @@
  * - Orders. The moment a guest is seated it has an order. A server takes
  *   a tray (tea or coffee), comes round the end of the counter, carries
  *   it to that guest, serves with a lean, sets the tray down at the
- *   guest's own place, bows, and walks back. The guest eats from then on;
+ *   guest's own place, and walks straight back. The guest eats from then on;
  *   the tray is cleared when the guest leaves.
  * - Who serves whom (the dispatcher, `plan`):
  *   1. From the bar it is first come, first served: the oldest waiting
@@ -39,6 +39,7 @@
 import { AssetManager, createSystem, Vector3, type Material, type Mesh, type Object3D } from '@iwsdk/core';
 import { Barista, BARISTA_NAMES, baristaLoaded, type BaristaName } from '../baristas/barista.js';
 import { BACK_BAR_YAW, servePointFor, servePointsForPlace, SHUFFLE_M, STATION_YAW, stationPoint, type ServePoint } from '../baristas/routes.js';
+import { MAX_STAFF } from '../game/rules.js';
 import { BACK_BAR_SECONDS, FIDGET_SECONDS, MAX_OUT, REPLAN_SECONDS, SAME_TIME_SECONDS, SET_DOWN_AT, SPEED, SWITCH_GAIN_M, TRAY_FADE_SECONDS, TRAY_SLIDE_SECONDS, TURN_SPEED, WAVE_CHANCE } from '../baristas/rules.js';
 import type { Seat } from '../guests/seats.js';
 import { Walk, yawDelta } from '../guests/walker.js';
@@ -48,9 +49,9 @@ import { GuestSystem } from './guest-system.js';
 /**
  * working: at its station. shuffling: a step along the bar. backBar:
  * turned to the back bar. waving. out: carrying a tray to a guest.
- * serving: the lean at the table. bowing. back: walking home.
+ * serving: the lean at the table, until the order is down. back: walking home.
  */
-export type BaristaState = 'working' | 'shuffling' | 'backBar' | 'waving' | 'out' | 'serving' | 'bowing' | 'back';
+export type BaristaState = 'working' | 'shuffling' | 'backBar' | 'waving' | 'out' | 'serving' | 'back';
 
 /** A guest's order, from the moment it is seated until it leaves the seat. */
 export interface Order {
@@ -115,6 +116,12 @@ export class BaristaSystem extends createSystem({}) {
   maxOut = MAX_OUT;
   /** Set false to keep everyone behind the counter. */
   serving = true;
+  /**
+   * How many servers are on the staff: the first this many baristas. The
+   * game starts the café with one and hires more from the shop (three in
+   * all); the checks and recordings (test mode) keep all three.
+   */
+  staffSize: number = MAX_STAFF;
   /** Counts, for the checks. */
   servedCount = 0;
   switches = 0;
@@ -148,6 +155,9 @@ export class BaristaSystem extends createSystem({}) {
     });
   }
 
+  /** The café's furniture count when the tables were last found. */
+  private furniture = 0;
+
   /**
    * Find the tables and where to stand at each: any piece of the café
    * with a meal anchor is a table, its top is at that anchor's height,
@@ -174,6 +184,12 @@ export class BaristaSystem extends createSystem({}) {
     const delta = Math.min(1, frameDelta) * cafe.timeScale;
     this.clock += delta;
     this.hire();
+    // New furniture (the annex's tables): find where to stand at them too.
+    if (cafe.furniture !== this.furniture) {
+      this.furniture = cafe.furniture;
+      this.findTables();
+      this.dirty = true;
+    }
     if (cafe.placed && cafe.placements !== this.placement) {
       // The café has been put down afresh: everyone back to their station, the tables cleared.
       this.placement = cafe.placements;
@@ -202,17 +218,20 @@ export class BaristaSystem extends createSystem({}) {
 
   // ------------------------------------------------------------- the staff
 
-  /** Bring on every barista whose model has loaded (they load in the background). */
+  /** Bring on every barista on the staff whose model has loaded (they load in the background); a new hire waves hello. */
   private hire(): void {
-    if (this.staff.length === BARISTA_NAMES.length) return;
-    BARISTA_NAMES.forEach((name: BaristaName, station) => {
+    if (this.staff.length >= this.staffSize) return;
+    BARISTA_NAMES.slice(0, this.staffSize).forEach((name: BaristaName, station) => {
       if (this.staff.some((m) => m.barista.name === name) || !baristaLoaded(name)) return;
       const barista = new Barista(name);
       barista.root.position.copy(stationPoint(station));
       barista.root.rotation.y = STATION_YAW;
       this.cafeSystem.cafe.add(barista.root);
       barista.play('Work');
+      const fresh = this.cafeSystem.placed && this.staff.length > 0;
       this.staff.push({ barista, station, state: 'working', t: Math.random() * 2, lasts: between(FIDGET_SECONDS), walk: null, speed: SPEED.walk, yaw: STATION_YAW, targetYaw: STATION_YAW, shift: 0, order: null, trips: 0 });
+      // One hired in the middle of the evening says hello to the player.
+      if (fresh) this.greetPlayer(this.staff[this.staff.length - 1]);
       this.dirty = true;
     });
   }
@@ -251,14 +270,14 @@ export class BaristaSystem extends createSystem({}) {
     for (let i = this.orders.length - 1; i >= 0; i--) {
       const order = this.orders[i];
       const guest = guests.guests.find((g) => g.id === order.guest);
-      if (guest && guest.state === 'seated' && guest.seat === order.seat) continue;
+      if (guest && guest.state === 'seated' && guest.seat === order.seat && guest.fuming < 0) continue;
       // Gone (or moved to another seat): the order is off, and a server on its way to it is free to be sent elsewhere.
       if (order.server) order.server.order = null;
       this.orders.splice(i, 1);
       this.dirty = true;
     }
     for (const guest of guests.guests) {
-      if (guest.state !== 'seated' || !guest.seat || guest.served || this.orders.some((o) => o.guest === guest.id)) continue;
+      if (guest.state !== 'seated' || !guest.seat || guest.served || guest.fuming >= 0 || this.orders.some((o) => o.guest === guest.id)) continue;
       const points = this.pointsFor(guest.seat);
       if (points.length === 0) continue;
       this.orders.push({ id: this.nextOrder++, guest: guest.id, seat: guest.seat, points, point: points[0], placedAt: this.clock, server: null, served: false, bumped: 0 });
@@ -302,7 +321,7 @@ export class BaristaSystem extends createSystem({}) {
     this.sinceplan = 0;
     const enRoute = this.staff.filter((m) => m.state === 'out');
     const free = this.staff.filter(atBar);
-    const busy = this.staff.filter((m) => m.state === 'serving' || m.state === 'bowing' || m.state === 'back').length;
+    const busy = this.staff.filter((m) => m.state === 'serving' || m.state === 'back').length;
 
     // The walking distance from a server to an order, worked out when asked for and remembered for this plan
     // (a free server's is from its station, which the grid remembers between plans too).
@@ -493,7 +512,11 @@ export class BaristaSystem extends createSystem({}) {
     if (Math.random() > WAVE_CHANCE) return;
     const free = this.staff.filter((m) => m.state === 'working');
     if (free.length === 0) return;
-    const member = free[Math.floor(Math.random() * free.length)];
+    this.greetPlayer(free[Math.floor(Math.random() * free.length)]);
+  }
+
+  /** A server at the bar waves. */
+  private greetPlayer(member: Staff): void {
     member.state = 'waving';
     member.t = 0;
     member.lasts = member.barista.seconds('Wave');
@@ -513,18 +536,19 @@ export class BaristaSystem extends createSystem({}) {
         if (member.t >= member.lasts) this.work(member);
         break;
       case 'serving':
-        if (barista.tray && member.order && member.t >= SET_DOWN_AT) this.setDown(member);
-        if (member.t >= member.lasts) {
-          member.state = 'bowing';
-          member.t = 0;
-          member.lasts = barista.seconds('Bow');
-          barista.play('Bow', true);
-          // It will be free again shortly: the next order can be planned for.
+        // Its guest lost its temper (or was moved) while it leant in: straighten up and take the tray back.
+        // Without this it would wait there for good, tray in hand, and with one server nobody would be served again.
+        if (barista.tray && !member.order) {
           this.dirty = true;
+          this.sendHome(member);
+          break;
         }
-        break;
-      case 'bowing':
-        if (member.t >= member.lasts) this.sendHome(member);
+        if (barista.tray && member.order && member.t >= SET_DOWN_AT) this.setDown(member);
+        // The order is down: straight back to the counter, no bow. It is free for the next order from here.
+        if (!barista.tray && member.t >= SET_DOWN_AT) {
+          this.dirty = true;
+          this.sendHome(member);
+        }
         break;
       default:
         break;

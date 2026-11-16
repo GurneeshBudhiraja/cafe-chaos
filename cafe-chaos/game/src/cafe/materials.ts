@@ -7,6 +7,7 @@
  * are painted with changes.
  */
 
+import { CHEAP_LOOK, matte } from '../light/cheap-materials.js';
 import { AssetManager, Color, Mesh, MeshStandardMaterial, type Material, type Object3D } from '@iwsdk/core';
 
 /** Which café material (by name, from the art models) replaces each grey-box one. */
@@ -45,6 +46,7 @@ function cafeMaterialFor(name: string): Material | undefined {
     const paint = PAINTED[name] ?? { color: 0x8a6b4f, roughness: 0.7 };
     material = new MeshStandardMaterial({ color: new Color(paint.color), roughness: paint.roughness, metalness: 0 });
     material.name = `Cafe${name.slice(3)}`;
+    if (CHEAP_LOOK) material = matte(material);
   }
   cache.set(name, material);
   return material;

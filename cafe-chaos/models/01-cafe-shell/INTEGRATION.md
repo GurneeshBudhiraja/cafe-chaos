@@ -1,6 +1,6 @@
 # cafe-shell — the Japanese garden café (final art)
 
-**File:** `cafe-shell.glb` — about 40,000 triangles, 38 meshes, 25 materials, 16 packed textures, one 2 s `Ambient` clip, 4.0 MB.
+**File:** `cafe-shell.glb` — about 35,000 triangles, 44 meshes in 70 nodes, 28 materials, 17 packed textures, one 2 s `Ambient` clip, 4.0 MB.
 **This replaces the grey-box shell.** Same root name and anchor names, so game code written
 against the grey box keeps working, but the shell is larger and the entrance moved: re-read
 the sizes below.
@@ -68,6 +68,30 @@ x ∈ [−0.33, +0.33], z ∈ [−0.25, +0.17] (the counter occupies the back of
 Use the `*_z_m` extras keys; the `*_y_m` ones are the same numbers in Blender's Y axis,
 kept only for grey-box compatibility.
 
+## The left side: `WallLeft-Closed`, `WallLeft-Open`, `GardenLeft`
+
+The left (−X) wall's middle section — everything between the corner posts — is now two nodes:
+
+- **`WallLeft-Closed`** (children `-Timber`, `-Shoji`): the wall as before.
+- **`WallLeft-Open`** (children `-Timber`, `-Shoji`, `-Frame`, `-Arm`, `-Sign`): the same wall with a
+  floor-level **exit** between the posts at z −0.075 … 0.087 (16 cm clear, 15 cm high, framed like
+  `GateFrame`), an 出口 / EXIT blade sign hanging outside over the walkway, readable from the seat.
+  Extras: `default_hidden: true`.
+
+Both are exported; **show one and hide the other** when the shell loads (Closed by default per the
+game's current rules, Open once the exit or the annex is in play — the exit works on its own).
+
+**`GardenLeft`** groups everything in the left garden strip (x < −0.33) that the annex wing covers:
+the pond (`PondWater`, `PondKoi`, `PondLilies`), `GardenLeft-Moss` (the left moss beds),
+`GardenLeft-MetaMoss` (the whole front-left corner as one bright grass bed, x −0.456 … −0.284,
+z 0.213 … 0.306, with the Meta mark pressed into its centre as a dark-moss groove), `GardenLeft-Fence` (the left run, with a gap at the walkout), `GardenLeft-Stones`,
+`GardenLeft-Petals`, `GardenLeft-AO`, and the walkout `GardenLeft-Path` (gravel from the exit to the
+plate's edge) with `GardenLeft-PathStones`. Hide the whole group when `cafe-annex` is placed.
+The cherry tree stays in the main shell (its blossoms reach x −0.449, inside the plate).
+
+**Exit route for guests:** out through `WallLeft-Open` (centre x −0.34, z 0.006), along the path to
+the plate's edge at x −0.46, through the gap in the fence (z −0.093 … 0.081).
+
 ## Anchors (empties under the root)
 
 | Anchor | Where | Facing |
@@ -75,6 +99,8 @@ kept only for grey-box compatibility.
 | `Entrance` | in the gate opening, right wall (x ≈ 0.33, z ≈ 0.055) | into the café (−X) |
 | `BenchSpot` | front-right corner by the gate (0.235, 0.024, 0.165) | no turn: waiting guests face the player (+Z), so their faces show |
 | `FloorTop` | (0, 0.024, 0) | — |
+| `PlaqueSpot-1 … 6` | along the front gravel, x −0.26, −0.16, −0.06, 0.04, 0.14, 0.24 at z 0.25, y 0.025 | where the `unlock-plaque` models stand (the place the Meta stone used to be) |
+| `MetaStone` | a plain flat stone at the front-right corner (0.32, 0.025, 0.25) — the Meta mark itself has moved to the left moss (`GardenLeft-MetaMoss`) | kept so nothing that looks it up breaks |
 
 `BenchSpot` matches the tested layout below — drop the `waiting-bench` model on it
 with the anchor's rotation.

@@ -6,25 +6,26 @@
  * the café the guests work out for themselves, from the navigation grid
  * (nav/nav-grid.ts).
  *
- *            back wall and counter
- *   +---------------------------------------+ . . fence . .
- *   |  T4   T4   T4    T2   T2      (quiet)  |rail
- *   |                                        |      deck
- *   |  T2   T2   T2    T2   T2               = door = = gap =  Q Q Q Q Q  < arrivals
- *   |                                        |                 > > > > >  those who give up
- *   |                                        |rail
- *   + - - - - - - - - - +    +- - - - - - - -+
- *   X <- - - left - - - - (  ) [Meta stone] - - right - -> X
- *   ^ leavers fade out at either end of the front path
+ *              back wall and counter
+ *        +---------------------------------------+ . . fence . .
+ *        |  T4   T4   T4    T2   T2      (quiet)  |rail
+ *  fence |                                        |      deck
+ *  < < <  EXIT  T2   T2   T2    T2   T2           = door = = gap =  Q Q
+ *  ^ fade |                                        |                    Q :  those who give up walk back beside it
+ *        |                                        |rail                Q :
+ *        + - - - - - - - - - - - - - - - - - - - -+                    Q :  < arrivals
+ *          (the front is open, but nobody leaves that way)
  *                        (player)
  *
  * - Arrivals come along the table from the right and join the back of
- *   the line; the line stands outside the door, its head on the deck.
+ *   the line; the line's head stands on the deck outside the door, and
+ *   the rest of it runs down the table toward the player.
  * - A guest who gives up waiting turns round and walks back the way it
  *   came, beside the line, and fades out where newcomers appear.
- * - A guest who has eaten comes out of the room's front opening, by the
- *   Meta stone, and there turns left or right along the garden path,
- *   fading out at that end. Nobody steps off the plate to leave.
+ * - A guest who has eaten leaves by the exit in the room's left wall
+ *   (under the 出口 sign) and down the walkout path to the plate's edge,
+ *   fading out there; with the annex open, on through the annex and out
+ *   of its own exit.
  */
 
 import { Vector3 } from '@iwsdk/core';
@@ -51,29 +52,52 @@ const at = (x: number, z: number): Vector3 => new Vector3(x, groundAt(x, z), z);
 
 // ------------------------------------------------------------------ the line
 
-/** The line stands along this z, through the half of the door opening away from the player. */
-const QUEUE_Z = 0.03;
-/** The head of the line: on the deck, just outside the door. */
-const QUEUE_HEAD_X = 0.43;
-/** The rest stand on the table beyond the plate, this far apart. */
-const QUEUE_NEXT_X = 0.5;
-const QUEUE_SPACING = 0.058;
 /**
- * The way the line faces: toward the door (-X), turned part of the way to
- * the player, so faces show from the front seat.
+ * The line: its head on the deck just outside the door, the rest on the
+ * table beyond the plate, turned to run toward the player rather than out
+ * to the right, so the whole line stays within reach (about 55 cm from
+ * the eyes, with the café at its usual 35 cm). Everyone faces the door,
+ * turned part of the way to the player so faces show.
  */
+const QUEUE_HEAD = { x: 0.43, z: 0.03 };
+/** Just past the gap in the fence, then down the table toward the player, this far apart. */
+const QUEUE_BEND = { x: 0.505, z: 0.04 };
+const QUEUE_COLUMN_X = 0.525;
+const QUEUE_SPACING = 0.058;
+/** The way the line faces: toward the door (-X), turned part of the way to the player. */
 export const QUEUE_YAW = -0.95;
 
 /** The line's spots, front to back. */
-export const QUEUE_SPOTS: Vector3[] = Array.from({ length: MAX_QUEUE }, (_, i) => at(i === 0 ? QUEUE_HEAD_X : QUEUE_NEXT_X + (i - 1) * QUEUE_SPACING, QUEUE_Z));
+export const QUEUE_SPOTS: Vector3[] = Array.from({ length: MAX_QUEUE }, (_, i) =>
+  i === 0 ? at(QUEUE_HEAD.x, QUEUE_HEAD.z) : i === 1 ? at(QUEUE_BEND.x, QUEUE_BEND.z) : at(QUEUE_COLUMN_X, QUEUE_BEND.z + (i - 1) * QUEUE_SPACING),
+);
 
-/** Where newcomers appear: out along the table, beyond the end of the line. */
-export const ARRIVAL_POINT = at(QUEUE_NEXT_X + (MAX_QUEUE - 1) * QUEUE_SPACING + 0.2, QUEUE_Z);
+/** Where newcomers appear when the café is not on a real table: out to the right, level with the end of the line. */
+export const ARRIVAL_POINT = at(0.74, QUEUE_BEND.z + (MAX_QUEUE - 2) * QUEUE_SPACING);
+/**
+ * On a real table, newcomers come from its real edge: they appear just
+ * inside it and walk across the player's own table to the line. `runM`
+ * is how far the table runs to the right of the line's column (café
+ * space, metres; CafeSystem.tableRun), 0 when the café is not on a
+ * table. On a wide table they start beyond the usual point, by up to
+ * `ARRIVAL_MAX_M` (further would make the walk too long to wait for); on
+ * a narrow one they start nearer, on the table, never in the air beyond
+ * its edge.
+ */
+export const ARRIVAL_INSET_M = 0.03;
+export const ARRIVAL_MAX_M = 0.4;
+/** Where the table's run is measured from: the line's column, level with where newcomers appear. */
+export const ARRIVAL_FROM = { x: QUEUE_COLUMN_X, z: ARRIVAL_POINT.z };
+export function arrivalPoint(runM: number): Vector3 {
+  const point = ARRIVAL_POINT.clone();
+  if (runM > 0) point.x = Math.max(QUEUE_COLUMN_X + 0.06, Math.min(ARRIVAL_POINT.x + ARRIVAL_MAX_M, QUEUE_COLUMN_X + runM - ARRIVAL_INSET_M));
+  return point;
+}
 
 // ------------------------------------------------------------------ leaving
 
-/** Those who give up walk back beside the line, this far to the player's side of it (z). */
-const TURN_BACK_Z = QUEUE_Z + 0.046;
+/** Those who give up walk back beside the line, this far out from it (x). */
+const TURN_BACK_X = QUEUE_COLUMN_X + 0.05;
 
 /**
  * Back out the way it came: a guest who gives up turns round, steps to
@@ -81,28 +105,35 @@ const TURN_BACK_Z = QUEUE_Z + 0.046;
  * newcomers appear. From the head of the line (on the deck) that starts
  * with the step down through the gap in the fence.
  */
-export function pathBack(from: Vector3): Vector3[] {
+export function pathBack(from: Vector3, arrival: Vector3 = ARRIVAL_POINT): Vector3[] {
   const points = [from.clone()];
-  if (from.x < PLATE_EDGE_X) points.push(at(PLATE_EDGE_X - 0.006, TURN_BACK_Z), at(PLATE_EDGE_X + 0.02, TURN_BACK_Z));
-  else points.push(at(from.x + 0.025, TURN_BACK_Z));
-  points.push(at(ARRIVAL_POINT.x, TURN_BACK_Z));
+  if (from.x < PLATE_EDGE_X) points.push(at(PLATE_EDGE_X - 0.006, QUEUE_HEAD.z), at(PLATE_EDGE_X + 0.02, QUEUE_HEAD.z));
+  points.push(at(TURN_BACK_X, Math.max(from.z, QUEUE_BEND.z)));
+  points.push(arrival.clone());
   return points;
 }
 
-export type Side = 'left' | 'right';
-
-/** Just outside the room's front opening, beside the Meta stone: every guest who has eaten comes out through here. */
-export const FRONT_OPENING = at(0.065, 0.204);
-
 /**
- * Where those leavers are going: the two ends of the garden path along
- * the front of the plate. Each end has a few spots, side by side and a
- * little apart along the path, dealt in turn, so two guests going the
- * same way walk abreast and do not vanish on the same spot.
+ * The way out, for every guest who has eaten: the exit in the room's left
+ * wall, under the 出口 sign, then the walkout path through the gap in the
+ * bamboo fence to the plate's edge, where it fades. Once the annex is
+ * open the way runs on through the annex to its own exit in its outer
+ * wall. Each exit has a few spots side by side across the path, dealt in
+ * turn, so two guests leaving together walk abreast and do not vanish on
+ * the same spot. Heights come from the navigation grid (café space,
+ * metres).
  */
-export const EXIT_ENDS: Record<Side, Vector3[]> = {
-  left: [at(-0.275, 0.218), at(-0.25, 0.247), at(-0.285, 0.276)],
-  right: [at(0.335, 0.218), at(0.355, 0.247), at(0.33, 0.276)],
-};
-/** Leavers march once they are on the front path (z beyond this, café space). */
-export const FRONT_PATH_Z = 0.195;
+export const EXIT_LANES: { x: number; z: number }[] = [
+  { x: -0.448, z: -0.04 },
+  { x: -0.452, z: 0.004 },
+  { x: -0.448, z: 0.046 },
+];
+export const ANNEX_EXIT_LANES: { x: number; z: number }[] = [
+  { x: -0.668, z: 0.08 },
+  { x: -0.672, z: 0.115 },
+  { x: -0.668, z: 0.15 },
+];
+/** Leavers march once they are through the exit, out of the room (x below this, café space). */
+export const OUTSIDE_X = -0.345;
+/** With the annex open, they march once through its exit. */
+export const ANNEX_OUTSIDE_X = -0.645;

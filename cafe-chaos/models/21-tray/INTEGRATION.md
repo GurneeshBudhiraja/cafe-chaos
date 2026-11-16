@@ -18,3 +18,19 @@ steps. `Serve` lowers it to table height and straightens back up — put the `me
 table at the lowest point (frame 13–25 of 37) and remove the tray.
 
 A tray can also sit on the counter top (y = 0.085 in shell space) as dressing.
+
+## Empty tray and dish-only models
+
+So a server can set just the order down and keep the tray:
+
+| File | What | Origin |
+|---|---|---|
+| `tray-empty.glb` | the tray alone, with a **`Dish`** empty on its deck (0, 0.0021, 0) where a dish sits | tray underside centre |
+| `dish-tea.glb` | matcha cup on a saucer + a plate of three dango | base centre (sits flat on a table or on `Dish`) |
+| `dish-coffee.glb` | latte with ∞ art + a stacked dorayaki | base centre |
+| `dish-tea-done.glb` | the same set finished: empty cup with a ring of leaves, bare skewer, crumbs | base centre |
+| `dish-coffee-done.glb` | empty cup, crumbs on the plate | base centre |
+
+Each dish is 3.2 × 1.6 cm, under 300 triangles, the shared `CafeBarPalette` material. Flow: parent
+`dish-*` to the tray's `Dish` for `Carry`, re-parent it to the table at `Serve`'s low point, swap
+it for the `-done` variant when the guest has eaten, and pick the done dish back onto the tray.

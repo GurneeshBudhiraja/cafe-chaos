@@ -26,7 +26,7 @@ It is hands only and seated, built with IWSDK (WebXR) for the Quest 3/3S and Met
 
 | # | Model | Purpose |
 |---|---|---|
-| 01 | `cafe-shell` | **Final art:** the Japanese garden café (now with the dressed counter, baristas' duckboard, menu board and `Ambient` steam clip) — 92×62 cm garden base, 70×46 cm café room, entrance gate on the right (+X). See its INTEGRATION.md; it replaces the grey-box shell. |
+| 01 | `cafe-shell` | **Final art:** the Japanese garden café (dressed counter, baristas' duckboard, menu board, `Ambient` steam clip; the left wall splits into `WallLeft-Closed`/`WallLeft-Open` (an exit with a sign) and the left garden strip is the `GardenLeft` group, for the annex) — 92×62 cm garden base, 70×46 cm café room, entrance gate on the right (+X). See its INTEGRATION.md; it replaces the grey-box shell. |
 | 02 | `waiting-bench` | **Final art:** timber bench with an indigo cushion, four waiting slots 4.6 cm apart; sits on the shell's `BenchSpot`, facing the player |
 | 03 | `table-2` | **Final art:** chunky square table, two short slat-back chairs, sakura-pink cushions |
 | 04 | `table-4` | **Final art:** rectangular table with two segmented sofa benches (2 seats each), indigo |
@@ -36,17 +36,21 @@ It is hands only and seated, built with IWSDK (WebXR) for the Quest 3/3S and Met
 | 08 | `table-big` | **Unlock:** a long table for six (`seat_tags: group`) |
 | 09 | `table-mess` | The dirty-table state |
 | 10 | `meal` | The food that arrives |
-| 11 | `guest-mochi`, `guest-onigiri`, `guest-tofu` + `accessories` | **Final art:** three snack-spirit species (ball, rounded triangle, rounded square) on one shared rig: standing and seated poses, 8 clips (`Idle`, `Walk`, `Lifted`, `SitHappy`…; `Walk` is a real gait walked in place, the game moves the root), 5.9–6.7 cm; plus 13 hats, glasses, bows and outfits that hang on their attach points. `guest.glb` = a copy of the mochi one |
+| 11 | `guest-mochi`, `guest-onigiri`, `guest-tofu` + `accessories` | **Final art:** three snack-spirit species (ball, rounded triangle, rounded square) on one shared rig: standing and seated poses, 10 clips (`Idle`, `Walk`, `Lifted`, `Strum`, `SitHappy`…; `Walk` is a real gait walked in place, the game moves the root), 5.9–6.7 cm; plus 13 hats, glasses, bows and outfits that hang on their attach points. `guest.glb` = a copy of the mochi one |
 | 12 | `guest-kid` | Child guest, 4.16 cm |
 | 13 | `janitor` | The janitor with cap and mop |
 | 14 | `demand-bubble` | Speech bubble with an `IconSlot` |
 | 15 | `mood-ring` | Mood indicator around a guest's feet |
 | 16 | `seat-glow` | Marks the valid or best seat while carrying |
 | 17 | `coin` | Money |
-| 18 | `barista-sora`, `-momo`, `-yuki`, `-ren`, `-hana`, `-kenji` | **Final art:** six blocky pixel-skinned barista looks on one rig (7.4 cm, 7 clips incl. Walk/Carry/Serve); stand on the shell's `BaristaSpot-1/2`; unlockable |
+| 18 | `barista-sora`, `-momo`, `-yuki`, `-ren`, `-hana`, `-kenji` | **Final art:** six blocky pixel-skinned barista looks on one rig (7.4 cm, 8 clips incl. Walk/Carry/Serve/Strum, `Tray` and `Guitar` attach points); stand on the shell's `BaristaSpot-1/2`; unlockable |
 | 19 | `petals` | **Final art:** sakura petal meshes (two petals, one blossom) for falling petals; the fall is code, see its INTEGRATION.md |
-| 21 | `tray-tea`, `tray-coffee` | **Final art:** serving trays with orders on them; parent to a barista's `Tray` empty for `Carry`/`Serve` |
+| 21 | `tray-tea`, `tray-coffee`, `tray-empty`, `dish-tea`, `dish-coffee` (+ `-done`) | **Final art:** serving trays with orders on them, an empty tray with a `Dish` point, and dish-only models a server sets on the table (plus finished variants) |
 | 20 | `cafe-hand-left`, `cafe-hand-right` | **Final art:** minimal matte cream hands for hand tracking, 25 joint-named rigid segments each, no skinning; see its INTEGRATION.md for the IWSDK hook |
+| 22 | `cafe-annex` | **Unlock:** the left wing — a shoji room with its own garden, pond and fence, placed at (0,0,0) in the shell's space; show `WallLeft-Open`, hide `GardenLeft`; `AnnexSpot-1..3` for furniture |
+| 23 | `unlock-plaque` + `unlock-icons.png` | **Final art:** pinchable flat stone (lying in the gravel) with a padlock (`Locked`/`Unlock`/`Owned`), a `PlaqueFace` the game draws on; stands on the shell's `PlaqueSpot-1..6`; plus the 4×2 icon atlas |
+| 24 | `queue-lanterns` | **Final art:** six paper lanterns on a string between bamboo poles (32 cm) for the queue outside; `Ambient` sway |
+| 25 | `guitar`, `music-notes` | **Final art:** a guitar for a barista's `Guitar` point (with the `Strum` clip) and dark floating music notes with an `Ambient` loop |
 
 The **second janitor** unlock reuses `janitor`. The **rating meter**, end-of-shift card and other panels are UI (UIKitML), not models.
 

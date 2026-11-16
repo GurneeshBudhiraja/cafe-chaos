@@ -15,7 +15,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
-export const APP_URL = process.env.APP_URL ?? 'https://localhost:8082/';
+/** The checks and recordings open the café in test mode (`?test`): no title card or walkthrough, all six servers, a free shop. */
+export const APP_URL = process.env.APP_URL ?? 'https://localhost:8082/?test';
 export const OUT_DIR = 'artifacts';
 
 /**
@@ -28,7 +29,7 @@ export const OUT_DIR = 'artifacts';
  */
 export async function startHeadset({ size = { width: 1032, height: 800 }, fovDeg = 96, record = null, maxSpeedUp = 4, prepare } = {}) {
   mkdirSync(OUT_DIR, { recursive: true });
-  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args: ['--ignore-certificate-errors'] });
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args: ['--ignore-certificate-errors', '--autoplay-policy=no-user-gesture-required'] });
   const startedAt = Date.now();
   const context = await browser.newContext({
     viewport: size,
@@ -83,6 +84,14 @@ export async function startHeadset({ size = { width: 1032, height: 800 }, fovDeg
      * soundtrack (its music, and every effect it logged, at the moment it
      * happened on the video's clock) rendered offline and mixed in.
      */
+    /** Reload the page as a player would (what it saved stays), and set the headset up again. */
+    async reload() {
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => window.__cafe?.world && window.IWER_DEVICE, null, { timeout: 30000 });
+      await page.evaluate(installHelpers);
+      await page.evaluate((f) => window.__h.setup(f), fovDeg);
+      await page.evaluate((s) => (window.__h.speedUp = s), speedUp);
+    },
     async finish() {
       let wav = null;
       if (record) {

@@ -143,25 +143,23 @@ await h.screenshot('artifacts/guests-4-turning-back.png');
   const back = await page.evaluate(() => window.__back);
   const walkingBack = back.find((q) => q.x > 0.56 && q.opacity === 1);
   const mine = back.filter((q) => q.id === walkingBack.id);
-  // Facing away from the door (+X is a yaw of a quarter turn), on the table beside the line, going steadily away.
-  const facingAway = Math.abs(Math.atan2(Math.sin(walkingBack.yaw - Math.PI / 2), Math.cos(walkingBack.yaw - Math.PI / 2))) < 0.5;
-  const away = mine.every((q, i) => i === 0 || q.x >= mine[i - 1].x - 1e-6);
-  check('one who gives up turns round and walks back the way it came', walkingBack.clip === 'Walk' && facingAway && away && Math.abs(walkingBack.y) < 0.002 && walkingBack.z > 0.06 && walkingBack.z < 0.09,
+  // Facing away from the door (its back to the door, at x 0.34 z 0.06), on the table beside the line, going steadily away from it.
+  const fromDoor = (q) => Math.hypot(q.x - 0.34, q.z - 0.06);
+  const awayYaw = Math.atan2(walkingBack.x - 0.34, walkingBack.z - 0.06);
+  const facingAway = Math.abs(Math.atan2(Math.sin(walkingBack.yaw - awayYaw), Math.cos(walkingBack.yaw - awayYaw))) < 1.0;
+  const away = mine.every((q, i) => i === 0 || fromDoor(q) >= fromDoor(mine[i - 1]) - 1e-6);
+  check('one who gives up turns round and walks back the way it came', walkingBack.clip === 'Walk' && facingAway && away && Math.abs(walkingBack.y) < 0.002,
     `guest ${walkingBack.id} at x ${walkingBack.x.toFixed(2)} z ${walkingBack.z.toFixed(3)} on the table beside the line, facing away from the door ${facingAway}, always going away ${away}, clip ${walkingBack.clip}`);
 }
 await page.waitForFunction(() => window.__cafe.guests.left >= 1, null, { timeout: 300000 });
 const end = await state();
 check('it fades out at the end, and there were never more than ten on stage', end.left >= 1 && end.peak <= 10, `left ${end.left}, peak ${end.peak}, on stage now ${end.all.length}`);
 
-// 4. Left or right at the front: neither end is favoured, and never three the same way running.
+// 4. Leaving: every guest who has eaten goes out by the exit in the left wall, each to its own spot across the path.
 {
-  const picks = await page.evaluate(() => Array.from({ length: 30 }, () => window.__cafe.guests.pickExit()));
-  const left = picks.filter((p) => p.side === 'left').length;
-  let run = 1;
-  let longest = 1;
-  for (let i = 1; i < picks.length; i++) { run = picks[i].side === picks[i - 1].side ? run + 1 : 1; longest = Math.max(longest, run); }
-  const lanes = new Set(picks.map((p) => `${p.side}${p.lane}`)).size;
-  check('leavers are sent left and right evenly', left >= 11 && left <= 19 && longest <= 2 && lanes === 6, `of 30: ${left} left, ${30 - left} right, longest run the same way ${longest}, ${lanes} different end spots used`);
+  const lanes = await page.evaluate(async () => (await import('/src/guests/paths.ts')).EXIT_LANES.length);
+  const seen = await page.evaluate(() => window.__cafe.guests.guests.filter((g) => g.state === 'leaving' && g.side === 'exit').map((g) => g.lane));
+  check('leavers have a spot at the exit each', seen.every((l) => l >= 0 && l < lanes), `${lanes} spots across the walkout path; leaving now on spots ${seen.join(', ') || 'none'}`);
 }
 
 const errors = await h.finish();

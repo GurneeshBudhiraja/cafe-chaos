@@ -23,21 +23,40 @@
 import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { playTheme } from './audio/theme.js';
+import { AnchorSystem } from './systems/anchor-system.js';
 import { themeHands } from './hands/cafe-hand.js';
 import { findSurfaceSpot } from './lib/desk-placement.js';
 import { setUpLighting } from './lighting.js';
+import { useCheapMaterials } from './light/cheap-materials.js';
 import { AmbienceSystem } from './systems/ambience-system.js';
 import { BaristaSystem } from './systems/barista-system.js';
 import { CafeSystem } from './systems/cafe-system.js';
+import { GameSystem } from './systems/game-system.js';
 import { GuestSystem } from './systems/guest-system.js';
 import { HandleSystem } from './systems/handle-system.js';
 import { HoldSystem } from './systems/hold-system.js';
 import { MoodSystem } from './systems/mood-system.js';
 import { RenderBudgetSystem } from './systems/render-budget-system.js';
+import { ScoreSystem } from './systems/score-system.js';
+import { SoundSystem } from './systems/sound-system.js';
+import { WristMenuSystem } from './systems/wrist-menu-system.js';
+import { StripSystem } from './systems/strip-system.js';
+import { ShopSystem } from './systems/shop-system.js';
 
+// Matte surfaces on every model (see light/cheap-materials.ts): before anything is loaded.
+useCheapMaterials();
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(RenderBudgetSystem);
+  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(AnchorSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(ScoreSystem).registerSystem(ShopSystem).registerSystem(StripSystem).registerSystem(GameSystem).registerSystem(WristMenuSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
   const system = world.getSystem(CafeSystem)!;
+  // Draw the headset's view at 85% resolution (`?res=1` for full): leaning in, the café fills the view and the
+  // cost of every pixel is what pulls the frame rate down. Set before any session starts.
+  const res = Number(new URLSearchParams(location.search).get('res'));
+  world.renderer.xr.setFramebufferScaleFactor(res > 0.3 && res <= 1 ? res : 0.85);
+  // The page before the headset view (index.html): hidden while in the headset; START enters it.
+  const xr = world.renderer.xr;
+  xr.addEventListener('sessionstart', () => document.body.classList.add('in-xr'));
+  xr.addEventListener('sessionend', () => document.body.classList.remove('in-xr'));
+  document.getElementById('start')?.addEventListener('click', () => world.launchXR());
   const lights = setUpLighting(world, system.cafe);
   const mood = world.getSystem(MoodSystem)!;
   const hold = world.getSystem(HoldSystem)!;
@@ -46,10 +65,18 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   const guests = world.getSystem(GuestSystem)!;
   const baristas = world.getSystem(BaristaSystem)!;
   const ambience = world.getSystem(AmbienceSystem)!;
+  const shop = world.getSystem(ShopSystem)!;
+  const wrist = world.getSystem(WristMenuSystem)!;
+  const strip = world.getSystem(StripSystem)!;
+  const sound = world.getSystem(SoundSystem)!;
+  const anchor = world.getSystem(AnchorSystem)!;
+  const game = world.getSystem(GameSystem)!;
+  const score = world.getSystem(ScoreSystem)!;
   mood.lights = lights;
   themeHands(world);
   const theme = playTheme(world);
+  sound.theme = theme;
 
   // Dev only: lets the check and recording scripts find the world, the café, its lights, the mood, the hold, the handles and the surface finder.
-  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, lights, mood, hold, handles, budget, guests, baristas, ambience, theme, findSurfaceSpot };
+  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, anchor, lights, mood, hold, handles, budget, guests, baristas, shop, wrist, strip, sound, ambience, theme, game, score, findSurfaceSpot };
 });

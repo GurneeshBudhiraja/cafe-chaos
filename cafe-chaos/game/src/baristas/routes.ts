@@ -14,8 +14,8 @@ import type { NavGrid } from '../nav/nav-grid.js';
 /** The duckboard's top, and the line along it the baristas work on. */
 const DUCKBOARD_TOP_M = 0.036;
 const STATION_Z = -0.204;
-/** The stations along the duckboard (x), left to right: one per barista. */
-export const STATION_X = [-0.265, -0.205, -0.145, -0.085, -0.025, 0.035];
+/** The stations along the duckboard (x), left to right: one per barista, spread along the counter. */
+export const STATION_X = [-0.235, -0.115, 0.005];
 /** A barista at work faces the counter and the player beyond it. */
 export const STATION_YAW = 0;
 /** Turned to the back bar (the kettle, the tins). */

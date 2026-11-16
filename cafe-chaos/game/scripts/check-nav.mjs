@@ -4,17 +4,20 @@
  * that:
  * 1. the grid is built from the café's own meshes, quickly;
  * 2. it has the café right: the aisles, the door, the deck, the front
- *    path, the duckboard, the front opening and the player's table are
- *    places to stand; the counter, a table, a chair seat, the fence and
- *    the rest of the room's front are not;
- * 3. a guest's way out from a seat goes through the room's front opening
- *    by the Meta stone and left along the garden path, not by the door
- *    and never off the plate;
- * 4. or right along the path, the same;
+ *    path, the duckboard, the exit in the left wall, the walkout path
+ *    and the player's table are places to stand; the counter, a table, a
+ *    chair seat, the fence and the room's open front are not;
+ * 3. a guest's way out from a seat goes through the exit in the left
+ *    wall and down the walkout path to the plate's edge, not by the door
+ *    and not over the room's front;
+ * 4. every spot across the exit path can be reached;
  * 5. a barista's way from its station to a table goes round the counter;
  * 6. the same way asked for again costs nothing (it is remembered);
  * 7. a table put down in the middle of a way, and the grid rebuilt, is
- *    walked round: nothing else is told about it.
+ *    walked round: nothing else is told about it;
+ * 8. once the café is extended (the annex opened) it is one wider room:
+ *    the left wall is gone, the new floor has tables like the rest, and
+ *    the one way out is the exit in the new outer wall.
  * With PICTURE=1 it prints the grid as text with a way drawn on it.
  *
  * Usage: dev server running, then `node scripts/check-nav.mjs`.
@@ -41,35 +44,36 @@ const facts = await page.evaluate(async () => {
   const { system, guests, baristas } = window.__cafe;
   const nav = system.nav;
   const V = system.cafe.position.constructor;
-  const { EXIT_ENDS, FRONT_OPENING } = await import('/src/guests/paths.ts');
+  const { EXIT_LANES } = await import('/src/guests/paths.ts');
   const { stationPoint } = await import('/src/baristas/routes.ts');
   const P = (p) => [+p.x.toFixed(4), +p.y.toFixed(4), +p.z.toFixed(4)];
   const seat = guests.seats.reduce((best, s) => (Math.hypot(s.position.x - 0.093, s.position.z + 0.135) < Math.hypot(best.position.x - 0.093, best.position.z + 0.135) ? s : best));
   const landing = nav.nearest(seat.position.x, seat.position.z, 0.09);
-  // A guest's way out, as the game builds it: to the front opening, then along the path to an end.
-  const join = (a, b) => (a && b ? [...a, ...b.slice(2)] : null);
+  // A guest's way out, as the game builds it: straight to a spot at the end of the walkout path.
+  const lane = (l) => new V(l.x, nav.heightAt(l.x, l.z), l.z);
+  const FRONT_EXIT = lane(EXIT_LANES[1]);
   const searches0 = nav.searches;
-  const toOpening = nav.findPath(landing, FRONT_OPENING);
+  const toOpening = nav.findPath(landing, FRONT_EXIT);
   const searches1 = nav.searches;
-  const again = nav.findPath(landing, FRONT_OPENING);
+  const again = nav.findPath(landing, FRONT_EXIT);
   const searches2 = nav.searches;
-  const out = join(toOpening, nav.findPath(FRONT_OPENING, EXIT_ENDS.left[0]));
-  const outRight = join(toOpening, nav.findPath(FRONT_OPENING, EXIT_ENDS.right[1]));
+  const out = toOpening;
+  const lanesReached = EXIT_LANES.filter((l) => !!nav.findPath(landing, lane(l))).length;
   const table = baristas.servePoints[0];
   const serve = nav.findPath(stationPoint(1), table.stand);
-  window.__navFacts = { landing, exit: FRONT_OPENING, seat };
+  window.__navFacts = { landing, exit: FRONT_EXIT, seat };
   return {
     buildMs: nav.buildMs, triangles: nav.triangles, cells: nav.nx * nav.nz, size: [nav.nx, nav.nz],
     stand: {
-      'the middle aisle': nav.walkable(0, -0.04), 'the door': nav.walkable(0.335, 0.055), 'the deck': nav.walkable(0.41, 0.1), 'the front path': nav.walkable(-0.1, 0.25),
-      'the duckboard': !!nav.nearest(-0.1, -0.205, 0.012), "the player's table": nav.walkable(0.6, 0.03), 'the front opening by the Meta stone': nav.walkable(0.065, 0.186),
+      'the middle aisle': nav.walkable(0, -0.04), 'the door': nav.walkable(0.335, 0.055), 'the deck': nav.walkable(0.41, 0.1), 'the front path': nav.walkable(-0.1, 0.25), 'the exit in the left wall': nav.walkable(-0.34, 0.006), 'the walkout path': nav.walkable(-0.42, 0.004),
+      'the duckboard': !!nav.nearest(-0.1, -0.205, 0.012), "the player's table": nav.walkable(0.6, 0.03)
     },
     not: {
       'the counter': nav.walkable(-0.1, -0.165), 'a table': nav.walkable(0, 0.025), 'a chair seat': nav.walkable(seat.position.x, seat.position.z), 'the fence': nav.walkable(0.456, 0.2),
-      "the room's front away from the opening": nav.walkable(-0.2, 0.184) || nav.walkable(0.25, 0.184), 'the back-bar cabinet': nav.walkable(-0.1, -0.25),
+      "the room's open front": nav.walkable(-0.2, 0.184) || nav.walkable(0.065, 0.184) || nav.walkable(0.25, 0.184), 'the back-bar cabinet': nav.walkable(-0.1, -0.25),
     },
     seats: guests.seats.length, servePoints: baristas.servePoints.map((p) => ({ table: p.table, stand: P(p.stand), yaw: +p.yaw.toFixed(2) })),
-    out: out ? out.map(P) : null, outRight: outRight ? outRight.map(P) : null, serve: serve ? serve.map(P) : null,
+    out: out ? out.map(P) : null, lanesReached, lanes: EXIT_LANES.length, serve: serve ? serve.map(P) : null,
     remembered: searches1 === searches0 + 1 && searches2 === searches1 && !!again && again.length === toOpening.length,
     picture: nav.picture(2, out ?? []),
     station: P(stationPoint(1)), tableStand: P(table.stand),
@@ -106,16 +110,24 @@ const describe = (path) => {
   }
   return { length, door, off, crossings, end: path[path.length - 1] };
 };
-const byTheStone = (d) => d.crossings.length === 1 && d.crossings[0] > 0 && d.crossings[0] < 0.135;
-if (facts.out && facts.outRight) {
+/** Where a way crosses the room's left wall (x -0.33): the exit is between z -0.075 and 0.087. */
+const throughExit = (path) => {
+  const at = [];
+  for (let i = 1; i < path.length; i++) {
+    const [ax, , az] = path[i - 1];
+    const [bx, , bz] = path[i];
+    if ((ax + 0.33) * (bx + 0.33) < 0) at.push(az + ((bz - az) * (-0.33 - ax)) / (bx - ax));
+  }
+  return at;
+};
+if (facts.out) {
   const l = describe(facts.out);
-  const r = describe(facts.outRight);
-  check('from a seat the way out is the front opening by the Meta stone, then left along the path', byTheStone(l) && !l.door && !l.off && l.end[0] < -0.2 && l.end[2] > 0.2, `${facts.out.length} points, ${(l.length * 100).toFixed(0)} cm, crosses the room's front at x ${l.crossings.map((x) => x.toFixed(3)).join(', ')}, by the door ${l.door}, off the plate ${l.off}, ends at [${l.end[0]}, ${l.end[2]}]`);
-  check('or right along the path', byTheStone(r) && !r.door && !r.off && r.end[0] > 0.3 && r.end[2] > 0.2, `${facts.outRight.length} points, ${(r.length * 100).toFixed(0)} cm, crosses at x ${r.crossings.map((x) => x.toFixed(3)).join(', ')}, off the plate ${r.off}, ends at [${r.end[0]}, ${r.end[2]}]`);
-} else {
-  check('from a seat the way out is the front opening by the Meta stone, then left along the path', false, 'no way found');
-  check('or right along the path', false, 'no way found');
-}
+  const exit = throughExit(facts.out);
+  const ok = exit.length === 1 && exit[0] > -0.075 && exit[0] < 0.087;
+  check('from a seat the way out is the exit in the left wall, then the walkout path', ok && l.crossings.length === 0 && !l.door && l.end[0] < -0.44,
+    `${facts.out.length} points, ${(l.length * 100).toFixed(0)} cm, through the left wall at z ${exit.map((z) => z.toFixed(3)).join(', ')}, over the room's front ${l.crossings.length} times, by the door ${l.door}, ends at [${l.end[0]}, ${l.end[2]}]`);
+} else check('from a seat the way out is the exit in the left wall, then the walkout path', false, 'no way found');
+check('every spot across the exit path can be reached', facts.lanesReached === facts.lanes, `${facts.lanesReached} of ${facts.lanes}`);
 if (facts.serve) {
   const xs = facts.serve.map((p) => p[0]);
   const behind = facts.serve[0][2] < -0.19;
@@ -175,6 +187,30 @@ check('the same way asked for again is remembered', facts.remembered, `second as
       `table put at [${res.at.map((v) => v.toFixed(3)).join(', ')}] (on the old way, ${(res.before.near * 100).toFixed(1)} cm from it); after a ${res.rebuildMs.toFixed(0)} ms rebuild the way passes ${res.after ? (res.after.near * 100).toFixed(1) : '?'} cm from its middle and is ${res.after ? ((res.after.length - res.before.length) * 100).toFixed(0) : '?'} cm longer`);
     check('and the baristas have somewhere to stand to serve it', res.tables === 13, `${res.tables} places to serve now`);
   }
+}
+
+// 8. The annex: opened, the way out runs on through it and out of its own exit; its furniture brings new seats.
+{
+  const res = await page.evaluate(async () => {
+    const { system, guests } = window.__cafe;
+    window.__tableBig?.removeFromParent();
+    const before = guests.seats.length;
+    for (let tries = 0; tries < 100 && !system.openAnnex(); tries++) await new Promise((r) => setTimeout(r, 200));
+    for (let tries = 0; tries < 600 && !(system.annexOpen && guests.seats.length > before); tries++) await new Promise((r) => setTimeout(r, 100));
+    const { ANNEX_EXIT_LANES } = await import('/src/guests/paths.ts');
+    const nav = system.nav;
+    const V = system.cafe.position.constructor;
+    const l = ANNEX_EXIT_LANES[1];
+    const way = nav.findPath(window.__navFacts.landing, new V(l.x, nav.heightAt(l.x, l.z), l.z));
+    const shown = (n) => system.cafe.getObjectByName(n)?.visible ?? false;
+    return { open: system.annexOpen, before, after: guests.seats.length, rebuildMs: nav.buildMs, way: way ? way.map((p) => [p.x, p.y, p.z]) : null,
+      wall: shown('WallLeft-Closed') || shown('WallLeft-Open'), tables: system.annexTables.map((t) => t.model) };
+  });
+  const outer = [];
+  const w = res.way ?? [];
+  for (let i = 1; i < w.length; i++) if ((w[i - 1][0] + 0.65) * (w[i][0] + 0.65) < 0) outer.push(w[i - 1][2] + ((w[i][2] - w[i - 1][2]) * (-0.65 - w[i - 1][0])) / (w[i][0] - w[i - 1][0]));
+  check('extended, the café is one wider room with more tables and one way out, in its new outer wall', res.open && !res.wall && res.tables.length === 4 && outer.length === 1 && outer[0] > 0.04 && outer[0] < 0.19 && res.after >= res.before + 10,
+    `open ${res.open}; left wall shown ${res.wall}; new tables ${res.tables.join(', ')}; out through the outer wall at z ${outer.map((z) => z.toFixed(3)).join(', ')}; seats ${res.before} to ${res.after}; grid read again in ${res.rebuildMs.toFixed(0)} ms`);
 }
 
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');

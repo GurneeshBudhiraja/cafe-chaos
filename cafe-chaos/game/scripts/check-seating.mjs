@@ -12,8 +12,8 @@
  *    one picked up with little patience left keeps its dial running in
  *    the hand and fades away there when it runs out;
  * 5. when its time is up a seated guest hops off its chair, comes out of
- *    the room's front opening by the Meta stone, and goes left or right
- *    along the front path, fading at its end without leaving the plate;
+ *    the exit in the room's left wall and goes down the walkout path,
+ *    fading at the plate's edge;
  *    its seat is free;
  * 6. there are never more than ten on stage, and no console errors.
  * Saves headset-view screenshots along the way.
@@ -232,7 +232,7 @@ await handTo('right', AWAY.right);
 
 // 5. The seated guest's time runs out: off the chair, out of the door, and away along the front.
 await h.head(SEAT, LOOK, 300);
-await page.waitForFunction(() => window.__trail.points.some((q) => q.state === 'leaving' && q.z > 0.2), null, { timeout: 420000 });
+await page.waitForFunction(() => window.__trail.points.some((q) => q.state === 'leaving' && q.x < -0.2), null, { timeout: 420000 });
 await h.screenshot('artifacts/seating-4-leaving.png');
 await page.waitForFunction(() => window.__trail.gone, null, { timeout: 420000 });
 const trail = await page.evaluate(() => window.__trail);
@@ -241,26 +241,25 @@ const trail = await page.evaluate(() => window.__trail);
   // The hop is under half a second: in the emulator's slow frames it can pass between two samples, so the system's own count is read.
   const hopped = (await page.evaluate(() => window.__cafe.guests.hoppedOff)) >= 1;
   const walkedOut = p.filter((q) => q.state === 'leaving');
-  // Out by the room's front opening (by the Meta stone), not the door; then along the garden path to an end.
+  // Out by the exit in the left wall, not the door, and never over the room's front.
   const byDoor = walkedOut.some((q) => q.x > 0.36 && q.z < 0.15);
-  // Where its way crosses the room's front edge (from the way it planned: the samples are too far apart to catch it).
+  // Judged from the way it planned (the samples are too far apart at the emulator's frame rate to catch the crossing).
   const way = trail.path ?? [];
-  const crossing = [];
-  for (let i = 1; i < way.length; i++) if ((way[i - 1][2] - 0.184) * (way[i][2] - 0.184) < 0) crossing.push(way[i - 1][0] + ((way[i][0] - way[i - 1][0]) * (0.184 - way[i - 1][2])) / (way[i][2] - way[i - 1][2]));
-  const byTheStone = crossing.length === 1 && crossing[0] > 0 && crossing[0] < 0.135;
-  const onPath = walkedOut.filter((q) => q.z > 0.2 && q.y > 0.015);
-  const offPlate = walkedOut.some((q) => q.y < 0.015 || Math.abs(q.x) > 0.46 || q.z > 0.31);
+  const wall = [];
+  const front = [];
+  for (let i = 1; i < way.length; i++) {
+    const [ax, , az] = way[i - 1];
+    const [bx, , bz] = way[i];
+    if ((ax + 0.33) * (bx + 0.33) < 0) wall.push(az + ((bz - az) * (-0.33 - ax)) / (bx - ax));
+    if ((az - 0.184) * (bz - 0.184) < 0) front.push(ax);
+  }
+  const byTheExit = wall.length === 1 && wall[0] > -0.075 && wall[0] < 0.087 && front.length === 0;
+  const planEnd = way.length ? way[way.length - 1] : [NaN, NaN, NaN];
+  const seenOutside = walkedOut.filter((q) => q.x < -0.33).length;
   // It fades over the last stretch; at the emulator's frame rate the last sample may be early in the fade.
   const faded = walkedOut.length > 0 && walkedOut[walkedOut.length - 1].opacity < 0.97;
-  const side = walkedOut.length ? walkedOut[0].side : '?';
-  const endX = onPath.length ? onPath[onPath.length - 1].x : NaN;
-  // Where the way it planned ends: at the far end of the front path on its side. (At the emulator's frame rate only a
-  // sample or two lands on the path itself, so the route is judged from the plan and the samples only confirm it.)
-  const planEnd = way.length ? way[way.length - 1] : [NaN, NaN, NaN];
-  const toAnEnd = planEnd[2] > 0.2 && (side === 'left' ? planEnd[0] < -0.2 : planEnd[0] > 0.3);
-  const wentThatWay = onPath.length >= 1 && (side === 'left' ? endX < 0.065 : endX > 0.065);
-  check('its time up, it hops off the chair, comes out by the Meta stone and goes left or right along the front path', hopped && !byDoor && byTheStone && toAnEnd && wentThatWay && !offPlate && faded && trail.gone,
-    `hopped ${hopped}, by the door ${byDoor}, out by the Meta stone ${byTheStone} (crossing the room's front at x ${crossing.map((x) => x.toFixed(3)).join(', ')}), went ${side} (seen ${onPath.length} times on the path, last at x ${endX.toFixed(2)}; its way ends at x ${planEnd[0].toFixed(2)}), off the plate ${offPlate}, faded ${faded}, gone ${trail.gone}`);
+  check('its time up, it hops off the chair, goes out by the exit in the left wall and down the walkout path', hopped && !byDoor && byTheExit && planEnd[0] < -0.44 && faded && trail.gone,
+    `hopped ${hopped}, by the door ${byDoor}, through the left wall at z ${wall.map((z) => z.toFixed(3)).join(', ')}, over the room's front ${front.length} times; its way ends at x ${planEnd[0].toFixed(3)}; seen outside ${seenOutside} times; faded ${faded}, gone ${trail.gone}`);
 }
 const end = await state();
 check('its seat is free again, and there were never more than ten on stage', end.seats[seat.index].occupant === 0 && end.peak <= 10 && end.left >= 1, `seat ${seat.index} occupant ${end.seats[seat.index].occupant}, peak ${end.peak}, left ${end.left}`);

@@ -8,7 +8,7 @@
  * 3. steam rises and blossom falls;
  * 4. the moment a guest is seated a server sets off with a tray, serves
  *    that guest (the tray goes down at the guest's own place, and the
- *    guest eats), bows and goes home;
+ *    guest eats), and goes straight home (no bow);
  * 5. of two guests seated together, one near and one far, the nearer is
  *    served first (one server);
  * 6. a server on its way to a far guest turns to a guest seated nearer
@@ -43,7 +43,7 @@ const h = await startHeadset({
       guests.seatedSeconds = 100000;
       system.replace();
     });
-    await h.page.waitForFunction(() => window.__cafe.system.placed && !window.__cafe.system.arriving && window.__cafe.baristas.staff.length === 6 && window.__cafe.ambience.petals, null, { timeout: 60000 });
+    await h.page.waitForFunction(() => window.__cafe.system.placed && !window.__cafe.system.arriving && window.__cafe.baristas.staff.length === 3 && window.__cafe.ambience.petals, null, { timeout: 60000 });
   },
 });
 const { page } = h;
@@ -86,7 +86,7 @@ const start = await staff();
 {
   const stations = await page.evaluate(async () => (await import('/src/baristas/routes.ts')).STATION_X);
   const atStation = start.staff.every((m) => Math.abs(m.at[0] - stations[m.station]) < 0.03 && Math.abs(m.at[1] - 0.036) < 1e-3 && m.at[2] < -0.19 && m.at[2] > -0.225);
-  check('all six servers are at their stations behind the counter', start.staff.length === 6 && atStation && new Set(start.staff.map((m) => m.name)).size === 6, start.staff.map((m) => `${m.name}@${m.at[0].toFixed(2)},${m.at[2].toFixed(3)}`).join(' '));
+  check('all three servers are at their stations behind the counter', start.staff.length === 3 && atStation && new Set(start.staff.map((m) => m.name)).size === 3, start.staff.map((m) => `${m.name}@${m.at[0].toFixed(2)},${m.at[2].toFixed(3)}`).join(' '));
   check('each server is one draw call', start.staff.every((m) => m.drawn === 1), `meshes drawn: ${start.staff.map((m) => m.drawn).join(', ')}`);
 }
 await h.head(await toWorld([-0.05, 0.3, 0.28]), await toWorld([-0.1, 0.07, -0.19]), 400);
@@ -142,7 +142,8 @@ await h.head(SEAT, LOOK, 300);
   check('the moment a guest is seated a server sets off with a tray for it', went.order === placed.guest && went.tray, `${went.name} is out with a tray for guest ${went.order} (seated: guest ${placed.guest})`);
   await until((name) => window.__cafe.baristas.staff.find((x) => x.barista.name === name).barista.root.position.z > -0.1, went.name);
   await h.screenshot('artifacts/baristas-2-carrying.png');
-  await until((name) => window.__cafe.baristas.staff.find((x) => x.barista.name === name).state === 'serving', went.name);
+  // With no bow the server is only a moment at the table, so wait for the tray to be down rather than for the 'serving' state.
+  await until((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.served === true, placed.guest);
   await h.screenshot('artifacts/baristas-3-serving.png');
   await until((name) => window.__cafe.baristas.staff.find((x) => x.barista.name === name).state === 'working', went.name);
   const after = await page.evaluate((id) => {
@@ -169,6 +170,9 @@ await page.evaluate(() => (window.__cafe.baristas.maxOut = 1));
 // 6. A server on its way to a far guest turns to one seated nearer it; the far guest is served next.
 {
   await until(() => window.__cafe.baristas.out === 0);
+  // Servers walk briskly and the emulator's frames are long: the café's clock is slowed for this one, so the server
+  // is still short of the near seat when its guest has sat down.
+  await page.evaluate(() => (window.__cafe.system.timeScale = 0.4));
   // The far guest: front left, the whole length of the aisle away.
   const far = await seatGuest(-0.297, 0.025);
   // As the server comes out of the corridor into the aisle, seat a guest just ahead of it (the emulator's
@@ -182,8 +186,10 @@ await page.evaluate(() => (window.__cafe.baristas.maxOut = 1));
   const server = turned.staff.find((m) => m.name === where.name);
   await until(([a, b]) => { const log = window.__cafe.baristas.servedLog; return log.includes(a) && log.includes(b); }, [far.guest, near.guest]);
   const s = await staff();
+  await page.evaluate(() => (window.__cafe.system.timeScale = 1));
   const order = s.servedLog.filter((g) => g === far.guest || g === near.guest);
-  check('a server on its way turns to a guest seated nearer it, and the other is served next', server.order === near.guest && turned.switches === switchesBefore + 1 && order[0] === near.guest && order[1] === far.guest,
+  // At the emulator's frame rate the near guest may already be served (no bow now) by the time this is read: then it has no order.
+  check('a server on its way turns to a guest seated nearer it, and the other is served next', (server.order === near.guest || (server.order === null && turned.servedLog.includes(near.guest))) && turned.switches === switchesBefore + 1 && order[0] === near.guest && order[1] === far.guest,
     `${where.name} was at x ${where.x.toFixed(2)} heading for guest ${far.guest}; guest ${near.guest} seated just ahead of it; it is now bringing guest ${server.order}'s order (switches ${switchesBefore} to ${turned.switches}); served in the order ${order.join(', ')}`);
 }
 

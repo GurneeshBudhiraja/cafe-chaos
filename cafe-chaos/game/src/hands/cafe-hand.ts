@@ -22,15 +22,83 @@
  *   the eye, which rounds the fingers.
  * - The tips of the thumb and forefinger glow amber as they close, so a
  *   pinch shows in the hand itself.
+ * - The segments are modelled for one hand's proportions, but the
+ *   headset reports the player's own joints, so on any other hand a
+ *   fixed-length segment would fall short of the next knuckle or run
+ *   through it. Each frame every segment is stretched (or shortened)
+ *   along its length to reach exactly from its joint to the next, and
+ *   the palm to the first knuckles and as wide as the hand's spread,
+ *   so the hand stays in one piece whatever its size.
+ *
+ * The game plays in passthrough, where the player's real hands are
+ * always in view (the dimmer only tints the cameras), so a model hand
+ * is drawn over a real one and the two never quite agree: a solid hand
+ * hides part of the real one and reads as a second hand on top of it.
+ * `HAND.style` chooses:
+ * - 'outline' (the default): IWSDK's own grey hand, a faint outline
+ *   that fades toward the wrist and sits around the real hand: the
+ *   stock look of hands on Quest. The café is drawn over the real hand;
+ * - 'occluded': the player's own hands, in front of the
+ *   café wherever they really are in front of it. Nothing of the hand
+ *   is drawn; an unseen copy of the tracked hand is put into the depth
+ *   buffer before anything else, so the café is not drawn where the
+ *   hand covers it and the cameras' picture of the real hand shows
+ *   there instead (see `OccludingHand`);
+ * - 'cream': the café's solid cream hands;
+ * - 'real': nothing drawn, the player's own hands only.
  *
  * Installed with `themeHands(world)`.
  */
 
-import { AnimatedHand, Color, MeshStandardMaterial, Vector3, type IUniform, type Mesh, type VisualConstructor, type VisualImplementation, type World } from '@iwsdk/core';
+import { AnimatedHand, Color, MeshStandardMaterial, ShaderMaterial, Vector3, type IUniform, type Mesh, type Object3D, type VisualConstructor, type VisualImplementation, type World } from '@iwsdk/core';
 import { foldParts } from '../lib/fold-parts.js';
+
+/**
+ * Each finger's segments, in order from the knuckle: a segment is named
+ * after the joint it starts from and reaches to the next joint named.
+ */
+const FINGERS: readonly (readonly string[])[] = [
+  ['thumb-metacarpal', 'thumb-phalanx-proximal', 'thumb-phalanx-distal', 'thumb-tip'],
+  ...['index-finger', 'middle-finger', 'ring-finger', 'pinky-finger'].map((f) => [`${f}-phalanx-proximal`, `${f}-phalanx-intermediate`, `${f}-phalanx-distal`, `${f}-tip`]),
+];
+/** The palm (the wrist's segment) reaches from the wrist to this knuckle, and spans these two. */
+const PALM = { reach: 'middle-finger-phalanx-proximal', across: ['index-finger-phalanx-proximal', 'pinky-finger-phalanx-proximal'] as const };
+/** How far a segment may be stretched or shortened from its modelled length. */
+const STRETCH = { min: 0.6, max: 1.5 };
+
+/** A segment, the joint its far end reaches, and the modelled distance between them. */
+interface Span {
+  node: Object3D;
+  far: Object3D;
+  rest: number;
+}
+
+type HandStyle = 'occluded' | 'outline' | 'cream' | 'real';
+/** 'outline' (IWSDK's stock hands, the look Quest players know) unless the address asks for another (`?hands=occluded`, `cream`, `real`): for trying the styles on the headset, and for pictures that need a hand in them. */
+function handStyle(): HandStyle {
+  const asked = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('hands') : null;
+  return asked === 'occluded' || asked === 'cream' || asked === 'real' ? asked : 'outline';
+}
 
 /** The hand's look, on top of the model's own cream and sage. */
 export const HAND = {
+  /**
+   * 'occluded': the real hands, shown in front of the café where they
+   * are in front of it. 'outline': IWSDK's stock outline hand (it
+   * surrounds the real hand instead of covering it). 'cream': the cream
+   * model hands, solid, so they cover the real hand and read as a second
+   * hand on top of it. 'real': no model at all (the café draws over the
+   * real hands).
+   */
+  style: handStyle(),
+  /**
+   * The unseen hand that hides the café ('occluded'). It is the tracked
+   * hand model grown outward by `grow` metres, so the edge of the real
+   * hand (and the little the tracking lags behind it) stays clear of the
+   * café; too much and a rim of the room shows around the hand.
+   * `outline` also draws IWSDK's faint outline around it.
+   */
+  occluder: { grow: 0.0025, outline: false },
   /**
    * The night's fill light is a dim blue, and the model's near-white
    * cream takes it on and reads as lilac grey. Two things keep it cream:
@@ -104,6 +172,10 @@ class CafeHand extends AnimatedHand {
     cafeThumbTip: { value: new Vector3() },
     cafeIndexTip: { value: new Vector3() },
   };
+  /** The finger segments, each stretched to its next joint every frame. */
+  private readonly spans: Span[] = [];
+  /** The palm: the wrist's segment, its length to the first knuckle and its width across the knuckles, with the cuff that rides on it. */
+  private palm: { span: Span; across: [Object3D, Object3D]; width: number; cuff: Mesh | undefined } | null = null;
 
   init(): void {
     const wrist = this.model.getObjectByName('wrist');
@@ -130,10 +202,11 @@ class CafeHand extends AnimatedHand {
     };
     tipOf('thumb-tip', this.uniforms.cafeThumbTip.value);
     tipOf('index-finger-tip', this.uniforms.cafeIndexTip.value);
+    this.measure(root, wrist, cuff);
     const cream = creamMaterial(segments[0].material as MeshStandardMaterial, this.uniforms);
     for (const segment of segments) segment.material = cream;
     // One mesh for the whole hand, its bones the joint nodes the headset poses.
-    foldParts(root, segments, 'CafeHand-Skin');
+    const skin = foldParts(root, segments, 'CafeHand-Skin');
     // The cuff is not a joint: it rides with the wrist.
     if (cuff) {
       const sage = (cuff.material as MeshStandardMaterial).clone();
@@ -142,12 +215,115 @@ class CafeHand extends AnimatedHand {
       cuff.material = sage;
       wrist.attach(cuff);
     }
+    // Real hands only: the model is still the thing the SDK poses and the pinch reads from, but nothing of it is drawn.
+    // (The model's own `visible` is reset by the SDK every frame, so the meshes are hidden instead.)
+    if (HAND.style === 'real') {
+      if (skin) skin.visible = false;
+      if (cuff) cuff.visible = false;
+    }
+  }
+
+  /** Note each segment's modelled length (the rest pose), to stretch it from later. */
+  private measure(root: Object3D, wrist: Object3D, cuff: Mesh | undefined): void {
+    const node = (name: string): Object3D | undefined => this.model.getObjectByName(name);
+    // Every segment is a direct child of the root, so its position is the joint's place in the hand's space.
+    const span = (from: Object3D | undefined, to: Object3D | undefined): Span | null =>
+      from && to && from.parent === root && to.parent === root ? { node: from, far: to, rest: from.position.distanceTo(to.position) } : null;
+    for (const finger of FINGERS) {
+      for (let i = 0; i + 1 < finger.length; i++) {
+        const s = span(node(finger[i]), node(finger[i + 1]));
+        if (s && s.rest > 0.001) this.spans.push(s);
+      }
+    }
+    const reach = span(wrist, node(PALM.reach));
+    const across: [Object3D | undefined, Object3D | undefined] = [node(PALM.across[0]), node(PALM.across[1])];
+    if (reach && reach.rest > 0.001 && across[0]?.parent === root && across[1]?.parent === root) {
+      const width = across[0].position.distanceTo(across[1].position);
+      if (width > 0.001) this.palm = { span: reach, across: [across[0], across[1]], width, cuff };
+    }
   }
 
   update(): void {
     super.update();
+    this.fit();
     const pinch = this.xrInput?.getPinchStrength() ?? 0;
     this.uniforms.cafePinch.value = pinch * pinch;
+  }
+
+  /**
+   * Stretch each segment along its length (the joint's -Z) to reach the
+   * next joint where the headset now puts it, and the palm to the first
+   * knuckles and across the hand's spread. The skinned hand follows its
+   * bones' scale, so the cream stays continuous at every knuckle.
+   */
+  private fit(): void {
+    const ratio = (live: number, rest: number): number => Math.min(STRETCH.max, Math.max(STRETCH.min, live / rest));
+    for (const s of this.spans) s.node.scale.z = ratio(s.node.position.distanceTo(s.far.position), s.rest);
+    const palm = this.palm;
+    if (!palm) return;
+    const wrist = palm.span.node;
+    const sz = ratio(wrist.position.distanceTo(palm.span.far.position), palm.span.rest);
+    const sx = ratio(palm.across[0].position.distanceTo(palm.across[1].position), palm.width);
+    wrist.scale.set(sx, 1, sz);
+    // The cuff rides on the wrist but is a ring of its own size: undo the palm's stretch on it.
+    palm.cuff?.scale.set(1 / sx, 1, 1 / sz);
+  }
+}
+
+/**
+ * The hand that hides the café behind it, so the player's real hand is
+ * seen in front.
+ *
+ * In passthrough the page draws over the cameras' picture: wherever the
+ * page leaves a pixel untouched (clear), the real world shows. So the
+ * real hand cannot be drawn over the café, but the café can be left out
+ * where the hand is. This is IWSDK's tracked hand model (posed from the
+ * headset's joints every frame) with a material that writes depth and
+ * no colour, drawn before everything else: anything further away than
+ * the hand then fails the depth test there and is not drawn, and the
+ * real hand shows through. Things nearer than the hand (a guest held
+ * between the fingers and the eye) still draw over it, as they should.
+ */
+const occluderMaterial = new ShaderMaterial({
+  uniforms: { grow: { value: HAND.occluder.grow } },
+  vertexShader: /* glsl */ `
+    #include <common>
+    #include <skinning_pars_vertex>
+    uniform float grow;
+    void main() {
+      #include <skinbase_vertex>
+      #include <beginnormal_vertex>
+      #include <skinnormal_vertex>
+      #include <defaultnormal_vertex>
+      vec3 transformed = position + normal * grow;
+      #include <skinning_vertex>
+      gl_Position = projectionMatrix * modelViewMatrix * vec4( transformed, 1.0 );
+    }`,
+  fragmentShader: /* glsl */ `void main() { gl_FragColor = vec4( 0.0 ); }`,
+  colorWrite: false,
+  depthWrite: true,
+  depthTest: true,
+});
+/** Before the dimmer and the café (both sort after this). */
+const OCCLUDER_ORDER = -2000;
+
+class OccludingHand extends AnimatedHand {
+  // Its own cache entry, so it is not handed a stock outline hand made earlier.
+  static assetKeyPrefix = 'cafe-occluding-hand';
+
+  init(): void {
+    super.init();
+    // The stock hand is two skinned meshes: the body (it writes depth, but among the see-through things, after the café is drawn) and the outline.
+    this.model.traverse((node) => {
+      const mesh = node as Mesh;
+      if (!mesh.isMesh) return;
+      if (mesh.renderOrder === 999) mesh.visible = HAND.occluder.outline;
+      else {
+        mesh.name = 'HandOccluder';
+        mesh.material = occluderMaterial;
+        mesh.renderOrder = OCCLUDER_ORDER;
+      }
+    });
   }
 }
 
@@ -163,9 +339,15 @@ class CafeHandRight extends CafeHand {
   static assetPath = modelUrl('right');
 }
 
-/** Draw both hands as the café's hands. */
+/** Draw both hands as the café's hands (or leave IWSDK's outline hands, for 'outline'). */
 export function themeHands(world: World): void {
+  if (HAND.style === 'outline') return;
   const as = (visual: unknown): VisualConstructor<VisualImplementation> => visual as VisualConstructor<VisualImplementation>;
+  if (HAND.style === 'occluded') {
+    world.input.xr.visualAdapters.hand.left.updateVisualImplementation(as(OccludingHand));
+    world.input.xr.visualAdapters.hand.right.updateVisualImplementation(as(OccludingHand));
+    return;
+  }
   world.input.xr.visualAdapters.hand.left.updateVisualImplementation(as(CafeHandLeft));
   world.input.xr.visualAdapters.hand.right.updateVisualImplementation(as(CafeHandRight));
 }

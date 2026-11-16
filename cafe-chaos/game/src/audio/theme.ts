@@ -19,6 +19,8 @@ import type { World } from '@iwsdk/core';
 export const THEME_VOLUME = 0.05;
 /** It comes in over this long, and goes out over this long (seconds). */
 const FADE = { in: 4, out: 1.2 };
+/** How loud it plays while the game is paused, as a share of its usual volume. */
+const DUCK = 0.4;
 
 export class Theme {
   readonly audio: HTMLAudioElement;
@@ -27,7 +29,13 @@ export class Theme {
   /** How many times it has been asked to play (for the checks). */
   asked = 0;
   private target = 0;
+  /** Quieter while the game is paused (see duck). */
+  ducked = false;
+  /** The player's music level (Settings): 1 is the usual volume, 0 silent. */
+  level = 1;
   private rate = 0;
+  /** True until it is asked to play, and after it is stopped (only then is the audio paused). */
+  private stopped = true;
   private last = performance.now();
 
   constructor(url: string) {
@@ -40,7 +48,8 @@ export class Theme {
   /** Start (or resume) the theme, fading in. */
   play(): void {
     this.asked++;
-    this.target = THEME_VOLUME;
+    this.stopped = false;
+    this.target = THEME_VOLUME * this.level * (this.ducked ? DUCK : 1);
     this.rate = THEME_VOLUME / FADE.in;
     this.audio
       .play()
@@ -57,14 +66,25 @@ export class Theme {
     if (!this.started && this.target > 0) this.play();
   }
 
+  /** Quieter while the game is paused (40%), back up when it carries on; only while it is playing. */
+  duck(on: boolean): void {
+    if (on === this.ducked || this.target === 0) return;
+    this.ducked = on;
+    this.target = THEME_VOLUME * this.level * (on ? DUCK : 1);
+    this.rate = THEME_VOLUME / FADE.out;
+  }
+
   /** Fade out and pause. */
   stop(): void {
+    this.stopped = true;
     this.target = 0;
     this.rate = THEME_VOLUME / FADE.out;
   }
 
   /** Ease the volume toward where it should be (call every frame). */
   update(): void {
+    // The level follows Settings at once (while it is playing; 0 is silent but still playing).
+    if (!this.stopped) this.target = THEME_VOLUME * this.level * (this.ducked ? DUCK : 1);
     const now = performance.now();
     const delta = Math.min(0.25, (now - this.last) / 1000);
     this.last = now;
@@ -72,7 +92,7 @@ export class Theme {
     if (volume === this.target) return;
     const step = this.rate * delta;
     this.audio.volume = volume < this.target ? Math.min(this.target, volume + step) : Math.max(this.target, volume - step);
-    if (this.audio.volume === 0 && this.target === 0) this.audio.pause();
+    if (this.audio.volume === 0 && this.stopped) this.audio.pause();
   }
 }
 

@@ -6,7 +6,8 @@
  * faces the player (it moves to another edge as the player moves round,
  * with a little hysteresis), and a bracket wraps each corner of the base,
  * all at their own size on the table, following the café wherever it goes
- * and however it is turned or sized. Each brightens as a hand comes near.
+ * and however it is turned or sized. The brackets rest faint; each handle
+ * brightens as a hand comes near.
  *
  * A pinch closing on the pill takes the café for carrying (HoldSystem
  * does the carry, as for a pinch on the café itself). A pinch closing on
@@ -19,10 +20,10 @@
 
 import { createSystem, Vector3 } from '@iwsdk/core';
 import { SCALE_MAX, SCALE_MIN } from '../hold/hold.js';
-import { BRACKET, CORNER_SIGNS, LIFT_M, NEAR_M, PILL, PILL_DOOR_SIDE_Z, REACH_M, SHOW, SIDE_HYSTERESIS, growFor, makeBracket, makePill, type Corner, type Handle, type Side } from '../handles/handles.js';
+import { BRACKET, CORNER_SIGNS, LIFT_M, NEAR_M, PAIR, PILL, PILL_DOOR_SIDE_Z, REACH_M, SHOW, SIDE_HYSTERESIS, growFor, makeBracket, makePill, type Corner, type Handle, type Side } from '../handles/handles.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
 import { CafeSystem } from './cafe-system.js';
-import { HoldSystem } from './hold-system.js';
+import { HoldSystem, wrapAngle } from './hold-system.js';
 
 interface CornerDrag {
   hand: Hand;
@@ -39,6 +40,8 @@ export class HandleSystem extends createSystem({}) {
   /** Whether the handles are up this frame. */
   shown = false;
   readonly brackets: Handle[] = [makeBracket(), makeBracket(), makeBracket(), makeBracket()];
+  /** The pause button stands beside the pill (GameSystem sets this): the pill makes room, the pair centred on the edge. */
+  paired = false;
   /** Which edge of the base the pill is on. */
   side: Side = 'front';
   /** The corner drag in progress, if any. */
@@ -66,7 +69,7 @@ export class HandleSystem extends createSystem({}) {
   update(delta: number): void {
     const cafe = this.cafe;
     const hold = this.hold;
-    const shown = !!cafe && !!hold && cafe.placed && this.world.renderer.xr.isPresenting;
+    const shown = !!cafe && !!hold && cafe.placed && !cafe.waiting && this.world.renderer.xr.isPresenting;
     this.shown = shown;
     for (const handle of [this.pill, ...this.brackets]) handle.group.visible = shown;
     if (!shown) {
@@ -119,6 +122,13 @@ export class HandleSystem extends createSystem({}) {
     cafe.localToWorld(group.position.copy(this.v));
     // Along the edge: the pill's length runs along X for the front and back edges, along Z for the sides.
     group.rotation.set(0, cafe.rotation.y + (this.side === 'left' || this.side === 'right' ? Math.PI / 2 : 0), 0);
+    if (this.paired) group.translateX(-PAIR.shift);
+  }
+
+  /** Where the pause button stands: on the table beside the pill's far end (world). */
+  pairSpot(out: Vector3): Vector3 {
+    const group = this.pill.group;
+    return group.localToWorld(out.set(PILL.length / 2 + PAIR.beyond / group.scale.x, 0, 0));
   }
 
   /** A bracket wraps each corner, its vertex just outside the corner and its arms back along the edges. */
@@ -212,7 +222,7 @@ export class HandleSystem extends createSystem({}) {
     const radius = Math.hypot(dx, dz);
     const scale = Math.min(SCALE_MAX, Math.max(SCALE_MIN, (drag.scale0 * radius) / drag.radius0));
     cafe.scale.setScalar(scale);
-    cafe.rotation.set(0, drag.yaw0 + (Math.atan2(dx, dz) - drag.angle0), 0);
+    cafe.rotation.set(0, drag.yaw0 + wrapAngle(Math.atan2(dx, dz) - drag.angle0), 0);
   }
 
   // ------------------------------------------------------------ brightness
@@ -223,10 +233,11 @@ export class HandleSystem extends createSystem({}) {
     const k = Math.min(1, SHOW.fade * delta);
     const carrying = hold.holding.length > 0;
     const grow = this.pill.group.scale.x;
-    this.light(this.pill, carrying ? SHOW.held : this.nearHand(this.pill, (PILL.length / 2) * grow) ? SHOW.near : SHOW.rest, k);
+    this.light(this.pill, carrying ? SHOW.held : this.nearHand(this.pill, (PILL.length / 2) * grow) ? SHOW.near : SHOW.rest, SHOW.rest, k);
     this.brackets.forEach((bracket, i) => {
       const held = this.drag?.corner === i;
-      this.light(bracket, held ? SHOW.held : this.nearHand(bracket, BRACKET.arm * grow * 0.5) ? SHOW.near : SHOW.rest, k);
+      // While the café is carried the corners show in full, so its footprint reads.
+      this.light(bracket, held || carrying ? SHOW.held : this.nearHand(bracket, BRACKET.arm * grow * 0.5) ? SHOW.near : SHOW.bracketRest, SHOW.bracketRest, k);
     });
   }
 
@@ -239,10 +250,12 @@ export class HandleSystem extends createSystem({}) {
     return false;
   }
 
-  private light(handle: Handle, target: number, k: number): void {
+  private light(handle: Handle, target: number, rest: number, k: number): void {
     handle.show += (target - handle.show) * k;
     handle.body.opacity = handle.show;
     handle.side.opacity = handle.show;
-    handle.glow.opacity = handle.show * SHOW.glowShare;
+    // The glow only above rest: none at all while nothing is near.
+    const lift = Math.max(0, Math.min(1, (handle.show - rest) / (SHOW.near - rest)));
+    handle.glow.opacity = handle.show * SHOW.glowShare * lift;
   }
 }

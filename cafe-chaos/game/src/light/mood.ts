@@ -72,12 +72,11 @@ export interface Lamp {
 }
 
 export const LAMPS: Lamp[] = [
-  // The two post lamps at the entrance, either side of the door frame: their pools reach out onto the table.
-  { position: [0.34, 0.078, -0.036], color: 0xffa858, intensity: 0.08, distance: 0.5, breathes: false },
-  { position: [0.34, 0.078, 0.146], color: 0xffa858, intensity: 0.08, distance: 0.5, breathes: false },
-  // The paper lanterns under the eave over the counter: the outer two carry the light for all three.
-  { position: [-0.2, 0.124, -0.158], color: 0xffbe74, intensity: 0.14, distance: 0.5, breathes: true },
-  { position: [0.2, 0.124, -0.158], color: 0xffbe74, intensity: 0.14, distance: 0.5, breathes: true },
+  // The two post lamps at the entrance, either side of the door frame: one light between them carries both
+  // (every light is worked out for every pixel, so fewer keep the frame rate up on the headset).
+  { position: [0.34, 0.078, 0.055], color: 0xffa858, intensity: 0.15, distance: 0.6, breathes: false },
+  // The paper lanterns under the eave over the counter: one light in the middle carries all three.
+  { position: [0, 0.124, -0.158], color: 0xffbe74, intensity: 0.26, distance: 0.62, breathes: true },
   // The room's own warmth: an unseen light high in the middle of the café, so the tables sit in a cosy wash.
   { position: [0, 0.15, -0.05], color: 0xffc080, intensity: 0.13, distance: 0.6, breathes: false },
 ];
@@ -109,6 +108,29 @@ export const GLOW: Record<string, { strength: number; color?: number }> = {
   CafeLanternPaper: { strength: 1.6 },
   CafeShoji: { strength: 1.1, color: 0xffb46a },
 };
+
+/**
+ * When the café grows (the annex), the light grows with it. The annex is
+ * a room of its own under its own eave, so it gets what the main room
+ * has: paper lanterns hanging under the eave (copies of the main room's
+ * middle lantern, `LANTERN_BOX`), each with a warm breathing light and a
+ * halo, and the room's own unseen warm light moves over to the middle of
+ * the wider room and reaches further. The house light stays over the
+ * counter, so the main room keeps its look. The new lights come up with
+ * the lamps and with the annex as it rises.
+ */
+export const ANNEX_LIGHT = {
+  /** The room light (LAMPS[ROOM_LAMP]): where it goes, how far it reaches, and how much stronger it gets. */
+  room: { position: [-0.17, 0.15, -0.05] as const, distance: 0.9, strength: 1.4 },
+};
+/** The main room's middle paper lantern (café space): copied to hang in the annex. */
+export const LANTERN_BOX = { min: [-0.04, 0.085, -0.2] as const, max: [0.04, 0.175, -0.115] as const };
+/** The annex's lanterns: how far left of the main room's middle lantern each hangs (metres, café space). */
+export const ANNEX_LANTERNS_X = [-0.43, -0.59];
+/** Each annex lantern's light (a point light where the lantern hangs) and halo: as the main room's lanterns, a touch stronger to carry the room alone. */
+export const ANNEX_LAMP = { y: 0.124, z: -0.158, color: 0xffbe74, intensity: 0.17, distance: 0.55, halo: { size: 0.11, opacity: 0.45 } };
+/** Which lamp is the room's own unseen light. */
+export const ROOM_LAMP = 2;
 
 /** The light spill on the player's table: a disc under the café, this radius (metres, café space). */
 export const SPILL_RADIUS = 0.85;
