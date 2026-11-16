@@ -12,7 +12,7 @@
  *  6. the janitor is saved and comes back after a reload; the messes do not
  *     (a clean café); pause freezes a cleaner;
  *  7. a guest who storms off without eating leaves no mess; a dirty table
- *     has a sign (a dish, then a broom once someone is coming); a guest
+ *     shows its mess and no floating sign; a guest
  *     let go over a dirty table is refused and goes back to the line;
  *  8. with three baristas off cleaning, one order brings one back, not all;
  *  9. DELETE AND START lets the janitor and the hired baristas go; no
@@ -80,8 +80,28 @@ const offered = await page.evaluate((table) => {
 check('a guest held over the dirty table is aimed at its seat as a dirty one (amber, it will not sit there)', offered?.table === first.table && offered.dirty === true, JSON.stringify(offered));
 await h.screenshot('artifacts/cleaning-1-dirty.png');
 
-const sign = await page.evaluate((t) => { const { mess, baristas } = window.__cafe; return { coming: mess.coming.has(t), signs: window.__cafe.system.cafe.children.filter((c) => c.name === `MessSign-${t}`).length }; }, first.table);
-check('a dirty table has a sign over it', sign.signs === 1, JSON.stringify(sign));
+const sign = await page.evaluate((t) => ({ signs: window.__cafe.system.cafe.children.filter((c) => c.name.startsWith('MessSign')).length, mess: window.__cafe.system.cafe.children.filter((c) => c.name === 'table-mess').length }));
+check('a dirty table shows its mess and no floating sign (the café kept uncluttered)', sign.signs === 0 && sign.mess === 1, JSON.stringify(sign));
+
+const fit = await page.evaluate(() => {
+  const { mess, system } = window.__cafe;
+  const out = {};
+  for (const t of [1, 8, 11, 12]) {
+    mess.soil(t);
+    const m = system.cafe.children.filter((c) => c.name === 'table-mess').at(-1);
+    const B = new (system.cafe.position.constructor)();
+    const box = new (window.__cafe.world.scene.constructor.prototype.constructor === undefined ? Object : Object)();
+    void box;
+    m.updateMatrixWorld(true);
+    const s = m.scale.x;
+    out[system.pieces[t].name] = +(s * 3.2).toFixed(2);
+  }
+  for (const t of [1, 11, 12]) mess.clean(t);
+  // These were not real cleanings: the count goes back.
+  mess.cleaned -= 3;
+  return out;
+});
+check('the mess fits inside each table top (at most 65 % of its shorter side): 3.0 cm on a two-seater, 2.6 on a four-seater, 1.7 on the bar, 1.6 on the side table', fit['table-2'] <= 3.0 && fit['table-4'] <= 2.6 && fit['bar-2'] <= 1.7 && fit['quiet-corner'] <= 1.6, JSON.stringify(fit));
 
 // 2. The barista, with nothing to serve, cleans it.
 await until(() => window.__cafe.baristas.staff.some((m) => m.state === 'toClean' || m.state === 'cleaning'), 60000);
@@ -91,7 +111,7 @@ const cleaningAt = await state();
 await until(() => window.__cafe.mess.cleaned >= 1, 60000);
 s = await state();
 const wipe = await page.evaluate(() => window.__cafe.baristas.staff[0].lasts);
-check('once a barista is on its way the sign shows it (the table is marked as coming)', comingNow, `coming ${comingNow}`);
+check('once a barista is on its way the table is marked as being seen to', comingNow, `coming ${comingNow}`);
 check('the barista goes to the dirty table and wipes it for 3 s; the mess goes and the seats are open again', cleaningAt.staff[0].state === 'cleaning' && cleaningAt.staff[0].chore === first.table && wipe === 3 && s.cleaned === 1 && s.dirty.length === 0 && s.closed.length === 0 && s.cleanedCount === 1, JSON.stringify({ was: cleaningAt.staff[0], wipe, dirty: s.dirty, closed: s.closed, cleaned: s.cleaned }));
 await until(() => window.__cafe.baristas.staff[0].state === 'working', 60000);
 

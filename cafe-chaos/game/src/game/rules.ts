@@ -221,12 +221,19 @@ export function tablePrice(bought: number): number {
  * cleaning when one comes in leaves the table and goes to serve. The
  * janitor (one, `JANITOR_PRICE`, bought in the shop) only cleans, the
  * longest dirty first, from its spot by the counter's end (`home`, café
- * space). The mess is sized for a small table (`bigMess`, `smallMess`
- * scale it for the others) and shrinks away over `vanish` seconds.
+ * space). The mess is sized to each table (MESS) and shrinks away over
+ * `vanish` seconds.
  * (estimate: 3 s, a wipe's worth; with one barista a round trip is 16 s
  * measured, so a stop to clean adds a fifth)
  */
-export const CLEAN = { seconds: 3, near: 0.3, vanish: 0.4, bigMess: 1.3, smallMess: 0.6, home: { x: 0.17, z: -0.2, reach: 0.1 } };
+export const CLEAN = { seconds: 3, near: 0.3, vanish: 0.4, home: { x: 0.17, z: -0.2, reach: 0.1 } };
+/**
+ * The mess is sized to its table: it covers at most `fit` of the top's
+ * shorter side (measured from the models, metres), so it always sits
+ * well inside the top, small and tidy, whatever the table (the owner:
+ * minimal, never crowding a table). The mess model is `size` across.
+ */
+export const MESS = { size: 0.032, fit: 0.65, tops: { 'table-2': 0.046, 'table-4': 0.04, 'bar-2': 0.026, 'quiet-corner': 0.024 } as Record<string, number> };
 export const JANITOR_PRICE = 120;
 
 /**

@@ -115,3 +115,13 @@ Each part merges to `main` only when its checks pass and the owner has played it
 ## Later
 
 A Canadian café as a second, purchasable café. Harder wishes and a dynamic wish picker.
+
+## Decluttering (owner, after phase 6)
+
+Only what the player can act on stays on, the rest is brief (S: research on tracking about 4 changing things; Apple, minimise distraction):
+- no sign over a dirty table (the mess, now final art and sized to its table at most 65 % of the top's shorter side, says so; dirty seats glow amber while a guest is carried);
+- no badge over the janitor (its uniform says so);
+- mood bubbles for 4 s after the food comes (the "!" first), the storm as an angry guest walks out; the bar keeps the café's mood all the time;
+- padlock tags small at rest (a padlock, a gold coin when affordable), the full price tag when the ray points at one;
+- the waiting guests' timer dots stay.
+

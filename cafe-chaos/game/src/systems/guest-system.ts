@@ -392,7 +392,7 @@ export class GuestSystem extends createSystem({}) {
   /** A singer sends up a note now and then while it sits. */
   private sing(guest: Guest, delta: number): void {
     // Once served its bubble shows the notes (guests/reactions.ts): no floating ones over it then.
-    if (!guest.sings || (this.seatedPatience !== null && guest.served) || Math.floor(guest.seatedFor / 1.6) === Math.floor((guest.seatedFor - delta) / 1.6)) return;
+    if (!guest.sings || (this.seatedPatience !== null && guest.served && guest.eaten < BUBBLE.servedFor + BUBBLE.moodFor) || Math.floor(guest.seatedFor / 1.6) === Math.floor((guest.seatedFor - delta) / 1.6)) return;
     const over = this.at.copy(guest.actor.root.position);
     over.y += guest.actor.bubbleAnchor.position.y + DIAL.above + 0.02;
     over.x += (Math.random() - 0.5) * 0.02;
@@ -876,6 +876,7 @@ export class GuestSystem extends createSystem({}) {
       if (guest.fuming >= 0 && (guest.state === 'leaving' || guest.state === 'hop')) feeling = 'storming';
       else if (guest.state === 'seated' && guest.served && guest.fuming < 0) {
         if (guest.eaten < BUBBLE.servedFor) feeling = 'served';
+        else if (guest.eaten >= BUBBLE.servedFor + BUBBLE.moodFor) feeling = null;
         else if (guest.sings) feeling = 'singing';
         else {
           let met = 0;

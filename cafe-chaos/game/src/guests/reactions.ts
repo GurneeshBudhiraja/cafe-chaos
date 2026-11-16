@@ -6,11 +6,12 @@
  *
  * What shows, by moment:
  * - its food just come: "!" (a moment);
- * - eating: how it feels, by what it is about to pay (the same sum as the
- *   pay: how soon it was seated, how many wishes its seat met), so the
- *   "+7" it leaves reads as earned: a heart (loving it), a thumbs up
- *   (happy), a level mouth (all right), a frown (not happy);
- * - a singer: notes;
+ * - then, for `moodFor` seconds, how it feels, by what it is about to pay
+ *   (the same sum as the pay: how soon it was seated, how many wishes its
+ *   seat met), so the "+7" it leaves reads as earned: a heart (loving
+ *   it), a thumbs up (happy), a level mouth (all right), a frown (not
+ *   happy); notes for a singer; then the bubble goes (the bar keeps the
+ *   café's mood all the time: the owner, keep the café uncluttered);
  * - storming out: a red scribble, a thumbs down and a cross face in turn
  *   (two a second, under the 3 a second flash limit; no flicker).
  * While it waits for its food its dot (the timer) shows instead.
@@ -36,7 +37,7 @@ import { CanvasTexture, DoubleSide, InstancedBufferAttribute, InstancedMesh, Mat
 export type Feeling = 'loving' | 'happy' | 'okay' | 'unhappy' | 'singing' | 'served' | 'storming';
 
 /** Size (metres across, café space), how far above the head anchor, and seat-mates' height step. */
-export const BUBBLE = { size: 0.032, above: 0.024, step: 0.009, pop: 0.3, overshoot: 0.18, maxPopping: 4, servedFor: 1.2, stormHz: 2 };
+export const BUBBLE = { size: 0.032, above: 0.024, step: 0.009, pop: 0.3, overshoot: 0.18, maxPopping: 4, servedFor: 1.2, moodFor: 4, stormHz: 2 };
 
 const COLS = 8;
 const ROWS = 4;

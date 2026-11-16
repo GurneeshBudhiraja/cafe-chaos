@@ -6,10 +6,11 @@
  * and a pinch on it opens the buy card (GameSystem). The ray only: a
  * fingertip or a pinch among the tables is for the guests, never a tag.
  *
- * Moss with the padlock open when the bank can pay, plain paper with it
- * shut when it cannot (never colour alone: WCAG 1.4.1, Meta's
- * accessibility checklist): the player can see from across the room which
- * tables are within reach. Its size is real metres whatever the café's
+ * At rest it is only a small padlock on a paper disc (the owner: ten tags
+ * crowded the café), open with a gold coin on its shoulder when the bank
+ * can pay, shut when it cannot (never colour alone: WCAG 1.4.1, Meta's
+ * accessibility checklist). Pointed at, it opens into the full tag: moss
+ * with the price when affordable, plain paper when not. Its size is real metres whatever the café's
  * scale (ui/panel.ts).
  */
 
@@ -59,8 +60,30 @@ export class LockTag {
     p.set(() => {}, [button]);
   }
 
+  /** The tag at rest: a paper disc with a padlock, a gold coin on its shoulder when it can be bought. */
+  private drawSmall(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    const rc = pen(this.panel.canvas);
+    const lw = Math.max(2, h * 0.045);
+    const cx = w / 2;
+    const cy = h * 0.52;
+    const r = h * 0.3;
+    rc.circle(cx, cy, r * 2, line(340 + this.table, lw, { fill: SKETCH.paper, fillStyle: 'solid', stroke: this.affordable ? SKETCH.mossDeep : SKETCH.ink, roughness: 1 }));
+    const bw = r * 0.95;
+    const bh = r * 0.78;
+    rc.rectangle(cx - bw / 2, cy - bh * 0.15, bw, bh, line(341 + this.table, lw * 0.9, { fill: SKETCH.ink, fillStyle: 'solid', stroke: SKETCH.ink }));
+    if (this.affordable) rc.arc(cx + bw * 0.42, cy - bh * 0.15 - bh * 0.35, bw * 0.7, bh * 1.1, Math.PI * 0.5, Math.PI * 1.5, false, line(342 + this.table, lw, { stroke: SKETCH.ink }));
+    else rc.arc(cx, cy - bh * 0.15, bw * 0.7, bh * 1.1, Math.PI, Math.PI * 2, false, line(342 + this.table, lw, { stroke: SKETCH.ink }));
+    if (this.affordable) sketchCoin(rc, cx + r * 0.85, cy - r * 0.75, h * 0.26, 343 + this.table, lw * 0.8);
+  }
+
   private draw(ctx: CanvasRenderingContext2D, w: number, h: number, hover: boolean, pressed: boolean): void {
     ctx.clearRect(0, 0, w, h);
+    // At rest: just a small padlock (with a coin mark when the bank can pay), so ten locked tables do not crowd
+    // the café; pointed at, the full tag with the price. The hit area is the whole tag either way (over 3 degrees).
+    if (!hover && !pressed) {
+      this.drawSmall(ctx, w, h);
+      return;
+    }
     const rc = pen(this.panel.canvas);
     const lw = Math.max(2, h * 0.045);
     const dip = pressed ? h * 0.04 : 0;

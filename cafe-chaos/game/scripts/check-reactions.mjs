@@ -7,8 +7,10 @@
  *     between a thumbs up or a level face; it pays what the bubble said;
  *  3. a singer shows notes; one storming out shows the storm, cycling its
  *     three pictures no faster than two a second;
- *  4. a full café: every bubble is one instance of one mesh (one draw call),
- *     seat-mates' bubbles at different heights; no console errors.
+ *  4. the feeling shows for 4 s, then the bubble goes (the café kept
+ *     uncluttered); a full café: every bubble is one instance of one mesh
+ *     (one draw call), seat-mates' bubbles at different heights; no console
+ *     errors.
  * Saves artifacts/reactions-*.png.
  * Usage: dev server running, then `node scripts/check-reactions.mjs`.
  */
@@ -53,10 +55,11 @@ const waitingBubble = await feeling(happy);
 const dotShown = await page.evaluate((id) => window.__cafe.guests.guests.find((g) => g.id === id).dial.sprite.visible, happy);
 check('waiting for its food: its dot, no bubble', waitingBubble === null && dotShown, JSON.stringify({ waitingBubble, dotShown }));
 await page.evaluate(() => { window.__cafe.baristas.serving = true; });
-await until((id) => window.__cafe.guests.reactions.feelingOf(id) === 'served', 60000, happy);
-const first = await feeling(happy);
+const servedBefore = await page.evaluate(() => window.__cafe.guests.reactions.counts.served ?? 0);
+await until((id) => { const f = window.__cafe.guests.reactions.feelingOf(id); return f === 'served' || f === 'loving'; }, 60000, happy);
 await until((id) => window.__cafe.guests.reactions.feelingOf(id) === 'loving', 10000, happy);
-check('its food come: "!" for a moment, then how it feels (seated at once, no wishes: loving it)', first === 'served' && (await feeling(happy)) === 'loving', `first ${first}, then ${await feeling(happy)}`);
+const servedShown = (await page.evaluate(() => window.__cafe.guests.reactions.counts.served ?? 0)) - servedBefore;
+check('its food come: "!" for a moment, then how it feels (seated at once, no wishes: loving it)', servedShown === 1 && (await feeling(happy)) === 'loving', `"!" shown ${servedShown}, then ${await feeling(happy)}`);
 
 // 2. Feelings by what it will pay.
 await page.evaluate(() => { window.__cafe.baristas.serving = true; });
@@ -101,6 +104,14 @@ for (let i = 1; i < cells.length; i++) if (cells[i].cells !== cells[i - 1].cells
 check('storming out: the storm shows, its pictures changing no faster than two a second', changes >= 1 && changes <= 4, `${changes} changes in 1.6 s`);
 await h.screenshot('artifacts/reactions-2-storm.png');
 
+// 4a. The feeling shows for a few seconds, then the bubble goes (a fresh guest, served now).
+await page.evaluate(() => { const { guests, baristas } = window.__cafe; guests.patienceFrozen = true; baristas.serving = true; });
+const fresh = await seat(10, [], 0);
+await until((id) => window.__cafe.guests.reactions.feelingOf(id) === 'loving', 120000, fresh);
+const gone = await until((id) => window.__cafe.guests.reactions.feelingOf(id) === null, 15000, fresh);
+const eatenWhenGone = await page.evaluate((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.eaten ?? -1, fresh);
+check('the feeling shows for about 4 s after the "!", then the bubble goes', gone && eatenWhenGone >= 5 && eatenWhenGone < 6.5, `gone ${gone} at ${eatenWhenGone.toFixed(1)} s of eating`);
+
 // 4. A full café: one instanced mesh.
 await page.evaluate(() => { const { guests, baristas } = window.__cafe; guests.patienceFrozen = true; baristas.serving = true; });
 for (const t of [1, 3, 4, 5, 9, 10, 11]) {
@@ -109,8 +120,7 @@ for (const t of [1, 3, 4, 5, 9, 10, 11]) {
     if (ok) await seat(t, [], Math.random());
   }
 }
-await until(() => window.__cafe.guests.reactions.mesh.count >= 10, 180000);
-await page.waitForTimeout(1500);
+await until(() => window.__cafe.guests.reactions.mesh.count >= 3, 180000);
 const full = await page.evaluate(() => {
   const m = window.__cafe.guests.reactions.mesh;
   const ys = [];
@@ -119,7 +129,7 @@ const full = await page.evaluate(() => {
   for (let i = 0; i < m.count; i++) { m.getMatrixAt(i, M); ys.push(+new V().setFromMatrixPosition(M).y.toFixed(3)); }
   return { count: m.count, instanced: !!m.isInstancedMesh, heights: [...new Set(ys)].length };
 });
-check('a full café: every bubble one instance of one mesh, at more than one height', full.instanced && full.count >= 10 && full.heights >= 2, JSON.stringify(full));
+check('a busy moment: every bubble one instance of one mesh, at more than one height', full.instanced && full.count >= 3 && full.heights >= 2, JSON.stringify(full));
 await h.head({ x: -0.72, y: 1.32, z: 0.28 }, { x: -1.3, y: 0.72, z: 0.28 });
 await page.waitForTimeout(600);
 await h.screenshot('artifacts/reactions-3-full.png');
