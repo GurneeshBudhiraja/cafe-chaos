@@ -772,7 +772,8 @@ export class GameSystem extends createSystem({}) {
     if (this.needGuest) {
       const look = randomLook(Math.random);
       if (castLoaded(look)) {
-        this.guests.spawn(look);
+        // The first run teaches the pinch and the seat, not wishes: its guest is happy anywhere.
+        this.guests.spawn(look).wishes = [];
         this.needGuest = false;
       }
     }

@@ -123,7 +123,7 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, canvas: HTMLC
   const rowH = 44;
   const rowGap = 8;
   const segH = 22;
-  const rows = g.wishes.length;
+  const rows = Math.max(1, g.wishes.length);
   const cardH = frame + bandH + pad + rows * (rowH + rowGap) - rowGap + pad + segH + pad + frame;
   const top = Math.max(0, H - cardH);
   ctx.clearRect(0, 0, w, h);
@@ -144,6 +144,12 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, canvas: HTMLC
   text(ctx, `${g.name.toUpperCase()}${g.sings ? '  ♪' : ''}`, bx + 14, by + bh / 2 + 1, 26, C.cream);
   // The wishes, a row each.
   let y = top + frame + bandH + pad;
+  if (g.wishes.length === 0) {
+    // No wishes: one quiet row.
+    rc.rectangle(frame + pad, y, W - (frame + pad) * 2, rowH, o(10, { fill: C.paperHi, fillStyle: 'solid', stroke: C.emptyLine }));
+    text(ctx, 'Happy anywhere', frame + pad + 18, y + rowH / 2 + 1, 24, C.soft);
+    y += rowH + rowGap;
+  }
   g.wishes.forEach((wish, i) => {
     const met = g.preview ? g.preview[i] : undefined;
     const x = frame + pad;

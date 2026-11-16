@@ -1,6 +1,7 @@
 /**
  * A short video of the guests' new screens, from the seat, late in an
- * evening: the dots over the line (seconds, timer ring, a pip a wish);
+ * evening (patience held still: the emulator runs too slowly for live
+ * timers): the dots over the line (seconds, timer ring, a pip a wish);
  * a hand over a guest with three wishes brings up its request card; the
  * guest picked up and carried across the café, the card marking which
  * wishes each seat meets; let go, the result pops up; then a pinch on the
@@ -42,9 +43,9 @@ const h = await startHeadset({
       const { guests } = window.__cafe;
       guests.arrivals = false;
       guests.line[0].wishes = ['window', 'quiet', 'alone'];
-      // Patience runs again, slowly, so the timer can be seen going down.
-      guests.patienceFrozen = false;
-      for (const g of guests.line) g.patience = g.patienceFull = 90;
+      // Patience held at a spread of values (the emulator runs too slowly for live timers to mean anything on video).
+      guests.patienceFrozen = true;
+      guests.line.forEach((g, i) => { g.patienceFull = 32; g.patience = [21, 27, 14, 6, 30][i] ?? 25; });
     });
   },
 });
