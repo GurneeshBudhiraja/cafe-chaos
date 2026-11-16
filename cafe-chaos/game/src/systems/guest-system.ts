@@ -53,7 +53,8 @@ import {
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
 import { grants, pickName, pickWishes, tablesOf, type Sitter, type WishId, openWishes, type Friendship } from '../guests/wishes.js';
-import { wishCount } from '../game/rules.js';
+import { payFor, wishCount } from '../game/rules.js';
+import { BUBBLE, feelingFor, Reactions, type Reacting } from '../guests/reactions.js';
 import { WishCards } from '../ui/wish-card.js';
 import { Popups } from '../guests/popups.js';
 import { SeatGlow } from '../guests/seat-glow.js';
@@ -291,6 +292,7 @@ export class GuestSystem extends createSystem({}) {
     cafe.add(this.rings.group);
     this.cards = new WishCards(cafe);
     cafe.add(this.popups.group);
+    cafe.add(this.reactions.mesh);
     this.seats = collectSeats(cafe, this.cafeSystem.seats, this.cafeSystem.nav, this.cafeSystem.pieces);
     this.seatAnchors = this.cafeSystem.seats.length;
     this.firstSeatCount = this.seats.length;
@@ -332,6 +334,7 @@ export class GuestSystem extends createSystem({}) {
     }
     this.blobs.end();
     this.popups.update(delta);
+    this.react(delta);
     for (let i = 0; i < 2; i++) this.rings.show(i, this.hovered[i]?.actor.root.position ?? null, delta);
     // The dot at the fingertips turns mint while a guest is lit under that hand.
     if (this.holdSystem) HANDS.forEach((hand, i) => (this.holdSystem!.cursor.aiming[hand] = this.hovered[i] !== null));
@@ -469,6 +472,7 @@ export class GuestSystem extends createSystem({}) {
 
   /** Take every guest away (a new session, or the café placed afresh). */
   clear(): void {
+    this.reactions.clear();
     for (const guest of this.guests) {
       guest.dial.dispose();
       guest.actor.dispose();
@@ -849,6 +853,43 @@ export class GuestSystem extends createSystem({}) {
     if (!friend?.wishMet) return;
     const i = friend.wishes.indexOf('friend');
     if (i >= 0) friend.wishMet[i] = false;
+  }
+
+  /** The bubbles over the seated guests (guests/reactions.ts): how each feels, read at a glance. */
+  readonly reactions = new Reactions();
+  private readonly reacting: Reacting[] = [];
+  private readonly reactingPool: Reacting[] = [];
+
+  /**
+   * What each guest's bubble says now: its food just come ("!"), then how
+   * it feels by what it is about to pay (the pay's own sum), notes for a
+   * singer, and a storm as one who lost its temper walks out. A guest
+   * still waiting for its food has its dot instead.
+   */
+  private react(delta: number): void {
+    const out = this.reacting;
+    out.length = 0;
+    for (const guest of this.guests) {
+      let feeling: Reacting['feeling'] = null;
+      if (guest.fuming >= 0 && (guest.state === 'leaving' || guest.state === 'hop')) feeling = 'storming';
+      else if (guest.state === 'seated' && guest.served && guest.fuming < 0) {
+        if (guest.eaten < BUBBLE.servedFor) feeling = 'served';
+        else if (guest.sings) feeling = 'singing';
+        else {
+          const met = guest.wishMet ? guest.wishMet.filter(Boolean).length : 0;
+          feeling = feelingFor(payFor(guest.seatShare, met, guest.wishMet?.length ?? 0));
+        }
+      }
+      if (!feeling || guest.actor.opacity < 0.3) continue;
+      const r = this.reactingPool[out.length] ?? (this.reactingPool[out.length] = { id: 0, at: new Vector3(), seat: 0, feeling: null });
+      r.id = guest.id;
+      r.feeling = feeling;
+      r.seat = guest.seat?.index ?? 0;
+      r.at.copy(guest.actor.root.position);
+      r.at.y += guest.actor.bubbleAnchor.position.y;
+      out.push(r);
+    }
+    this.reactions.update(out, this.headLocal, delta);
   }
 
   /** The seats free now (open, clean, nobody on them): worked out once a frame. */

@@ -88,6 +88,7 @@ Reference from the owner: speech bubbles over seated guests, coins popping, a re
 
 - One small bubble per seated guest for mood; the timer ring around it while waiting. Seat-mates at different heights, nearer one in front; slight overlap is fine as long as each stays readable. Bubbles turn toward the player.
 - Moments: seated (tick/star/cross, exists), waiting too long, food arrives ("!"), eating (yum/steam, heart if loving it), paying (coin with amount), leaving happy (wave/heart/thumbs-up), storming out (scribble, thumbs-down, frown in turn, dust puffs), bothered by a neighbour, singing (notes).
+- Built (phase 5): one instanced mesh with one picture sheet (one draw call for the room), 3.2 cm bubbles turned to the eyes with no roll, cut-out edges so the nearer is in front, seat-mates at two heights; "!" for 1.2 s when the food comes, then a heart / thumbs up / level face / frown by the guest's own predicted pay (≥9, ≥6, ≥4, less), notes for a singer, a storm (scribble, thumbs down, cross face) at 2 frames a second as a guest who stormed off walks out; 0.3 s pop, at most 4 popping, none under reduced motion (S: Meta, Microsoft, Apple, GI 2020, Game Accessibility Guidelines). The waiting guest keeps its timer dot.
 - Several variations per mood so it is not monotonous; good and bad keep separate colour and shape families; never colour alone (S: Meta accessibility).
 
 ## 10. Blender
