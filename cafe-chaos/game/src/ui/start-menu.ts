@@ -158,6 +158,17 @@ if (typeof Image !== 'undefined') {
   img.src = `${import.meta.env.BASE_URL}models/unlock-icons.png`;
 }
 
+/** The janitor's picture (rendered like the icon set, models/13-janitor/icon-janitor.png). */
+let janitorIcon: HTMLImageElement | null = null;
+if (typeof Image !== 'undefined') {
+  const img = new Image();
+  img.onload = () => {
+    janitorIcon = img;
+    for (const f of iconListeners) f();
+  };
+  img.src = `${import.meta.env.BASE_URL}models/icon-janitor.png`;
+}
+
 let cover: HTMLImageElement | null = null;
 const coverListeners: (() => void)[] = [];
 if (typeof Image !== 'undefined') {
@@ -983,7 +994,8 @@ export class StartMenu {
         const d = Math.min(150, ROW - 8);
         const px = PAD + d / 2 + 4;
         const py = ry + ROW / 2;
-        if (r.kind === 'janitor') this.mopPortrait(rc, px, py, d, '#6f8f5a', this.seed + 100 + i * 10);
+        if (r.kind === 'janitor' && janitorIcon) this.imagePortrait(ctx, rc, janitorIcon, px, py, d, this.seed + 100 + i * 10);
+        else if (r.kind === 'janitor') this.mopPortrait(rc, px, py, d, '#6f8f5a', this.seed + 100 + i * 10);
         else this.iconPortrait(ctx, rc, ICONS.barista, px, py, d, this.seed + 100 + i * 10);
         const tx = PAD + d + 32;
         // The words stop short of the HIRE button: what it does on up to two lines.
@@ -1000,6 +1012,19 @@ export class StartMenu {
       });
       ctx.restore();
     }, buttons);
+  }
+
+  /** A picture of its own (256 px, rendered like the icon set) in the same round paper frame. */
+  private imagePortrait(ctx: CanvasRenderingContext2D, rc: RoughCanvas, image: HTMLImageElement, x: number, y: number, d: number, seed: number): void {
+    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, d / 2 - 4, 0, Math.PI * 2);
+    ctx.clip();
+    const crop = 0.18;
+    const s = d * 0.98;
+    ctx.drawImage(image, image.width * crop, image.height * crop * 0.6, image.width * (1 - crop * 2), image.height * (1 - crop * 2), x - s / 2, y - s / 2, s, s);
+    ctx.restore();
   }
 
   /** A model's picture from the icon set in a round paper frame (a blank disc until the set has loaded). */

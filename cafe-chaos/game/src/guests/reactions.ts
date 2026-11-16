@@ -86,6 +86,7 @@ export class Reactions {
   private readonly s = new Vector3();
   private readonly p = new Vector3();
   private time = 0;
+  private readonly seen = new Set<number>();
   /** How many of each feeling have been shown (for the checks). */
   readonly counts: Record<string, number> = {};
 
@@ -103,6 +104,8 @@ export class Reactions {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 21;
     this.mesh.userData.dynamic = true;
+    // Nothing points at the bubbles: never tested by a ray.
+    this.mesh.raycast = () => {};
     this.cells = new InstancedBufferAttribute(new Float32Array(max * 2), 2);
     this.mesh.geometry.setAttribute('cell', this.cells);
     this.mesh.count = 0;
@@ -115,7 +118,8 @@ export class Reactions {
     let n = 0;
     let popping = 0;
     for (const shown of this.shown.values()) if (shown.popping) popping++;
-    const seen = new Set<number>();
+    const seen = this.seen;
+    seen.clear();
     for (const r of reacting) {
       if (!r.feeling || n >= max) continue;
       seen.add(r.id);
@@ -183,6 +187,11 @@ function drawSheet(): CanvasTexture {
       const [x, y] = at(cell);
       ctx.save();
       ctx.translate(x, y);
+      // A gutter round each cell (the drawing a little smaller than the cell), so a far, small bubble never takes a
+      // sliver of its neighbour.
+      ctx.translate(CELL / 2, CELL / 2);
+      ctx.scale(0.86, 0.86);
+      ctx.translate(-CELL / 2, -CELL / 2);
       bubble(ctx, v, feeling === 'storming' ? BAD : feeling === 'unhappy' ? BAD : feeling === 'okay' ? SOFT : GOOD);
       ctx.translate(64, 56);
       draw(ctx, feeling, v);
@@ -337,8 +346,17 @@ function face(ctx: CanvasRenderingContext2D, kind: 'level' | 'frown' | 'cross', 
   if (kind === 'level') {
     ctx.moveTo(-14, 14 + wob(v, 2));
     ctx.lineTo(14, 14 - wob(v, 2));
-  } else ctx.arc(0, 26, 15, Math.PI * 1.2, Math.PI * 1.8);
+  } else ctx.arc(0, 32, 17, Math.PI * 1.12, Math.PI * 1.88);
   ctx.stroke();
+  // Not happy: brows slanting down to the middle, so the shape differs from "all right", not only the colour.
+  if (kind !== 'level') {
+    ctx.beginPath();
+    ctx.moveTo(-20, -20);
+    ctx.lineTo(-6, -15);
+    ctx.moveTo(20, -20);
+    ctx.lineTo(6, -15);
+    ctx.stroke();
+  }
 }
 
 /** A music note. */

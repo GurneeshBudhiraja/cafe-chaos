@@ -15,10 +15,10 @@ const url = (name: string): string => `${import.meta.env.BASE_URL}models/${name}
 export const CAFE_PIECES = ['cafe-shell', 'table-2', 'table-4', 'bar-2', 'quiet-corner', 'meal'] as const;
 /** The guests (three species) and what they wear: needed moments after the café is up. */
 export const GUEST_PIECES = ['guest-mochi', 'guest-onigiri', 'guest-tofu', 'accessories'] as const;
-/** The staff (six looks on one rig), the trays they carry, and the petals that fall from the tree. */
-export const STAFF_PIECES = ['barista-sora', 'barista-momo', 'barista-yuki', 'tray-tea', 'tray-coffee', 'petals'] as const;
+/** The staff (the baristas' looks and the janitor, all on one rig), the trays they carry, and the petals that fall from the tree. */
+export const STAFF_PIECES = ['barista-sora', 'barista-momo', 'barista-yuki', 'barista-janitor', 'tray-tea', 'tray-coffee', 'petals'] as const;
 /** The annex wing and the plaque that opens it, its furniture, and the rest for the game to come (the janitor, the markers). */
-export const LATER_PIECES = ['cafe-annex', 'unlock-plaque', 'window-booth', 'table-big', 'table-mess', 'janitor', 'demand-bubble', 'mood-ring', 'seat-glow', 'coin'] as const;
+export const LATER_PIECES = ['cafe-annex', 'unlock-plaque', 'window-booth', 'table-big', 'table-mess', 'demand-bubble', 'mood-ring', 'seat-glow', 'coin'] as const;
 
 export type ModelName = (typeof CAFE_PIECES)[number] | (typeof GUEST_PIECES)[number] | (typeof STAFF_PIECES)[number] | (typeof LATER_PIECES)[number];
 

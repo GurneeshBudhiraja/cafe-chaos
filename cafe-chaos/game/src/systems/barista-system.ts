@@ -40,7 +40,7 @@ import { AssetManager, createSystem, Vector3, type Material, type Mesh, type Obj
 import { Barista, BARISTA_NAMES, baristaLoaded, type BaristaName } from '../baristas/barista.js';
 import { BACK_BAR_YAW, servePointFor, servePointsForPlace, SHUFFLE_M, STATION_X, STATION_YAW, stationPoint, type ServePoint } from '../baristas/routes.js';
 import { CLEAN, MAX_STAFF } from '../game/rules.js';
-import { Janitor, janitorLoaded } from '../baristas/janitor.js';
+import { janitorLoaded, makeJanitor, setCleaning } from '../baristas/janitor.js';
 import { MessSystem } from './mess-system.js';
 import { BACK_BAR_SECONDS, FIDGET_SECONDS, MAX_OUT, REPLAN_SECONDS, SAME_TIME_SECONDS, SET_DOWN_AT, SPEED, SWITCH_GAIN_M, TRAY_FADE_SECONDS, TRAY_SLIDE_SECONDS, TURN_SPEED, WAVE_CHANCE } from '../baristas/rules.js';
 import type { Seat } from '../guests/seats.js';
@@ -57,8 +57,8 @@ import { GuestSystem } from './guest-system.js';
  */
 export type BaristaState = 'working' | 'shuffling' | 'backBar' | 'waving' | 'out' | 'serving' | 'back' | 'toClean' | 'cleaning';
 
-/** What a member of staff is driven through: a barista's rig, or the janitor's made motion (baristas/janitor.ts). */
-export type Figure = Barista | Janitor;
+/** What a member of staff is driven through: the rig every look shares (the janitor is a look on it too). */
+export type Figure = Barista;
 
 /** A guest's order, from the moment it is seated until it leaves the seat. */
 export interface Order {
@@ -303,7 +303,7 @@ export class BaristaSystem extends createSystem({}) {
     if (!this.janitorHired || this.janitor || !janitorLoaded()) return;
     const nav = this.cafeSystem.nav;
     const home = nav.nearest(CLEAN.home.x, CLEAN.home.z, CLEAN.home.reach) ?? stationPoint(STATION_X.length - 1);
-    const janitor = new Janitor();
+    const janitor = makeJanitor();
     janitor.root.position.copy(home);
     janitor.root.rotation.y = STATION_YAW;
     this.cafeSystem.cafe.add(janitor.root);
@@ -612,6 +612,7 @@ export class BaristaSystem extends createSystem({}) {
 
   /** The table is wiped: cleaned, and on to the next (the janitor always; a barista only with nothing to serve), else home. */
   private finishCleaning(member: Staff): void {
+    if (member.role === 'janitor') setCleaning(member.barista, false);
     const mess = this.mess;
     const table = member.chore;
     member.chore = -1;
@@ -654,6 +655,7 @@ export class BaristaSystem extends createSystem({}) {
 
   /** Back to its station (with its tray, if it never served it). */
   private sendHome(member: Staff): void {
+    if (member.role === 'janitor') setCleaning(member.barista, false);
     member.order = null;
     member.chore = -1;
     member.state = 'back';
@@ -830,7 +832,8 @@ export class BaristaSystem extends createSystem({}) {
       member.lasts = CLEAN.seconds;
       const point = this.servePoints.find((p) => p.table === member.chore);
       if (point) member.targetYaw = point.yaw;
-      member.barista.play('Work');
+      member.barista.play('Wipe');
+      if (member.role === 'janitor') setCleaning(member.barista, true);
       return;
     }
     if (member.state === 'out') {

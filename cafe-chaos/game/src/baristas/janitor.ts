@@ -1,85 +1,89 @@
 /**
- * The janitor on stage: the `janitor` model (a figure in green with a cap
- * and a mop) driven the way a barista is (BaristaSystem), so the one
- * dispatcher moves both. The model has no clips of its own yet, so its
- * motion is made here: a bob as it walks, a side-to-side sway as it wipes
- * a table, still when idle. (The Blender pass, later, gives it a walk and
- * a wipe; this class then plays them.)
+ * The janitor: a look on the baristas' rig (models/18-barista/staff_build.py),
+ * so it walks and wipes with the same clips (Walk, Wipe, Idle) and is one
+ * draw call like them. Dressed so nobody mistakes it: a bright safety-blue
+ * coverall with yellow reflective stripes, a white badge on the chest, a
+ * yellow bandana, a mop slung across its back, a cleaning cloth in hand,
+ * and a bucket set down beside it while it cleans (`setCleaning`).
+ *
+ * Over its head floats a small broom badge, the same broom as the sign
+ * over a dirty table someone is on the way to clean: the one who cleans,
+ * read at a glance (shape, not only colour).
  */
 
-import { AssetManager, Group, type Object3D } from '@iwsdk/core';
-import { copyModel } from '../systems/cafe-system.js';
-import type { BaristaClip } from './barista.js';
+import { CanvasTexture, Sprite, SpriteMaterial, SRGBColorSpace, type Object3D } from '@iwsdk/core';
+import { Barista, baristaLoaded } from './barista.js';
 
-/** How the made motion looks: the walk's bob (metres, times a second) and the wipe's sway (radians, times a second). */
-const MOTION = { bob: 0.0025, bobHz: 3.2, squash: 0.06, lean: 0.12, sway: 0.16, swayHz: 2.4, ease: 8 };
+/** The broom badge: its size and height over the janitor's feet (metres, its own space). */
+const BADGE = { size: 0.022, above: 0.092 };
 
 /** True once the janitor's model has loaded. */
 export function janitorLoaded(): boolean {
-  return !!AssetManager.getGLTF('janitor', { shared: true });
+  return baristaLoaded('janitor');
 }
 
-export class Janitor {
-  readonly name = 'janitor';
-  readonly root: Object3D;
-  /** A janitor carries no tray (the dispatcher asks). */
-  tray: Object3D | null = null;
-  clip: BaristaClip = 'Idle';
-  private time = 0;
-  private readonly body: Object3D;
+/** A janitor on stage, its bucket put away. */
+export function makeJanitor(): Barista {
+  const janitor = new Barista('janitor');
+  janitor.root.name = 'Janitor';
+  const badge = new Sprite(badgeMaterial());
+  badge.name = 'JanitorBadge';
+  badge.scale.setScalar(BADGE.size);
+  badge.position.y = BADGE.above;
+  badge.renderOrder = 29;
+  janitor.root.add(badge);
+  setCleaning(janitor, false);
+  return janitor;
+}
 
-  constructor() {
-    this.root = copyModel('janitor');
-    this.root.name = 'Janitor';
-    this.root.userData.dynamic = true;
-    this.root.traverse((node) => {
-      const mesh = node as { isMesh?: boolean; castShadow?: boolean; receiveShadow?: boolean };
-      if (!mesh.isMesh) return;
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-    });
-    // All of it moves together: its parts go under one group the motion is made on.
-    this.body = new Group();
-    this.body.name = 'JanitorBody';
-    for (const child of [...this.root.children]) this.body.add(child);
-    this.root.add(this.body);
-  }
-  /** The sway and lean as shown (eased toward what the motion asks). */
-  private sway = 0;
-  private lean = 0;
+/** The bucket beside it while it cleans; folded away (its part collapsed) otherwise. */
+export function setCleaning(janitor: Barista, on: boolean): void {
+  const bucket: Object3D | undefined = janitor.root.getObjectByName('Bucket');
+  bucket?.scale.setScalar(on ? 1 : 0.0001);
+}
 
-  /** What it is doing: 'Walk' bobs, 'Work' (wiping) sways, the rest stand still. */
-  play(clip: BaristaClip, _once = false): void {
-    if (this.clip === clip) return;
-    this.clip = clip;
-    this.time = 0;
-    this.body.position.y = 0;
-    this.body.rotation.z = 0;
-  }
+let badge: SpriteMaterial | null = null;
 
-  /** How long a clip lasts (the made motions loop: a nominal second). */
-  seconds(_clip: BaristaClip): number {
-    return 1;
-  }
-
-  /** Nothing to hold: the dispatcher never gives the janitor a tray. */
-  hold(_what: Object3D | null): void {
-    this.tray = null;
-  }
-
-  update(delta: number): void {
-    this.time += delta;
-    const walking = this.clip === 'Walk' || this.clip === 'Carry';
-    const wiping = this.clip === 'Work' || this.clip === 'Serve';
-    // Walking: a bob with a little squash as each foot lands, leaning into the walk.
-    const step = Math.abs(Math.sin(this.time * MOTION.bobHz * Math.PI * 2));
-    this.body.position.y = walking ? step * MOTION.bob : 0;
-    const squash = walking ? (1 - step) * MOTION.squash : 0;
-    this.body.scale.set(1 + squash * 0.5, 1 - squash, 1 + squash * 0.5);
-    // Wiping: an eased side-to-side sway.
-    const k = 1 - Math.exp(-MOTION.ease * delta);
-    this.sway += ((wiping ? Math.sin(this.time * MOTION.swayHz * Math.PI * 2) * MOTION.sway : 0) - this.sway) * k;
-    this.lean += ((walking ? MOTION.lean : 0) - this.lean) * k;
-    this.body.rotation.set(this.lean, 0, this.sway);
-  }
+/** A paper disc with a blue rim and a broom on it, drawn once. */
+function badgeMaterial(): SpriteMaterial {
+  if (badge) return badge;
+  const px = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = px;
+  const ctx = canvas.getContext('2d')!;
+  const c = px / 2;
+  ctx.beginPath();
+  ctx.arc(c, c + 2, c - 4, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(30, 20, 12, 0.3)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(c, c, c - 6, 0, Math.PI * 2);
+  ctx.fillStyle = '#2167d8';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(c, c, c - 15, 0, Math.PI * 2);
+  ctx.fillStyle = '#f4ecdc';
+  ctx.fill();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#2a1d14';
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(c + 22, c - 30);
+  ctx.lineTo(c - 6, c + 10);
+  ctx.stroke();
+  ctx.fillStyle = '#f5cf2a';
+  ctx.beginPath();
+  ctx.moveTo(c - 18, c + 2);
+  ctx.lineTo(c + 4, c + 16);
+  ctx.lineTo(c - 6, c + 34);
+  ctx.lineTo(c - 32, c + 20);
+  ctx.closePath();
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  badge = new SpriteMaterial({ map: texture, transparent: true, depthWrite: false, toneMapped: false });
+  return badge;
 }

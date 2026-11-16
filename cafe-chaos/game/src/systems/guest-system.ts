@@ -334,11 +334,12 @@ export class GuestSystem extends createSystem({}) {
     }
     this.blobs.end();
     this.popups.update(delta);
-    this.react(delta);
     for (let i = 0; i < 2; i++) this.rings.show(i, this.hovered[i]?.actor.root.position ?? null, delta);
     // The dot at the fingertips turns mint while a guest is lit under that hand.
     if (this.holdSystem) HANDS.forEach((hand, i) => (this.holdSystem!.cursor.aiming[hand] = this.hovered[i] !== null));
     this.wishesShown(frameDelta);
+    // After the wishes: the head is this frame's, so the bubbles turn to where the eyes are now.
+    this.react(delta);
     this.glow.show(this.seats, this.targets, this.targets.some((t, i) => t !== null || this.carriedBy(HANDS[i]) !== undefined), delta, this.granting);
     this.peak = Math.max(this.peak, this.guests.length);
   }
@@ -390,7 +391,8 @@ export class GuestSystem extends createSystem({}) {
 
   /** A singer sends up a note now and then while it sits. */
   private sing(guest: Guest, delta: number): void {
-    if (!guest.sings || Math.floor(guest.seatedFor / 1.6) === Math.floor((guest.seatedFor - delta) / 1.6)) return;
+    // Once served its bubble shows the notes (guests/reactions.ts): no floating ones over it then.
+    if (!guest.sings || (this.seatedPatience !== null && guest.served) || Math.floor(guest.seatedFor / 1.6) === Math.floor((guest.seatedFor - delta) / 1.6)) return;
     const over = this.at.copy(guest.actor.root.position);
     over.y += guest.actor.bubbleAnchor.position.y + DIAL.above + 0.02;
     over.x += (Math.random() - 0.5) * 0.02;
@@ -876,7 +878,8 @@ export class GuestSystem extends createSystem({}) {
         if (guest.eaten < BUBBLE.servedFor) feeling = 'served';
         else if (guest.sings) feeling = 'singing';
         else {
-          const met = guest.wishMet ? guest.wishMet.filter(Boolean).length : 0;
+          let met = 0;
+          if (guest.wishMet) for (const m of guest.wishMet) if (m) met++;
           feeling = feelingFor(payFor(guest.seatShare, met, guest.wishMet?.length ?? 0));
         }
       }
@@ -884,13 +887,25 @@ export class GuestSystem extends createSystem({}) {
       const r = this.reactingPool[out.length] ?? (this.reactingPool[out.length] = { id: 0, at: new Vector3(), seat: 0, feeling: null });
       r.id = guest.id;
       r.feeling = feeling;
-      r.seat = guest.seat?.index ?? 0;
+      // Seat-mates at two heights: its place among its table's seats (so two at one table never share a height).
+      r.seat = guest.seat ? this.rankAtTable(guest.seat) : 0;
       r.at.copy(guest.actor.root.position);
       r.at.y += guest.actor.bubbleAnchor.position.y;
       out.push(r);
     }
     this.reactions.update(out, this.headLocal, delta);
   }
+
+  /** A seat's place among its table's seats (0, 1, ...), worked out once. */
+  private rankAtTable(seat: Seat): number {
+    let rank = this.ranks.get(seat);
+    if (rank === undefined) {
+      rank = this.seats.filter((s) => s.table === seat.table && s.index < seat.index).length;
+      this.ranks.set(seat, rank);
+    }
+    return rank;
+  }
+  private readonly ranks = new Map<Seat, number>();
 
   /** The seats free now (open, clean, nobody on them): worked out once a frame. */
   private freeSeats(): Seat[] {
