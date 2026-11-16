@@ -140,17 +140,18 @@ export class PatienceDial {
     ctx.fillText(`${seconds}`, c, c - 5);
     // One pip for each wish, under the number (a small heart first for a pair's friend).
     const n = Math.max(0, Math.min(3, pips));
-    const gap = 12;
+    const gap = paired ? 16 : 12;
     for (let i = 0; i < n; i++) {
       const px = c + (i - (n - 1) / 2) * gap;
       ctx.fillStyle = paired && i === 0 ? '#c9772f' : '#5a4030';
       ctx.beginPath();
       if (paired && i === 0) {
-        ctx.arc(px - 2.2, c + 22.5, 2.6, 0, Math.PI * 2);
-        ctx.arc(px + 2.2, c + 22.5, 2.6, 0, Math.PI * 2);
-        ctx.moveTo(px - 4.6, c + 23.5);
-        ctx.lineTo(px, c + 28.5);
-        ctx.lineTo(px + 4.6, c + 23.5);
+        // A heart, twice a pip's size, so its shape reads (not only its colour).
+        ctx.arc(px - 3.6, c + 21.5, 4.2, 0, Math.PI * 2);
+        ctx.arc(px + 3.6, c + 21.5, 4.2, 0, Math.PI * 2);
+        ctx.moveTo(px - 7.6, c + 23);
+        ctx.lineTo(px, c + 31);
+        ctx.lineTo(px + 7.6, c + 23);
       } else ctx.arc(px, c + 24, 4, 0, Math.PI * 2);
       ctx.fill();
     }
@@ -158,9 +159,10 @@ export class PatienceDial {
     if (hurried) {
       const hx = c;
       const hy = 13;
+      // On a dark ink disc (not the koi of a ring running low), so a hurried guest low on patience still shows both.
       ctx.beginPath();
-      ctx.arc(hx, hy + 1, 13, 0, Math.PI * 2);
-      ctx.fillStyle = '#b8361a';
+      ctx.arc(hx, hy + 1, 14, 0, Math.PI * 2);
+      ctx.fillStyle = '#2a1d14';
       ctx.fill();
       ctx.beginPath();
       ctx.moveTo(hx - 6, hy - 7);

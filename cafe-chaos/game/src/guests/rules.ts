@@ -19,6 +19,8 @@ export const SPAWN_SECONDS: [number, number] = [3.5, 6.5];
 export const SPAWN_STRETCH = 1.6;
 /** The first guest arrives this long after the café is placed. */
 export const FIRST_SPAWN_SECONDS = 1.5;
+/** A pair's second guest walks up this long behind the first (so the two are never in one spot at once). */
+export const PAIR_FOLLOW_SECONDS = 1.1;
 
 /**
  * How long a guest waits in the line before giving up (seconds).

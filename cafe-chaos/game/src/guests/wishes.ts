@@ -102,6 +102,8 @@ export interface Sitter {
 export interface Friendship {
   friend: number;
   free: readonly Seat[];
+  /** The friend is still to be seated (in the line or a hand). False once it has gone (it can no longer join). */
+  waiting: boolean;
 }
 
 /** Which table each seat is at: the index of the nearest table, bar or corner piece (seats at one table share it). */
@@ -151,7 +153,8 @@ export function grants(wish: WishId, seat: Seat, self: number, sitters: Sitter[]
       if (!friendship) return false;
       const friend = sitters.find((s) => s.id === friendship.friend);
       if (friend) return (tables.get(friend.seat.index) ?? -2) === table;
-      // The friend is not seated yet: this table must have another free seat for it.
+      // The friend is not seated yet: this table must have another free seat for it. Gone (or fuming): never.
+      if (!friendship.waiting) return false;
       return friendship.free.some((s) => s !== seat && (tables.get(s.index) ?? -2) === table);
     }
   }
@@ -193,6 +196,7 @@ const CLASHES: [WishId, WishId][] = [
   ['quiet', 'company'],
   ['friend', 'alone'],
   ['friend', 'company'],
+  ['friend', 'quiet'],
 ];
 
 /** Can these wishes all be met together? */

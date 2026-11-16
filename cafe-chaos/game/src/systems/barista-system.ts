@@ -120,6 +120,8 @@ interface Served {
 const TRAY_MODELS = ['tray-tea', 'tray-coffee'] as const;
 const between = (range: [number, number]): number => range[0] + Math.random() * (range[1] - range[0]);
 const lengthOf = (path: Vector3[]): number => path.reduce((sum, p, i) => (i ? sum + p.distanceTo(path[i - 1]) : 0), 0);
+/** How much sooner a hurried guest's order counts as placed (seconds): about one round trip, so it is served next, never at the cost of a guest who has waited longer. */
+const URGENT_HEAD_START = 16;
 const atBar = (member: Staff): boolean => member.state === 'working' || member.state === 'shuffling' || member.state === 'backBar' || member.state === 'waving';
 const cleaningUp = (member: Staff): boolean => member.state === 'toClean' || member.state === 'cleaning';
 
@@ -431,8 +433,13 @@ export class BaristaSystem extends createSystem({}) {
       const nearestFree = (order: Order): number => Math.min(...free.map((member) => distance(member, order)));
       const next = waiting()
         .filter((order) => nearestFree(order) < Infinity)
-        // A guest in a hurry first; then first come, first served (orders placed together: the nearer first).
-        .sort((a, b) => (a.urgent !== b.urgent ? (a.urgent ? -1 : 1) : Math.abs(a.placedAt - b.placedAt) > SAME_TIME_SECONDS ? a.placedAt - b.placedAt : nearestFree(a) - nearestFree(b)))
+        // First come, first served, a guest in a hurry counted as come URGENT_HEAD_START seconds sooner (served first,
+        // but a normal guest who has waited long enough still goes ahead: nobody starves); placed together, the nearer first.
+        .sort((a, b) => {
+          const ta = a.placedAt - (a.urgent ? URGENT_HEAD_START : 0);
+          const tb = b.placedAt - (b.urgent ? URGENT_HEAD_START : 0);
+          return Math.abs(ta - tb) > SAME_TIME_SECONDS ? ta - tb : nearestFree(a) - nearestFree(b);
+        })
         .slice(0, departures);
       let best: Staff[] | null = null;
       let bestCost = Infinity;
@@ -463,7 +470,7 @@ export class BaristaSystem extends createSystem({}) {
     const walking = baristas.filter((m) => m.state === 'out' && m.order);
     for (const member of walking) {
       const mine = member.order!;
-      // A guest in a hurry is never passed over; a normal one only for another normal one.
+      // A server on its way to a guest in a hurry is never sent elsewhere.
       if (mine.bumped > 0 || mine.urgent) continue;
       const nearer = waiting()
         .filter((order) => distance(member, order) + SWITCH_GAIN_M < distance(member, mine))
@@ -482,7 +489,8 @@ export class BaristaSystem extends createSystem({}) {
       for (let j = i + 1; j < walking.length; j++) {
         const a = walking[i];
         const b = walking[j];
-        if (!a.order || !b.order) continue;
+        // A guest in a hurry keeps the server already on its way.
+        if (!a.order || !b.order || a.order.urgent || b.order.urgent) continue;
         if (distance(a, b.order) + distance(b, a.order) + SWITCH_GAIN_M >= distance(a, a.order) + distance(b, b.order)) continue;
         const [first, second] = [a.order, b.order];
         this.switches++;

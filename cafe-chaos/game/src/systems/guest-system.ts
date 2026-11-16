@@ -47,12 +47,12 @@ import { randomLook, type Look } from '../guests/cast.js';
 import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
-  CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
+  CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, PAIR_FOLLOW_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
   PATIENCE_SECONDS, PATIENCE_SPREAD, DROP_MARGIN_M, AIM_SNAP_M, HOVER_EXIT_RADII, HOVER_SWITCH, PICK_MEMORY_S, PICK_RADIUS_M, SIGHT, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
-import { grants, pickName, pickWishes, tablesOf, type Sitter, type WishId, openWishes } from '../guests/wishes.js';
+import { grants, pickName, pickWishes, tablesOf, type Sitter, type WishId, openWishes, type Friendship } from '../guests/wishes.js';
 import { wishCount } from '../game/rules.js';
 import { WishCards } from '../ui/wish-card.js';
 import { Popups } from '../guests/popups.js';
@@ -302,6 +302,7 @@ export class GuestSystem extends createSystem({}) {
   }
 
   update(frameDelta: number): void {
+    this.frame++;
     const cafe = this.cafeSystem;
     const delta = Math.min(1, frameDelta) * cafe.timeScale;
     // New furniture (the annex's) is taken in whether or not the café is down yet.
@@ -353,7 +354,12 @@ export class GuestSystem extends createSystem({}) {
 
   /** Would this seat meet each of this guest's wishes, as things stand? */
   grantsEach(guest: Guest, seat: Seat): boolean[] {
-    const friendship = guest.friend ? { friend: guest.friend, free: this.seats.filter((s) => s.occupant === 0 && !s.locked && !s.dirty) } : null;
+    let friendship: Friendship | null = null;
+    if (guest.friend) {
+      const friend = this.guests.find((g) => g.id === guest.friend);
+      const waiting = !!friend && (friend.state === 'arriving' || friend.state === 'queued' || friend.state === 'held' || (friend.state === 'hop' && !friend.seat));
+      friendship = { friend: guest.friend, free: this.freeSeats(), waiting };
+    }
     return guest.wishes.map((wish) => grants(wish, seat, guest.id, this.sitters, this.tables, this.quietCorner, friendship));
   }
 
@@ -494,16 +500,32 @@ export class GuestSystem extends createSystem({}) {
       this.nextSpawnIn = 0.5;
       return;
     }
+    // A friend following one just arrived (a pair): it comes now, a moment behind, and they are paired.
+    const leader = this.pendingFriend ? this.guests.find((g) => g.id === this.pendingFriend) : undefined;
+    this.pendingFriend = 0;
     const first = this.spawn(look);
-    // Now and then two friends come together (if the line has room for both): each wishes to share a table with the other.
-    if (Math.random() < this.pairChance && this.line.length + awayFromLine + 1 < this.queueCap && this.guests.length < MAX_GUESTS) {
-      const look2 = randomLook(Math.random, look);
-      if (castLoaded(look2)) this.pair(first, this.spawn(look2));
+    if (leader && leader.state !== 'leaving' && leader.state !== 'vanishing') {
+      this.pair(leader, first);
+      this.nextSpawnIn = this.lastGap;
+      return;
+    }
+    // Now and then two friends come together (if the line has room for both): each wishes to share a table with
+    // the other. The second walks up a moment behind the first, so the two are never in one place at once.
+    const forced = this.forcePair;
+    if ((forced || Math.random() < this.pairChance) && this.line.length + awayFromLine < this.queueCap && this.guests.length < MAX_GUESTS) {
+      this.forcePair = false;
+      this.pendingFriend = first.id;
+      first.hurried = false;
+      first.patience = first.patienceFull = this.patienceSeconds;
     }
     // The fuller the café, the longer until the next one.
     const [min, max] = this.spawnSeconds;
     const fullness = this.guests.length / MAX_GUESTS;
     this.nextSpawnIn = (min + Math.random() * (max - min)) * (1 + (this.spawnStretch - 1) * fullness) * this.spawnPace;
+    if (this.pendingFriend) {
+      this.lastGap = this.nextSpawnIn;
+      this.nextSpawnIn = PAIR_FOLLOW_SECONDS;
+    }
   }
 
   /** Bring a new guest on at the arrival point and send it to the back of the line. */
@@ -518,7 +540,8 @@ export class GuestSystem extends createSystem({}) {
     actor.setOpacity(0);
     this.cafeSystem.cafe.add(actor.root);
     // In a hurry (now and then, by level): a shorter wait in the line.
-    const hurried = Math.random() < this.hurryChance;
+    if (this.forceHurryIn > 0) this.forceHurryIn--;
+    const hurried = this.forceHurryIn === 0 && this.forcedHurry ? ((this.forcedHurry = false), true) : Math.random() < this.hurryChance;
     const usual = this.patienceSeconds * (1 + (Math.random() * 2 - 1) * PATIENCE_SPREAD);
     const patience = hurried ? Math.max(this.hurry.lineMin, usual * this.hurry.line) : usual;
     const dial = new PatienceDial();
@@ -584,14 +607,33 @@ export class GuestSystem extends createSystem({}) {
   pair(a: Guest, b: Guest): void {
     a.friend = b.id;
     b.friend = a.id;
+    // One draw for the pair: the friend wish, and the same other wishes for both (a place, so one table can meet
+    // both; never alone, company or quiet, which clash with sharing a table).
+    const count = wishCount(this.level);
+    const pool = (this.wishPool ?? ['window', 'door', 'counter']).filter((w) => w === 'window' || w === 'door' || w === 'counter');
+    const others = count > 1 && pool.length > 0 ? [pool[Math.floor(Math.random() * pool.length)]] : [];
     for (const g of [a, b]) {
       g.hurried = false;
       g.sings = false;
-      const others = pickWishes(Math.max(1, wishCount(this.level) - 1), false, this.lastWishes, Math.random, (this.wishPool ?? undefined)?.filter((w) => w !== 'alone' && w !== 'company') ?? ['window', 'door', 'counter', 'quiet']);
-      g.wishes = ['friend', ...others.filter((w) => w !== 'alone' && w !== 'company').slice(0, Math.max(0, wishCount(this.level) - 1))];
+      g.wishes = ['friend', ...others];
     }
+    this.lastWishes = a.wishes;
     // Their own usual wait (not a hurried one), the same for both.
     b.patience = b.patienceFull = a.patienceFull = a.patience = this.patienceSeconds;
+  }
+  /** A pair's first guest, whose friend arrives next (0: none waiting); and the gap that friend's arrival put off. */
+  private pendingFriend = 0;
+  private lastGap = 0;
+  /** The game's cues: the next arrival is a pair, and in this many arrivals one is in a hurry (0: not forced). */
+  forcePair = false;
+  forceHurryIn = 0;
+  /** Set with `forceHurryIn`: a forced hurried guest is still to come. */
+  forcedHurry = false;
+
+  /** Make the `n`-th arrival from now one in a hurry (the first the player meets comes on cue, not by chance). */
+  hurryIn(n: number): void {
+    this.forceHurryIn = Math.max(1, n);
+    this.forcedHurry = true;
   }
 
   // ---------------------------------------------------------------- the line
@@ -808,6 +850,19 @@ export class GuestSystem extends createSystem({}) {
     const i = friend.wishes.indexOf('friend');
     if (i >= 0) friend.wishMet[i] = false;
   }
+
+  /** The seats free now (open, clean, nobody on them): worked out once a frame. */
+  private freeSeats(): Seat[] {
+    if (this.freeFrame !== this.frame) {
+      this.freeFrame = this.frame;
+      this.free.length = 0;
+      for (const s of this.seats) if (s.occupant === 0 && !s.locked && !s.dirty) this.free.push(s);
+    }
+    return this.free;
+  }
+  private readonly free: Seat[] = [];
+  private freeFrame = -1;
+  private frame = 0;
 
   /** Who is seated now (for the wishes that depend on the other guests). */
   private collectSitters(): void {

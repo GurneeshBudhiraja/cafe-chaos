@@ -85,8 +85,10 @@ export class ScoreSystem extends createSystem({}) {
     if (outcome.kind === 'paid') {
       // One payment, by how quickly it was seated and the share of its wishes its seat met (game/rules.ts PAY).
       const { met, of } = outcome.wishes;
-      const coins = Math.round(payFor(outcome.share, met, of) * (outcome.hurried ? HURRY.pay : 1));
-      const happiness = Math.round(coins * PAY.happiness);
+      const base = payFor(outcome.share, met, of);
+      const coins = Math.round(base * (outcome.hurried ? HURRY.pay : 1));
+      // The café's happiness by the visit itself (a hurried guest pays more, it is not happier).
+      const happiness = Math.round(base * PAY.happiness);
       this.earn(coins);
       this.cheer(happiness);
       this.up++;

@@ -145,7 +145,23 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, canvas: HTMLC
   ctx.fillRect(bx, by, bw, bh);
   rc.rectangle(bx, by, bw, bh, o(5, { strokeWidth: 2.4 }));
   text(ctx, `${g.name.toUpperCase()}${g.sings ? '  ♪' : ''}`, bx + 14, by + bh / 2 + 1, 26, C.cream);
-  if (g.hurried) text(ctx, '⧗ IN A HURRY', bx + bw - 14, by + bh / 2 + 1, 20, C.cream, 'right');
+  if (g.hurried) {
+    // An hourglass drawn (the hand font has no glyph for it), then the words.
+    text(ctx, 'IN A HURRY', bx + bw - 14, by + bh / 2 + 1, 20, C.cream, 'right');
+    ctx.font = hand(20, 700);
+    const hx = bx + bw - 14 - ctx.measureText('IN A HURRY').width - 16;
+    const hy = by + bh / 2;
+    ctx.fillStyle = C.cream;
+    ctx.beginPath();
+    ctx.moveTo(hx - 7, hy - 10);
+    ctx.lineTo(hx + 7, hy - 10);
+    ctx.lineTo(hx, hy);
+    ctx.lineTo(hx + 7, hy + 10);
+    ctx.lineTo(hx - 7, hy + 10);
+    ctx.lineTo(hx, hy);
+    ctx.closePath();
+    ctx.fill();
+  }
   // The wishes, a row each.
   let y = top + frame + bandH + pad;
   if (g.wishes.length === 0) {

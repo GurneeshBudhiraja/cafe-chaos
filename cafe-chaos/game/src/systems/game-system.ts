@@ -35,7 +35,7 @@
 
 import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 import { HandRays } from '../hands/hand-ray.js';
-import { arrivalGap, HAPPINESS, HURRY, hurryChance, JANITOR_PRICE, pairChance, LEVEL, levelBonus, levelGoal, linePatience, MAX_STAFF, MEAL_SECONDS, queueCap, START_TABLES } from '../game/rules.js';
+import { arrivalGap, HAPPINESS, HURRY, hurryChance, JANITOR_PRICE, pairChance, PAIRS, LEVEL, levelBonus, levelGoal, linePatience, MAX_STAFF, MEAL_SECONDS, queueCap, START_TABLES } from '../game/rules.js';
 import { HOW_TO_PLAY } from '../game/how-to-play.js';
 import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS, SPAWN_SECONDS } from '../guests/rules.js';
@@ -565,7 +565,7 @@ export class GameSystem extends createSystem({}) {
   /** DELETE AND START: everything earned goes (the settings stay), and a fresh evening opens. */
   private startFresh(): void {
     const keep = { music: this.save.music, sounds: this.save.sounds, size: this.save.size, tutorialDone: this.save.tutorialDone };
-    Object.assign(this.save, { bank: 0, tables: [...START_TABLES], hires: 0, janitor: false, level: 1, levelServed: 0, happiness: HAPPINESS.start, bestLevel: 1, runs: 0 }, keep);
+    Object.assign(this.save, { bank: 0, tables: [...START_TABLES], hires: 0, janitor: false, level: 1, levelServed: 0, happiness: HAPPINESS.start, bestLevel: 1, metHurry: false, metPair: false, runs: 0 }, keep);
     writeSave(this.save);
     this.shop.restore(0, START_TABLES, false);
     // The extension, if up, waits locked and untagged until the main room is open again.
@@ -861,6 +861,16 @@ export class GameSystem extends createSystem({}) {
     g.hurryChance = hurryChance(this.level);
     g.pairChance = pairChance(this.level);
     g.hurry = { line: HURRY.line, lineMin: HURRY.lineMin, seated: HURRY.seated };
+    // The first hurried guest and the first pair come on cue, so every player meets them early (the competition's
+    // "satisfying in 10 minutes"): the third arrival once hurried guests begin, the first arrival once pairs do.
+    if (this.phase === 'run' && this.level >= HURRY.from && !this.save.metHurry) {
+      this.save.metHurry = true;
+      g.hurryIn(3);
+    }
+    if (this.phase === 'run' && this.level >= PAIRS.from && !this.save.metPair) {
+      this.save.metPair = true;
+      g.forcePair = true;
+    }
     this.showLevelOnBar(this.level, this.levelServed);
   }
 

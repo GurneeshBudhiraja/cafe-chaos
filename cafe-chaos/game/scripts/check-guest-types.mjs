@@ -160,6 +160,42 @@ await until((id) => !window.__cafe.guests.line.some((g) => g.id === id), 30000, 
 const afterLoss = await page.evaluate((id) => window.__cafe.guests.guests.find((g) => g.id === id).wishMet, lost[0]);
 check('seated first with room for its friend it counts as met; the friend giving up makes it unmet', JSON.stringify(tentative) === '[true]' && JSON.stringify(afterLoss) === '[false]', JSON.stringify({ tentative, afterLoss }));
 
+// 7. Pairs through the arrivals themselves: the friend walks up a moment behind, both share the same other wishes.
+await page.evaluate(() => { const { guests } = window.__cafe; guests.clear(); guests.level = 8; guests.queueCap = 4; guests.pairChance = 0; guests.forcePair = true; guests.spawnSeconds = [3, 3]; guests.arrivals = true; });
+await until(() => window.__cafe.guests.guests.length >= 2, 20000);
+const arrivedPair = await page.evaluate(() => {
+  const { guests } = window.__cafe;
+  guests.arrivals = false;
+  const [a, b] = guests.guests;
+  return { a: { id: a.id, friend: a.friend, wishes: a.wishes }, b: { id: b.id, friend: b.friend, wishes: b.wishes }, gap: +Math.abs(a.actor.root.position.distanceTo(b.actor.root.position)).toFixed(3) };
+});
+const same = JSON.stringify(arrivedPair.a.wishes) === JSON.stringify(arrivedPair.b.wishes);
+const noClash = [arrivedPair.a, arrivedPair.b].every((g) => !g.wishes.some((w) => ['quiet', 'alone', 'company'].includes(w)));
+check('a pair arrives through the arrivals: linked, the friend a step behind, the same wishes (none that clash with sharing)', arrivedPair.a.friend === arrivedPair.b.id && arrivedPair.b.friend === arrivedPair.a.id && same && noClash && arrivedPair.gap > 0.01, JSON.stringify(arrivedPair));
+
+// 8. The first hurried guest comes on cue: the third arrival.
+const cued = await page.evaluate(() => {
+  const { guests } = window.__cafe;
+  guests.clear();
+  guests.hurryChance = 0;
+  guests.hurryIn(3);
+  return [guests.spawn(), guests.spawn(), guests.spawn(), guests.spawn()].map((g) => g.hurried);
+});
+check('the first hurried guest comes on cue: the third arrival, then by chance', cued.join() === 'false,false,true,false', cued.join());
+
+// 9. A hurried guest pays 1.5 times but makes the café no happier than another.
+const happy = await page.evaluate(() => {
+  const { score, system } = window.__cafe;
+  const at = new system.cafe.position.constructor(0, 0.1, 0);
+  score.happiness = 50;
+  score.score({ kind: 'paid', guest: 0, share: 0, at, wishes: { met: 1, of: 1 }, hurried: true });
+  const hurried = score.happiness - 50;
+  score.happiness = 50;
+  score.score({ kind: 'paid', guest: 0, share: 0, at, wishes: { met: 1, of: 1 }, hurried: false });
+  return { hurried, normal: score.happiness - 50 };
+});
+check('a hurried guest pays more but lifts the café\'s happiness the same', happy.hurried === happy.normal && happy.normal > 0, JSON.stringify(happy));
+
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');
 console.log(`${results.filter(Boolean).length}/${results.length} checks passed`);

@@ -29,6 +29,9 @@ export interface Save {
   happiness: number;
   /** The highest level reached. */
   bestLevel: number;
+  /** The first hurried guest and the first pair have been cued (they come on cue once, then by chance). */
+  metHurry: boolean;
+  metPair: boolean;
   runs: number;
   /** Settings: music and sound levels (0 off to 5), and the café's size (percent). */
   music: number;
@@ -48,7 +51,7 @@ const OLD_KEY = 'cafe-chaos/save/v2';
 export const TEST_MODE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('test');
 
 export function freshSave(): Save {
-  return { bank: 0, tables: [...START_TABLES], hires: 0, janitor: false, tutorialDone: false, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, runs: 0, music: 2, sounds: 3, size: 100 };
+  return { bank: 0, tables: [...START_TABLES], hires: 0, janitor: false, tutorialDone: false, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, metHurry: false, metPair: false, runs: 0, music: 2, sounds: 3, size: 100 };
 }
 
 export function loadSave(): Save {
