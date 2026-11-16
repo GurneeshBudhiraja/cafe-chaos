@@ -8,7 +8,7 @@
  * 4. carried over a seat, the card marks each wish that seat meets, and
  *    the seats that meet every wish are lit;
  * 5. let go there, its wishes are judged as the card said, once, and the
- *    result pops up over its head; it has no dot once seated;
+ *    result pops up over its head; its dot now counts its food wait down;
  * 6. a seated guest stays where it was put: a pinch on it picks nothing up;
  * 7. judged once: someone sitting at a loner's table later does not
  *    change the loner's result;
@@ -81,7 +81,7 @@ const lateSet = new Set(counts.late);
 check('early guests have 1 wish; late ones a mix of 1, 2 and 3', counts.early.every((n) => n === 1) && counts.late.every((n) => n >= 1 && n <= 3) && lateSet.has(2) && lateSet.has(3), `early ${counts.early.join('')}, late ${counts.late.join('')}`);
 
 // 1. The line, at a high level (a mix of wishes).
-await page.evaluate(() => { window.__cafe.game.level = 10; window.__cafe.guests.level = 10; window.__cafe.guests.clear(); });
+await page.evaluate(() => { window.__cafe.game.level = 10; window.__cafe.guests.level = 10; window.__cafe.guests.queueCap = 5; window.__cafe.guests.clear(); });
 await until(() => window.__cafe.guests.line.length >= 4 && window.__cafe.guests.line.slice(0, 4).every((g) => g.state === 'queued' && !g.walk));
 await page.evaluate(() => (window.__cafe.guests.arrivals = false));
 await frames(4);
@@ -140,7 +140,7 @@ await pinch(0);
 await until((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.state === 'seated', first.id, 30000);
 await h.screenshot('artifacts/wishes-4-result.png');
 const seated = await page.evaluate((id) => { const { guests } = window.__cafe; const g = guests.guests.find((x) => x.id === id); return { seat: g.seat?.index, met: g.wishMet, results: guests.popups.shown.result ?? 0, dot: g.dial.sprite.visible }; }, first.id);
-check('let go, its wishes are judged as the card said, the result pops up, and it has no dot', seated.seat === carried?.target && JSON.stringify(seated.met) === JSON.stringify(carried?.each) && seated.results === before + 1 && !seated.dot, JSON.stringify(seated));
+check('let go, its wishes are judged as the card said, the result pops up, and its dot counts the food wait down', seated.seat === carried?.target && JSON.stringify(seated.met) === JSON.stringify(carried?.each) && seated.results === before + 1 && seated.dot, JSON.stringify(seated));
 
 // 6. A seated guest stays put: a pinch on it picks nothing up.
 const picked = await page.evaluate(() => window.__cafe.guests.pickedUp);

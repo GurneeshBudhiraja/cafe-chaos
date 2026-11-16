@@ -156,6 +156,30 @@ await until(() => window.__cafe.game.phase === 'run');
 s = await state();
 check('TRY AGAIN: level 2 from zero, the happiness full, the coins kept', s.level === 2 && s.served === 0 && s.happiness === 100 && s.bank === bank && s.cafe, JSON.stringify({ level: s.level, served: s.served, happiness: s.happiness, bank: [bank, s.bank], cafe: s.cafe }));
 
+// 9a. A guest served while the card waits for empty hands counts toward the next level; happiness carried on even with none served.
+await page.evaluate(() => { const { game } = window.__cafe; game.save.level = 1; game.save.levelServed = 0; game.toRun(true); });
+await until(() => window.__cafe.game.level === 1 && window.__cafe.game.levelServed === 0 && window.__cafe.game.phase === 'run');
+await page.evaluate(() => Object.defineProperty(window.__cafe.guests, 'carrying', { get: () => true, configurable: true }));
+for (let i = 0; i < 6; i++) await pay(0.2, 1, 1);
+await page.waitForTimeout(500);
+await page.evaluate(() => { delete window.__cafe.guests.carrying; });
+await until(() => window.__cafe.game.phase === 'levelup');
+s = await state();
+check('a sixth guest served while the level card waited counts toward level 2', s.level === 2 && s.served === 1, JSON.stringify({ level: s.level, served: s.served }));
+await until(() => window.__cafe.game.menu.card.open && window.__cafe.game.menu.cardKind === 'level', 10000);
+await page.evaluate(() => window.__cafe.game.click('level-continue'));
+await until(() => window.__cafe.game.phase === 'run' && window.__cafe.system.timeScale === 1, 10000);
+await page.evaluate(() => { window.__cafe.score.happiness = 40; });
+await page.waitForTimeout(300);
+await page.evaluate(() => window.__cafe.game.click('bar-pause'));
+await until(() => window.__cafe.game.phase === 'paused');
+await page.evaluate(() => window.__cafe.game.click('end'));
+await until(() => window.__cafe.game.phase === 'title');
+await page.evaluate(() => window.__cafe.game.click('continue'));
+await until(() => window.__cafe.game.phase === 'run');
+s = await state();
+check('MAIN MENU then CONTINUE carries the happiness on (40), even with the count it had', s.happiness === 40 && s.level === 2 && s.served === 1, JSON.stringify({ happiness: s.happiness, level: s.level, served: s.served }));
+
 // 9. Letting go: only a seat near where the hand points.
 const aim = await page.evaluate(() => {
   const { guests } = window.__cafe;
@@ -174,7 +198,16 @@ const aim = await page.evaluate(() => {
 });
 check('let go over a free seat the guest takes it; let go far from any free seat it goes back to the line', aim.near && aim.away, JSON.stringify(aim));
 
-// 10. An old save keeps only its settings.
+// 10. The level series and the pace table, from the rules themselves.
+const rules = await page.evaluate(async () => {
+  const r = await import('/src/game/rules.ts');
+  const levels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 20];
+  return { goals: levels.map((l) => r.levelGoal(l)), gaps: levels.map((l) => +r.arrivalGap(l).toFixed(2)), queue: levels.map((l) => r.queueCap(l)), line: levels.map((l) => r.linePatience(l)) };
+});
+check('goals 5, 7, 10, 14, 19, 25, 32, 40, 49, then 60 from level 10', rules.goals.join() === '5,7,10,14,19,25,32,40,49,60,60,60', rules.goals.join());
+check('gaps 20, 18, 15, 12, 8.5 (rush), 9.35 (breather), 7, 6, 5.5, then 5 (the floor); the line 2, 2, 3 ... 4; patience 30 down to 20', rules.gaps.join() === '20,18,15,12,8.5,9.35,7,6,5.5,5,5,5' && rules.queue.join() === '2,2,3,3,3,3,3,4,4,4,4,4' && rules.line[0] === 30 && rules.line[11] === 20, JSON.stringify(rules));
+
+// 11. An old save keeps only its settings.
 const migrated = await page.evaluate(async () => {
   localStorage.removeItem('cafe-chaos/save/v3');
   localStorage.setItem('cafe-chaos/save/v2', JSON.stringify({ bank: 900, hires: 2, tutorialDone: true, bestSeconds: 400, bestCoins: 300, runs: 9, music: 4, sounds: 1, size: 120 }));

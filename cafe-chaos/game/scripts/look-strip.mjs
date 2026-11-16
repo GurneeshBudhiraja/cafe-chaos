@@ -22,7 +22,6 @@ const { page } = h;
 const frames = (n) => page.evaluate((n) => new Promise((resolve) => { const info = window.__cafe.world.renderer.info.render; const target = info.frame + n; const t = setInterval(() => { if (info.frame >= target) { clearInterval(t); resolve(); } }, 8); }), n);
 await page.evaluate(() => {
   const { game, guests } = window.__cafe;
-  game.save.bestSeconds = 310;
   game.click('open');
   game.click('skip');
   guests.patienceFrozen = true;

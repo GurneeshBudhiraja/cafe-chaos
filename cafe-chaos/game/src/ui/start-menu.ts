@@ -100,6 +100,8 @@ export interface FailState {
   level: number;
   served: number;
   goal: number;
+  /** Guests who left unhappy in the level: why the happiness ran out. */
+  left: number;
 }
 /** The shop: the bank, and each barista in hiring order. */
 export interface ShopState {
@@ -814,8 +816,9 @@ export class StartMenu {
       const mid = lx + lw / 2;
       text(ctx, 'A rough evening', mid, H / 2 - 110, 46, SKETCH.ink);
       text(ctx, `Level ${s.level}`, mid, H / 2 - 20, 64, SKETCH.ink);
-      text(ctx, `${s.served} of ${s.goal} guests served`, mid, H / 2 + 60, 34, SKETCH.soft, 'center', false);
-      text(ctx, 'Your coins and staff are kept.', mid, H / 2 + 120, 30, SKETCH.soft, 'center', false);
+      text(ctx, `${s.served} of ${s.goal} guests served`, mid, H / 2 + 50, 34, SKETCH.soft, 'center', false);
+      text(ctx, `${s.left} ${s.left === 1 ? 'guest' : 'guests'} left unhappy`, mid, H / 2 + 98, 30, SKETCH.koi, 'center', false);
+      text(ctx, 'Your coins and staff are kept.', mid, H / 2 + 146, 30, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
   }

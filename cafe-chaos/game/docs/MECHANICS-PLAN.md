@@ -8,8 +8,8 @@ Each number is marked: **M** measured in the game, **S** backed by a published s
 
 - Start card: returning player sees CONTINUE with "Level N · coins"; first-timer sees NEW GAME, the tutorial, then Level 1.
 - A level is passed by serving a set number of guests (seated, fed, paid). The café never closes between levels.
-- Level-up: wait until the player's hand is empty, ease time to a stop (~0.3 s), dim the lamps, show a "Level N" banner card in the sketch style at the menu spot with confetti and a chime, no flashing. It waits for a pinch on CONTINUE (the rest point, S: Meta breaks every 10–15 min). The café stays visible.
-- Fail: café happiness at 0 → retry the current level from its start; coins and purchases kept (S: Juul).
+- Level-up: wait until the player's hand is empty, ease time to a stop (0.3 s), then show a "Level N" card in the sketch style at the menu spot (world-locked, 1 m) with confetti from the card and a chime, no flashing. It waits for a pinch on CONTINUE (the rest point, S: Meta breaks every 10–15 min; Apple: nothing waits on an animation, CONTINUE works during the confetti). Guests served while the card waited count toward the next level. The café is hidden behind the card as in pause (zero cost; built: phase 1).
+- Fail: café happiness at 0 → retry the current level from its start; coins and purchases kept (S: Juul). The card says how far it got and why ("N guests left unhappy"; S: NN/g error messages name the problem).
 - Bar HUD: "Level N · served/goal" where the clock was.
 - Save (new save version, old saves start fresh, settings kept): level, served count in the level, happiness, coins, unlocked tables, staff. Autosave on each served guest, each purchase, pause and headset-off (S: Meta autosave, VRC pause). Who was sitting where is not restored.
 
@@ -21,8 +21,8 @@ Each number is marked: **M** measured in the game, **S** backed by a published s
 | 2 | 7 | 18 s | 2 | 1 |
 | 3 | 10 | 15 s | 3 | 2 |
 | 4 | 14 | 12 s | 3 | 2 |
-| 5 | 19 | 10 s | 3 | 2 |
-| 6 | 25 | 8.5 s | 3 | 2 + janitor |
+| 5 (rush) | 19 | 8.5 s | 3 | 2 |
+| 6 (breather) | 25 | 9.4 s | 3 | 2 + janitor |
 | 7 | 32 | 7 s | 3 | 3 |
 | 8 | 40 | 6 s | 4 | 3 |
 | 9 | 49 | 5.5 s | 4 | 3 + janitor |
@@ -31,7 +31,7 @@ Each number is marked: **M** measured in the game, **S** backed by a published s
 - Goal growth: the step grows by 1 each level, capped at 60 (S: accelerating thresholds).
 - Inside a level arrivals speed up ~15%, then the level-up rest.
 - Floor 5 s: three baristas serve about one guest per 5 s (M), and Meta advises against reflex-heavy pacing (S).
-- Every 5th level is a rush level, the next one eases.
+- Every 5th level is a rush level (×0.85), the next one eases (×1.1); the 5 s floor wins, so from level 10 there are no rush levels and variety comes from the wishes.
 - Competition rule "satisfying in ≤10 minutes": every feature must appear in the first 10 minutes (levels 1–4): hurried guests from level 2, two-wish guests from level 3, pairs from level 4, three-wish guests from level 5. Janitor affordable by about level 4.
 
 ## 3. Timers (one dot per guest, two stages)
@@ -50,7 +50,7 @@ Each number is marked: **M** measured in the game, **S** backed by a published s
 
 ## 4. Pay
 
-One payment per guest, 1–10 coins: `1 + 9 × (0.4 × speed + 0.6 × share of wishes met)` (E). Hurried guests pay the same score × 1.5, so up to 15 (S: Diner Dash customer types tip differently; more risk, more reward). Leavers pay 0. The game starts at 0 coins with the two centre tables already open for free; the first table bought costs 10. Show why (ticks and a speed mark beside "+6") (S: feedback). Replaces the base + tip-per-wish pay from guest-cards.
+One payment per guest, 1–10 coins: `1 + 9 × (0.4 × speed + 0.6 × share of wishes met)` (E), rounded. Hurried guests pay the same score × 1.5, so up to 15 (S: Diner Dash customer types tip differently; more risk, more reward). Leavers pay 0. The game starts at 0 coins with the two centre tables already open for free; the first table bought costs 10. Why the amount: the genre shows a live predictor (hearts) rather than a breakdown after; the seated dot counts the food wait down (built: phase 1) and the seated mood bubble (phase 5) shows the wishes met, so "+7" reads as earned. Show why (ticks and a speed mark beside "+6") (S: feedback). Replaces the base + tip-per-wish pay from guest-cards.
 
 ## 5. Wishes
 

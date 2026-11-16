@@ -9,9 +9,12 @@
  *   (pick up the guest at the gate; seat it; watch the server bring its
  *   tea). Every step has Skip. The guest's patience is held, so nothing
  *   goes wrong while the player learns.
- * - The run: one endless evening. The clock counts up from 0:00; guests
- *   come faster and wait less patiently as it goes on (game/rules.ts
- *   RAMP); the café closes when its happiness reaches zero. Coins go to
+ * - The run: the café never closes. The player passes a level by serving
+ *   a set number of guests; each level guests come a little faster and
+ *   wait a little less in the line (game/rules.ts LEVEL). The goal met,
+ *   the café eases to a stop and the level card goes up (confetti, a
+ *   chime, CONTINUE). The café's happiness at zero loses the level: the
+ *   retry card, TRY AGAIN from the level's start, coins kept. Coins go to
  *   the bank and hire servers (ShopSystem), who stay hired.
  * - Pause and Shop are on the bar (the scoreboard over the café), out of
  *   reach: the hand points at one and pinches (the hand ray, Meta's way to
@@ -21,11 +24,9 @@
  *   Settings, End the evening). Shop pauses too and shows the baristas to
  *   hire. The game pauses itself when the headset comes off or another
  *   app takes over, and the bank is saved then too.
- * - Closing card: how long the café stayed open, the record, guests fed,
- *   coins earned; Play again or Menu.
  *
- * The bank, the staff, the records and whether the first run has been
- * seen are kept between sessions (game/save.ts).
+ * The bank, the staff, the level (and how far into it) and whether the
+ * first run has been seen are kept between sessions (game/save.ts).
  *
  * In test mode (`?test`: the checks and recordings) none of this shows:
  * guests come at once and all six servers work, as before there was a
@@ -145,6 +146,8 @@ export class GameSystem extends createSystem({}) {
   /** The level (1-based), and guests served in it so far. */
   level = 1;
   levelServed = 0;
+  /** The happiness last written to the save (a leaver changes it; it is saved then). */
+  private savedHappiness = -1;
   /** `score.servedGuests` when this level's count stood at zero. */
   private servedMark = 0;
   /** A level's goal has been met: the level card goes up as soon as no hand is carrying a guest. */
@@ -296,6 +299,8 @@ export class GameSystem extends createSystem({}) {
       if (this.phase === 'paused') this.showPauseCard();
       if (this.phase === 'levelup' && this.cafe.timeScale === 0) this.showLevelCard();
       if (this.phase === 'closed') this.showFailedCard();
+      // How to play was up (opened from the pause card): back, so there is something to press.
+      if (this.phase === 'rules') this.menu.showHow(HOW_TO_PLAY, this.menu.howIndex);
     });
     xr.addEventListener('sessionend', () => {
       this.pause();
@@ -602,8 +607,8 @@ export class GameSystem extends createSystem({}) {
     this.level = Math.max(1, Math.floor(this.save.level));
     this.levelServed = again ? 0 : Math.max(0, Math.min(levelGoal(this.level) - 1, Math.floor(this.save.levelServed)));
     this.servedMark = this.score.servedGuests - this.levelServed;
-    // Carried on part-way through a level: the happiness it had. From a level's start: full.
-    if (this.levelServed > 0 && this.save.happiness > 0) this.score.happiness = Math.min(HAPPINESS.max, this.save.happiness);
+    // Carried on: the happiness it had (saved on every change). From a level's start, after it was lost: full.
+    if (!again && this.save.happiness > 0) this.score.happiness = Math.min(HAPPINESS.max, this.save.happiness);
     this.pace();
     this.menu.hideAll();
     this.strip.live = true;
@@ -704,10 +709,10 @@ export class GameSystem extends createSystem({}) {
     this.servedMark = this.score.servedGuests;
     this.score.refill();
     this.keep();
-    this.failed = { level: this.level, served, goal: levelGoal(this.level) };
+    this.failed = { level: this.level, served, goal: levelGoal(this.level), left: this.score.down };
     this.showFailedCard();
   }
-  private failed = { level: 1, served: 0, goal: 1 };
+  private failed = { level: 1, served: 0, goal: 1, left: 0 };
 
   private showFailedCard(): void {
     if (!this.menu.card.open) this.menuPlaced = false;
@@ -721,13 +726,13 @@ export class GameSystem extends createSystem({}) {
     this.clock += delta;
     const served = this.score.servedGuests - this.servedMark;
     if (served !== this.levelServed) {
-      // A guest served: counted, and saved (a level left part-way is carried on from here).
+      // A guest served: counted, the pace moved on, and saved (a level left part-way is carried on from here).
       this.levelServed = served;
+      this.pace();
       this.keep();
     }
-    this.pace();
     this.sinceSave += delta;
-    if (this.sinceSave >= AUTOSAVE_SECONDS) this.keep();
+    if (this.score.happiness !== this.savedHappiness || this.sinceSave >= AUTOSAVE_SECONDS) this.keep();
     if (this.score.happiness <= 0) {
       this.toClosed();
       return;
@@ -747,9 +752,11 @@ export class GameSystem extends createSystem({}) {
    */
   private levelUp(): void {
     this.levelDue = false;
+    // Guests served while the card waited for empty hands count toward the next level.
+    const goal = levelGoal(this.level);
     this.level++;
-    this.levelServed = 0;
-    this.servedMark = this.score.servedGuests;
+    this.servedMark += goal;
+    this.levelServed = Math.max(0, this.score.servedGuests - this.servedMark);
     this.score.award(levelBonus(this.level));
     this.score.refill();
     this.save.bestLevel = Math.max(this.save.bestLevel, this.level);
@@ -829,6 +836,7 @@ export class GameSystem extends createSystem({}) {
       this.save.level = this.level;
       this.save.levelServed = this.levelServed;
       this.save.happiness = this.score.happiness;
+      this.savedHappiness = this.score.happiness;
     }
     writeSave(this.save);
   }

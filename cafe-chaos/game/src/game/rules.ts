@@ -53,10 +53,11 @@ export const LOSSES = {
 /**
  * The levels.
  *
- * - `firstGoal`, `goalCap`: guests to serve to pass level 1; each level
- *   after asks for more, and the step grows by one each time (5, 7, 10,
- *   14, 19 ...), up to the cap. (source: accelerating thresholds; a fixed
- *   step is too slow early and too fast late.)
+ * - `firstGoal`, `goalCap`, `capFrom`: guests to serve to pass level 1;
+ *   each level after asks for more, and the step grows by one each time
+ *   (5, 7, 10, 14, 19 ...); from level `capFrom` it is the cap. (source:
+ *   accelerating thresholds; a fixed step is too slow early and too fast
+ *   late.)
  * - `gaps`: seconds between arrivals at the start of levels 1, 2, 3 ...
  *   (the last holds from then on), never under `floor`. One barista
  *   serves a guest about every 16 seconds, two every 8, three every 5
@@ -65,7 +66,9 @@ export const LOSSES = {
  *   Meta, avoid reflex-heavy events).
  * - `speedUp`: by the end of a level the gap is this share of its start.
  * - `rush`: every `every`-th level comes `gap` times as fast, and the one
- *   after it `after` times (a breather).
+ *   after it `after` times (a breather). The floor still wins, so from
+ *   the level that reaches the floor there are no rush levels: variety
+ *   there comes from the wishes, not speed.
  * - `queue`: how many may stand in the line, by level (the last holds).
  * - `linePatience`: seconds a guest waits in the line at level 1, less
  *   `perLevel` each level, never under `min`. (estimate)
@@ -81,6 +84,7 @@ export const LOSSES = {
 export const LEVEL = {
   firstGoal: 5,
   goalCap: 60,
+  capFrom: 10,
   gaps: [20, 18, 15, 12, 10, 8.5, 7, 6, 5.5, 5],
   floor: 5,
   speedUp: 0.85,
@@ -105,13 +109,16 @@ const byLevel = <T>(list: readonly T[], level: number): T => list[Math.min(list.
 /** Guests to serve to pass `level` (1-based). */
 export function levelGoal(level: number): number {
   const n = Math.max(0, Math.floor(level) - 1);
+  if (n + 1 >= LEVEL.capFrom) return LEVEL.goalCap;
   return Math.min(LEVEL.goalCap, LEVEL.firstGoal + (n * (n + 3)) / 2);
 }
 
 /** Seconds between arrivals in `level`, `progress` (0 to 1) of the way through it. */
 export function arrivalGap(level: number, progress = 0): number {
   const r = LEVEL.rush;
-  const rush = level > 1 && level % r.every === 0 ? r.gap : level > r.every && level % r.every === 1 ? r.after : 1;
+  // A breather only follows a rush the floor did not cancel.
+  const rushed = level > r.every && level % r.every === 1 && byLevel(LEVEL.gaps, level - 1) * r.gap > LEVEL.floor;
+  const rush = level > 1 && level % r.every === 0 ? r.gap : rushed ? r.after : 1;
   const within = 1 - (1 - LEVEL.speedUp) * Math.min(1, Math.max(0, progress));
   return Math.max(LEVEL.floor, byLevel(LEVEL.gaps, level) * rush * within);
 }

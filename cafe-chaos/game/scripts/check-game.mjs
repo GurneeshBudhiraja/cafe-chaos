@@ -88,7 +88,7 @@ const state = () =>
       phase: game.phase, step: game.step, card: game.card.open || game.menu.card.open, coach: game.coach.open, board: strip.panel.open, live: strip.live,
       arrived: guests.arrived, onStage: guests.guests.length, staff: baristas.staff.length, hires: shop.hires, price: shop.price,
       bank: score.bank, happiness: score.happiness, up: score.up, down: score.down, clock: game.clock, log: score.log,
-      popups: { ...guests.popups.shown }, refused: shop.refused, pace: guests.spawnPace, patience: guests.patienceSeconds,
+      popups: { ...guests.popups.shown }, refused: shop.refused, pace: guests.spawnPace, gap: guests.spawnSeconds, level: game.level, patience: guests.patienceSeconds,
     };
   });
 
@@ -98,7 +98,7 @@ await page.waitForTimeout(3000);
 let s = await state();
 const waiting = await page.evaluate(() => ({ waiting: window.__cafe.system.waiting, visible: window.__cafe.system.cafe.visible }));
 check('the start card shows at the table; the café waits hidden, no scoreboard, nobody comes', s.phase === 'title' && s.card && !s.board && waiting.waiting && !waiting.visible && s.arrived === 0, `phase ${s.phase}, card ${s.card}, board ${s.board}, ${JSON.stringify(waiting)}, arrived ${s.arrived}`);
-check('the café has one server', s.staff === 1 && s.hires === 0 && s.price === 60, `staff ${s.staff}, next costs ${s.price}`);
+check('the café has one server', s.staff === 1 && s.hires === 0 && s.price === 50, `staff ${s.staff}, next costs ${s.price}`);
 await h.screenshot('artifacts/game-title.png');
 
 // 2. A fingertip on "Open the café".
@@ -149,18 +149,18 @@ await page.evaluate(() => {
   window.__cafe.guests.patienceFrozen = false;
 });
 
-// 4. The clock counts up and the pace builds.
+// 4. Level 1: the clock counts up, guests about 20 s apart.
 const c0 = s.clock;
-const p0 = s.pace;
 await page.waitForTimeout(6000);
 s = await state();
-check('the clock counts up, and guests come faster as it does', s.clock > c0 && s.pace < p0, `clock ${c0.toFixed(1)} -> ${s.clock.toFixed(1)}, arrival pace ${p0.toFixed(3)} -> ${s.pace.toFixed(3)}`);
+const gap = (s.gap[0] + s.gap[1]) / 2;
+check('the clock counts up; level 1 has guests about 20 s apart', s.clock > c0 && gap > 17 && gap <= 20 && s.level === 1, `clock ${c0.toFixed(1)} -> ${s.clock.toFixed(1)}, gap ${gap.toFixed(1)} s, level ${s.level}`);
 
 // 5. The first guest, seated quickly, pays the top tip.
 await until(() => window.__cafe.score.log.some((e) => e.kind === 'paid'), null, 240000);
 s = await state();
 const paid = s.log.find((e) => e.kind === 'paid');
-check('a guest seated quickly pays the top tip, with a thumbs up and coins', paid?.tier === 'quick' && paid.coins === 12 && s.up === 1 && s.bank === 12 && s.popups.up >= 1 && s.popups.coins >= 1, `tier ${paid?.tier}, coins ${paid?.coins}, bank ${s.bank}, up ${s.up}`);
+check('a guest seated at once with its wishes met pays 10, with a thumbs up and coins', paid?.coins === 10 && paid.share < 0.25 && s.up === 1 && s.bank === 10 && s.popups.up >= 1 && s.popups.coins >= 1, `share ${paid?.share?.toFixed(2)}, coins ${paid?.coins}, bank ${s.bank}, up ${s.up}`);
 await h.screenshot('artifacts/game-paid.png');
 
 // 6. A guest whose food never comes storms out.
@@ -200,14 +200,14 @@ await frames(3);
 await page.evaluate(() => window.__cafe.game.click('hire'));
 await frames(2);
 s = await state();
-check('Hire is refused while the bank is short', s.refused === 1 && s.staff === 1 && s.bank === 20, `refused ${s.refused}, staff ${s.staff}, bank ${s.bank}`);
+check('Hire is refused while the bank is short', s.refused === 1 && s.staff === 1 && s.bank < 50, `refused ${s.refused}, staff ${s.staff}, bank ${s.bank}`);
 await page.evaluate(() => (window.__cafe.score.bank = 100));
 await frames(3);
 await page.evaluate(() => window.__cafe.game.click('hire'));
 await until(() => window.__cafe.baristas.staff.length === 2, null, 60000);
 s = await state();
-const savedHire = await page.evaluate(() => JSON.parse(localStorage.getItem('cafe-chaos/save/v2') ?? 'null'));
-check('with the money a server is hired, the price taken, and it is saved', s.staff === 2 && s.bank === 40 && s.price === 120 && savedHire?.hires === 1 && savedHire.bank === 40, `staff ${s.staff}, bank ${s.bank}, next ${s.price}, saved ${JSON.stringify(savedHire)}`);
+const savedHire = await page.evaluate(() => JSON.parse(localStorage.getItem('cafe-chaos/save/v3') ?? 'null'));
+check('with the money a server is hired, the price taken, and it is saved', s.staff === 2 && s.bank === 50 && s.price === 150 && savedHire?.hires === 1 && savedHire.bank === 50, `staff ${s.staff}, bank ${s.bank}, next ${s.price}, saved ${JSON.stringify(savedHire)}`);
 await h.screenshot('artifacts/game-hired.png');
 
 // 8. Pause (the bar's Pause; check-bar.mjs presses it with the hand ray) and Resume.
@@ -227,20 +227,19 @@ await page.waitForTimeout(3000);
 s = await state();
 check('Resume carries on', s.phase === 'run' && s.clock > pausedAt, `phase ${s.phase}, clock ${s.clock.toFixed(2)}`);
 
-// 9. Happiness at zero closes the café.
-const openFor = s.clock;
+// 9. Happiness at zero: the level is lost; the retry card.
 await page.evaluate(() => (window.__cafe.score.happiness = 0));
 await until(() => window.__cafe.game.phase === 'closed', null, 20000);
 s = await state();
-const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('cafe-chaos/save/v2') ?? 'null'));
-check('happiness at zero closes the café, and the record and the staff are saved', s.phase === 'closed' && s.card && saved?.bestSeconds >= openFor && saved.hires === 1 && saved.runs === 1 && saved.tutorialDone === true, `phase ${s.phase}, saved ${JSON.stringify(saved)}`);
+const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('cafe-chaos/save/v3') ?? 'null'));
+check('happiness at zero loses the level: the retry card, the staff and the level saved', s.phase === 'closed' && s.card && saved?.level === 1 && saved.levelServed === 0 && saved.hires === 1 && saved.runs === 1 && saved.tutorialDone === true, `phase ${s.phase}, saved ${JSON.stringify(saved)}`);
 await h.screenshot('artifacts/game-closed.png');
 const again = await page.evaluate(() => {
   window.__cafe.game.click('again');
   const { game, guests, score, baristas } = window.__cafe;
   return { phase: game.phase, clock: game.clock, onStage: guests.guests.length, happiness: score.happiness, staffSize: baristas.staffSize };
 });
-check('Play again opens at 0:00 with nobody about, the staff kept', again.phase === 'run' && again.clock === 0 && again.onStage === 0 && again.happiness === 100 && again.staffSize === 2, JSON.stringify(again));
+check('TRY AGAIN opens the level afresh with nobody about, the staff kept', again.phase === 'run' && again.clock === 0 && again.onStage === 0 && again.happiness === 100 && again.staffSize === 2, JSON.stringify(again));
 
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');

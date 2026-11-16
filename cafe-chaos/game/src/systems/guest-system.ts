@@ -984,6 +984,8 @@ export class GuestSystem extends createSystem({}) {
       // How long it waited to be seated, as a share of its patience; and a top-up for the wait for its food.
       guest.seatShare = Math.min(1, Math.max(0, 1 - guest.patience / guest.patienceFull));
       guest.patience = this.seatedPatience ?? Math.min(SERVICE_MAX_SECONDS, Math.max(0, guest.patience) + SERVICE_TOPUP_SECONDS);
+      // The second stage of its wait: the dot counts the fresh amount down (full again as it sits).
+      if (this.seatedPatience !== null) guest.patienceFull = this.seatedPatience;
       this.seated++;
       this.judge(guest);
     }
@@ -1149,10 +1151,11 @@ export class GuestSystem extends createSystem({}) {
     guest.highlight += (want - guest.highlight) * (1 - Math.exp(-(want ? 18 : 8) * delta));
     guest.actor.setHighlight(guest.highlight < 0.01 ? 0 : guest.highlight);
     guest.actor.update(delta);
-    // The dot shows for as long as the guest is waiting to be seated: in the line, and in the player's hand
-    // (or the air) on its way from the line, where its patience is still running. Once seated, its seat is
-    // final and there is nothing to do about its wait: no dot (its face shows if its food is slow).
-    const waiting = guest.state === 'queued' || guest.state === 'vanishing' || ((guest.state === 'held' || guest.state === 'hop') && fromLine(guest));
+    // The dot shows for as long as the guest is waiting: in the line, in the player's hand (or the air) on
+    // its way from the line, and (in the game, where sitting gives a fresh amount) seated until its food
+    // comes, so a full café shows who is still waiting (plan: one dot, two stages).
+    const waiting = guest.state === 'queued' || guest.state === 'vanishing' || ((guest.state === 'held' || guest.state === 'hop') && fromLine(guest))
+      || (this.seatedPatience !== null && guest.state === 'seated' && !guest.served && guest.fuming < 0);
     guest.dial.update(guest.patience / guest.patienceFull, guest.patience, guest.wishes.length, waiting, opacity, delta, this.hovered.includes(guest) || guest.state === 'held');
     // A blob under everyone on their feet (not the seated, nor the carried).
     const p = guest.actor.root.position;
