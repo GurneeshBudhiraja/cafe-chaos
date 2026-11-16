@@ -1135,7 +1135,7 @@ export class GuestSystem extends createSystem({}) {
     // (or the air) on its way from the line, where its patience is still running. Once seated, its seat is
     // final and there is nothing to do about its wait: no dot (its face shows if its food is slow).
     const waiting = guest.state === 'queued' || guest.state === 'vanishing' || ((guest.state === 'held' || guest.state === 'hop') && fromLine(guest));
-    guest.dial.update(guest.patience / guest.patienceFull, guest.patience, guest.wishes.length, waiting, opacity, delta);
+    guest.dial.update(guest.patience / guest.patienceFull, guest.patience, guest.wishes.length, waiting, opacity, delta, this.hovered.includes(guest) || guest.state === 'held');
     // A blob under everyone on their feet (not the seated, nor the carried).
     const p = guest.actor.root.position;
     if (guest.state !== 'seated' && guest.state !== 'held' && guest.state !== 'vanishing') this.blobs.add(p.x, guest.ground, p.z, opacity);

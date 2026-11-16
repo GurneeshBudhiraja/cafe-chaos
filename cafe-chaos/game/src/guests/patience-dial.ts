@@ -9,6 +9,11 @@
  * hard to please. The wishes themselves are on the card beside the hand
  * (ui/wish-card.ts), when a hand is near the guest or carries it.
  *
+ * When a hand is near its guest (the guest a pinch would take, whose card
+ * is up beside the hand), the dot is lit: it grows by a third and a warm
+ * lantern ring glows round it, easing in and out, so the card and its
+ * guest are plainly one.
+ *
  * It is a sprite, so it always faces the player. Each dot has its own
  * small canvas, drawn again only when what it shows changes (the second,
  * a step of the ring).
@@ -29,6 +34,8 @@ const COLOURS: [number, string][] = [
 ];
 /** Below this share the dot throbs, this many times a second, by this much of its size. */
 const THROB = { below: 0.25, rate: 2.4, depth: 0.12 };
+/** Lit by a hand: how much larger, and how quickly it eases in and out (per second). */
+const LIT = { grow: 0.35, ease: 14 };
 const PX = 128;
 
 export class PatienceDial {
@@ -41,6 +48,8 @@ export class PatienceDial {
   private readonly material: SpriteMaterial;
   private drawn = '';
   private time = Math.random() * 10;
+  /** 0 to 1: how lit it is, eased. */
+  private lit = 0;
 
   constructor() {
     this.canvas = document.createElement('canvas');
@@ -60,26 +69,38 @@ export class PatienceDial {
    * Show `left` (0 to 1) of the patience and `seconds` left, with `pips`
    * wishes, at `opacity`; hidden when `shown` is false.
    */
-  update(left: number, seconds: number, pips: number, shown: boolean, opacity: number, delta: number): void {
+  update(left: number, seconds: number, pips: number, shown: boolean, opacity: number, delta: number, lit = false): void {
     this.sprite.visible = shown && opacity > 0.02;
+    this.lit += ((lit ? 1 : 0) - this.lit) * Math.min(1, LIT.ease * delta);
     if (!this.sprite.visible) return;
     this.left = Math.min(1, Math.max(0, left));
-    const key = `${Math.ceil(this.left * STEPS)}|${Math.max(0, Math.ceil(seconds))}|${pips}`;
+    const glow = Math.round(this.lit * 8) / 8;
+    const key = `${Math.ceil(this.left * STEPS)}|${Math.max(0, Math.ceil(seconds))}|${pips}|${glow}`;
     if (key !== this.drawn) {
       this.drawn = key;
-      this.draw(Math.ceil(this.left * STEPS) / STEPS, Math.max(0, Math.ceil(seconds)), pips);
+      this.draw(Math.ceil(this.left * STEPS) / STEPS, Math.max(0, Math.ceil(seconds)), pips, glow);
     }
     this.material.opacity = opacity;
     this.time += delta;
     const throb = this.left < THROB.below ? 1 + THROB.depth * Math.abs(Math.sin(this.time * THROB.rate * Math.PI)) : 1;
-    this.sprite.scale.setScalar(DIAL.size * throb);
+    this.sprite.scale.setScalar(DIAL.size * throb * (1 + LIT.grow * this.lit));
+    // Lit, it draws over the other dots.
+    this.sprite.renderOrder = this.lit > 0.5 ? 31 : 30;
   }
 
-  private draw(left: number, seconds: number, pips: number): void {
+  private draw(left: number, seconds: number, pips: number, glow: number): void {
     const ctx = this.ctx;
     const c = PX / 2;
     const colour = COLOURS.find(([share]) => left <= share)![1];
     ctx.clearRect(0, 0, PX, PX);
+    // Lit: a soft lantern glow behind it, and a lantern ring round the rim.
+    if (glow > 0) {
+      const g = ctx.createRadialGradient(c, c, c * 0.55, c, c, c);
+      g.addColorStop(0, `rgba(255, 214, 140, ${0.85 * glow})`);
+      g.addColorStop(1, 'rgba(255, 214, 140, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, PX, PX);
+    }
     // A soft shadow, the timber rim, the paper.
     ctx.beginPath();
     ctx.arc(c, c + 2, c - 4, 0, Math.PI * 2);
@@ -87,7 +108,7 @@ export class PatienceDial {
     ctx.fill();
     ctx.beginPath();
     ctx.arc(c, c, c - 6, 0, Math.PI * 2);
-    ctx.fillStyle = '#66462f';
+    ctx.fillStyle = glow > 0.5 ? '#f0c987' : '#66462f';
     ctx.fill();
     ctx.beginPath();
     ctx.arc(c, c, c - 11, 0, Math.PI * 2);
