@@ -32,7 +32,7 @@
 import { Color, createSystem, DoubleSide, InstancedMesh, Matrix4, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3, Euler } from '@iwsdk/core';
 import { HAPPINESS } from '../game/rules.js';
 import { Panel, type Button } from '../ui/panel.js';
-import { line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
+import { hand, line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
 import { clockText } from '../game/clock.js';
 import { CafeSystem } from './cafe-system.js';
 import { ScoreSystem } from './score-system.js';
@@ -54,6 +54,8 @@ const SEGMENTS = 10;
  * 3 degrees for a ray), and the margin at each end.
  */
 const BAR_BUTTON = { size: 0.66, pad: 0.14 };
+/** The tag over a lit bar button: its size (metres) and how far its middle stands above the bar's top edge. */
+const BAR_TAG = { width: 0.15, height: 0.05, above: 0.034 };
 /** The confetti: how many scraps, how long they fly (seconds), how fast they leave (m/s), gravity (m/s²). */
 const CONFETTI = { count: 60, seconds: 1.6, speed: 0.55, gravity: 1.1 };
 /** The scraps' colours: the café's moss, lantern, koi and paper. */
@@ -68,6 +70,13 @@ export const STRIP_HEIGHT: 'eye' | 'low' = typeof location !== 'undefined' && ne
 
 export class StripSystem extends createSystem({}) {
   readonly panel = new Panel('ScoreStrip', STRIP.width, STRIP.height);
+  /**
+   * The name of the button the beam is on (Pause, Resume or Shop): a small
+   * paper tag just above it, shown only while it is lit, so what the icon
+   * does is never a guess. Above, not below: below it would sit over the café.
+   */
+  readonly tag = new Panel('BarTag', BAR_TAG.width, BAR_TAG.height);
+  private tagText = '';
   /** The longest evening before this run (seconds), and whether a run is on: the game sets them. */
   best = 0;
   live = false;
@@ -108,6 +117,9 @@ export class StripSystem extends createSystem({}) {
     this.panel.turn = 2.5;
     this.bank = this.score.bank;
     this.panel.set((ctx, w, h) => this.draw(ctx, w, h), this.barButtons());
+    this.tag.frame = false;
+    this.tag.onTop = true;
+    this.panel.mesh.add(this.tag.mesh);
     const colour = new Color();
     for (let i = 0; i < CONFETTI.count; i++) this.confetti.setColorAt(i, colour.set(CONFETTI_COLOURS[i % CONFETTI_COLOURS.length]));
     this.confetti.visible = false;
@@ -122,7 +134,9 @@ export class StripSystem extends createSystem({}) {
     this.player.head.getWorldPosition(this.head);
     this.place(delta);
     this.flyConfetti(delta);
-    if (!this.panel.update(delta, this.head)) return;
+    const up = this.panel.update(delta, this.head);
+    this.showTag(delta);
+    if (!up) return;
     this.time += delta;
     const s = this.score;
     // Past the best time: celebrate once (confetti and a chime), then only the green.
@@ -227,9 +241,12 @@ export class StripSystem extends createSystem({}) {
     // Laid out left to right with room between every part; the time and the bank are given room for their widest so nothing shifts as they change.
     const inner = h * 0.12, around = h * 0.15;
     const icon = h * 0.36, timeSize = h * 0.36, bankSize = h * 0.34;
-    // The widest time ('59:59') and bank ('9999') in the hand font, as drawn on the headset.
+    // The widest time ('59:59') in the hand font, as drawn on the headset; the bank as wide as it is drawn
+    // (measured, two digits at least), so a small number leaves no gap before the shop and a big one never
+    // runs into it. The bar's segments give way only when the bank gains a digit.
     const timeW = h * 0.9;
-    const bankW = h * 0.72;
+    ctx.font = hand(bankSize, 700);
+    const bankW = ctx.measureText(`${s.bank}`.padStart(2, '0')).width;
     // Pause at the left end: the clock starts after it and a divider.
     const btn = h * BAR_BUTTON.size;
     let x = h * BAR_BUTTON.pad + btn + around;
@@ -253,8 +270,10 @@ export class StripSystem extends createSystem({}) {
     const face = h * 0.4;
     sketchFace(rc, x + face / 2, h * 0.5, face, mood, 31, lw);
     x += face + inner;
-    // Shop at the right end, after the coins, with a wider gap before it so the button stands apart from the number.
-    const right = w - h * BAR_BUTTON.pad - btn - around * 2.2 - bankW - inner - icon - around;
+    // Shop at the right end, mirroring Pause at the left: the button, a divider `around` before it, then the coins.
+    const shopLine = w - h * BAR_BUTTON.pad - btn - around;
+    rc.line(shopLine, h * 0.17, shopLine - 2, h * 0.83, line(23, lw * 0.8));
+    const right = shopLine - around - bankW - inner - icon - around;
     rc.line(right, h * 0.17, right - 2, h * 0.83, line(22, lw * 0.8));
     const x0 = x;
     const span = right - around - x0;
@@ -284,6 +303,24 @@ export class StripSystem extends createSystem({}) {
     const coinX = right + around + icon / 2;
     sketchCoin(rc, coinX, h * 0.5, icon * pop, 41, lw);
     scrawl(ctx, `${s.bank}`, coinX + icon / 2 + inner, h * 0.53, bankSize * pop);
+  }
+
+  /** The tag over the lit button: its word, where it stands (over that button), shown while the button is lit. */
+  private showTag(delta: number): void {
+    const id = this.panel.open && this.controls !== 'off' ? this.panel.hover : null;
+    const b = id ? this.panel.buttons.find((x) => x.id === id) : undefined;
+    const word = !b ? '' : b.id === 'bar-shop' ? 'Shop' : this.controls === 'paused' ? 'Resume' : 'Pause';
+    if (word && word !== this.tagText) {
+      this.tagText = word;
+      this.tag.set((ctx, w, h) => {
+        const lw = Math.max(2, h * 0.05);
+        pen(this.tag.canvas).rectangle(lw * 1.5, lw * 1.5, w - lw * 3, h - lw * 3, line(130, lw, { fill: SKETCH.paper, fillStyle: 'solid', roughness: 1.1 }));
+        scrawl(ctx, word, w / 2, h * 0.56, h * 0.56, { align: 'center' });
+      });
+    }
+    if (b) this.tag.mesh.position.set(((b.x + b.w / 2) / this.panel.width - 0.5) * STRIP.width, STRIP.height / 2 + BAR_TAG.above, 0.002);
+    this.tag.show(!!b);
+    this.tag.update(delta, this.head);
   }
 
   /** The bar's two buttons: they draw themselves (Panel calls `draw` with the hover and the press). */
