@@ -46,6 +46,9 @@ export interface CardSubject {
   name: string;
   wishes: WishId[];
   sings: boolean;
+  /** In a hurry (the card says so), and the friend it came with (a pair), if any. */
+  hurried?: boolean;
+  friend?: string | null;
   /** Its patience: the share left (0 to 1) and the seconds left. */
   left: number;
   seconds: number;
@@ -81,7 +84,7 @@ export class WishCards {
     const card = this.cards[i];
     if (subject && at) {
       const steps = Math.ceil(subject.left * SEGMENTS * 4);
-      const key = `${subject.id}|${subject.wishes.join()}|${subject.sings}|${Math.max(0, Math.ceil(subject.seconds))}|${steps}|${subject.preview?.join() ?? ''}`;
+      const key = `${subject.id}|${subject.wishes.join()}|${subject.sings}|${subject.hurried ?? ''}|${subject.friend ?? ''}|${Math.max(0, Math.ceil(subject.seconds))}|${steps}|${subject.preview?.join() ?? ''}`;
       if (key !== this.shown[i]) {
         this.shown[i] = key;
         card.set((ctx, w, h) => draw(ctx, w, h, card.canvas, subject));
@@ -142,6 +145,7 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, canvas: HTMLC
   ctx.fillRect(bx, by, bw, bh);
   rc.rectangle(bx, by, bw, bh, o(5, { strokeWidth: 2.4 }));
   text(ctx, `${g.name.toUpperCase()}${g.sings ? '  ♪' : ''}`, bx + 14, by + bh / 2 + 1, 26, C.cream);
+  if (g.hurried) text(ctx, '⧗ IN A HURRY', bx + bw - 14, by + bh / 2 + 1, 20, C.cream, 'right');
   // The wishes, a row each.
   let y = top + frame + bandH + pad;
   if (g.wishes.length === 0) {
@@ -160,7 +164,7 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, canvas: HTMLC
     const mark = met === true ? '✓' : met === false ? '✕' : `${i + 1}`;
     const ink = met === true ? C.mossDeep : met === false ? C.koi : C.ink;
     text(ctx, mark, x + 22, y + rowH / 2 + 1, 23, met === undefined ? C.soft : ink, 'center');
-    text(ctx, WISH_SHORT[wish], x + 44, y + rowH / 2 + 1, 24, ink);
+    text(ctx, wish === 'friend' && g.friend ? `With ${g.friend}` : WISH_SHORT[wish], x + 44, y + rowH / 2 + 1, 24, ink);
     y += rowH + rowGap;
   });
   y += pad - rowGap;

@@ -14,6 +14,10 @@
  * lantern ring glows round it, easing in and out, so the card and its
  * guest are plainly one.
  *
+ * A guest in a hurry has an hourglass at the top of its dot and a koi rim
+ * (the shape says it as well as the colour); one of a pair has a small
+ * heart in place of a pip, for the friend it wants to sit with.
+ *
  * It is a sprite, so it always faces the player. Each dot has its own
  * small canvas, drawn again only when what it shows changes (the second,
  * a step of the ring).
@@ -69,16 +73,16 @@ export class PatienceDial {
    * Show `left` (0 to 1) of the patience and `seconds` left, with `pips`
    * wishes, at `opacity`; hidden when `shown` is false.
    */
-  update(left: number, seconds: number, pips: number, shown: boolean, opacity: number, delta: number, lit = false): void {
+  update(left: number, seconds: number, pips: number, shown: boolean, opacity: number, delta: number, lit = false, hurried = false, paired = false): void {
     this.sprite.visible = shown && opacity > 0.02;
     this.lit += ((lit ? 1 : 0) - this.lit) * Math.min(1, LIT.ease * delta);
     if (!this.sprite.visible) return;
     this.left = Math.min(1, Math.max(0, left));
     const glow = Math.round(this.lit * 8) / 8;
-    const key = `${Math.ceil(this.left * STEPS)}|${Math.max(0, Math.ceil(seconds))}|${pips}|${glow}`;
+    const key = `${Math.ceil(this.left * STEPS)}|${Math.max(0, Math.ceil(seconds))}|${pips}|${glow}|${hurried}|${paired}`;
     if (key !== this.drawn) {
       this.drawn = key;
-      this.draw(Math.ceil(this.left * STEPS) / STEPS, Math.max(0, Math.ceil(seconds)), pips, glow);
+      this.draw(Math.ceil(this.left * STEPS) / STEPS, Math.max(0, Math.ceil(seconds)), pips, glow, hurried, paired);
     }
     this.material.opacity = opacity;
     this.time += delta;
@@ -88,7 +92,7 @@ export class PatienceDial {
     this.sprite.renderOrder = this.lit > 0.5 ? 31 : 30;
   }
 
-  private draw(left: number, seconds: number, pips: number, glow: number): void {
+  private draw(left: number, seconds: number, pips: number, glow: number, hurried = false, paired = false): void {
     const ctx = this.ctx;
     const c = PX / 2;
     const colour = COLOURS.find(([share]) => left <= share)![1];
@@ -108,7 +112,7 @@ export class PatienceDial {
     ctx.fill();
     ctx.beginPath();
     ctx.arc(c, c, c - 6, 0, Math.PI * 2);
-    ctx.fillStyle = glow > 0.5 ? '#f0c987' : '#66462f';
+    ctx.fillStyle = glow > 0.5 ? '#f0c987' : hurried ? '#b8361a' : '#66462f';
     ctx.fill();
     ctx.beginPath();
     ctx.arc(c, c, c - 11, 0, Math.PI * 2);
@@ -134,13 +138,39 @@ export class PatienceDial {
     ctx.textBaseline = 'middle';
     ctx.font = `800 ${seconds >= 10 ? 40 : 46}px ${HAND_FONT}, 'Trebuchet MS', sans-serif`;
     ctx.fillText(`${seconds}`, c, c - 5);
-    // One pip for each wish, under the number.
+    // One pip for each wish, under the number (a small heart first for a pair's friend).
     const n = Math.max(0, Math.min(3, pips));
     const gap = 12;
     for (let i = 0; i < n; i++) {
+      const px = c + (i - (n - 1) / 2) * gap;
+      ctx.fillStyle = paired && i === 0 ? '#c9772f' : '#5a4030';
       ctx.beginPath();
-      ctx.arc(c + (i - (n - 1) / 2) * gap, c + 24, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#5a4030';
+      if (paired && i === 0) {
+        ctx.arc(px - 2.2, c + 22.5, 2.6, 0, Math.PI * 2);
+        ctx.arc(px + 2.2, c + 22.5, 2.6, 0, Math.PI * 2);
+        ctx.moveTo(px - 4.6, c + 23.5);
+        ctx.lineTo(px, c + 28.5);
+        ctx.lineTo(px + 4.6, c + 23.5);
+      } else ctx.arc(px, c + 24, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // In a hurry: an hourglass over the top of the ring.
+    if (hurried) {
+      const hx = c;
+      const hy = 13;
+      ctx.beginPath();
+      ctx.arc(hx, hy + 1, 13, 0, Math.PI * 2);
+      ctx.fillStyle = '#b8361a';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(hx - 6, hy - 7);
+      ctx.lineTo(hx + 6, hy - 7);
+      ctx.lineTo(hx, hy + 1);
+      ctx.lineTo(hx + 6, hy + 9);
+      ctx.lineTo(hx - 6, hy + 9);
+      ctx.lineTo(hx, hy + 1);
+      ctx.closePath();
+      ctx.fillStyle = '#fbf2e1';
       ctx.fill();
     }
     this.texture.needsUpdate = true;

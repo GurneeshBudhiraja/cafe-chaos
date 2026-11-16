@@ -35,7 +35,7 @@
 
 import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 import { HandRays } from '../hands/hand-ray.js';
-import { arrivalGap, HAPPINESS, JANITOR_PRICE, LEVEL, levelBonus, levelGoal, linePatience, MAX_STAFF, MEAL_SECONDS, queueCap, START_TABLES } from '../game/rules.js';
+import { arrivalGap, HAPPINESS, HURRY, hurryChance, JANITOR_PRICE, pairChance, LEVEL, levelBonus, levelGoal, linePatience, MAX_STAFF, MEAL_SECONDS, queueCap, START_TABLES } from '../game/rules.js';
 import { HOW_TO_PLAY } from '../game/how-to-play.js';
 import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS, SPAWN_SECONDS } from '../guests/rules.js';
@@ -858,6 +858,9 @@ export class GameSystem extends createSystem({}) {
     g.seatedPatience = LEVEL.seatedPatience;
     g.level = this.level;
     g.singerChance = this.level >= LEVEL.singerFrom ? LEVEL.singer : 0;
+    g.hurryChance = hurryChance(this.level);
+    g.pairChance = pairChance(this.level);
+    g.hurry = { line: HURRY.line, lineMin: HURRY.lineMin, seated: HURRY.seated };
     this.showLevelOnBar(this.level, this.levelServed);
   }
 
@@ -900,6 +903,8 @@ export class GameSystem extends createSystem({}) {
     this.guests.patienceSeconds = PATIENCE_SECONDS;
     this.guests.level = 1;
     this.guests.singerChance = 0;
+    this.guests.hurryChance = 0;
+    this.guests.pairChance = 0;
     this.score.running = false;
     if (this.phase === 'title') this.guests.clear();
   }

@@ -77,6 +77,8 @@ export interface Order {
   served: boolean;
   /** How many times a server on its way to this order was sent to a nearer one instead (for the checks). */
   bumped: number;
+  /** Its guest is in a hurry: served before the others. */
+  urgent: boolean;
 }
 
 export interface Staff {
@@ -330,7 +332,7 @@ export class BaristaSystem extends createSystem({}) {
       if (guest.state !== 'seated' || !guest.seat || guest.served || guest.fuming >= 0 || this.orders.some((o) => o.guest === guest.id)) continue;
       const points = this.pointsFor(guest.seat);
       if (points.length === 0) continue;
-      this.orders.push({ id: this.nextOrder++, guest: guest.id, seat: guest.seat, points, point: points[0], placedAt: this.clock, server: null, served: false, bumped: 0 });
+      this.orders.push({ id: this.nextOrder++, guest: guest.id, seat: guest.seat, points, point: points[0], placedAt: this.clock, server: null, served: false, bumped: 0, urgent: guest.hurried });
       this.dirty = true;
     }
   }
@@ -405,7 +407,8 @@ export class BaristaSystem extends createSystem({}) {
       const nearestFree = (order: Order): number => Math.min(...free.map((member) => distance(member, order)));
       const next = waiting()
         .filter((order) => nearestFree(order) < Infinity)
-        .sort((a, b) => (Math.abs(a.placedAt - b.placedAt) > SAME_TIME_SECONDS ? a.placedAt - b.placedAt : nearestFree(a) - nearestFree(b)))
+        // A guest in a hurry first; then first come, first served (orders placed together: the nearer first).
+        .sort((a, b) => (a.urgent !== b.urgent ? (a.urgent ? -1 : 1) : Math.abs(a.placedAt - b.placedAt) > SAME_TIME_SECONDS ? a.placedAt - b.placedAt : nearestFree(a) - nearestFree(b)))
         .slice(0, departures);
       let best: Staff[] | null = null;
       let bestCost = Infinity;
@@ -436,7 +439,8 @@ export class BaristaSystem extends createSystem({}) {
     const walking = baristas.filter((m) => m.state === 'out' && m.order);
     for (const member of walking) {
       const mine = member.order!;
-      if (mine.bumped > 0) continue;
+      // A guest in a hurry is never passed over; a normal one only for another normal one.
+      if (mine.bumped > 0 || mine.urgent) continue;
       const nearer = waiting()
         .filter((order) => distance(member, order) + SWITCH_GAIN_M < distance(member, mine))
         .sort((a, b) => distance(member, a) - distance(member, b))[0];

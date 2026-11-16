@@ -57,7 +57,8 @@ One payment per guest, 1–10 coins: `1 + 9 × (0.4 × speed + 0.6 × share of w
 - 1–3 per guest by level; never clashing; only wishes an unlocked seat can satisfy.
 - Cap mix about 25% one, 45% two, 30% three (E).
 - Keep wishes a self-contained registry (id, label, icon, rule, clashes, from-level) so new ones drop in; the owner plans harder wishes and a dynamic picker later.
-- Pairs: two friends who must share a table.
+- Pairs (built: phase 4): two friends arrive together; each has the `friend` wish (never with `alone` or `company`), a heart on its dot, "With <name>" on its card. Seated first, it counts as met if its table has room for the friend; once both sit, met if they share a table; the friend giving up makes it unmet. From level 4, 15 % of arrivals rising to 25 %.
+- Hurried guests (built: phase 4): from level 2, 10 % rising to 20 %; line patience ×0.6 (≥15 s), 30 s seated, pay ×1.5 (up to 15), an hourglass and koi rim on the dot (not colour alone), "⧗ IN A HURRY" on the card; their order is served first and a barista on its way to one is never diverted.
 - UI is the guest-cards work (dot per guest, request card beside the hand) (S: icon size minimums).
 
 ## 6. Tables

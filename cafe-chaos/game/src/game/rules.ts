@@ -159,6 +159,39 @@ export function wishCount(level: number, random: () => number = Math.random): nu
 export const MEAL_SECONDS = 22;
 
 /**
+ * Hurried guests (from level `from`): a share of new guests, `chance`
+ * rising by `perLevel` a level to `max`, who wait `line` times as long in
+ * the line (never under `lineMin` seconds) and `seated` seconds for their
+ * food (30: with one barista a hurried guest seated at a random moment
+ * leaves about 2 % of the time, at 25 s about 10 %, measured), are served
+ * first, and pay `pay` times as much (up to 15): more risk, more reward
+ * (source: Diner Dash's customer types each have their own patience and
+ * tips). Marked by an hourglass on the dot, not colour alone. (estimate:
+ * the shares)
+ */
+export const HURRY = { from: 2, chance: 0.1, perLevel: 0.02, max: 0.2, line: 0.6, lineMin: 15, seated: 30, pay: 1.5 };
+
+/** The share of new guests in a hurry in `level`. */
+export function hurryChance(level: number): number {
+  if (level < HURRY.from) return 0;
+  return Math.min(HURRY.max, HURRY.chance + HURRY.perLevel * (level - HURRY.from));
+}
+
+/**
+ * Pairs (from level `from`): two friends arrive together and wish to sit
+ * at the same table (each has the `friend` wish, besides its others). A
+ * new arrival is a pair with `chance`, rising by `perLevel` a level to
+ * `max`, when the line has room for both. (estimate)
+ */
+export const PAIRS = { from: 4, chance: 0.15, perLevel: 0.02, max: 0.25 };
+
+/** The share of arrivals that are pairs in `level`. */
+export function pairChance(level: number): number {
+  if (level < PAIRS.from) return 0;
+  return Math.min(PAIRS.max, PAIRS.chance + PAIRS.perLevel * (level - PAIRS.from));
+}
+
+/**
  * The tables. The café opens with `START_TABLES` (indices into the café's
  * pieces, cafe/layout.ts: the centre back table and the centre front
  * two-seater, four seats); every other table, the bar and the quiet

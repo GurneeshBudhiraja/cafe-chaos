@@ -86,8 +86,9 @@ await page.evaluate(() => { const { game, shop, system } = window.__cafe; shop.r
 await until(() => window.__cafe.guests.line.length >= 4 && window.__cafe.guests.line.slice(0, 4).every((g) => g.state === 'queued' && !g.walk));
 await page.evaluate(() => (window.__cafe.guests.arrivals = false));
 await frames(4);
-const CLASH = [['window', 'door'], ['window', 'counter'], ['door', 'counter'], ['alone', 'company'], ['quiet', 'music'], ['quiet', 'company']];
-const line = await page.evaluate(() => window.__cafe.guests.line.map((g) => ({ id: g.id, name: g.name, wishes: g.wishes, dot: g.dial.sprite.visible })));
+const CLASH = [['window', 'door'], ['window', 'counter'], ['door', 'counter'], ['alone', 'company'], ['quiet', 'music'], ['quiet', 'company'], ['friend', 'alone'], ['friend', 'company']];
+// The guests standing in the line (a pair comes as two at once, so one more may still be walking up).
+const line = await page.evaluate(() => window.__cafe.guests.line.filter((g) => g.state === 'queued' && !g.walk).map((g) => ({ id: g.id, name: g.name, wishes: g.wishes, dot: g.dial.sprite.visible })));
 const names = new Set(line.map((g) => g.name));
 const fine = line.every((g) => g.wishes.length >= 1 && g.wishes.length <= 3 && new Set(g.wishes).size === g.wishes.length && CLASH.every(([a, b]) => !(g.wishes.includes(a) && g.wishes.includes(b))));
 check('every guest in line has its own name, 1-3 wishes that can all be met, and a dot', names.size === line.length && fine && line.every((g) => g.dot), JSON.stringify(line));

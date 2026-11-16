@@ -126,6 +126,10 @@ export interface Guest {
   fuming: number;
   /** The vein mark over its head while it fumes. */
   anger: Sprite | null;
+  /** In a hurry (game/rules.ts HURRY): a shorter wait, served first, pays more; an hourglass on its dot. */
+  hurried: boolean;
+  /** The friend it came with (a pair: each wishes to share a table with the other); 0 if none. */
+  friend: number;
   /** Its own name; what it wishes for (1 to 3 wishes); and whether it sings while it sits. */
   name: string;
   wishes: WishId[];
@@ -169,6 +173,8 @@ export interface Outcome {
   at: Vector3;
   /** Its wishes as it left: how many were met, of how many (`of` 0 if it never sat). */
   wishes: { met: number; of: number };
+  /** It was in a hurry (it pays more). */
+  hurried: boolean;
 }
 
 export class GuestSystem extends createSystem({}) {
@@ -189,6 +195,11 @@ export class GuestSystem extends createSystem({}) {
   level = 1;
   /** How many may stand in the line (the game sets it by level). */
   queueCap = MAX_QUEUE;
+  /** The share of new guests in a hurry, and of arrivals that are pairs (the game sets them by level). */
+  hurryChance = 0;
+  pairChance = 0;
+  /** A hurried guest's patience in the line as a share of the others', its floor, and its seconds for its food (the game sets them). */
+  hurry = { line: 1, lineMin: 0, seated: 0 };
   /** How much the gap between arrivals grows as the café fills (the game, which sets the gaps itself, turns it off with 1). */
   spawnStretch = SPAWN_STRETCH;
   /**
@@ -337,13 +348,13 @@ export class GuestSystem extends createSystem({}) {
       this.tables = tablesOf(this.seats, pieces);
       this.quietCorner = pieces.findIndex((piece) => /quiet/i.test(piece.name));
     }
-    this.sitters.length = 0;
-    for (const guest of this.guests) if (guest.state === 'seated' && guest.seat && guest.fuming < 0) this.sitters.push({ id: guest.id, seat: guest.seat, sings: guest.sings });
+    this.collectSitters();
   }
 
   /** Would this seat meet each of this guest's wishes, as things stand? */
   grantsEach(guest: Guest, seat: Seat): boolean[] {
-    return guest.wishes.map((wish) => grants(wish, seat, guest.id, this.sitters, this.tables, this.quietCorner));
+    const friendship = guest.friend ? { friend: guest.friend, free: this.seats.filter((s) => s.occupant === 0 && !s.locked && !s.dirty) } : null;
+    return guest.wishes.map((wish) => grants(wish, seat, guest.id, this.sitters, this.tables, this.quietCorner, friendship));
   }
 
   /** Would this seat meet every one of this guest's wishes? */
@@ -358,7 +369,10 @@ export class GuestSystem extends createSystem({}) {
   private judge(guest: Guest): void {
     const seat = guest.seat;
     if (!seat || guest.wishes.length === 0) return;
+    // Judged with itself among the sitters, so its friend, seated already, is judged against it too.
+    this.collectSitters();
     guest.wishMet = this.grantsEach(guest, seat);
+    this.judgeFriend(guest);
     const over = this.at.copy(guest.actor.root.position);
     over.y += guest.actor.bubbleAnchor.position.y + DIAL.above + 0.02;
     this.popups.result(guest.wishMet.filter(Boolean).length, guest.wishes.length, over.clone());
@@ -399,7 +413,7 @@ export class GuestSystem extends createSystem({}) {
       const preview = carried && carried.target ? this.grantsEach(carried, carried.target) : null;
       this.cards.update(
         i,
-        guest ? { id: guest.id, name: guest.name, wishes: guest.wishes, sings: guest.sings, left: guest.patience / guest.patienceFull, seconds: guest.patience, preview } : null,
+        guest ? { id: guest.id, name: guest.name, wishes: guest.wishes, sings: guest.sings, hurried: guest.hurried, friend: this.guests.find((g) => g.id === guest.friend)?.name ?? null, left: guest.patience / guest.patienceFull, seconds: guest.patience, preview } : null,
         at,
         this.eye,
         this.headLocal,
@@ -477,7 +491,12 @@ export class GuestSystem extends createSystem({}) {
       this.nextSpawnIn = 0.5;
       return;
     }
-    this.spawn(look);
+    const first = this.spawn(look);
+    // Now and then two friends come together (if the line has room for both): each wishes to share a table with the other.
+    if (Math.random() < this.pairChance && this.line.length + awayFromLine + 1 < this.queueCap && this.guests.length < MAX_GUESTS) {
+      const look2 = randomLook(Math.random, look);
+      if (castLoaded(look2)) this.pair(first, this.spawn(look2));
+    }
     // The fuller the café, the longer until the next one.
     const [min, max] = this.spawnSeconds;
     const fullness = this.guests.length / MAX_GUESTS;
@@ -495,7 +514,10 @@ export class GuestSystem extends createSystem({}) {
     actor.root.position.copy(this.arrival);
     actor.setOpacity(0);
     this.cafeSystem.cafe.add(actor.root);
-    const patience = this.patienceSeconds * (1 + (Math.random() * 2 - 1) * PATIENCE_SPREAD);
+    // In a hurry (now and then, by level): a shorter wait in the line.
+    const hurried = Math.random() < this.hurryChance;
+    const usual = this.patienceSeconds * (1 + (Math.random() * 2 - 1) * PATIENCE_SPREAD);
+    const patience = hurried ? Math.max(this.hurry.lineMin, usual * this.hurry.line) : usual;
     const dial = new PatienceDial();
     dial.sprite.position.set(0, actor.bubbleAnchor.position.y + DIAL.above, 0);
     actor.root.add(dial.sprite);
@@ -532,6 +554,8 @@ export class GuestSystem extends createSystem({}) {
       seatShare: -1,
       fuming: -1,
       anger: null,
+      hurried,
+      friend: 0,
       name: pickName(taken),
       wishes,
       sings,
@@ -547,6 +571,24 @@ export class GuestSystem extends createSystem({}) {
     this.guests.push(guest);
     this.line.push(guest);
     return guest;
+  }
+
+  /**
+   * Make two new guests a pair: friends, neither in a hurry, each with the
+   * `friend` wish and up to two more (none that clash with sharing a
+   * table), and the same patience, so they wait together.
+   */
+  pair(a: Guest, b: Guest): void {
+    a.friend = b.id;
+    b.friend = a.id;
+    for (const g of [a, b]) {
+      g.hurried = false;
+      g.sings = false;
+      const others = pickWishes(Math.max(1, wishCount(this.level) - 1), false, this.lastWishes, Math.random, (this.wishPool ?? undefined)?.filter((w) => w !== 'alone' && w !== 'company') ?? ['window', 'door', 'counter', 'quiet']);
+      g.wishes = ['friend', ...others.filter((w) => w !== 'alone' && w !== 'company').slice(0, Math.max(0, wishCount(this.level) - 1))];
+    }
+    // Their own usual wait (not a hurried one), the same for both.
+    b.patience = b.patienceFull = a.patienceFull = a.patience = this.patienceSeconds;
   }
 
   // ---------------------------------------------------------------- the line
@@ -740,12 +782,43 @@ export class GuestSystem extends createSystem({}) {
     return guest.state === 'seated' && !guest.served && guest.fuming < 0;
   }
 
+  /**
+   * A pair: once both are seated, each one's `friend` wish is judged
+   * again (it was judged before the other sat, by whether there was room
+   * for it): met if they share a table. A friend who gave up instead
+   * leaves the wish unmet.
+   */
+  private judgeFriend(guest: Guest): void {
+    const friend = guest.friend ? this.guests.find((g) => g.id === guest.friend) : undefined;
+    if (!friend || !friend.wishMet || !friend.seat || !guest.seat) return;
+    const same = (this.tables.get(friend.seat.index) ?? -1) === (this.tables.get(guest.seat.index) ?? -2);
+    const i = friend.wishes.indexOf('friend');
+    if (i >= 0) friend.wishMet[i] = same;
+    const j = guest.wishes.indexOf('friend');
+    if (j >= 0 && guest.wishMet) guest.wishMet[j] = same;
+  }
+
+  /** A friend gave up before it sat: the one seated has its `friend` wish unmet. */
+  private friendLost(guest: Guest): void {
+    const friend = guest.friend ? this.guests.find((g) => g.id === guest.friend) : undefined;
+    if (!friend?.wishMet) return;
+    const i = friend.wishes.indexOf('friend');
+    if (i >= 0) friend.wishMet[i] = false;
+  }
+
+  /** Who is seated now (for the wishes that depend on the other guests). */
+  private collectSitters(): void {
+    this.sitters.length = 0;
+    for (const guest of this.guests) if (guest.state === 'seated' && guest.seat && guest.fuming < 0) this.sitters.push({ id: guest.id, seat: guest.seat, sings: guest.sings });
+  }
+
   /** Tell the listeners how a guest's visit ended. */
   private tell(kind: Outcome['kind'], guest: Guest): void {
+    if (kind === 'gaveUp') this.friendLost(guest);
     const at = guest.actor.root.position.clone();
     at.y += guest.actor.bubbleAnchor.position.y + DIAL.above + 0.012;
     const wishes = guest.wishMet ? { met: guest.wishMet.filter(Boolean).length, of: guest.wishMet.length } : { met: 0, of: 0 };
-    for (const listen of this.outcomes) listen({ kind, guest: guest.id, share: guest.seatShare, at, wishes });
+    for (const listen of this.outcomes) listen({ kind, guest: guest.id, share: guest.seatShare, at, wishes, hurried: guest.hurried });
   }
 
   /**
@@ -1000,9 +1073,10 @@ export class GuestSystem extends createSystem({}) {
       guest.eaten = 0;
       // How long it waited to be seated, as a share of its patience; and a top-up for the wait for its food.
       guest.seatShare = Math.min(1, Math.max(0, 1 - guest.patience / guest.patienceFull));
-      guest.patience = this.seatedPatience ?? Math.min(SERVICE_MAX_SECONDS, Math.max(0, guest.patience) + SERVICE_TOPUP_SECONDS);
+      const seated = this.seatedPatience === null ? null : guest.hurried && this.hurry.seated > 0 ? this.hurry.seated : this.seatedPatience;
+      guest.patience = seated ?? Math.min(SERVICE_MAX_SECONDS, Math.max(0, guest.patience) + SERVICE_TOPUP_SECONDS);
       // The second stage of its wait: the dot counts the fresh amount down (full again as it sits).
-      if (this.seatedPatience !== null) guest.patienceFull = this.seatedPatience;
+      if (seated !== null) guest.patienceFull = seated;
       this.seated++;
       this.judge(guest);
     }
@@ -1173,7 +1247,7 @@ export class GuestSystem extends createSystem({}) {
     // comes, so a full café shows who is still waiting (plan: one dot, two stages).
     const waiting = guest.state === 'queued' || guest.state === 'vanishing' || ((guest.state === 'held' || guest.state === 'hop') && fromLine(guest))
       || (this.seatedPatience !== null && guest.state === 'seated' && !guest.served && guest.fuming < 0);
-    guest.dial.update(guest.patience / guest.patienceFull, guest.patience, guest.wishes.length, waiting, opacity, delta, this.hovered.includes(guest) || guest.state === 'held');
+    guest.dial.update(guest.patience / guest.patienceFull, guest.patience, guest.wishes.length, waiting, opacity, delta, this.hovered.includes(guest) || guest.state === 'held', guest.hurried, guest.friend !== 0);
     // A blob under everyone on their feet (not the seated, nor the carried).
     const p = guest.actor.root.position;
     if (guest.state !== 'seated' && guest.state !== 'held' && guest.state !== 'vanishing') this.blobs.add(p.x, guest.ground, p.z, opacity);

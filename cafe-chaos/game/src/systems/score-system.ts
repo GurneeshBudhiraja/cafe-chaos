@@ -19,7 +19,7 @@
  */
 
 import { createSystem } from '@iwsdk/core';
-import { HAPPINESS, LOSSES, PAY, payFor } from '../game/rules.js';
+import { HAPPINESS, HURRY, LOSSES, PAY, payFor } from '../game/rules.js';
 import { GuestSystem, type Outcome } from './guest-system.js';
 
 export class ScoreSystem extends createSystem({}) {
@@ -85,7 +85,7 @@ export class ScoreSystem extends createSystem({}) {
     if (outcome.kind === 'paid') {
       // One payment, by how quickly it was seated and the share of its wishes its seat met (game/rules.ts PAY).
       const { met, of } = outcome.wishes;
-      const coins = payFor(outcome.share, met, of);
+      const coins = Math.round(payFor(outcome.share, met, of) * (outcome.hurried ? HURRY.pay : 1));
       const happiness = Math.round(coins * PAY.happiness);
       this.earn(coins);
       this.cheer(happiness);

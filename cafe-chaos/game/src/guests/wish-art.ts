@@ -122,6 +122,19 @@ export function drawWish(ctx: CanvasRenderingContext2D, kind: WishPicture, x: nu
       ctx.fillStyle = AMBER;
       figure(u * 0.38, 0.92);
       break;
+    case 'friend':
+      // Two figures, close, a small heart between them.
+      figure(-u * 0.32, 0.88);
+      figure(u * 0.32, 0.88);
+      ctx.fillStyle = AMBER;
+      ctx.beginPath();
+      ctx.arc(-u * 0.07, -u * 0.62, u * 0.09, 0, Math.PI * 2);
+      ctx.arc(u * 0.07, -u * 0.62, u * 0.09, 0, Math.PI * 2);
+      ctx.moveTo(-u * 0.16, -u * 0.58);
+      ctx.lineTo(0, -u * 0.4);
+      ctx.lineTo(u * 0.16, -u * 0.58);
+      ctx.fill();
+      break;
     case 'music':
     case 'note':
       note(-u * 0.25, 0, 1);
