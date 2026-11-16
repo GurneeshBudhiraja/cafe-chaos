@@ -186,7 +186,8 @@ const aim = await page.evaluate(() => {
   const V = guests.seats[0].position.constructor;
   const taken = guests.seats.map((x) => x.occupant);
   // One free seat only: the one furthest to the left.
-  const free = [...guests.seats].sort((a, b) => a.position.x - b.position.x)[0];
+  // One free seat only: the furthest left of the seats on open tables (the far left ones are on locked tables).
+  const free = [...guests.seats].filter((x) => !x.locked).sort((a, b) => a.position.x - b.position.x)[0];
   for (const x of guests.seats) x.occupant = x === free ? 0 : 999;
   const far = [...guests.seats].sort((a, b) => b.position.x - a.position.x)[0];
   const over = (seat) => new V(seat.position.x, seat.position.y + 0.05, seat.position.z);

@@ -63,8 +63,8 @@ One payment per guest, 1–10 coins: `1 + 9 × (0.4 × speed + 0.6 × share of w
 ## 6. Tables
 
 - Start: centre front two-seater and centre back table open (4 seats). 10 more spots locked in the main room (8 tables, bar, quiet corner), then the 4-table extension once the main room is open.
-- Locked look: grey and see-through, padlock and price tag above; ray hover highlights and shows the price.
-- Pinch a locked table (hand empty): time freezes, café stays visible, buy card in the sketch style ("Unlock this table · seats 2 · BUY n", or "Need n more"). Bought: padlock pops, unlock sound.
+- Locked look (built: phase 2): a muted warm ghost at 42 % opacity, still casting its shadow (S: stereo transparency reads slower, 30–50 % is the headset range, shadow is a depth cue); a paper tag 6 × 4.2 cm above it (S: Meta ≥ 3° ray target, Microsoft text minimums) with a padlock and the price, moss with the padlock open when affordable, plain with it shut when not (S: never colour alone). The ray lights the tag and turns the table gold.
+- Pinch a tag (hand empty): time freezes, the café stays visible under the card (the lamps dim as in pause: S, Apple, keep context but let it recede), buy card in the sketch style ("Open this table? · A two-seat table · Seats 2 · You have n · BUY n / NOT NOW", "Need n more" when short). Bought: the ghost and tag go, the unlock sound plays.
 - The player chooses which table; the price depends only on how many were bought.
 - Prices (jump grows by 5): 10, 20, 35, 55, 80, 110, 145, 185, 230, 280, then 335, 395, 460, 530. Total 2,870 (E).
 

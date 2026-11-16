@@ -159,6 +159,27 @@ export function wishCount(level: number, random: () => number = Math.random): nu
 export const MEAL_SECONDS = 22;
 
 /**
+ * The tables. The café opens with `START_TABLES` (indices into the café's
+ * pieces, cafe/layout.ts: the centre back table and the centre front
+ * two-seater, four seats); every other table, the bar and the quiet
+ * corner stand locked, grey and see-through with a padlock and a price
+ * over them, and the player points at one and pinches to buy it. Which
+ * one is the player's choice (a near table is served sooner, a window or
+ * door table meets more wishes); the price depends only on how many have
+ * been bought: `TABLE_PRICES[n]` is the n-th table bought. The jump grows
+ * by 5 each time (source: a growing step suits a small fixed set of
+ * unlocks; doubling would reach tens of thousands). The last four are the
+ * extension's, offered once the main room is all open. (estimate)
+ */
+export const START_TABLES = [2, 8];
+export const TABLE_PRICES = [10, 20, 35, 55, 80, 110, 145, 185, 230, 280, 335, 395, 460, 530];
+
+/** What the next table costs once `bought` have been bought (the last price holds). */
+export function tablePrice(bought: number): number {
+  return TABLE_PRICES[Math.min(TABLE_PRICES.length - 1, Math.max(0, bought))];
+}
+
+/**
  * The staff. The café opens with `STARTING_STAFF` server; each further
  * one is hired with coins and stays hired (it is saved). `HIRE_PRICES[n]`
  * is the price of the server after the n-th hire, so the second server

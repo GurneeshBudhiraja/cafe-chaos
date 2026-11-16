@@ -95,6 +95,13 @@ export interface LevelState {
   bonus: number;
   goal: number;
 }
+/** The buy card: the table pointed at (its name and seats), what it costs, and the bank. */
+export interface BuyState {
+  name: string;
+  seats: number;
+  price: number;
+  coins: number;
+}
 /** The card when the café's happiness ran out: the level, and how far it got. */
 export interface FailState {
   level: number;
@@ -159,7 +166,7 @@ export class StartMenu {
   /** What the sheet shows ('none' when it is closed). */
   sheetKind: 'none' | 'settings' | 'warn' | 'quit' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card or the shop. */
-  cardKind: 'start' | 'pause' | 'shop' | 'level' | 'failed' = 'start';
+  cardKind: 'start' | 'pause' | 'shop' | 'level' | 'failed' | 'buy' = 'start';
   private seed = 1;
   private clock = 0;
   private start: StartState = { kind: 'first', coins: 0, staff: 1, level: 1 };
@@ -290,6 +297,14 @@ export class StartMenu {
     this.cardKind = 'level';
     this.card.resize(START_SIZE.width, START_SIZE.height);
     this.layoutLevel(state);
+    this.card.show(true);
+  }
+
+  /** A locked table pointed at and pinched: buy it, or not now. Shown again if the bank changes. */
+  showBuy(state: BuyState): void {
+    this.cardKind = 'buy';
+    this.card.resize(START_SIZE.width, START_SIZE.height);
+    this.layoutBuy(state);
     this.card.show(true);
   }
 
@@ -819,6 +834,52 @@ export class StartMenu {
       text(ctx, `${s.served} of ${s.goal} guests served`, mid, H / 2 + 50, 34, SKETCH.soft, 'center', false);
       text(ctx, `${s.left} ${s.left === 1 ? 'guest' : 'guests'} left unhappy`, mid, H / 2 + 98, 30, SKETCH.koi, 'center', false);
       text(ctx, 'Your coins and staff are kept.', mid, H / 2 + 146, 30, SKETCH.soft, 'center', false);
+      ctx.restore();
+    }, buttons);
+  }
+
+  /**
+   * The buy card, wide like the start card: on the left a padlock seal
+   * and what the table is; on the right the price beside the bank, BUY
+   * (moss when the bank can pay; pale, and refused, when it cannot: the
+   * card says how many more coins) and NOT NOW.
+   */
+  private layoutBuy(s: BuyState): void {
+    const SW = Math.round(this.card.width / this.k);
+    const H = Math.round(this.card.height / this.k);
+    const lx = PAD;
+    const lw = 360;
+    const cx = lx + lw + 30;
+    const cw = SW - PAD - cx;
+    const can = s.coins >= s.price;
+    const yNo = H - PAD - 96;
+    const buttons: Button[] = [
+      this.priceButton(this.card, 'buy-yes', cx, yNo - TOUCH_GAP - 150, cw, 150, can ? 'primary' : 'off', 'BUY', s.price),
+      this.button(this.card, 'buy-no', cx, yNo, cw, 96, 'secondary', 'NOT NOW'),
+    ];
+    this.card.set((ctx) => {
+      ctx.clearRect(0, 0, this.card.width, this.card.height);
+      ctx.save();
+      ctx.scale(this.k, this.k);
+      const rc = pen(this.card.canvas);
+      this.paper(ctx, rc, 0, H, SW);
+      const mid = lx + lw / 2;
+      // The seal: a paper disc with a padlock.
+      const sy = H / 2 - 40;
+      rc.circle(mid, sy, 230, this.o({ fill: SKETCH.paper, fillStyle: 'solid', stroke: SKETCH.timber, strokeWidth: 5, seed: this.seed + 80 }));
+      rc.rectangle(mid - 44, sy - 10, 88, 70, this.o({ fill: SKETCH.ink, fillStyle: 'solid', stroke: SKETCH.ink, seed: this.seed + 81 }));
+      rc.arc(mid, sy - 10, 64, 80, Math.PI, Math.PI * 2, false, this.o({ strokeWidth: 7, seed: this.seed + 82 }));
+      text(ctx, s.name, mid, sy + 170, 44, SKETCH.ink);
+      text(ctx, `Seats ${s.seats}`, mid, sy + 222, 32, SKETCH.soft, 'center', false);
+      const tx = cx + cw / 2;
+      text(ctx, 'Open this table?', tx, PAD + 60, 50, SKETCH.ink);
+      const coinsY = PAD + 150;
+      ctx.font = font(38);
+      const word = `You have ${s.coins.toLocaleString('en')}`;
+      const ww = ctx.measureText(word).width;
+      rc.circle(tx - ww / 2 - 30, coinsY, 40, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, seed: this.seed + 83 }));
+      text(ctx, word, tx + 18, coinsY, 38, SKETCH.ink);
+      if (!can) text(ctx, `Need ${(s.price - s.coins).toLocaleString('en')} more`, tx, coinsY + 56, 30, SKETCH.koi, 'center', false);
       ctx.restore();
     }, buttons);
   }

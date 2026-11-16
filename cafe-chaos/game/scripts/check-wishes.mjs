@@ -81,7 +81,8 @@ const lateSet = new Set(counts.late);
 check('early guests have 1 wish; late ones a mix of 1, 2 and 3', counts.early.every((n) => n === 1) && counts.late.every((n) => n >= 1 && n <= 3) && lateSet.has(2) && lateSet.has(3), `early ${counts.early.join('')}, late ${counts.late.join('')}`);
 
 // 1. The line, at a high level (a mix of wishes).
-await page.evaluate(() => { window.__cafe.game.level = 10; window.__cafe.guests.level = 10; window.__cafe.guests.queueCap = 5; window.__cafe.guests.clear(); });
+// Every table open (the wishes need window and door seats), a high level, room in the line.
+await page.evaluate(() => { const { game, shop, system } = window.__cafe; shop.restore(shop.hires, system.tables); game.applyLocks(); game.level = 10; window.__cafe.guests.level = 10; window.__cafe.guests.queueCap = 5; window.__cafe.guests.clear(); });
 await until(() => window.__cafe.guests.line.length >= 4 && window.__cafe.guests.line.slice(0, 4).every((g) => g.state === 'queued' && !g.walk));
 await page.evaluate(() => (window.__cafe.guests.arrivals = false));
 await frames(4);
@@ -126,7 +127,7 @@ const carried = await page.evaluate(() => {
   const g = guests.carriedBy('right');
   if (!g || !g.target) return null;
   const each = guests.grantsEach(g, g.target);
-  const all = guests.seats.filter((s) => s.occupant === 0 && guests.wouldGrant(g, s)).map((s) => s.index).sort((a, b) => a - b);
+  const all = guests.seats.filter((s) => s.occupant === 0 && !s.locked && guests.wouldGrant(g, s)).map((s) => s.index).sort((a, b) => a - b);
   return { id: g.id, target: g.target.index, each, lit: [...guests.granting].map((s) => s.index).sort((a, b) => a - b), all, cardKey: guests.cards.shown[0] };
 });
 check('carried over a seat, the card marks each wish it meets, and the seats that meet them all are lit',

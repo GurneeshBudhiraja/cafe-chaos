@@ -1,7 +1,8 @@
 /**
  * ShopSystem: hiring. The café opens with one server; each further one
  * (up to all three baristas) is hired with coins from the bank, at a price
- * that rises with each hire (game/rules.ts HIRE_PRICES), and stays hired.
+ * that rises with each hire (game/rules.ts HIRE_PRICES), and stays hired;
+ * and the tables, bought one at a time at a rising price (TABLE_PRICES).
  *
  * It has no objects of its own: the shop card (the bar's Shop button)
  * shows the baristas and their prices, and its HIRE calls `hire()`. A
@@ -11,7 +12,7 @@
  */
 
 import { createSystem } from '@iwsdk/core';
-import { HIRE_PRICES, MAX_STAFF, STARTING_STAFF } from '../game/rules.js';
+import { HIRE_PRICES, MAX_STAFF, START_TABLES, STARTING_STAFF, tablePrice } from '../game/rules.js';
 import { BaristaSystem } from './barista-system.js';
 import { ScoreSystem } from './score-system.js';
 
@@ -21,8 +22,12 @@ export class ShopSystem extends createSystem({}) {
   /** Hires made and hires refused this session (for the sounds and the checks). */
   purchases = 0;
   refused = 0;
-  /** Called after each hire (the game saves). */
+  /** Called after each hire or table bought (the game saves). */
   readonly bought: (() => void)[] = [];
+  /** The tables open (indices into the café's pieces), the starting ones included. */
+  tables: number[] = [...START_TABLES];
+  /** Tables bought this session (for the sounds and the checks). */
+  tablesBought = 0;
   private baristas!: BaristaSystem;
   private score!: ScoreSystem;
 
@@ -47,10 +52,39 @@ export class ShopSystem extends createSystem({}) {
     return price !== null && this.score.bank >= price;
   }
 
-  /** The café as it was saved: this many servers already hired (nothing is spent). */
-  restore(hires: number): void {
+  /** The café as it was saved: this many servers already hired, these tables open (nothing is spent). */
+  restore(hires: number, tables: readonly number[] = START_TABLES): void {
     this.hires = Math.max(0, Math.min(HIRE_PRICES.length, Math.floor(hires)));
     this.baristas.staffSize = this.staff;
+    this.tables = [...new Set([...START_TABLES, ...tables.filter((t) => Number.isInteger(t) && t >= 0)])];
+  }
+
+  /** How many tables have been bought (the starting ones are not bought). */
+  get tablesOwned(): number {
+    return Math.max(0, this.tables.length - START_TABLES.length);
+  }
+
+  /** What the next table costs. */
+  get tablePrice(): number {
+    return tablePrice(this.tablesOwned);
+  }
+
+  /** Can the bank pay for the next table? */
+  get tableAffordable(): boolean {
+    return this.score.bank >= this.tablePrice;
+  }
+
+  /** Buy the table at `index` (a piece of the café); false (and counted as refused) if it is open already or the bank cannot pay. */
+  buyTable(index: number): boolean {
+    if (this.tables.includes(index) || !this.score.spend(this.tablePrice)) {
+      this.refused++;
+      return false;
+    }
+    this.tables.push(index);
+    this.tablesBought++;
+    this.purchases++;
+    for (const done of this.bought) done();
+    return true;
   }
 
   /** Hire the next server; false (and counted as refused) if all are hired or the bank cannot pay. */

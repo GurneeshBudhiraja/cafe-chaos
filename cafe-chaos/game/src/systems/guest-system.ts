@@ -52,7 +52,7 @@ import {
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
-import { grants, pickName, pickWishes, tablesOf, type Sitter, type WishId } from '../guests/wishes.js';
+import { grants, pickName, pickWishes, tablesOf, type Sitter, type WishId, openWishes } from '../guests/wishes.js';
 import { wishCount } from '../game/rules.js';
 import { WishCards } from '../ui/wish-card.js';
 import { Popups } from '../guests/popups.js';
@@ -406,7 +406,7 @@ export class GuestSystem extends createSystem({}) {
         scale,
         Math.min(0.1, delta),
       );
-      if (carried) for (const seat of this.seats) if (seat.occupant === 0 && this.wouldGrant(carried, seat)) this.granting.add(seat);
+      if (carried) for (const seat of this.seats) if (seat.occupant === 0 && !seat.locked && this.wouldGrant(carried, seat)) this.granting.add(seat);
     });
   }
 
@@ -418,9 +418,26 @@ export class GuestSystem extends createSystem({}) {
     this.seatAnchors = cafe.seats.length;
     for (const seat of fresh.slice(0, SEAT_HEADROOM - (this.seats.length - this.firstSeatCount))) {
       seat.index = this.seats.length;
+      seat.locked = this.lockedTables.has(seat.table);
       this.seats.push(seat);
     }
+    if (this.wishPool) this.wishPool = openWishes(this.seats.filter((x) => !x.locked), this.quietCorner);
   }
+
+  /**
+   * Which tables are locked (indices into the café's pieces): their seats
+   * are offered to nobody, and no new guest wishes for a place only a
+   * locked seat could give it. The game sets it (and again after a
+   * purchase, and after the extension's tables come).
+   */
+  setLockedTables(locked: ReadonlySet<number>): void {
+    this.lockedTables = locked;
+    for (const seat of this.seats) seat.locked = locked.has(seat.table);
+    this.wishPool = openWishes(this.seats.filter((s) => !s.locked), this.quietCorner);
+  }
+  private lockedTables: ReadonlySet<number> = new Set();
+  /** The wishes an open seat can meet (all of them until the game says which tables are locked). */
+  private wishPool: WishId[] | null = null;
 
   /** True while a hand is carrying a guest. */
   get carrying(): boolean {
@@ -487,7 +504,7 @@ export class GuestSystem extends createSystem({}) {
     const singerAbout = this.guests.some((g) => g.sings);
     const sings = !singerAbout && Math.random() < this.singerChance;
     // 1 to 3 wishes, more as the evening goes on; a singer wants company (an audience).
-    const wishes: WishId[] = sings ? ['company'] : pickWishes(wishCount(this.level), singerAbout, this.lastWishes);
+    const wishes: WishId[] = sings ? ['company'] : pickWishes(wishCount(this.level), singerAbout, this.lastWishes, Math.random, this.wishPool ?? undefined);
     this.lastWishes = wishes;
     const guest: Guest = {
       id: this.arrived,
@@ -907,7 +924,7 @@ export class GuestSystem extends createSystem({}) {
     let best: Seat | null = null;
     let bestDistance = AIM_SNAP_M;
     for (const seat of this.seats) {
-      if ((seat.occupant !== 0 && seat !== own) || seat === spoken) continue;
+      if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked) continue;
       const d = Math.hypot(spot.x - seat.position.x, spot.z - seat.position.z);
       if (d < bestDistance) {
         bestDistance = d;

@@ -136,6 +136,21 @@ export function grants(wish: WishId, seat: Seat, self: number, sitters: Sitter[]
   }
 }
 
+/**
+ * The wishes some open seat could meet, given the seats that are open
+ * (not on a locked table): a place wish only if a seat is in that place;
+ * company and alone always (every table seats two or more, or stands
+ * alone); quiet always (an empty table is quiet). With only the two
+ * starting tables open, nobody wishes for the window.
+ */
+export function openWishes(open: readonly Seat[], quietCorner: number): WishId[] {
+  const out: WishId[] = ['quiet', 'alone', 'company'];
+  if (open.some((s) => s.position.x < PLACES.windowX)) out.push('window');
+  if (open.some((s) => s.position.x > PLACES.doorX)) out.push('door');
+  if (open.some((s) => s.position.z < PLACES.counterZ && s.table !== quietCorner)) out.push('counter');
+  return out;
+}
+
 /** A name not in use on stage. */
 export function pickName(taken: Set<string>, random: () => number = Math.random): string {
   const free = NAMES.filter((name) => !taken.has(name));
@@ -169,8 +184,8 @@ export function compatible(wishes: WishId[]): boolean {
  * met by some seat in the café: at most one place wish, and the rest about
  * company and quiet, which any table can grant.
  */
-export function pickWishes(count: number, singerAbout: boolean, last: WishId[], random: () => number = Math.random): WishId[] {
-  const pool = singerAbout ? [...ALWAYS, 'music' as const] : [...ALWAYS];
+export function pickWishes(count: number, singerAbout: boolean, last: WishId[], random: () => number = Math.random, open: readonly WishId[] = ALWAYS): WishId[] {
+  const pool: WishId[] = singerAbout ? [...open, 'music' as const] : [...open];
   const want = Math.max(1, Math.min(3, Math.round(count)));
   for (let attempt = 0; attempt < 24; attempt++) {
     const picked: WishId[] = [];

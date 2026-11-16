@@ -33,7 +33,7 @@
  * tables.
  */
 
-import { AssetManager, Box3, createSystem, Euler, Group, Mesh, Quaternion, Vector3, XRPlane as DetectedPlane, type Object3D } from '@iwsdk/core';
+import { AssetManager, Box3, Color, createSystem, Euler, Group, Mesh, MeshBasicMaterial, Quaternion, Vector3, XRPlane as DetectedPlane, type Material, type Object3D } from '@iwsdk/core';
 import type { ModelName } from '../assets.js';
 import { DRESSING, FLOOR_TOP_M, OPENING_LAYOUT, type Placement } from '../cafe/layout.js';
 import { dressGreyBox } from '../cafe/materials.js';
@@ -93,6 +93,17 @@ const FLOAT_BELOW_M = 0.5;
  * outline fades. Nothing appears suddenly close or large (Meta MR guidance).
  */
 const ARRIVE = { outline: 1.3, draw: 0.9, rise: 0.9, from: 0.86, lift: 0.03 };
+/**
+ * A locked table's look: a muted warm grey, see-through (a ghost of the
+ * table to come); brighter and gold while the hand points at it, so the
+ * hover is plain (Meta: show each visual state). About 42 % opaque: stereo
+ * transparent surfaces take longer to read (Tsirlin, Allison and Wilcox),
+ * and 30 to 50 % is the range used for see-through panels in headsets;
+ * a muted tint rather than flat grey (Nielsen: inactive things in a muted
+ * colour). It still casts its shadow: a depth cue (Apple).
+ */
+const GHOST = { colour: 0xa89a86, opacity: 0.42, litOpacity: 0.6 };
+const GHOST_LIT_COLOUR = new Color(0xd9b26a);
 /** Where the café stands for the desktop preview (world, metres). */
 const PREVIEW_SPOT = new Vector3(0, 0.78, 0);
 
@@ -127,6 +138,19 @@ export class CafeSystem extends createSystem({
   annex: { root: Group; rising: number } | null = null;
   /** The tables the extension brought. */
   readonly annexTables: { model: ModelName; piece: Object3D }[] = [];
+  /**
+   * The tables (indices into `pieces`: every piece with a meal anchor, so
+   * the bar and the quiet corner too), and which are locked. A locked
+   * table stands grey and see-through (`GHOST`), so it reads as not yet
+   * the player's; the game puts a padlock and a price over it. Each table
+   * is drawn as its own small batch, not folded into the room's, so one
+   * can change its look on its own.
+   */
+  readonly tables: number[] = [];
+  private readonly locked = new Set<number>();
+  /** Each locked table's own ghost material (so one can brighten under the hand), and each mesh's real material. */
+  private readonly ghosts = new Map<number, MeshBasicMaterial>();
+  private readonly realMaterials = new Map<Mesh, Material | Material[]>();
   /** -1 none, -2 waiting for the player (see `hold`), 0.. seconds into the arrival. */
   private arrival = -1;
   /**
@@ -198,7 +222,14 @@ export class CafeSystem extends createSystem({
         if (node) node.userData.dynamic = true;
       }
     }
-    // The furniture stands still inside the café: draw it as one mesh per material.
+    // Each table its own small batch (so it can be greyed out on its own); the rest of the furniture as one mesh per material.
+    this.pieces.forEach((piece, i) => {
+      if (!piece.getObjectByName('Meal-1')) return;
+      this.tables.push(i);
+      // `keepApart`, not `dynamic`: the table stays out of the room's batch but is still an obstacle on the grid.
+      piece.userData.keepApart = true;
+      batchStatic(piece as Group);
+    });
     this.batch = batchStatic(this.cafe);
     // From the café as built, the map the characters find their way by.
     this.nav = new NavGrid(this.cafe, CAFE_NAV);
@@ -236,6 +267,68 @@ export class CafeSystem extends createSystem({
     this.raiseAnnex(delta);
   }
 
+  /** Is the table at `index` locked? */
+  isLocked(index: number): boolean {
+    return this.locked.has(index);
+  }
+
+  /** The locked tables now. */
+  get lockedTables(): ReadonlySet<number> {
+    return this.locked;
+  }
+
+  /**
+   * Lock or open the table at `index` (into `pieces`). Locked, every mesh
+   * of it takes a shared grey, see-through material; opened, each gets its
+   * own back.
+   */
+  setTableLocked(index: number, locked: boolean): void {
+    const piece = this.pieces[index];
+    if (!piece || this.locked.has(index) === locked) return;
+    if (locked) {
+      this.locked.add(index);
+      const ghost = new MeshBasicMaterial({ color: GHOST.colour, transparent: true, opacity: GHOST.opacity, depthWrite: false, toneMapped: false });
+      ghost.name = `Ghost-${index}`;
+      this.ghosts.set(index, ghost);
+      piece.traverse((node) => {
+        if (!(node instanceof Mesh) || !node.visible) return;
+        this.realMaterials.set(node, node.material);
+        node.material = ghost;
+      });
+    } else {
+      this.locked.delete(index);
+      this.ghosts.get(index)?.dispose();
+      this.ghosts.delete(index);
+      piece.traverse((node) => {
+        if (!(node instanceof Mesh)) return;
+        const real = this.realMaterials.get(node);
+        if (!real) return;
+        node.material = real;
+        this.realMaterials.delete(node);
+      });
+    }
+  }
+
+  /** A locked table lit under the hand (0 to 1): its ghost brightens. */
+  setTableLit(index: number, lit: number): void {
+    const ghost = this.ghosts.get(index);
+    if (!ghost) return;
+    ghost.opacity = GHOST.opacity + (GHOST.litOpacity - GHOST.opacity) * lit;
+    ghost.color.set(GHOST.colour).lerp(GHOST_LIT_COLOUR, lit);
+  }
+
+  /** Where a table's top is (café space): its meal anchor's height over its centre. Null if `index` is not a table. */
+  tableTop(index: number, out: Vector3): Vector3 | null {
+    const piece = this.pieces[index];
+    const anchor = piece?.getObjectByName('Meal-1');
+    if (!piece || !anchor) return null;
+    this.cafe.updateMatrixWorld(true);
+    const top = this.cafe.worldToLocal(anchor.getWorldPosition(out)).y;
+    this.cafe.worldToLocal(piece.getWorldPosition(out));
+    out.y = top;
+    return out;
+  }
+
   /** True once the annex is fully open (risen, and the grid read again). */
   get annexOpen(): boolean {
     return !!this.annex && this.annex.rising >= 1;
@@ -258,10 +351,14 @@ export class CafeSystem extends createSystem({
       piece.position.set(x, FLOOR_TOP_M, z);
       root.add(piece);
       this.pieces.push(piece);
+      this.tables.push(this.pieces.length - 1);
       this.annexTables.push({ model, piece });
       piece.traverse((node) => {
         if (/^Seat-\d+$/.test(node.name)) this.seats.push(node);
       });
+      piece.userData.keepApart = true;
+      piece.updateMatrixWorld(true);
+      batchStatic(piece as Group);
     }
     this.hangLanterns(root);
     this.cafe.add(root);

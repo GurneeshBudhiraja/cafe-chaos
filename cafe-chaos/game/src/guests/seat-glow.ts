@@ -170,7 +170,7 @@ export class SeatGlow {
     let count = 0;
     if (carrying) {
       for (const seat of seats) {
-        if (seat.occupant !== 0 || targets.includes(seat)) continue;
+        if (seat.occupant !== 0 || seat.locked || targets.includes(seat)) continue;
         const grant = granting?.has(seat) ?? false;
         this.scale.setScalar(GLOW.dot * (grant ? GRANT.dot : 1));
         this.matrix.compose(this.place.set(seat.position.x, seat.position.y + GLOW.lift, seat.position.z), this.flat, this.scale);
