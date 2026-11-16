@@ -36,6 +36,7 @@ import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 import { HandRays } from '../hands/hand-ray.js';
 import { arrivalPace, HIRE_PRICES, MEAL_SECONDS, patienceShare, STARTING_STAFF, WISH, wishChance } from '../game/rules.js';
 import { BARISTA_NAMES } from '../baristas/barista.js';
+import { HOW_TO_PLAY } from '../game/how-to-play.js';
 import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS } from '../guests/rules.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
@@ -75,47 +76,47 @@ const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as cons
  * not flicker off.
  */
 const RAY = { awayFromCafe: 0.04, reach: 4, edge: 0.15 };
-/** The count back from a pause: 3, 2, 1 (seconds). */
-const RESUME_COUNT = 3;
 /** The café's size in Settings (percent of what fits the table): the range and the step. */
 const SIZE = { min: 60, max: 140, step: 10 };
 /**
- * The start card: `distance` from the eyes (metres) and `below` degrees
- * under the level line of sight, centred there and turned to face the eyes.
+ * The menu cards (start, pause, shop, How to play, and the sheet opened in
+ * front of them) stand where Quest's own panels do and are pressed the way
+ * Quest's own panels are: out of reach, pointed at with the hand ray and
+ * pinched. Pressing a card held in reach meant placing it for the arm as
+ * well as the eyes, and no one place suited both (tried on the headset:
+ * too high, then too close). So, as Meta, Apple and Google all do:
  *
- * - Distance: 45 cm, at the far end of Meta's range for direct touch (42 to
- *   46 cm), so it is within easy reach without being up against the face,
- *   and well short of the 0.5 to 0.8 m Meta says to avoid (too far to
- *   touch, too near for a ray).
- * - Height: 25 degrees down. The eyes rest 10 to 20 degrees below the
- *   horizon (Microsoft), the line of sight sits 10 to 15 degrees down
- *   (Magic Leap), and content belongs 0 to 35 degrees below (Microsoft):
- *   25 puts the middle of the card just under the resting gaze, its top
- *   edge a little below eye level, and its buttons (in its lower half,
- *   as Meta asks) low enough to press with the arm relaxed.
- * It glides back in front when the player turns more than `follow` degrees away,
- * or when the head has moved more than `shift` metres from where it was when
- * the card was put there and stayed moved for `dwell` seconds (a lean in, or
- * sitting back): the card goes with the player, not left behind.
+ * - `distance`: 1 m from the eyes. Meta places objects "at a roughly 1
+ *   meter distance slightly below the user's line of sight", and indirect
+ *   (ray) panels no nearer than 0.8 m.
+ * - `size`: the cards stand twice as big as made, so at 1 m they look the
+ *   size they would at 50 cm: the same text, and buttons over 3 degrees
+ *   (Meta asks 2.5 to 3 at least) for the ray.
+ * - `top`: the top edge 4 degrees under the level line of sight, so the
+ *   card hangs just under where the eyes look and never covers them (the
+ *   eyes rest 10 to 20 degrees down, Microsoft). A taller card hangs lower,
+ *   its centre never past `lowest` degrees.
+ *
+ * A card glides back in front when the player turns more than `follow`
+ * degrees away, or when the head has moved more than `shift` metres from
+ * where it was when the card was put there and stayed moved for `dwell`
+ * seconds (a lean in, or sitting back).
  */
-const MENU_SPOT = { distance: 0.45, below: 25, follow: 35, glide: 4, shift: 0.12, dwell: 0.6 };
+const MENU_SPOT = { distance: 1, size: 2, top: 4, lowest: 30, follow: 35, glide: 4, shift: 0.12, dwell: 0.6 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
 
 /**
- * The game in three pictures, taken from the game itself
- * (scripts/shoot-howto.mjs). How to play shows the first three; the first run's
- * coach card shows the one for the step in hand.
+ * The first run's coach card: a picture for each move, taken from the game
+ * itself (scripts/shoot-howto.mjs). How to play has its own list of steps,
+ * with videos (game/how-to-play.ts).
  */
 const MOVES = [
   { picture: 'howto-pinch.jpg', title: 'Pinch a guest', text: 'Put your fingers above a guest at the gate. When the guest glows, pinch.' },
   { picture: 'howto-seat.jpg', title: 'Seat the guest', text: 'Move the guest above the café. Open your fingers. The guest goes to the seat that glows.' },
   { picture: 'howto-happy.jpg', title: 'Keep guests happy', text: 'Seat guests quickly. The bar above the café shows how happy the guests are.' },
-  // The coach card only (How to play shows the first three).
   { picture: 'howto-pause.jpg', title: 'Pause and shop', text: 'Point your hand at the bar and pinch. Pause is at the left end. Shop is at the right end.' },
 ];
-/** How many of the MOVES How to play shows. */
-const HOW_MOVES = 3;
 /** The bank is saved this often during a run (seconds), so little is lost if the page is closed. */
 const AUTOSAVE_SECONDS = 20;
 
@@ -163,7 +164,7 @@ export class GameSystem extends createSystem({}) {
   private opening: 'run' | 'tutorial' | null = null;
   /** Where Settings was opened from. */
   private settingsFrom: 'title' | 'pause' = 'title';
-  /** Where the shop was opened from: CLOSE goes back there (a run counts back in). */
+  /** Where the shop was opened from: CLOSE goes back there (a run carries on). */
   private shopFrom: 'run' | 'paused' = 'run';
   private sound: SoundSystem | null = null;
   private readonly edge = new Vector3();
@@ -189,9 +190,6 @@ export class GameSystem extends createSystem({}) {
   /** Times the wrist menu has been opened (WristMenuSystem counts them; the first run waits for one). */
   wristOpens = 0;
   /** Where How to play was opened from: back there when it is closed. */
-  /** Seconds left of the count back from a pause (0: none). */
-  resuming = 0;
-  private shownCount = 0;
   private rulesFrom: GamePhase = 'title';
   strip!: StripSystem;
   private cafe!: CafeSystem;
@@ -238,9 +236,7 @@ export class GameSystem extends createSystem({}) {
       const image = new Image();
       image.onload = () => {
         this.pictures[i] = image;
-        if (i < HOW_MOVES) this.menu.howPictures[i] = image;
-        // Cards already up are drawn again with it.
-        this.how.paint();
+        // The coach card, if it is up, is drawn again with it.
         this.coach.paint();
       };
       image.src = `${import.meta.env.BASE_URL}ui/${move.picture}`;
@@ -250,6 +246,8 @@ export class GameSystem extends createSystem({}) {
     this.hold?.claims.push((point) => this.card.covers(point) || this.how.covers(point) || this.coach.covers(point));
     this.world.createTransformEntity(this.rays.group);
     // The start menu stands in the world (the café is hidden until it is opened).
+    // The menu cards stand a metre away, twice as big (MENU_SPOT).
+    for (const p of [this.menu.card, this.menu.sheet, this.menu.how]) p.size = MENU_SPOT.size;
     this.world.createTransformEntity(this.menu.card.mesh);
     this.world.createTransformEntity(this.menu.sheet.mesh);
     this.hold?.claims.push((point) => this.menu.card.covers(point) || this.menu.sheet.covers(point));
@@ -278,11 +276,13 @@ export class GameSystem extends createSystem({}) {
     };
     xr.addEventListener('sessionstart', () => {
       xr.getSession()?.addEventListener('visibilitychange', onVisibility);
+      // Look and pinch (Meta VR Glasses): the pinch's gaze ray presses the button looked at.
+      xr.getSession()?.addEventListener('selectstart', (e) => this.lookAndPinch(e as XRInputSourceEvent));
       // The card was put from the page's head: put it again from the real one once tracking settles.
       this.menuSettle = GameSystem.MENU_SETTLE_S;
       this.menuPlaced = false;
       // Back in the headset mid-run: the pause card is there again.
-      if (this.phase === 'paused' && this.resuming <= 0) this.showPauseCard();
+      if (this.phase === 'paused') this.showPauseCard();
     });
     xr.addEventListener('sessionend', () => {
       this.pause();
@@ -310,6 +310,7 @@ export class GameSystem extends createSystem({}) {
     this.coach.update(cardDelta, this.head);
     if (!this.sound) this.applySettings();
     this.placeMenu(cardDelta);
+    this.awayWhilePaused();
     this.menu.tick(cardDelta);
     this.menu.card.update(cardDelta, this.head);
     this.menu.sheet.update(cardDelta, this.head);
@@ -320,8 +321,7 @@ export class GameSystem extends createSystem({}) {
       if (what === 'run') this.toRun();
       else this.toTutorial();
     }
-    this.countDown(frameDelta);
-    this.strip.controls = this.phase === 'run' || this.resuming > 0 ? 'live' : this.phase === 'paused' ? 'paused' : 'off';
+    this.strip.controls = this.phase === 'run' ? 'live' : this.phase === 'paused' ? 'paused' : 'off';
     if (!cafe.placed || cafe.arriving) {
       for (const hand of HANDS) this.rays.update(hand, null, null, null, cardDelta);
       return;
@@ -376,9 +376,9 @@ export class GameSystem extends createSystem({}) {
 
   /**
    * Where the start card stands: straight ahead (by the way the head points,
-   * not by how it tilts), MENU_SPOT.distance from the eyes and
-   * MENU_SPOT.below degrees under the level line of sight, tilted back to
-   * face them. It faces the player
+   * not by how it tilts), MENU_SPOT.distance from the eyes with its top
+   * edge MENU_SPOT.top degrees under the level line of sight, tilted back
+   * to face them. It faces the player
    * once, when it is put there, and then stays still: a nod or a lean while a
    * finger presses does not move or turn it. Only if the player turns well
    * away (over MENU_SPOT.follow degrees) with no fingertip near does it glide
@@ -405,7 +405,10 @@ export class GameSystem extends createSystem({}) {
       this.forward.set(0, 0, -1).applyQuaternion(this.headQ).setY(0);
       if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
       this.forward.normalize();
-      const below = (MENU_SPOT.below * Math.PI) / 180;
+      // The centre is half the card's height further down than its top edge.
+      const tall = (card.mesh.geometry as PlaneGeometry).parameters.height;
+      const top = (MENU_SPOT.top * Math.PI) / 180;
+      const below = Math.min((MENU_SPOT.lowest * Math.PI) / 180, top + Math.atan((tall * MENU_SPOT.size) / 2 / MENU_SPOT.distance));
       this.wanted.copy(this.head).addScaledVector(this.forward, MENU_SPOT.distance * Math.cos(below));
       this.wanted.y -= MENU_SPOT.distance * Math.sin(below);
       // Outside the headset view, and in its first moments, the head is not yet the player's: keep putting it afresh.
@@ -450,8 +453,25 @@ export class GameSystem extends createSystem({}) {
     card.mesh.getWorldPosition(this.spot);
     card.mesh.getWorldQuaternion(this.headQ);
     this.toMenu.set(0, 0, 1).applyQuaternion(this.headQ);
-    sheet.mesh.position.copy(this.spot).addScaledVector(this.toMenu, 0.04);
+    sheet.mesh.position.copy(this.spot).addScaledVector(this.toMenu, 0.06);
   }
+
+  /**
+   * While the pause card is up (paused, or in How
+   * to play or the shop from a pause), the café is hidden: it stands between
+   * the eyes and the card a metre away, and hidden it is not drawn at all
+   * (its guests, staff, lights and bar are all in it), so a pause costs the
+   * headset next to nothing. Nothing is unloaded, so it is back at once
+   * on RESUME.
+   */
+  private awayWhilePaused(): void {
+    const away = this.phase === 'paused' || (this.phase === 'rules' && this.rulesFrom === 'paused');
+    if (away === this.cafeAway) return;
+    this.cafeAway = away;
+    this.cafe.cafe.visible = !away;
+  }
+  /** True while the café is hidden behind the pause card. */
+  private cafeAway = false;
 
   /** After the cards have turned: the sheet takes the turn of the card behind it (it never turns on its own). */
   private turnSheet(): void {
@@ -512,13 +532,13 @@ export class GameSystem extends createSystem({}) {
     this.openCafe(this.save.tutorialDone ? 'run' : 'tutorial');
   }
 
-  /** How to play: the game in three pictures, each with a line. */
+  /** How to play: the steps one at a time, each a looping video and a line (game/how-to-play.ts). */
   toRules(): void {
     this.rulesFrom = this.phase;
     this.phase = 'rules';
     this.card.show(false);
     this.menu.hideAll();
-    this.menu.showHow(MOVES.slice(0, HOW_MOVES));
+    this.menu.showHow(HOW_TO_PLAY);
   }
 
   /** The first run's teaching: a guest waits at the gate, its patience held, and the coach card says what to do. */
@@ -560,7 +580,6 @@ export class GameSystem extends createSystem({}) {
 
   /** Stop everything in the café where it is, and save. No-op unless a run is on (mid-count, it holds the pause). */
   pause(): void {
-    if (this.phase === 'paused') return this.holdPause();
     if (this.phase !== 'run') return;
     this.phase = 'paused';
     this.speed = this.cafe.timeScale;
@@ -584,7 +603,7 @@ export class GameSystem extends createSystem({}) {
   /**
    * The shop, on the same card: the bank and the three baristas (working,
    * hire now, or not yet). Opened from the bar in a run, it pauses first;
-   * CLOSE then counts back in. Opened while paused, CLOSE goes back to the
+   * CLOSE then carries on. Opened while paused, CLOSE goes back to the
    * pause card.
    */
   private openShop(): void {
@@ -592,7 +611,6 @@ export class GameSystem extends createSystem({}) {
       this.pause();
       this.shopFrom = 'run';
     } else if (this.phase === 'paused') {
-      if (this.resuming > 0) this.resuming = 0;
       this.shopFrom = this.menu.cardKind === 'shop' ? this.shopFrom : 'paused';
     } else return;
     this.closeSheet();
@@ -619,46 +637,12 @@ export class GameSystem extends createSystem({}) {
     else this.showPauseCard();
   }
 
-  /**
-   * Carry on from a pause: a 3-2-1 first, on the card and the pause button,
-   * with the café still frozen, so the hands can come back to the table
-   * before guests move again. Pausing again during it cancels it.
-   */
+  /** Carry on from a pause: the café shows and moves again at once. */
   resume(): void {
-    if (this.phase !== 'paused' || this.resuming > 0) return;
-    this.resuming = RESUME_COUNT;
-    this.showCount();
-  }
-
-  /** The count is over: the café moves again. */
-  private carryOn(): void {
-    this.resuming = 0;
+    if (this.phase !== 'paused') return;
     this.unpause();
     this.phase = 'run';
     this.menu.hideAll();
-  }
-
-  /** Back to the pause card from the middle of a count. */
-  private holdPause(): void {
-    if (this.phase !== 'paused' || this.resuming <= 0) return;
-    this.resuming = 0;
-    this.showPauseCard();
-  }
-
-  /** The count on the card: one big number. */
-  private showCount(): void {
-    const n = Math.ceil(this.resuming);
-    this.shownCount = n;
-    this.closeSheet();
-    this.menu.showCount(n);
-  }
-
-  /** Each frame of a count: on real time (the café's own clock is stopped). */
-  private countDown(frameDelta: number): void {
-    if (this.resuming <= 0) return;
-    this.resuming -= Math.min(0.25, frameDelta);
-    if (this.resuming <= 0) this.carryOn();
-    else if (Math.ceil(this.resuming) !== this.shownCount) this.showCount();
   }
 
   /** The café closes: the run is over. The time it stayed open is the score. */
@@ -725,7 +709,6 @@ export class GameSystem extends createSystem({}) {
   /** Let the café move again after a pause (a no-op when it is not paused). */
   private unpause(): void {
     if (this.phase !== 'paused') return;
-    this.resuming = 0;
     this.cafe.timeScale = this.speed;
     this.guests.handsOff = false;
   }
@@ -795,16 +778,15 @@ export class GameSystem extends createSystem({}) {
 
   /**
    * Buttons. On the cards in reach: an index fingertip near one lights it,
-   * and pushing through the card's face presses it; a pinch closing on one
-   * presses it too. On the bar, out of reach: the hand ray (`aimAtBar`)
-   * lights the button it points at, and a pinch presses it. A hand
+   * and touching the card's face presses it; a pinch closing on one
+   * presses it too. On the menu cards and the bar, out of reach: the hand
+   * ray (`aimRay`) lights the button it points at, and a pinch presses it. A hand
    * carrying a guest or the café presses nothing and has no ray.
    */
   private press(delta: number): void {
     const hold = this.hold;
     if (!hold) return;
     const panels = this.panels;
-    const bar = panels.indexOf(this.strip.panel);
     for (let i = 0; i < panels.length; i++) this.hovers[i] = null;
     for (const hand of HANDS) {
       const pinch = hold.pinch[hand];
@@ -817,7 +799,8 @@ export class GameSystem extends createSystem({}) {
       for (let i = 0; i < panels.length; i++) {
         const panel = panels[i];
         // The fingertip: every card keeps track of it, so a press needs a push through this card's own face.
-        const off = busy || panel.dimmed;
+        // A card dimmed behind another, or the bar hidden with the café while paused, takes no press.
+        const off = busy || panel.dimmed || (this.cafeAway && panel === this.strip.panel);
         const touch = panel.touch(hand, off || !tip.tracked ? null : tip.point);
         if (off || done) continue;
         if (tip.tracked && panel.covers(tip.point)) near = true;
@@ -832,14 +815,16 @@ export class GameSystem extends createSystem({}) {
           done = true;
         }
       }
-      // The ray: only for a free hand away from the café and from every card in reach.
-      const aimed = !busy && !done && !near && this.strip.controls !== 'off' && !hold.nearCafe(pinch.point, RAY.awayFromCafe) ? this.aimAtBar(hand) : null;
+      // The ray: a free hand away from every card in reach points at the menu cards (out of
+      // reach, in front) and, away from the café, at the bar.
+      const toBar = this.strip.controls !== 'off' && !hold.nearCafe(pinch.point, RAY.awayFromCafe);
+      const aimed = !busy && !done && !near ? this.aimRay(hand, toBar) : null;
       this.aim[hand] = aimed ? (aimed.button?.id ?? '') : null;
       this.rays.update(hand, aimed ? this.rayFrom : null, aimed ? this.rayHit : null, aimed ? this.barNormal : null, delta);
       if (!aimed?.button) continue;
-      this.hovers[bar] = aimed.button.id;
-      if (fresh) {
-        this.strip.panel.press(aimed.button.id);
+      this.hovers[panels.indexOf(aimed.panel)] = aimed.button.id;
+      if (fresh && performance.now() - this.gazePressAt > 250) {
+        aimed.panel.press(aimed.button.id);
         this.click(aimed.button.id);
       }
     }
@@ -847,15 +832,42 @@ export class GameSystem extends createSystem({}) {
   }
 
   /**
-   * Where a hand's ray meets the bar: the headset's own pointer for the hand
-   * (its target ray, steadied by the system as in its own menus), or, where
-   * there is none, a line from the shoulder through the pinch. Null when it
-   * does not meet the bar; else the button under it (null between buttons).
-   * Sets rayFrom (at the hand), rayHit and barNormal.
+   * What a hand's ray points at: the nearest of the menu cards that take
+   * presses (the sheet, How to play, the menu card; not one dimmed behind
+   * the sheet) and, with `toBar`, the bar. Null when it meets none; else the
+   * card and the button under it (null between buttons). Sets rayFrom (at
+   * the hand), rayHit and barNormal (the face it meets, for the cursor).
    */
-  private aimAtBar(hand: Hand): { button: Button | null } | null {
-    const panel = this.strip.panel;
-    if (!panel.open) return null;
+  private aimRay(hand: Hand, toBar: boolean): { panel: Panel; button: Button | null } | null {
+    const m = this.menu;
+    const targets = [m.sheet, m.how, m.card].filter((p) => p.open && !p.dimmed);
+    if (toBar && this.strip.panel.open && !this.cafeAway) targets.push(this.strip.panel);
+    if (!targets.length) return null;
+    this.castRay(hand);
+    let best: { panel: Panel; button: Button | null; t: number } | null = null;
+    for (const panel of targets) {
+      const hit = this.rayAt(panel);
+      if (hit && (!best || hit.t < best.t)) {
+        best = { panel, button: hit.button, t: hit.t };
+        this.bestHit.copy(this.rayHit);
+        this.bestNormal.copy(this.barNormal);
+      }
+    }
+    if (!best) return null;
+    this.rayHit.copy(this.bestHit);
+    this.barNormal.copy(this.bestNormal);
+    return best;
+  }
+  private readonly bestHit = new Vector3();
+  private readonly bestNormal = new Vector3();
+  private readonly rayScratch = new Vector3();
+
+  /**
+   * A hand's ray: the headset's own pointer for the hand (its target ray,
+   * steadied by the system as in its own menus), or, where there is none,
+   * a line from the shoulder through the pinch. Sets rayFrom and rayDir.
+   */
+  private castRay(hand: Hand): void {
     const pinch = this.hold!.pinch[hand];
     const source = this.world.input.xr.getPrimaryInputSource(hand) as XRInputSource | undefined;
     const frame = this.xrFrame as XRFrame | undefined;
@@ -874,22 +886,59 @@ export class GameSystem extends createSystem({}) {
       this.rayFrom.copy(pinch.point);
       this.rayDir.copy(pinch.point).sub(this.shoulder).normalize();
     }
+  }
+
+  /** Where the ray (castRay) meets a card's face, from the front: how far, and the button there; null if it misses. Sets rayHit and barNormal. */
+  private rayAt(panel: Panel): { t: number; button: Button | null } | null {
     const mesh = panel.mesh;
     mesh.getWorldPosition(this.spot);
     mesh.getWorldQuaternion(this.headQ);
     this.barNormal.set(0, 0, 1).applyQuaternion(this.headQ);
     const facing = this.rayDir.dot(this.barNormal);
-    // It must come at the bar's face from the front.
+    // It must come at the card's face from the front.
     if (facing > -0.05) return null;
-    const t = this.wanted.copy(this.spot).sub(this.rayFrom).dot(this.barNormal) / facing;
+    const t = this.rayScratch.copy(this.spot).sub(this.rayFrom).dot(this.barNormal) / facing;
     if (t <= 0 || t > RAY.reach) return null;
     this.rayHit.copy(this.rayFrom).addScaledVector(this.rayDir, t);
-    const local = mesh.worldToLocal(this.wanted.copy(this.rayHit));
+    const local = mesh.worldToLocal(this.rayScratch.copy(this.rayHit));
     const g = (mesh.geometry as PlaneGeometry).parameters;
     const edge = g.height * RAY.edge;
     if (Math.abs(local.x) > g.width / 2 + edge || Math.abs(local.y) > g.height / 2 + edge) return null;
-    return { button: panel.hit(this.rayHit) };
+    return { t, button: panel.hit(this.rayHit) };
   }
+
+  /**
+   * Look and pinch, the main input on Meta VR Glasses ("eyes and hands are
+   * the primary inputs"): a browser with eye tracking gives a pinch as a
+   * transient pointer whose ray runs from the eyes to where they look. It
+   * presses the menu card or bar button under that ray, as the hand ray
+   * does. Quest sends no transient pointers (its hands are tracked
+   * pointers), so there nothing changes. A hand-ray press in the same moment
+   * is skipped (`gazePressAt`), so one pinch never presses twice.
+   */
+  private lookAndPinch(e: XRInputSourceEvent): void {
+    if (e.inputSource.targetRayMode !== 'transient-pointer') return;
+    const space = this.xrManager.getReferenceSpace();
+    const pose = space ? e.frame.getPose(e.inputSource.targetRaySpace, space) : null;
+    if (!pose) return;
+    this.rayMatrix.fromArray(pose.transform.matrix).premultiply(this.player.matrixWorld);
+    this.rayFrom.setFromMatrixPosition(this.rayMatrix);
+    this.rayDir.set(0, 0, -1).transformDirection(this.rayMatrix);
+    const m = this.menu;
+    const targets = [m.sheet, m.how, m.card].filter((p) => p.open && !p.dimmed);
+    if (this.strip.panel.open && !this.cafeAway && this.strip.controls !== 'off') targets.push(this.strip.panel);
+    let best: { panel: Panel; button: Button; t: number } | null = null;
+    for (const panel of targets) {
+      const hit = this.rayAt(panel);
+      if (hit?.button && (!best || hit.t < best.t)) best = { panel, button: hit.button, t: hit.t };
+    }
+    if (!best) return;
+    this.gazePressAt = performance.now();
+    best.panel.press(best.button.id);
+    this.click(best.button.id);
+  }
+  /** When look and pinch last pressed a button (ms): a hand-ray press in the same moment is the same pinch. */
+  private gazePressAt = -Infinity;
 
   /** What a button does (the checks call this directly too). */
   click(id: string): void {
@@ -960,7 +1009,15 @@ export class GameSystem extends createSystem({}) {
       case 'rules':
         this.toRules();
         break;
+      case 'how-prev':
+        this.menu.howStep(-1);
+        break;
+      case 'how-next':
+        this.menu.howStep(1);
+        break;
+      case 'how-done':
       case 'back':
+        // Closing How to play (its close button, or DONE on the last step): back where it was opened from.
         if (this.rulesFrom === 'paused') {
           this.how.show(false);
           this.phase = 'paused';
@@ -978,7 +1035,7 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'bar-pause':
         // The bar's Pause: pauses a run; while paused (the card up) it carries on, as RESUME does.
-        if (this.phase === 'run' || this.resuming > 0) this.pause();
+        if (this.phase === 'run') this.pause();
         else if (this.phase === 'paused') this.resume();
         break;
       case 'bar-shop':

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "record:howto": "scripts/with-server.sh node scripts/record-howto.mjs",
     "dev": "iwsdk dev restart --open --foreground",
     "dev:runtime": "vite",
     "dev:down": "iwsdk dev down",

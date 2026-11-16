@@ -32,8 +32,9 @@
 import { Color, createSystem, DoubleSide, InstancedMesh, Matrix4, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3, Euler } from '@iwsdk/core';
 import { HAPPINESS } from '../game/rules.js';
 import { Panel, type Button } from '../ui/panel.js';
-import { line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
+import { hand, line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
 import { clockText } from '../game/clock.js';
+import { narrowView } from '../lib/view-fit.js';
 import { CafeSystem } from './cafe-system.js';
 import { ScoreSystem } from './score-system.js';
 import { ShopSystem } from './shop-system.js';
@@ -54,6 +55,16 @@ const SEGMENTS = 10;
  * 3 degrees for a ray), and the margin at each end.
  */
 const BAR_BUTTON = { size: 0.66, pad: 0.14 };
+/** The tag over a lit bar button: its size (metres) and how far its middle stands above the bar's top edge. */
+const BAR_TAG = { width: 0.15, height: 0.05, above: 0.034 };
+/**
+ * On a narrow view: the bar hangs over the café's back wall, its middle `y`
+ * up (café space) over the back edge, at `size` of the full bar, so it
+ * stays inside the Glasses' design area while the player looks at the café,
+ * over the roof and the back wall, never over a table, a guest or the
+ * counter.
+ */
+const STRIP_NARROW = { y: 0.3, size: 0.8 };
 /** The confetti: how many scraps, how long they fly (seconds), how fast they leave (m/s), gravity (m/s²). */
 const CONFETTI = { count: 60, seconds: 1.6, speed: 0.55, gravity: 1.1 };
 /** The scraps' colours: the café's moss, lantern, koi and paper. */
@@ -68,6 +79,15 @@ export const STRIP_HEIGHT: 'eye' | 'low' = typeof location !== 'undefined' && ne
 
 export class StripSystem extends createSystem({}) {
   readonly panel = new Panel('ScoreStrip', STRIP.width, STRIP.height);
+  /**
+   * The name of the button the beam is on (Pause, Resume or Shop): a small
+   * paper tag just above it, shown only while it is lit, so what the icon
+   * does is never a guess. Above, not below: below it would sit over the café.
+   */
+  readonly tag = new Panel('BarTag', BAR_TAG.width, BAR_TAG.height);
+  private tagText = '';
+  /** True on a narrow view: the bar lower and smaller over the café's back wall, its tag below the button. */
+  narrow = false;
   /** The longest evening before this run (seconds), and whether a run is on: the game sets them. */
   best = 0;
   live = false;
@@ -108,6 +128,9 @@ export class StripSystem extends createSystem({}) {
     this.panel.turn = 2.5;
     this.bank = this.score.bank;
     this.panel.set((ctx, w, h) => this.draw(ctx, w, h), this.barButtons());
+    this.tag.frame = false;
+    this.tag.onTop = true;
+    this.panel.mesh.add(this.tag.mesh);
     const colour = new Color();
     for (let i = 0; i < CONFETTI.count; i++) this.confetti.setColorAt(i, colour.set(CONFETTI_COLOURS[i % CONFETTI_COLOURS.length]));
     this.confetti.visible = false;
@@ -122,7 +145,9 @@ export class StripSystem extends createSystem({}) {
     this.player.head.getWorldPosition(this.head);
     this.place(delta);
     this.flyConfetti(delta);
-    if (!this.panel.update(delta, this.head)) return;
+    const up = this.panel.update(delta, this.head);
+    this.showTag(delta);
+    if (!up) return;
     this.time += delta;
     const s = this.score;
     // Past the best time: celebrate once (confetti and a chime), then only the green.
@@ -203,10 +228,22 @@ export class StripSystem extends createSystem({}) {
     this.confetti.instanceMatrix.needsUpdate = true;
   }
 
-  /** Over the café's back edge, at (just under) eye height, but always clear above the café. */
+  /**
+   * Over the café's back edge, at (just under) eye height, but always clear
+   * above the café. On a narrow view (Meta VR Glasses, lib/view-fit.ts) that
+   * is out of sight while the player looks at the café (30 to 36 degrees over
+   * the gaze; the Glasses' design area reaches 27), so there it hangs lower
+   * and smaller, over the café's back wall (STRIP_NARROW).
+   */
   private place(delta: number): void {
     const cafe = this.cafe.cafe;
     const scale = cafe.scale.x || 1;
+    this.narrow = narrowView(this.world.renderer);
+    this.panel.size = this.narrow ? STRIP_NARROW.size : 1;
+    if (this.narrow) {
+      this.panel.mesh.position.set(0, STRIP_NARROW.y, STRIP.back);
+      return;
+    }
     // The world height the eyes want, eased so a nod or a lean does not move it.
     const eyes = this.head.y - STRIP.below;
     this.height = Number.isNaN(this.height) ? eyes : this.height + (eyes - this.height) * (1 - Math.exp(-MOTION.follow * delta));
@@ -227,9 +264,12 @@ export class StripSystem extends createSystem({}) {
     // Laid out left to right with room between every part; the time and the bank are given room for their widest so nothing shifts as they change.
     const inner = h * 0.12, around = h * 0.15;
     const icon = h * 0.36, timeSize = h * 0.36, bankSize = h * 0.34;
-    // The widest time ('59:59') and bank ('9999') in the hand font, as drawn on the headset.
+    // The widest time ('59:59') in the hand font, as drawn on the headset; the bank as wide as it is drawn
+    // (measured, two digits at least), so a small number leaves no gap before the shop and a big one never
+    // runs into it. The bar's segments give way only when the bank gains a digit.
     const timeW = h * 0.9;
-    const bankW = h * 0.72;
+    ctx.font = hand(bankSize, 700);
+    const bankW = ctx.measureText(`${s.bank}`.padStart(2, '0')).width;
     // Pause at the left end: the clock starts after it and a divider.
     const btn = h * BAR_BUTTON.size;
     let x = h * BAR_BUTTON.pad + btn + around;
@@ -253,8 +293,10 @@ export class StripSystem extends createSystem({}) {
     const face = h * 0.4;
     sketchFace(rc, x + face / 2, h * 0.5, face, mood, 31, lw);
     x += face + inner;
-    // Shop at the right end, after the coins.
-    const right = w - h * BAR_BUTTON.pad - btn - around - bankW - inner - icon - around;
+    // Shop at the right end, mirroring Pause at the left: the button, a divider `around` before it, then the coins.
+    const shopLine = w - h * BAR_BUTTON.pad - btn - around;
+    rc.line(shopLine, h * 0.17, shopLine - 2, h * 0.83, line(23, lw * 0.8));
+    const right = shopLine - around - bankW - inner - icon - around;
     rc.line(right, h * 0.17, right - 2, h * 0.83, line(22, lw * 0.8));
     const x0 = x;
     const span = right - around - x0;
@@ -286,6 +328,25 @@ export class StripSystem extends createSystem({}) {
     scrawl(ctx, `${s.bank}`, coinX + icon / 2 + inner, h * 0.53, bankSize * pop);
   }
 
+  /** The tag over the lit button: its word, where it stands (over that button), shown while the button is lit. */
+  private showTag(delta: number): void {
+    const id = this.panel.open && this.controls !== 'off' ? this.panel.hover : null;
+    const b = id ? this.panel.buttons.find((x) => x.id === id) : undefined;
+    const word = !b ? '' : b.id === 'bar-shop' ? 'Shop' : this.controls === 'paused' ? 'Resume' : 'Pause';
+    if (word && word !== this.tagText) {
+      this.tagText = word;
+      this.tag.set((ctx, w, h) => {
+        const lw = Math.max(2, h * 0.05);
+        pen(this.tag.canvas).rectangle(lw * 1.5, lw * 1.5, w - lw * 3, h - lw * 3, line(130, lw, { fill: SKETCH.paper, fillStyle: 'solid', roughness: 1.1 }));
+        scrawl(ctx, word, w / 2, h * 0.56, h * 0.56, { align: 'center' });
+      });
+    }
+    // Above the button; on a narrow view (the bar lower, by the top of the view) below it, over the café's back wall.
+    if (b) this.tag.mesh.position.set(((b.x + b.w / 2) / this.panel.width - 0.5) * STRIP.width, (this.narrow ? -1 : 1) * (STRIP.height / 2 + BAR_TAG.above), 0.002);
+    this.tag.show(!!b);
+    this.tag.update(delta, this.head);
+  }
+
   /** The bar's two buttons: they draw themselves (Panel calls `draw` with the hover and the press). */
   private barButtons(): Button[] {
     const w = this.panel.width;
@@ -305,7 +366,8 @@ export class StripSystem extends createSystem({}) {
     const lw = Math.max(2, this.panel.height * 0.016);
     const off = this.controls === 'off';
     const dip = pressed ? b.h * 0.04 : 0;
-    rc.rectangle(b.x, b.y + dip, b.w, b.h, line(seed, lw * 1.1, { fill: hover && !off ? '#e4d9c6' : SKETCH.paper, fillStyle: 'solid', roughness: 1.2, stroke: off ? SKETCH.empty : SKETCH.ink }));
+    // Lit: a deeper tan, as on the menu cards, so the button aimed at is plain to see.
+    rc.rectangle(b.x, b.y + dip, b.w, b.h, line(seed, lw * 1.1, { fill: hover && !off ? '#c4b397' : SKETCH.paper, fillStyle: 'solid', roughness: 1.2, stroke: off ? SKETCH.empty : SKETCH.ink }));
     if (hover && !off) {
       ctx.save();
       ctx.beginPath();
@@ -333,22 +395,43 @@ export class StripSystem extends createSystem({}) {
     for (const side of [-1, 1]) rc.rectangle(cx + side * s * 0.12 - s * 0.06, cy - s * 0.22, s * 0.12, s * 0.44, line(72 + side, lw * 0.9, { fill: ink, fillStyle: 'solid', stroke: ink }));
   }
 
-  /** Shop: a shopping bag; a lantern dot with + while a hire is affordable, a moss check once all are hired. */
+  /**
+   * Shop: a little shop front (a striped awning over a window and a door);
+   * a lantern dot with + while a hire is affordable, a moss check once all
+   * are hired.
+   */
   private drawShop(ctx: CanvasRenderingContext2D, b: Button, hover: boolean, pressed: boolean): void {
     const rc = pen(this.panel.canvas);
     const lw = Math.max(2, this.panel.height * 0.016);
-    const { cx, cy, s, ink } = this.square(ctx, b, hover, pressed, 80);
+    const sq = this.square(ctx, b, hover, pressed, 80);
+    const { s, ink } = sq;
+    // A little left of and below the middle, clear of the badge in the top right corner.
+    const cx = sq.cx - s * 0.06;
+    const cy = sq.cy + s * 0.04;
     const off = this.controls === 'off';
-    const bw = s * 0.5;
-    const bh = s * 0.42;
-    const top = cy - s * 0.1;
-    rc.arc(cx, top, bw * 0.5, bw * 0.62, Math.PI, Math.PI * 2, false, line(82, lw * 1.2, { stroke: ink }));
-    rc.rectangle(cx - bw / 2, top, bw, bh, line(83, lw * 1.1, { fill: off ? SKETCH.paper : SKETCH.lantern, fillStyle: 'solid', stroke: ink }));
-    rc.line(cx - bw / 2, top + bh * 0.22, cx + bw / 2, top + bh * 0.22, line(84, lw * 0.7, { stroke: ink }));
+    const stripe = off ? SKETCH.empty : SKETCH.red;
+    // The front: a wall, its window (lit) and its door.
+    const fw = s * 0.52;
+    const fTop = cy - s * 0.06;
+    const fBottom = cy + s * 0.3;
+    rc.rectangle(cx - fw / 2, fTop, fw, fBottom - fTop, line(83, lw, { fill: SKETCH.paper, fillStyle: 'solid', stroke: ink }));
+    rc.rectangle(cx - fw / 2 + s * 0.06, fTop + s * 0.08, s * 0.18, s * 0.13, line(84, lw * 0.8, { fill: off ? SKETCH.paper : SKETCH.lantern, fillStyle: 'solid', stroke: ink }));
+    rc.rectangle(cx + s * 0.04, fTop + s * 0.07, s * 0.14, fBottom - fTop - s * 0.07, line(85, lw * 0.8, { fill: off ? SKETCH.paper : SKETCH.timber, fillStyle: 'solid', stroke: ink }));
+    // The awning: four stripes, red and paper, with a scalloped edge.
+    const aw = s * 0.62;
+    const aTop = cy - s * 0.27;
+    const aBottom = cy - s * 0.06;
+    const n = 4;
+    const sw = aw / n;
+    for (let i = 0; i < n; i++) {
+      const x = cx - aw / 2 + i * sw;
+      rc.polygon([[x, aTop], [x + sw, aTop], [x + sw, aBottom], [x, aBottom]], line(86 + i, lw * 0.7, { fill: i % 2 === 0 ? stripe : SKETCH.paper, fillStyle: 'solid', stroke: ink }));
+      rc.arc(x + sw / 2, aBottom, sw, sw * 0.8, 0, Math.PI, false, line(90 + i, lw * 0.7, { fill: i % 2 === 0 ? stripe : SKETCH.paper, fillStyle: 'solid', stroke: ink }));
+    }
     if (off) return;
-    const r = s * 0.13;
-    const bx = b.x + b.w - r - s * 0.06;
-    const by = b.y + r + s * 0.06 + (pressed ? b.h * 0.04 : 0);
+    const r = s * 0.11;
+    const bx = b.x + b.w - r - s * 0.04;
+    const by = b.y + r + s * 0.04 + (pressed ? b.h * 0.04 : 0);
     if (this.shop.price === null) {
       rc.circle(bx, by, r * 2, line(92, lw * 0.9, { fill: SKETCH.moss, fillStyle: 'solid', stroke: SKETCH.mossDeep }));
       rc.linearPath([[bx - r * 0.45, by], [bx - r * 0.1, by + r * 0.4], [bx + r * 0.5, by - r * 0.4]], line(93, lw * 1.1, { stroke: '#f2ebdd' }));

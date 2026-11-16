@@ -44,6 +44,7 @@ import { distanceToEdge, findSurfaceSpot, fitOnSurface, type DetectedSurface, ty
 import { CAFE_NAV } from '../nav/cafe-nav.js';
 import { NavGrid } from '../nav/nav-grid.js';
 import { LandingOutline } from '../cafe/landing-outline.js';
+import { narrowView } from '../lib/view-fit.js';
 
 /**
  * The tables on the new floor: the room's own columns (13 cm apart)
@@ -71,6 +72,8 @@ const JOIN_BOX: Box = { min: [-0.375, -0.01, -0.235], max: [-0.3, 0.215, 0.23] }
  * back row leaves comfortable seated reach.
  */
 export const CAFE_SCALE = 1.0;
+/** The café's size on a narrow view (Meta VR Glasses), as a share of its size on a wide one. */
+export const NARROW_VIEW_SCALE = 0.85;
 /** Give plane detection this long to find a surface before floating the café... */
 const DESK_WAIT_MS = 2000;
 /** ...and keep looking this long after floating: a surface found late still gets the café. */
@@ -134,6 +137,13 @@ export class CafeSystem extends createSystem({
   hold = false;
   /** The player's café size (Settings), times the size that fits the table. */
   sizeFactor = 1;
+  /**
+   * On a narrow view (Meta VR Glasses, lib/view-fit.ts) the café stands at
+   * `NARROW_VIEW_SCALE` of its size: at full size it is about 61 degrees
+   * across from the seat, wider than the Glasses' 58 degree design area; at
+   * 85 % it is about 52. On a wide view (Quest) it is 1: nothing changes.
+   */
+  viewFactor = 1;
   private fitScale = CAFE_SCALE;
   /** The dotted outline of where the café lands (see ARRIVE). */
   readonly outline = new LandingOutline();
@@ -165,7 +175,7 @@ export class CafeSystem extends createSystem({
   /** Set the player's size factor (Settings); applied now if the café is up. */
   setSize(factor: number): void {
     this.sizeFactor = factor;
-    this.targetScale = this.fitScale * factor;
+    this.targetScale = this.fitScale * factor * this.viewFactor;
     if (this.placed && this.arrival === -1) this.cafe.scale.setScalar(this.targetScale);
   }
 
@@ -204,6 +214,12 @@ export class CafeSystem extends createSystem({
 
   update(delta: number): void {
     const presenting = this.world.renderer.xr.isPresenting;
+    // A narrow view (known once the headset view is up): the café a little smaller, so all of it is in sight.
+    const view = narrowView(this.world.renderer) ? NARROW_VIEW_SCALE : 1;
+    if (view !== this.viewFactor) {
+      this.viewFactor = view;
+      this.setSize(this.sizeFactor);
+    }
     if (presenting && !this.sessionWas) {
       // A new session: place afresh, on the table the headset sees.
       this.placed = false;
@@ -386,12 +402,12 @@ export class CafeSystem extends createSystem({
     const fit = this.onDesk && surface ? fitOnSurface(surface, this.head, yaw, this.footprint, this.fit) : null;
     if (fit) {
       this.fitScale = fit.scale;
-      this.targetScale = fit.scale * this.sizeFactor;
+      this.targetScale = fit.scale * this.sizeFactor * this.viewFactor;
       this.settle(fit.spot, fit.yaw);
       return;
     }
     this.fitScale = CAFE_SCALE;
-    this.targetScale = CAFE_SCALE * this.sizeFactor;
+    this.targetScale = CAFE_SCALE * this.sizeFactor * this.viewFactor;
     if (!this.onDesk) this.spot.set(this.head.x - Math.sin(yaw) * FLOAT_AHEAD_M, this.head.y - FLOAT_BELOW_M, this.head.z - Math.cos(yaw) * FLOAT_AHEAD_M);
     this.settle(this.spot, Math.atan2(this.head.x - this.spot.x, this.head.z - this.spot.z));
   }

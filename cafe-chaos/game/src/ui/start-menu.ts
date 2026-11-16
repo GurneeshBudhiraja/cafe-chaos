@@ -1,56 +1,72 @@
 /**
- * The start menu: a card that stands at the edge of the player's table,
- * facing them, within reach (pressed with a fingertip, like every button
- * in the game). It is drawn in the café's own colours with a timber frame
+ * The start menu: a card that stands a metre in front of the player,
+ * facing them, pressed with the hand ray (point and pinch), as Quest's own
+ * panels are (GameSystem places it and casts the ray). It is drawn in the café's own colours with a timber frame
  * round shoji paper, and its lines boil (redrawn with a new seed ten times
  * a second) while it is up.
  *
- *   ┌────────────────────────────┐
- *   │ [BEST 6:12]  cover art [Quit]│
- *   │        CAFÉ CHAOS          │
- *   │ [        CONTINUE        ] │   40 coins · 2 baristas
- *   │ [        NEW GAME        ] │
- *   │         (?) How to play    │
- *   └────────────────────────────┘
+ * The start card is wide, the cover art on the left and the buttons on
+ * the right, so it stays short: its top edge sits a little under eye
+ * level and the whole card in the comfortable band below it (sideways
+ * looking is easier than up and down), inside Meta VR Glasses' design
+ * area. The pause card and the shop are the same shape.
  *
- * The first time (no save) there is only NEW GAME, and the card is shorter
- * (it stands on the table, so it is drawn from the bottom up). With no best
- * time there is no badge. Quit sits in the cover art's top corner, out of
- * the way of the buttons pressed often, and asks first. Settings, the New
- * Game warning and the Quit question open on a
- * second card in front of it (`sheet`): the card behind is dimmed and does
- * not take presses until the sheet closes.
+ *   ┌──────────────┬──────────────────────┐
+ *   │ [BEST 5:40]  │               [Quit] │
+ *   │  cover art   │ [      CONTINUE    ] │   40 coins · 2 baristas
+ *   │              │ [      NEW GAME    ] │
+ *   │  CAFÉ CHAOS  │ [? How to play][⚙ Settings]
+ *   └──────────────┴──────────────────────┘
+ *
+ * The first time (no save) there is only NEW GAME, and it is bigger. With
+ * no best time there is no badge. Quit sits at the top right, out of the
+ * way of the buttons pressed often, and asks first. Settings, the New
+ * Game warning and the Quit question open on a second card in front of it
+ * (`sheet`): the card behind is dimmed and does not take presses until the
+ * sheet closes.
  *
  * Everything is drawn in design units (720 across) and scaled to the panel.
  */
 
+import { LinearFilter, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, VideoTexture } from '@iwsdk/core';
 import type { RoughCanvas } from 'roughjs/bin/canvas';
+import type { HowToStep } from '../game/how-to-play.js';
 import type { Options } from 'roughjs/bin/core';
 import { Panel, type Button } from './panel.js';
 import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
 
-/** The two cards' sizes (metres). The start card is 24 cm across; the sheet the same width. */
+/** The sheet's size (metres): 24 cm across (Settings, the New Game warning, Quit). */
 export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.21 };
+/** The menu card (start, pause, shop): wide and short (metres), 960 by 600 design units. */
+export const START_SIZE = { width: 0.32, height: 0.2 };
 /**
- * How to play: the same card as on the web page (index.html #how), wider for
- * its three steps side by side: 33 cm across, drawn in 1080 design units.
- * Its paper is centred on the panel and only as tall as what is on it (the
- * panel leaves room for longer text).
+ * How to play: one step at a time, as on the web page (index.html #how):
+ * the step's video (looping, silent) on the left, its title and line on
+ * the right, PREVIOUS and NEXT along the bottom (DONE on the last step),
+ * and a close button at the top right. Wide and short like the start card
+ * (38 by 21 cm, drawn in 1080 design units), so at a metre and twice the
+ * size it stays inside Meta VR Glasses' design area (58 by 54 degrees)
+ * and the 0 to 35 degrees below the eyes that is comfortable to look at.
+ * The steps come from game/how-to-play.ts.
  */
-export const HOW_SIZE = { width: 0.33, height: 0.32 };
+export const HOW_SIZE = { width: 0.38, height: 0.21 };
 const HW = 1080;
-/** One step of How to play: a picture (drawn once loaded), a title and a line. */
-export interface HowStep {
-  title: string;
-  text: string;
-}
+/** Canvas pixels per metre of panel (as ui/panel.ts). */
+const PPM = 2400;
+/** The video's frame on the How to play card (design units): 16:9, centred. */
+const HOW_VIDEO = { width: 520, height: 293 };
+/**
+ * A lit button's paper: deep enough to see at a glance on the shoji paper
+ * (#d9cfbe) through the headset; the ink on it stays well readable (navy on
+ * the plain one about 9:1, koi red on the red tint about 4.4:1).
+ */
+const HOVER = { plain: '#c4b397', danger: '#e8b2a2' };
 /** Design units across. */
 const W = 720;
 const PAD = 36;
 const GAP = 24;
 /** Between two things you press: 40 design units (about 13 mm), over Meta's 12 mm. */
 const TOUCH_GAP = 40;
-const ART_H = 330;
 const BOIL_HZ = 10;
 /** Volume and size steps. */
 export const LEVELS = 5;
@@ -111,16 +127,24 @@ function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, si
 
 /** The menu's two cards and their boil. */
 export class StartMenu {
-  readonly card = new Panel('StartCard', MENU_SIZE.width, MENU_SIZE.height);
+  readonly card = new Panel('StartCard', START_SIZE.width, START_SIZE.height);
   readonly sheet = new Panel('MenuSheet', MENU_SIZE.width, MENU_SIZE.sheetHeight);
   readonly how = new Panel('HowCard', HOW_SIZE.width, HOW_SIZE.height);
-  /** How to play's pictures, by step, once loaded (the game loads them; set one and paint `how`). */
-  readonly howPictures: (HTMLImageElement | null)[] = [];
-  private howSteps: HowStep[] = [];
+  private howSteps: readonly HowToStep[] = [];
+  /** The step How to play shows (0-based). */
+  howIndex = 0;
+  /** Each step's still picture, by its path, once loaded. */
+  private readonly posters = new Map<string, HTMLImageElement | null>();
+  /** The step's video: one element, its texture on a plane laid over the card's picture frame. */
+  private readonly video: HTMLVideoElement | null = typeof document !== 'undefined' ? document.createElement('video') : null;
+  private videoPlane: Mesh<PlaneGeometry, MeshBasicMaterial> | null = null;
+  private videoFor = '';
+  /** Players who ask the system for less motion see the still picture, not the clip. */
+  private readonly still = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** What the sheet shows ('none' when it is closed). */
   sheetKind: 'none' | 'settings' | 'warn' | 'quit' = 'none';
-  /** What the card shows: the start menu, or (in a run) the pause card, the shop, or the count back in. */
-  cardKind: 'start' | 'pause' | 'shop' | 'count' = 'start';
+  /** What the card shows: the start menu, or (in a run) the pause card or the shop. */
+  cardKind: 'start' | 'pause' | 'shop' = 'start';
   private seed = 1;
   private clock = 0;
   private start: StartState = { kind: 'first', coins: 0, staff: 1, best: null };
@@ -135,22 +159,105 @@ export class StartMenu {
       p.frame = false;
       p.turn = 3;
     }
-    this.k = this.card.width / W;
+    // Design units to canvas pixels: from the sheet (24 cm, 720 units), which never changes size; every card uses the same scale.
+    this.k = this.sheet.width / W;
     this.kh = this.how.width / HW;
     coverListeners.push(() => this.card.paint());
   }
 
-  /** How to play, in front of the eyes where the start card stands (the game hides the card behind). */
-  showHow(steps: HowStep[]): void {
+  /** How to play, in front of the eyes where the start card stands (the game hides the card behind), from `index`. */
+  showHow(steps: readonly HowToStep[], index = 0): void {
     this.howSteps = steps;
+    this.howIndex = Math.max(0, Math.min(steps.length - 1, index));
+    for (const step of steps) this.loadPoster(step.poster);
     this.layoutHow();
     this.how.show(true);
   }
+
+  /** The next or the previous step (`by` +1 or -1). False when there is none that way. */
+  howStep(by: number): boolean {
+    const to = this.howIndex + by;
+    if (to < 0 || to >= this.howSteps.length) return false;
+    this.howIndex = to;
+    this.layoutHow();
+    return true;
+  }
+
+  private loadPoster(path: string): void {
+    if (this.posters.has(path) || typeof Image === 'undefined') return;
+    this.posters.set(path, null);
+    const img = new Image();
+    img.onload = () => {
+      this.posters.set(path, img);
+      if (this.how.open) this.how.paint();
+    };
+    img.src = `${import.meta.env.BASE_URL}${path}`;
+  }
+
+  /**
+   * The video plane: made once, a child of the How to play card, so it moves,
+   * turns and scales with it; it stands a hair in front of the paper.
+   */
+  private ensureVideoPlane(): Mesh<PlaneGeometry, MeshBasicMaterial> | null {
+    if (this.videoPlane || !this.video) return this.videoPlane;
+    const v = this.video;
+    v.muted = true;
+    v.loop = true;
+    v.playsInline = true;
+    v.crossOrigin = 'anonymous';
+    v.preload = 'auto';
+    const texture = new VideoTexture(v);
+    texture.colorSpace = SRGBColorSpace;
+    texture.minFilter = LinearFilter;
+    texture.magFilter = LinearFilter;
+    const m = (units: number): number => (units * this.kh) / PPM;
+    const plane = new Mesh(new PlaneGeometry(m(HOW_VIDEO.width), m(HOW_VIDEO.height)), new MeshBasicMaterial({ map: texture, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
+    plane.name = 'HowVideo';
+    plane.renderOrder = this.how.mesh.renderOrder + 1;
+    plane.visible = false;
+    this.how.mesh.add(plane);
+    this.videoPlane = plane;
+    return plane;
+  }
+
+  /** Each frame: the step's clip plays over its frame while How to play is up; otherwise it stops. */
+  private tickVideo(): void {
+    const v = this.video;
+    if (!v) return;
+    const step = this.how.open ? this.howSteps[this.howIndex] : undefined;
+    const want = step?.video && !this.still ? `${import.meta.env.BASE_URL}${step.video}` : '';
+    if (!want) {
+      if (!v.paused) v.pause();
+      if (this.videoPlane) this.videoPlane.visible = false;
+      return;
+    }
+    const plane = this.ensureVideoPlane();
+    if (!plane) return;
+    if (this.videoFor !== want) {
+      this.videoFor = want;
+      v.src = want;
+      v.currentTime = 0;
+    }
+    if (v.paused) void v.play().catch(() => {});
+    // Over the picture frame (design units to the card's own metres, y up).
+    const top = this.howVideoTop;
+    const m = (units: number): number => (units * this.kh) / PPM;
+    plane.position.set(m(this.howVideoLeft + HOW_VIDEO.width / 2) - HOW_SIZE.width / 2, HOW_SIZE.height / 2 - m(top + HOW_VIDEO.height / 2), 0.0008);
+    // Shown once it has a picture, fading with the card.
+    const ready = v.readyState >= 2;
+    plane.visible = ready && this.how.shownAmount > 0;
+    plane.material.opacity = this.how.shownAmount;
+  }
+
+  /** Where the video's frame starts on the card (design units from the top and the left), set by the layout. */
+  private howVideoTop = 0;
+  private howVideoLeft = 0;
 
   /** Draw the start card for this state (and put it up). */
   showStart(state: StartState): void {
     this.cardKind = 'start';
     this.start = state;
+    this.card.resize(START_SIZE.width, START_SIZE.height);
     this.layoutStart();
     this.card.show(true);
   }
@@ -158,6 +265,7 @@ export class StartMenu {
   /** The pause card (in a run). */
   showPause(state: PauseState): void {
     this.cardKind = 'pause';
+    this.card.resize(START_SIZE.width, START_SIZE.height);
     this.layoutPause(state);
     this.card.show(true);
   }
@@ -165,14 +273,8 @@ export class StartMenu {
   /** The shop (in a run, paused). Shown again after each hire. */
   showShop(state: ShopState): void {
     this.cardKind = 'shop';
+    this.card.resize(START_SIZE.width, START_SIZE.height);
     this.layoutShop(state);
-    this.card.show(true);
-  }
-
-  /** The count back in from a pause: one big number, on the pause card's paper. */
-  showCount(n: number): void {
-    this.cardKind = 'count';
-    this.layoutCount(n);
     this.card.show(true);
   }
 
@@ -215,6 +317,7 @@ export class StartMenu {
 
   /** Each frame: the boil (a new seed, ten times a second) while a card is up. */
   tick(delta: number): void {
+    this.tickVideo();
     this.clock += delta;
     const seed = 1 + Math.floor(this.clock * BOIL_HZ);
     if (seed === this.seed) return;
@@ -257,7 +360,7 @@ export class StartMenu {
    * 'danger' (koi outline), 'off' (pale, cannot go further). It lights from
    * inside when a finger is near and moves down when pressed.
    */
-  private button(panel: Panel, id: string, x: number, y: number, w: number, h: number, kind: 'primary' | 'secondary' | 'danger' | 'off', label: string, sub?: string, glyph = false): Button {
+  private button(panel: Panel, id: string, x: number, y: number, w: number, h: number, kind: 'primary' | 'secondary' | 'danger' | 'off', label: string, sub?: string, glyph = false, size?: number): Button {
     const k = panel === this.how ? this.kh : this.k;
     return {
       id, label, x: x * k, y: y * k, w: w * k, h: h * k, bare: true,
@@ -266,7 +369,9 @@ export class StartMenu {
         ctx.save();
         ctx.scale(k, k);
         const dip = pressed ? 6 : 0;
-        const fill = kind === 'primary' ? SKETCH.moss : kind === 'off' ? SKETCH.paper : hover ? '#e4d9c6' : SKETCH.paper;
+        // Lit (the beam or a finger on it): plain buttons darken to a deeper paper, the red ones take a red tint,
+        // the green one keeps its colour and glows (the lantern), so the button about to be pressed is plain to see.
+        const fill = kind === 'primary' ? SKETCH.moss : kind === 'off' ? SKETCH.paper : !hover ? SKETCH.paper : kind === 'danger' ? HOVER.danger : HOVER.plain;
         const stroke = kind === 'primary' ? SKETCH.mossDeep : kind === 'danger' ? SKETCH.koi : kind === 'off' ? '#b6a993' : SKETCH.ink;
         rc.rectangle(x, y + dip, w, h, this.o({ fill, fillStyle: 'solid', stroke, seed: this.seed + Math.round(x + y) }));
         if (hover && kind !== 'off') this.lantern(ctx, x, y + dip, w, h);
@@ -274,7 +379,7 @@ export class StartMenu {
         if (sub) {
           text(ctx, label, x + w / 2, y + h * 0.4 + dip, Math.round(h * 0.34), ink);
           text(ctx, sub, x + w / 2, y + h * 0.73 + dip, 28, kind === 'primary' ? '#f2ebdd' : SKETCH.soft, 'center', false);
-        } else text(ctx, label, x + w / 2, y + h / 2 + 2 + dip, glyph ? 50 : Math.round(Math.min(h >= 140 ? 60 : 40, h * 0.42)), ink);
+        } else text(ctx, label, x + w / 2, y + h / 2 + 2 + dip, size ?? (glyph ? 50 : Math.round(Math.min(h >= 140 ? 60 : 40, h * 0.42))), ink);
         ctx.restore();
       },
     };
@@ -283,55 +388,63 @@ export class StartMenu {
   private layoutStart(): void {
     const s = this.start;
     const returning = s.kind === 'returning';
-    const used = PAD + ART_H + GAP + 150 + (returning ? TOUCH_GAP + 100 : 0) + TOUCH_GAP + 84 + PAD;
+    const SW = Math.round(this.card.width / this.k);
     const H = Math.round(this.card.height / this.k);
-    const top = H - used;
-    const buttons: Button[] = [];
+    // The cover art: the left column, full height.
     const ax = PAD;
-    const ay = top + PAD;
-    const aw = W - PAD * 2;
-    let y = ay + ART_H + GAP;
-    if (returning) buttons.push(this.button(this.card, 'continue', PAD, y, W - PAD * 2, 150, 'primary', 'CONTINUE', `${s.coins.toLocaleString('en')} coins · ${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`));
-    else buttons.push(this.button(this.card, 'new', PAD, y, W - PAD * 2, 150, 'primary', 'NEW GAME'));
-    y += 150;
+    const ay = PAD;
+    const aw = 360;
+    const ah = H - PAD * 2;
+    // The buttons: the right column.
+    const cx = ax + aw + 30;
+    const cw = SW - PAD - cx;
+    const buttons: Button[] = [];
+    const rowH = 84;
+    const half = (cw - TOUCH_GAP) / 2;
+    const bottom = H - PAD - rowH;
     if (returning) {
-      y += TOUCH_GAP;
-      buttons.push(this.button(this.card, 'new', PAD, y, W - PAD * 2, 100, 'secondary', 'NEW GAME'));
-      y += 100;
+      const newY = bottom - TOUCH_GAP - 96;
+      const contY = newY - TOUCH_GAP - 140;
+      buttons.push(this.button(this.card, 'continue', cx, contY, cw, 140, 'primary', 'CONTINUE', `${s.coins.toLocaleString('en')} coins · ${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`));
+      buttons.push(this.button(this.card, 'new', cx, newY, cw, 96, 'secondary', 'NEW GAME'));
+    } else {
+      const h = 200;
+      buttons.push(this.button(this.card, 'new', cx, bottom - TOUCH_GAP - h, cw, h, 'primary', 'NEW GAME'));
     }
-    y += TOUCH_GAP;
-    // How to play and Settings side by side, near the middle (little reach).
-    const half = (W - PAD * 2 - TOUCH_GAP) / 2;
-    buttons.push(this.button(this.card, 'help', PAD, y, half, 84, 'secondary', '? How to play'));
-    buttons.push(this.button(this.card, 'gear', PAD + half + TOUCH_GAP, y, half, 84, 'secondary', '⚙ Settings'));
-    // Quit: in the cover art's top corner, away from the buttons pressed often (it asks first).
-    const qw = 170;
-    buttons.push(this.button(this.card, 'quit', ax + aw - 18 - qw, ay + 18, qw, 84, 'secondary', 'Quit'));
+    // How to play and Settings side by side at the bottom (little reach).
+    buttons.push(this.button(this.card, 'help', cx, bottom, half, rowH, 'secondary', '? How to play', undefined, false, 30));
+    buttons.push(this.button(this.card, 'gear', cx + half + TOUCH_GAP, bottom, half, rowH, 'secondary', '⚙ Settings', undefined, false, 30));
+    // Quit: top right, away from the buttons pressed often (it asks first).
+    const qw = 150;
+    buttons.push(this.button(this.card, 'quit', SW - PAD - qw, PAD, qw, 72, 'secondary', 'Quit'));
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
       ctx.scale(this.k, this.k);
       const rc = pen(this.card.canvas);
-      this.paper(ctx, rc, top, H);
-      // The cover art: only here, behind the name.
+      this.paper(ctx, rc, 0, H, SW);
+      // The cover art, cropped to fill its column (never stretched), darkened toward the name.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(ax, ay, aw, ah);
+      ctx.clip();
+      ctx.fillStyle = '#2a2420';
+      ctx.fillRect(ax, ay, aw, ah);
       if (cover) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(ax, ay, aw, ART_H);
-        ctx.clip();
-        ctx.drawImage(cover, ax, ay, aw, ART_H);
-        const g = ctx.createLinearGradient(0, ay + ART_H * 0.45, 0, ay + ART_H);
-        g.addColorStop(0, 'rgba(22,23,29,0)');
-        g.addColorStop(1, 'rgba(22,23,29,.85)');
-        ctx.fillStyle = g;
-        ctx.fillRect(ax, ay, aw, ART_H);
-        ctx.restore();
-      } else {
-        ctx.fillStyle = '#2a2420';
-        ctx.fillRect(ax, ay, aw, ART_H);
+        const k = Math.max(aw / cover.width, ah / cover.height);
+        const iw = aw / k;
+        const ih = ah / k;
+        ctx.drawImage(cover, (cover.width - iw) / 2, (cover.height - ih) / 2, iw, ih, ax, ay, aw, ah);
       }
-      rc.rectangle(ax, ay, aw, ART_H, this.o({ strokeWidth: 3, seed: this.seed + 3 }));
-      text(ctx, 'CAFÉ CHAOS', W / 2, ay + ART_H - 58, 78, '#f2ebdd');
+      const g = ctx.createLinearGradient(0, ay + ah * 0.4, 0, ay + ah);
+      g.addColorStop(0, 'rgba(22,23,29,0)');
+      g.addColorStop(1, 'rgba(22,23,29,.88)');
+      ctx.fillStyle = g;
+      ctx.fillRect(ax, ay, aw, ah);
+      ctx.restore();
+      rc.rectangle(ax, ay, aw, ah, this.o({ strokeWidth: 3, seed: this.seed + 3 }));
+      text(ctx, 'CAFÉ', ax + aw / 2, ay + ah - 150, 74, '#f2ebdd');
+      text(ctx, 'CHAOS', ax + aw / 2, ay + ah - 72, 74, '#f2ebdd');
       // Your best time: a lantern-coloured badge, only once there is one.
       if (returning && s.best) {
         ctx.font = font(30);
@@ -366,70 +479,80 @@ export class StartMenu {
   }
 
   /**
-   * How to play, laid out as on the web page: the title; two notes for
-   * before you start (sit at a table, put down your controllers); the three
-   * steps side by side, each a picture, a numbered title and a line; CLOSE.
+   * How to play, one step at a time, laid out wide:
+   *
+   *   ┌──────────────────────────────────────────┐
+   *   │ How to play                          [✕] │
+   *   │ ┌──────────────────┐  [2] Pinch a guest  │
+   *   │ │   step's video   │  Put your fingers   │
+   *   │ │                  │  above a guest...   │
+   *   │ └──────────────────┘                     │
+   *   │ [PREVIOUS]        ● ○ ○ ○        [NEXT]  │
+   *   └──────────────────────────────────────────┘
+   *
+   * PREVIOUS and NEXT run along the bottom, the most used controls low on
+   * the panel (Meta); the last step's NEXT reads DONE and closes, as ✕ does.
    */
   private layoutHow(): void {
     const ctx = this.how.ctx;
     const H = Math.round(this.how.height / this.kh);
-    const P = 54;
-    const CW = HW - P * 2;
-    const GAP_H = 24;
-    const before = ['Sit at a table. The café stands on the table.', 'Put down your controllers. Use only your hands.'];
-    const bw = (CW - 18) / 2;
-    const beforeLines = before.map((b) => this.wrap(ctx, b, 30, false, bw - 36));
-    const bh = Math.max(...beforeLines.map((l) => l.length)) * 40 + 30;
-    const sw = (CW - GAP_H * 2) / 3;
-    const ph = Math.round(sw * 0.75);
+    const P = 36;
+    const steps = this.howSteps;
+    const i = this.howIndex;
+    const step = steps[i];
+    if (!step) return;
+    const last = i === steps.length - 1;
+    const HEAD = 84;
+    const NAV_H = 90;
     const BADGE = 48;
-    const steps = this.howSteps.map((st) => ({
-      title: this.wrap(ctx, st.title, 33, true, sw - BADGE - 14),
-      text: this.wrap(ctx, st.text, 27, false, sw),
-    }));
-    const titleH = Math.max(BADGE, ...steps.map((st) => st.title.length * 38));
-    const textH = Math.max(0, ...steps.map((st) => st.text.length * 37));
-    const CLOSE_H = 104;
-    const used = P + 60 + 20 + bh + GAP_H + ph + 16 + titleH + 12 + textH + 30 + CLOSE_H + P;
-    const top = Math.max(0, Math.round((H - used) / 2));
-    const yBefore = top + P + 80;
-    const ySteps = yBefore + bh + GAP_H;
-    const yClose = top + used - P - CLOSE_H;
-    const buttons = [this.button(this.how, 'back', P, yClose, CW, CLOSE_H, 'primary', 'CLOSE')];
+    const vx = P;
+    const vy = P + HEAD + 18;
+    const rx = vx + HOW_VIDEO.width + 30;
+    const rw = HW - P - rx;
+    const titleLines = this.wrap(ctx, step.title, 36, true, rw - BADGE - 14);
+    const textLines = this.wrap(ctx, step.text, 28, false, rw);
+    this.howVideoTop = vy;
+    this.howVideoLeft = vx;
+    const yNav = H - P - NAV_H;
+    const navW = 280;
+    const buttons: Button[] = [
+      this.button(this.how, 'back', HW - P - HEAD, P, HEAD, HEAD, 'secondary', '✕', undefined, true),
+      this.button(this.how, 'how-prev', P, yNav, navW, NAV_H, i === 0 ? 'off' : 'secondary', 'PREVIOUS'),
+      last ? this.button(this.how, 'how-done', HW - P - navW, yNav, navW, NAV_H, 'primary', 'DONE') : this.button(this.how, 'how-next', HW - P - navW, yNav, navW, NAV_H, 'primary', 'NEXT'),
+    ];
     this.how.set((c) => {
       c.clearRect(0, 0, this.how.canvas.width, this.how.canvas.height);
       c.save();
       c.scale(this.kh, this.kh);
       const rc = pen(this.how.canvas);
-      this.paper(c, rc, top, H, HW);
-      text(c, 'How to play', HW / 2, top + P + 30, 52, SKETCH.ink);
-      beforeLines.forEach((lines, i) => {
-        const x = P + i * (bw + 18);
-        rc.rectangle(x, yBefore, bw, bh, this.o({ fill: '#e4d9c6', fillStyle: 'solid', strokeWidth: 3, seed: this.seed + 20 + i }));
-        const y0 = yBefore + bh / 2 - ((lines.length - 1) * 40) / 2;
-        lines.forEach((l, j) => text(c, l, x + bw / 2, y0 + j * 40, 30, SKETCH.ink, 'center', false));
-      });
-      steps.forEach((st, i) => {
-        const x = P + i * (sw + GAP_H);
-        const img = this.howPictures[i];
-        c.fillStyle = '#2a2420';
-        c.fillRect(x, ySteps, sw, ph);
-        if (img) {
-          // Cover the frame (crop, never stretch).
-          const s = Math.max(sw / img.width, ph / img.height);
-          const iw = sw / s;
-          const ih = ph / s;
-          c.drawImage(img, (img.width - iw) / 2, (img.height - ih) / 2, iw, ih, x, ySteps, sw, ph);
-        }
-        rc.rectangle(x, ySteps, sw, ph, this.o({ strokeWidth: 3, seed: this.seed + 30 + i }));
-        const yt = ySteps + ph + 16;
-        c.fillStyle = SKETCH.moss;
-        c.fillRect(x, yt, BADGE, BADGE);
-        text(c, `${i + 1}`, x + BADGE / 2, yt + BADGE / 2 + 2, 30, '#f2ebdd');
-        const ty = yt + (st.title.length === 1 ? BADGE / 2 : 19);
-        st.title.forEach((l, j) => text(c, l, x + BADGE + 14, ty + j * 38 + 2, 33, SKETCH.ink, 'left'));
-        const py = yt + titleH + 12 + 18;
-        st.text.forEach((l, j) => text(c, l, x, py + j * 37, 27, SKETCH.soft, 'left', false));
+      this.paper(c, rc, 0, H, HW);
+      text(c, 'How to play', P + 4, P + HEAD / 2, 48, SKETCH.ink, 'left');
+      // The frame: the still picture (shown until the clip plays, and for less motion), then the clip on top (tickVideo).
+      c.fillStyle = '#2a2420';
+      c.fillRect(vx, vy, HOW_VIDEO.width, HOW_VIDEO.height);
+      const img = this.posters.get(step.poster);
+      if (img) {
+        // Cover the frame: crop, never stretch.
+        const s = Math.max(HOW_VIDEO.width / img.width, HOW_VIDEO.height / img.height);
+        const iw = HOW_VIDEO.width / s;
+        const ih = HOW_VIDEO.height / s;
+        c.drawImage(img, (img.width - iw) / 2, (img.height - ih) / 2, iw, ih, vx, vy, HOW_VIDEO.width, HOW_VIDEO.height);
+      }
+      rc.rectangle(vx, vy, HOW_VIDEO.width, HOW_VIDEO.height, this.o({ strokeWidth: 3, seed: this.seed + 30 }));
+      // The step, beside the video: its number in a moss square, its title, its line.
+      c.fillStyle = SKETCH.moss;
+      c.fillRect(rx, vy, BADGE, BADGE);
+      text(c, `${i + 1}`, rx + BADGE / 2, vy + BADGE / 2 + 2, 32, '#f2ebdd');
+      titleLines.forEach((l, j) => text(c, l, rx + BADGE + 14, vy + BADGE / 2 + j * 44 + 2, 36, SKETCH.ink, 'left'));
+      const yText = vy + Math.max(BADGE, titleLines.length * 44) + 30;
+      textLines.forEach((l, j) => text(c, l, rx, yText + j * 38, 28, SKETCH.soft, 'left', false));
+      // Where you are: a dot for each step, the current one filled.
+      const dot = 20;
+      const dotGap = 22;
+      const dotsW = steps.length * dot + (steps.length - 1) * dotGap;
+      const dx = HW / 2 - dotsW / 2;
+      steps.forEach((_, k) => {
+        rc.circle(dx + k * (dot + dotGap) + dot / 2, yNav + NAV_H / 2, dot, this.o({ strokeWidth: 2.5, seed: this.seed + 60 + k, fill: k === i ? SKETCH.moss : 'transparent', fillStyle: 'solid', stroke: k === i ? SKETCH.mossDeep : '#b6a993' }));
       });
       c.restore();
     }, buttons);
@@ -524,7 +647,7 @@ export class StartMenu {
       ctx.scale(this.k, this.k);
       this.paper(ctx, pen(this.sheet.canvas), 0, H);
       text(ctx, 'Quit Café Chaos?', W / 2, 90, 54, SKETCH.ink);
-      text(ctx, 'Your coins and baristas are saved.', W / 2, 170, 34, SKETCH.soft, 'center', false);
+      text(ctx, 'Your progress is saved.', W / 2, 170, 34, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
   }
@@ -562,43 +685,39 @@ export class StartMenu {
     };
   }
 
-  /** The pause card's measures (design units), shared with the count so the card does not jump between them. */
-  private static readonly PAUSE_H = PAD + 174 + 140 + TOUCH_GAP + 96 + TOUCH_GAP + 96 + PAD + 14;
-
+  /**
+   * The pause card, wide like the start card: Paused, the time open and the
+   * best on the left; RESUME, How to play and Settings, and END THE
+   * EVENING on the right.
+   */
   private layoutPause(s: PauseState): void {
+    const SW = Math.round(this.card.width / this.k);
     const H = Math.round(this.card.height / this.k);
-    const top = H - StartMenu.PAUSE_H;
-    let y = top + PAD + 174;
-    const buttons: Button[] = [this.button(this.card, 'resume', PAD, y, W - PAD * 2, 140, 'primary', 'RESUME')];
-    y += 140 + TOUCH_GAP;
-    const half = (W - PAD * 2 - TOUCH_GAP) / 2;
-    buttons.push(this.button(this.card, 'how', PAD, y, half, 96, 'secondary', '? How to play'));
-    buttons.push(this.button(this.card, 'settings', PAD + half + TOUCH_GAP, y, half, 96, 'secondary', '⚙ Settings'));
-    y += 96 + TOUCH_GAP;
-    buttons.push(this.button(this.card, 'end', PAD, y, W - PAD * 2, 96, 'danger', 'END THE EVENING'));
+    const lx = PAD;
+    const lw = 360;
+    const cx = lx + lw + 30;
+    const cw = SW - PAD - cx;
+    const half = (cw - TOUCH_GAP) / 2;
+    const yEnd = H - PAD - 96;
+    const yRow = yEnd - TOUCH_GAP - 96;
+    const yResume = yRow - TOUCH_GAP - 150;
+    const buttons: Button[] = [
+      this.button(this.card, 'resume', cx, yResume, cw, 150, 'primary', 'RESUME'),
+      this.button(this.card, 'how', cx, yRow, half, 96, 'secondary', '? How to play', undefined, false, 30),
+      this.button(this.card, 'settings', cx + half + TOUCH_GAP, yRow, half, 96, 'secondary', '⚙ Settings', undefined, false, 30),
+      this.button(this.card, 'end', cx, yEnd, cw, 96, 'danger', 'END THE EVENING'),
+    ];
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
       ctx.scale(this.k, this.k);
-      this.paper(ctx, pen(this.card.canvas), top, H);
-      text(ctx, 'Paused', W / 2, top + PAD + 64, 64, SKETCH.ink);
-      text(ctx, s.best ? `${s.time}   ·   BEST ${s.best}` : s.time, W / 2, top + PAD + 136, 34, SKETCH.soft, 'center', false);
+      this.paper(ctx, pen(this.card.canvas), 0, H, SW);
+      const mid = lx + lw / 2;
+      text(ctx, 'Paused', mid, H / 2 - 90, 68, SKETCH.ink);
+      text(ctx, s.time, mid, H / 2 + 6, 64, SKETCH.ink);
+      if (s.best) text(ctx, `BEST ${s.best}`, mid, H / 2 + 88, 34, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
-  }
-
-  private layoutCount(n: number): void {
-    const H = Math.round(this.card.height / this.k);
-    const top = H - StartMenu.PAUSE_H;
-    this.card.set((ctx) => {
-      ctx.clearRect(0, 0, this.card.width, this.card.height);
-      ctx.save();
-      ctx.scale(this.k, this.k);
-      this.paper(ctx, pen(this.card.canvas), top, H);
-      text(ctx, 'Back in', W / 2, top + PAD + 90, 44, SKETCH.soft, 'center', false);
-      text(ctx, `${n}`, W / 2, top + StartMenu.PAUSE_H * 0.58, 260, SKETCH.moss);
-      ctx.restore();
-    }, []);
   }
 
   /** A barista's place in the shop: a round frame with a steaming cup in their colour. */
@@ -612,41 +731,51 @@ export class StartMenu {
     }
   }
 
+  /**
+   * The shop, wide like the start card: the title and the bank across the
+   * top with CLOSE at the right (as Quit on the start card), then a row for
+   * each barista: their portrait and name, and HIRE with the price (or
+   * "Works for you").
+   */
   private layoutShop(s: ShopState): void {
+    const SW = Math.round(this.card.width / this.k);
     const H = Math.round(this.card.height / this.k);
-    const ROW = 124;
-    const ROW_GAP = 20;
-    const used = PAD + 180 + s.rows.length * (ROW + ROW_GAP) - ROW_GAP + TOUCH_GAP + 110 + PAD + 14;
-    const top = Math.max(0, H - used);
+    const HEAD = 84;
+    const ROW_GAP = 16;
+    const y0 = PAD + HEAD + 20;
+    const ROW = Math.min(124, Math.floor((H - PAD - y0 - ROW_GAP * (s.rows.length - 1)) / Math.max(1, s.rows.length)));
     const buttons: Button[] = [];
-    let y = top + PAD + 180;
     const bw = 290;
-    const bh = 100;
+    const bh = Math.min(100, ROW - 16);
+    let y = y0;
     s.rows.forEach((r) => {
       if (r.status !== 'working' && r.price !== undefined) {
-        buttons.push(this.priceButton(this.card, r.status === 'hire' ? 'hire' : 'hire-later', W - PAD - bw, y + (ROW - bh) / 2, bw, bh, r.status === 'hire' ? 'primary' : 'off', 'HIRE', r.price));
+        buttons.push(this.priceButton(this.card, r.status === 'hire' ? 'hire' : 'hire-later', SW - PAD - bw, y + (ROW - bh) / 2, bw, bh, r.status === 'hire' ? 'primary' : 'off', 'HIRE', r.price));
       }
       y += ROW + ROW_GAP;
     });
-    buttons.push(this.button(this.card, 'shop-close', PAD, y - ROW_GAP + TOUCH_GAP, W - PAD * 2, 110, 'secondary', 'CLOSE'));
+    const qw = 170;
+    buttons.push(this.button(this.card, 'shop-close', SW - PAD - qw, PAD, qw, HEAD, 'secondary', 'CLOSE'));
     const tints = ['#7a9a6e', '#d48a8a', '#8aa3c9'];
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
       ctx.scale(this.k, this.k);
       const rc = pen(this.card.canvas);
-      this.paper(ctx, rc, top, H);
-      text(ctx, 'Hire baristas', W / 2, top + PAD + 56, 56, SKETCH.ink);
+      this.paper(ctx, rc, 0, H, SW);
+      text(ctx, 'Hire baristas', PAD + 4, PAD + HEAD / 2, 52, SKETCH.ink, 'left');
       const coins = `${s.coins.toLocaleString('en')} coins`;
       ctx.font = font(36);
       const cw = ctx.measureText(coins).width;
-      sketchCoin(rc, W / 2 - cw / 2 - 24, top + PAD + 128, 38, this.seed + 3, 2.5);
-      text(ctx, coins, W / 2 - cw / 2 + 6, top + PAD + 130, 36, SKETCH.ink, 'left');
-      let ry = top + PAD + 180;
+      const coinX = SW - PAD - qw - 40 - cw;
+      sketchCoin(rc, coinX - 26, PAD + HEAD / 2, 38, this.seed + 3, 2.5);
+      text(ctx, coins, coinX, PAD + HEAD / 2 + 2, 36, SKETCH.ink, 'left');
+      let ry = y0;
       s.rows.forEach((r, i) => {
-        this.portrait(rc, PAD + 58, ry + ROW / 2, 100, tints[i % tints.length], this.seed + 100 + i * 10);
-        text(ctx, r.name, PAD + 132, ry + ROW / 2 + 2, 44, SKETCH.ink, 'left');
-        if (r.status === 'working') text(ctx, 'Works for you', W - PAD - 14, ry + ROW / 2 + 2, 32, SKETCH.moss, 'right');
+        const d = Math.min(100, ROW - 10);
+        this.portrait(rc, PAD + d / 2 + 8, ry + ROW / 2, d, tints[i % tints.length], this.seed + 100 + i * 10);
+        text(ctx, r.name, PAD + d + 40, ry + ROW / 2 + 2, 44, SKETCH.ink, 'left');
+        if (r.status === 'working') text(ctx, 'Works for you', SW - PAD - 14, ry + ROW / 2 + 2, 32, SKETCH.moss, 'right');
         ry += ROW + ROW_GAP;
       });
       ctx.restore();
