@@ -142,6 +142,16 @@ export const HOVER_SWITCH = 0.7;
  * it came from.
  */
 export const DROP_MARGIN_M = 0.08;
+/**
+ * A carried guest lands on the free seat nearest where the player points
+ * only if that seat is within this (metres, café space) of the spot;
+ * pointed anywhere else it goes back to its place in the line, with no
+ * penalty (Apple: an item dropped where it cannot go moves back to its
+ * source; Meta: forgiving and reversible). A little over half the gap
+ * between tables (0.13 m), so anywhere over a table reaches its seats and
+ * a table away does not.
+ */
+export const AIM_SNAP_M = 0.09;
 /** Hops: onto a seat, back to the line, and off a seat (seconds and height in metres). */
 export const HOP = { sit: { seconds: 0.28, height: 0.012 }, back: { seconds: 0.45, height: 0.03 }, off: { seconds: 0.42, height: 0.028 } };
 

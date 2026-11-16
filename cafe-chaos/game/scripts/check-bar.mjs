@@ -113,7 +113,7 @@ await page.waitForTimeout(600);
 await page.screenshot({ path: 'artifacts/bar-shop.png' });
 await page.evaluate(() => window.__cafe.game.click('hire'));
 s = await state();
-check('HIRE hires the next barista, the price taken; the shop shows it', s.hires === 1 && s.bank === 15 && s.kind === 'shop' && s.cardButtons.includes('hire-later'), JSON.stringify({ hires: s.hires, bank: s.bank, buttons: s.cardButtons }));
+check('HIRE hires the next barista, the price taken; the shop shows it', s.hires === 1 && s.bank === 25 && s.kind === 'shop' && s.cardButtons.includes('hire-later'), JSON.stringify({ hires: s.hires, bank: s.bank, buttons: s.cardButtons }));
 await page.evaluate(() => window.__cafe.game.click('shop-close'));
 const closed = await until(() => window.__cafe.game.phase === 'run' && !window.__cafe.game.menu.card.open, null, 15000);
 check('CLOSE carries on with the run', closed, `${closed}`);

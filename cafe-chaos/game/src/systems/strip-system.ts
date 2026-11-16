@@ -3,7 +3,7 @@
  * player's eye level, above the back of the café, turned to the player. It
  * is the one place to read how the evening is going:
  *
- *   [⏸] | (clock) 3:42 | (face) [▨▨▨▨▨▨▨□□□] | (coin) 46 [shop]
+ *   [⏸] | LEVEL 3  6/10 | (face) [▨▨▨▨▨▨▨□□□] | (coin) 46 [shop]
  *
  * - Pause, at the left end, and Shop, at the right end by the coins: the
  *   bar is out of reach, so they are pressed with the hand ray (point and
@@ -11,8 +11,8 @@
  *   Each lights from inside when aimed at. Shop has a lantern dot with a +
  *   while the bank can pay for the next barista, and a moss check once all
  *   three work. Both are pale (and do nothing) outside a run.
- * - The clock, counting up, with the longest evening under it ("new
- *   record!" once this run has passed it).
+ * - The level, and under it the guests served in it of the number that
+ *   passes it. A new level throws confetti (GameSystem calls `celebrate`).
  * - Happiness: a face and ten hatched segments, calm above 60 %, warn
  *   down to 30 %, danger below; the percentage beside them.
  * - The bank.
@@ -33,7 +33,6 @@ import { Color, createSystem, DoubleSide, InstancedMesh, Matrix4, MeshBasicMater
 import { HAPPINESS } from '../game/rules.js';
 import { Panel, type Button } from '../ui/panel.js';
 import { hand, line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
-import { clockText } from '../game/clock.js';
 import { narrowView } from '../lib/view-fit.js';
 import { CafeSystem } from './cafe-system.js';
 import { ScoreSystem } from './score-system.js';
@@ -88,16 +87,13 @@ export class StripSystem extends createSystem({}) {
   private tagText = '';
   /** True on a narrow view: the bar lower and smaller over the café's back wall, its tag below the button. */
   narrow = false;
-  /** The longest evening before this run (seconds), and whether a run is on: the game sets them. */
-  best = 0;
+  /** Whether a run is on (the game sets it). */
   live = false;
   /** What the bar's buttons do now (the game sets it): 'live' in a run, 'paused' while paused (Pause shows play), 'off' otherwise (pale). */
   controls: 'live' | 'paused' | 'off' = 'off';
-  /** Times a new best time was celebrated (the sound system plays the chime). */
+  /** Times a new level was celebrated (the sound system plays the chime). */
   celebrations = 0;
-  /** True once this run has passed the best time (celebrated once). */
-  private celebrated = false;
-  /** The confetti: a burst of paper scraps from the board, once, when the best time is passed. */
+  /** The confetti: a burst of paper scraps, once, when a level is reached. */
   private readonly confetti = new InstancedMesh(new PlaneGeometry(0.009, 0.005), new MeshBasicMaterial({ side: DoubleSide, toneMapped: false, transparent: true }), CONFETTI.count);
   private readonly bits = Array.from({ length: CONFETTI.count }, () => ({ p: new Vector3(), v: new Vector3(), r: new Euler(), spin: new Vector3() }));
   private confettiAge = Infinity;
@@ -150,12 +146,6 @@ export class StripSystem extends createSystem({}) {
     if (!up) return;
     this.time += delta;
     const s = this.score;
-    // Past the best time: celebrate once (confetti and a chime), then only the green.
-    if (this.live && this.best > 0 && s.clock > this.best && !this.celebrated) {
-      this.celebrated = true;
-      this.celebrations++;
-      this.burst();
-    }
     const want = (s.happiness / HAPPINESS.max) * SEGMENTS;
     let moving = false;
     for (let i = 0; i < SEGMENTS; i++) {
@@ -174,7 +164,7 @@ export class StripSystem extends createSystem({}) {
     }
     const low = this.live && s.happiness / HAPPINESS.max <= 0.3 && s.happiness > 0;
     const shopNow = this.shop.price === null ? 'full' : this.shop.affordable ? 'can' : 'not';
-    const now = `${Math.round(s.happiness)}|${s.bank}|${Math.floor(s.clock)}|${this.best}|${this.live}|${this.controls}|${shopNow}`;
+    const now = `${Math.round(s.happiness)}|${s.bank}|${s.level}|${s.levelServed}|${s.levelGoal}|${this.live}|${this.controls}|${shopNow}`;
     if (moving || low || now !== this.shown) {
       this.shown = now;
       this.panel.paint();
@@ -188,12 +178,18 @@ export class StripSystem extends createSystem({}) {
     this.bank = this.score.bank;
     this.popAge = Infinity;
     this.height = NaN;
-    this.celebrated = false;
   }
 
   /** Throw the confetti from the board. */
-  private burst(): void {
-    this.panel.mesh.getWorldPosition(this.spot);
+  /** A level reached: confetti from `at` (world; the board if not given), and the chime. */
+  celebrate(at?: Vector3): void {
+    this.celebrations++;
+    this.burst(at);
+  }
+
+  private burst(at?: Vector3): void {
+    if (at) this.spot.copy(at);
+    else this.panel.mesh.getWorldPosition(this.spot);
     for (const b of this.bits) {
       b.p.copy(this.spot);
       const a = Math.random() * Math.PI * 2;
@@ -263,29 +259,21 @@ export class StripSystem extends createSystem({}) {
     rc.rectangle(lw * 2, lw * 2, w - lw * 4, h - lw * 4, line(11, lw * 1.2, { fill: SKETCH.paper, fillStyle: 'solid', roughness: 1.3 }));
     // Laid out left to right with room between every part; the time and the bank are given room for their widest so nothing shifts as they change.
     const inner = h * 0.12, around = h * 0.15;
-    const icon = h * 0.36, timeSize = h * 0.36, bankSize = h * 0.34;
-    // The widest time ('59:59') in the hand font, as drawn on the headset; the bank as wide as it is drawn
+    const icon = h * 0.36, bankSize = h * 0.34;
+    // Room for the widest level line ('LEVEL 99', '60/60 served') in the hand font; the bank as wide as it is drawn
     // (measured, two digits at least), so a small number leaves no gap before the shop and a big one never
     // runs into it. The bar's segments give way only when the bank gains a digit.
-    const timeW = h * 0.9;
+    const timeW = h * 1.35;
     ctx.font = hand(bankSize, 700);
     const bankW = ctx.measureText(`${s.bank}`.padStart(2, '0')).width;
-    // Pause at the left end: the clock starts after it and a divider.
+    // Pause at the left end: the level starts after it and a divider.
     const btn = h * BAR_BUTTON.size;
     let x = h * BAR_BUTTON.pad + btn + around;
     rc.line(x, h * 0.17, x + 2, h * 0.83, line(20, lw * 0.8));
     x += around;
-    // The clock: a drawn clock face and the time.
-    const cx = x + icon / 2, cy = h * 0.5;
-    rc.circle(cx, cy, icon, line(12, lw, { fill: SKETCH.paper, fillStyle: 'solid' }));
-    rc.line(cx, cy, cx, cy - icon * 0.32, line(13, lw * 0.9));
-    rc.line(cx, cy, cx + icon * 0.24, cy + icon * 0.06, line(14, lw * 0.9));
-    x += icon + inner;
-    const record = this.live && this.best > 0 && s.clock > this.best;
-    if (this.best > 0) {
-      scrawl(ctx, clockText(s.clock), x, h * 0.4, h * 0.32, { color: record ? SKETCH.moss : SKETCH.ink });
-      scrawl(ctx, record ? 'NEW BEST!' : `BEST ${clockText(this.best)}`, x, h * 0.78, h * 0.18, { color: record ? SKETCH.moss : SKETCH.soft });
-    } else scrawl(ctx, clockText(s.clock), x, h * 0.53, timeSize);
+    // The level, and under it the guests served in it of the number that passes it.
+    scrawl(ctx, `LEVEL ${s.level}`, x, h * 0.36, h * 0.3);
+    scrawl(ctx, `${Math.min(s.levelServed, s.levelGoal)}/${s.levelGoal} served`, x, h * 0.76, h * 0.2, { color: SKETCH.soft });
     x += timeW + around;
     rc.line(x, h * 0.17, x + 2, h * 0.83, line(21, lw * 0.8));
     x += around;

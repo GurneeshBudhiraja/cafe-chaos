@@ -48,7 +48,7 @@ import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
-  PATIENCE_SECONDS, PATIENCE_SPREAD, DROP_MARGIN_M, HOVER_EXIT_RADII, HOVER_SWITCH, PICK_MEMORY_S, PICK_RADIUS_M, SIGHT, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
+  PATIENCE_SECONDS, PATIENCE_SPREAD, DROP_MARGIN_M, AIM_SNAP_M, HOVER_EXIT_RADII, HOVER_SWITCH, PICK_MEMORY_S, PICK_RADIUS_M, SIGHT, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
@@ -185,8 +185,18 @@ export class GuestSystem extends createSystem({}) {
   /** Where the last newcomer appeared (café space), and how much further out than the usual spot that was (metres): the real table's edge. */
   readonly arrival = ARRIVAL_POINT.clone();
   fromEdge = 0;
-  /** How long the café has been open (seconds): the more, the more wishes a new guest may have (game/rules.ts WISH). The game sets it. */
-  evening = 0;
+  /** The level: the higher, the more wishes a new guest may have (game/rules.ts LEVEL). The game sets it. */
+  level = 1;
+  /** How many may stand in the line (the game sets it by level). */
+  queueCap = MAX_QUEUE;
+  /** How much the gap between arrivals grows as the café fills (the game, which sets the gaps itself, turns it off with 1). */
+  spawnStretch = SPAWN_STRETCH;
+  /**
+   * Seconds a guest waits for its food once seated: a fresh amount, whatever
+   * it had left in the line (the game sets it). Null: the old top-up
+   * (SERVICE_TOPUP_SECONDS), for the checks that run without the game.
+   */
+  seatedPatience: number | null = null;
   /** The share of new guests who sing (the game sets it). */
   singerChance = 0;
   /** The cards beside the hands: who the lit or carried guest is and what it wants. */
@@ -412,6 +422,11 @@ export class GuestSystem extends createSystem({}) {
     }
   }
 
+  /** True while a hand is carrying a guest. */
+  get carrying(): boolean {
+    return this.guests.some((g) => g.state === 'held');
+  }
+
   /** Take every guest away (a new session, or the café placed afresh). */
   clear(): void {
     for (const guest of this.guests) {
@@ -434,7 +449,7 @@ export class GuestSystem extends createSystem({}) {
     if (this.nextSpawnIn > 0) return;
     // A guest lifted out of the line keeps its place: it may be put back.
     const awayFromLine = this.guests.filter((g) => (g.state === 'held' || g.state === 'hop') && fromLine(g)).length;
-    if (!this.arrivals || this.guests.length >= MAX_GUESTS || this.line.length + awayFromLine >= MAX_QUEUE) {
+    if (!this.arrivals || this.guests.length >= MAX_GUESTS || this.line.length + awayFromLine >= this.queueCap) {
       // No room just now: look again shortly.
       this.nextSpawnIn = 0.5;
       return;
@@ -449,7 +464,7 @@ export class GuestSystem extends createSystem({}) {
     // The fuller the café, the longer until the next one.
     const [min, max] = this.spawnSeconds;
     const fullness = this.guests.length / MAX_GUESTS;
-    this.nextSpawnIn = (min + Math.random() * (max - min)) * (1 + (SPAWN_STRETCH - 1) * fullness) * this.spawnPace;
+    this.nextSpawnIn = (min + Math.random() * (max - min)) * (1 + (this.spawnStretch - 1) * fullness) * this.spawnPace;
   }
 
   /** Bring a new guest on at the arrival point and send it to the back of the line. */
@@ -472,7 +487,7 @@ export class GuestSystem extends createSystem({}) {
     const singerAbout = this.guests.some((g) => g.sings);
     const sings = !singerAbout && Math.random() < this.singerChance;
     // 1 to 3 wishes, more as the evening goes on; a singer wants company (an audience).
-    const wishes: WishId[] = sings ? ['company'] : pickWishes(wishCount(this.evening), singerAbout, this.lastWishes);
+    const wishes: WishId[] = sings ? ['company'] : pickWishes(wishCount(this.level), singerAbout, this.lastWishes);
     this.lastWishes = wishes;
     const guest: Guest = {
       id: this.arrived,
@@ -856,8 +871,9 @@ export class GuestSystem extends createSystem({}) {
    * is the spot under the hand if the hand is low over the café; else the
    * spot on the café behind the fingers along the line of sight; else (the
    * line of sight running past the café) the spot under the hand again.
-   * Null when the hand is clear of the café (DROP_MARGIN_M): the guest
-   * goes back where it came from.
+   * Null when the hand is clear of the café (DROP_MARGIN_M), or no free
+   * seat is within AIM_SNAP_M of that spot: the guest goes back where it
+   * came from.
    */
   private seatAimed(hang: Vector3, pinch: Vector3, own: Seat | null, spoken: Seat | null): Seat | null {
     if (this.seats.length === 0) return null;
@@ -886,8 +902,10 @@ export class GuestSystem extends createSystem({}) {
       spot.copy(hang);
       if (!inside(spot)) return null;
     }
+    // Only a seat near where the player points: a guest let go far from any free seat goes back to its
+    // place in the line, it does not fly across the café to whichever seat happens to be free.
     let best: Seat | null = null;
-    let bestDistance = Infinity;
+    let bestDistance = AIM_SNAP_M;
     for (const seat of this.seats) {
       if ((seat.occupant !== 0 && seat !== own) || seat === spoken) continue;
       const d = Math.hypot(spot.x - seat.position.x, spot.z - seat.position.z);
@@ -965,7 +983,7 @@ export class GuestSystem extends createSystem({}) {
       guest.eaten = 0;
       // How long it waited to be seated, as a share of its patience; and a top-up for the wait for its food.
       guest.seatShare = Math.min(1, Math.max(0, 1 - guest.patience / guest.patienceFull));
-      guest.patience = Math.min(SERVICE_MAX_SECONDS, Math.max(0, guest.patience) + SERVICE_TOPUP_SECONDS);
+      guest.patience = this.seatedPatience ?? Math.min(SERVICE_MAX_SECONDS, Math.max(0, guest.patience) + SERVICE_TOPUP_SECONDS);
       this.seated++;
       this.judge(guest);
     }

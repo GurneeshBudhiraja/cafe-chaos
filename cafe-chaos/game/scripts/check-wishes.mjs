@@ -3,7 +3,7 @@
  * 1. every guest in the line has a name of its own and 1 to 3 wishes that
  *    can all be met together, and a dot over its head (its seconds, its
  *    timer ring, a pip for each wish);
- * 2. early in the evening guests have 1 wish; late, a mix of 1, 2 and 3;
+ * 2. at level 1 guests have 1 wish; at a high level, a mix of 1, 2 and 3;
  * 3. a hand over a guest brings up its request card beside the hand;
  * 4. carried over a seat, the card marks each wish that seat meets, and
  *    the seats that meet every wish are lit;
@@ -62,11 +62,11 @@ const hold = () => page.evaluate(() => { const g = window.__cafe.guests; g.spawn
 const pacer = setInterval(() => hold().catch(() => {}), 150);
 await hold();
 
-// 2. How many wishes, early and late in the evening (new guests made directly, then cleared away).
+// 2. How many wishes, at level 1 and at a high level (new guests made directly, then cleared away).
 const counts = await page.evaluate(() => {
   const g = window.__cafe.guests;
-  const sample = (evening) => {
-    g.evening = evening;
+  const sample = (level) => {
+    g.level = level;
     const out = [];
     for (let i = 0; i < 30; i++) {
       const guest = g.spawn();
@@ -75,13 +75,13 @@ const counts = await page.evaluate(() => {
     g.clear();
     return out;
   };
-  return { early: sample(10), late: sample(400) };
+  return { early: sample(1), late: sample(10) };
 });
 const lateSet = new Set(counts.late);
 check('early guests have 1 wish; late ones a mix of 1, 2 and 3', counts.early.every((n) => n === 1) && counts.late.every((n) => n >= 1 && n <= 3) && lateSet.has(2) && lateSet.has(3), `early ${counts.early.join('')}, late ${counts.late.join('')}`);
 
-// 1. The line, late in the evening.
-await page.evaluate(() => { window.__cafe.game.clock = 400; window.__cafe.guests.clear(); });
+// 1. The line, at a high level (a mix of wishes).
+await page.evaluate(() => { window.__cafe.game.level = 10; window.__cafe.guests.level = 10; window.__cafe.guests.clear(); });
 await until(() => window.__cafe.guests.line.length >= 4 && window.__cafe.guests.line.slice(0, 4).every((g) => g.state === 'queued' && !g.walk));
 await page.evaluate(() => (window.__cafe.guests.arrivals = false));
 await frames(4);
@@ -181,13 +181,9 @@ check('judged once: the loner keeps its result when someone joins its table; the
 await page.evaluate(() => (window.__cafe.guests.mealSeconds = 3));
 await until(() => window.__cafe.score.log.filter((e) => e.kind === 'paid').length >= 3, null, 400000);
 const log = await page.evaluate(() => window.__cafe.score.log.filter((e) => e.kind === 'paid'));
-const TIERS = { quick: 12, fair: 8, late: 5 };
-const right = log.every((e) => {
-  const { met, of } = e.wishes;
-  const bonus = of >= 2 && met === of ? 4 : 0;
-  return e.coins === TIERS[e.tier] + met * 4 + bonus;
-});
-check('each guest pays its tier, 4 a wish met, 4 more for all of two or more', log.length >= 3 && right, JSON.stringify(log.map((e) => ({ tier: e.tier, wishes: e.wishes, coins: e.coins }))));
+const pay = (share, met, of) => Math.round(1 + 9 * (0.4 * (1 - Math.min(1, Math.max(0, share))) + 0.6 * (of > 0 ? met / of : 1)));
+const right = log.every((e) => e.coins === pay(e.share, e.wishes.met, e.wishes.of) && e.coins >= 1 && e.coins <= 10);
+check('each guest pays once, 1 to 10 coins: by how quickly it was seated and the share of its wishes met', log.length >= 3 && right, JSON.stringify(log.map((e) => ({ share: +e.share.toFixed(2), wishes: e.wishes, coins: e.coins }))));
 
 clearInterval(pacer);
 const errors = await h.finish();

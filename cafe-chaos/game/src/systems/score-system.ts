@@ -2,15 +2,13 @@
  * ScoreSystem: how the evening is going, kept and shown.
  *
  * - The café's happiness (0 to 100, starting full). A guest who ate and
- *   left lifts it, by more the sooner it was seated; a guest who gave up
- *   in the line, or stormed out of its seat before its food came, knocks
- *   it down. At 0 the café closes early (GameSystem ends the shift).
- * - Money. A guest who ate pays as it gets down from its chair: more if
- *   it was taken from the gate and seated in the first quarter of its
- *   patience, less if it was seated at the last moment
- *   (game/rules.ts PAY_TIERS). One who leaves unhappy costs no coins,
- *   only happiness.
- *   The shift's takings go into the bank, which the shop spends.
+ *   left lifts it, by more the more it paid; a guest who gave up in the
+ *   line, or stormed out of its seat before its food came, knocks it
+ *   down. At 0 the level starts again (GameSystem).
+ * - Money. A guest who ate pays once, as it gets down from its chair: 1
+ *   to 10 coins, by how quickly it was seated and how many of its wishes
+ *   its seat met (game/rules.ts PAY). One who leaves unhappy costs no
+ *   coins, only happiness. Coins go into the bank, which the shop spends.
  * - Thumbs. Each happy guest leaves a thumbs up over its head with its
  *   coins; each unhappy one a thumbs down. Both are counted.
  *
@@ -21,7 +19,7 @@
  */
 
 import { createSystem } from '@iwsdk/core';
-import { HAPPINESS, LOSSES, PAY_TIERS, WISH } from '../game/rules.js';
+import { HAPPINESS, LOSSES, PAY, payFor } from '../game/rules.js';
 import { GuestSystem, type Outcome } from './guest-system.js';
 
 export class ScoreSystem extends createSystem({}) {
@@ -36,12 +34,14 @@ export class ScoreSystem extends createSystem({}) {
   servedGuests = 0;
   /** Wishes met by guests who paid, this run. */
   wishesGranted = 0;
-  /** Seconds the café has been open this run (GameSystem keeps it); shown on the board. */
-  clock = 0;
+  /** The level, and guests served in it of the number that passes it (GameSystem keeps them); shown on the board. */
+  level = 1;
+  levelServed = 0;
+  levelGoal = 1;
   /** True during a shift: outcomes count. */
   running = false;
   /** Every scored outcome this shift, in order (for the checks). */
-  readonly log: { kind: Outcome['kind']; share: number; coins: number; happiness: number; tier?: string; wishes?: Outcome['wishes'] }[] = [];
+  readonly log: { kind: Outcome['kind']; share: number; coins: number; happiness: number; wishes?: Outcome['wishes'] }[] = [];
   private guests!: GuestSystem;
 
   init(): void {
@@ -61,6 +61,16 @@ export class ScoreSystem extends createSystem({}) {
     this.running = true;
   }
 
+  /** Coins given outright (a level's bonus): into the bank and the takings. */
+  award(coins: number): void {
+    this.earn(coins);
+  }
+
+  /** The café's happiness back to full (a new level, or a level begun again). */
+  refill(): void {
+    this.happiness = HAPPINESS.start;
+  }
+
   /** Spend from the bank; false (and nothing spent) if there is not enough. */
   spend(price: number): boolean {
     if (this.bank < price) return false;
@@ -73,16 +83,10 @@ export class ScoreSystem extends createSystem({}) {
     if (!this.running) return;
     const popups = this.guests.popups;
     if (outcome.kind === 'paid') {
-      // By how quickly it was seated. Each wish met adds to the tip and the café's happiness, each one missed
-      // takes a little happiness, all met (of two or more) adds a bonus; none met pays one step down.
-      let step = PAY_TIERS.findIndex((t) => outcome.share <= t.upTo);
-      if (step < 0) step = PAY_TIERS.length - 1;
+      // One payment, by how quickly it was seated and the share of its wishes its seat met (game/rules.ts PAY).
       const { met, of } = outcome.wishes;
-      if (of > 0 && met === 0) step = Math.min(PAY_TIERS.length - 1, step + 1);
-      const tier = PAY_TIERS[step];
-      const all = of >= 2 && met === of;
-      const coins = tier.coins + met * WISH.coins + (all ? WISH.allBonus : 0);
-      const happiness = tier.happiness + met * WISH.happiness - (of - met) * WISH.miss;
+      const coins = payFor(outcome.share, met, of);
+      const happiness = Math.round(coins * PAY.happiness);
       this.earn(coins);
       this.cheer(happiness);
       this.up++;
@@ -90,7 +94,7 @@ export class ScoreSystem extends createSystem({}) {
       this.wishesGranted += met;
       popups.show('up', outcome.at);
       popups.coins(coins, outcome.at.clone().setY(outcome.at.y + 0.018));
-      this.log.push({ kind: outcome.kind, share: outcome.share, coins, happiness, tier: tier.name, wishes: outcome.wishes });
+      this.log.push({ kind: outcome.kind, share: outcome.share, coins, happiness, wishes: outcome.wishes });
       return;
     }
     // An unhappy guest costs happiness only; the bank and the night's takings are never touched.

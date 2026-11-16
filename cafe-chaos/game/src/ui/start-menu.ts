@@ -76,17 +76,30 @@ export interface StartState {
   kind: 'first' | 'returning';
   coins: number;
   staff: number;
-  /** Best time as m:ss, or null. */
-  best: string | null;
+  /** The level the save is on. */
+  level: number;
 }
 export interface SettingsState {
   music: number;
   sounds: number;
 }
-/** The pause card: the time open, and the best time (m:ss, or null). */
+/** The pause card: the level, and guests served in it of the number that passes it. */
 export interface PauseState {
-  time: string;
-  best: string | null;
+  level: number;
+  served: number;
+  goal: number;
+}
+/** The level card: the level just reached, the coins it gives, and the guests to serve to pass it. */
+export interface LevelState {
+  level: number;
+  bonus: number;
+  goal: number;
+}
+/** The card when the café's happiness ran out: the level, and how far it got. */
+export interface FailState {
+  level: number;
+  served: number;
+  goal: number;
 }
 /** The shop: the bank, and each barista in hiring order. */
 export interface ShopState {
@@ -101,7 +114,7 @@ export interface ShopState {
 export interface WarnState {
   coins: number;
   staff: number;
-  best: string | null;
+  level: number;
 }
 
 let cover: HTMLImageElement | null = null;
@@ -144,12 +157,12 @@ export class StartMenu {
   /** What the sheet shows ('none' when it is closed). */
   sheetKind: 'none' | 'settings' | 'warn' | 'quit' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card or the shop. */
-  cardKind: 'start' | 'pause' | 'shop' = 'start';
+  cardKind: 'start' | 'pause' | 'shop' | 'level' | 'failed' = 'start';
   private seed = 1;
   private clock = 0;
-  private start: StartState = { kind: 'first', coins: 0, staff: 1, best: null };
+  private start: StartState = { kind: 'first', coins: 0, staff: 1, level: 1 };
   private settings: SettingsState = { music: 2, sounds: 3 };
-  private warn: WarnState = { coins: 0, staff: 1, best: null };
+  private warn: WarnState = { coins: 0, staff: 1, level: 1 };
   private readonly k: number;
   /** How to play's scale (metres per design unit). */
   private readonly kh: number;
@@ -267,6 +280,22 @@ export class StartMenu {
     this.cardKind = 'pause';
     this.card.resize(START_SIZE.width, START_SIZE.height);
     this.layoutPause(state);
+    this.card.show(true);
+  }
+
+  /** A level reached: the banner, the coins it gives and what comes next; CONTINUE carries on. */
+  showLevel(state: LevelState): void {
+    this.cardKind = 'level';
+    this.card.resize(START_SIZE.width, START_SIZE.height);
+    this.layoutLevel(state);
+    this.card.show(true);
+  }
+
+  /** The café's happiness ran out: the level starts again (TRY AGAIN), or back to the menu. */
+  showFailed(state: FailState): void {
+    this.cardKind = 'failed';
+    this.card.resize(START_SIZE.width, START_SIZE.height);
+    this.layoutFailed(state);
     this.card.show(true);
   }
 
@@ -405,7 +434,7 @@ export class StartMenu {
     if (returning) {
       const newY = bottom - TOUCH_GAP - 96;
       const contY = newY - TOUCH_GAP - 140;
-      buttons.push(this.button(this.card, 'continue', cx, contY, cw, 140, 'primary', 'CONTINUE', `${s.coins.toLocaleString('en')} coins · ${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`));
+      buttons.push(this.button(this.card, 'continue', cx, contY, cw, 140, 'primary', 'CONTINUE', `Level ${s.level} · ${s.coins.toLocaleString('en')} coins`));
       buttons.push(this.button(this.card, 'new', cx, newY, cw, 96, 'secondary', 'NEW GAME'));
     } else {
       const h = 200;
@@ -445,18 +474,19 @@ export class StartMenu {
       rc.rectangle(ax, ay, aw, ah, this.o({ strokeWidth: 3, seed: this.seed + 3 }));
       text(ctx, 'CAFÉ', ax + aw / 2, ay + ah - 150, 74, '#f2ebdd');
       text(ctx, 'CHAOS', ax + aw / 2, ay + ah - 72, 74, '#f2ebdd');
-      // Your best time: a lantern-coloured badge, only once there is one.
-      if (returning && s.best) {
+      // The level the save is on: a lantern-coloured badge.
+      if (returning) {
+        const word = `${s.level}`;
         ctx.font = font(30);
-        const lw = ctx.measureText('BEST').width;
+        const lw = ctx.measureText('LEVEL').width;
         ctx.font = font(44);
-        const tw = ctx.measureText(s.best).width;
+        const tw = ctx.measureText(word).width;
         const bx = ax + 18;
         const by = ay + 18;
         const bw = 24 + lw + 18 + tw + 24;
         rc.rectangle(bx, by, bw, 84, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, seed: this.seed + 50 }));
-        text(ctx, 'BEST', bx + 24, by + 44, 30, SKETCH.ink, 'left');
-        text(ctx, s.best, bx + bw - 22, by + 44, 44, SKETCH.ink, 'right');
+        text(ctx, 'LEVEL', bx + 24, by + 44, 30, SKETCH.ink, 'left');
+        text(ctx, word, bx + bw - 22, by + 44, 44, SKETCH.ink, 'right');
       }
       ctx.restore();
     }, buttons);
@@ -606,7 +636,7 @@ export class StartMenu {
   private layoutWarn(): void {
     const s = this.warn;
     const H = Math.round(this.sheet.height / this.k);
-    const lost = [`${s.coins.toLocaleString('en')} coins`, `${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`].concat(s.best ? [`best time (${s.best})`] : []);
+    const lost = [`${s.coins.toLocaleString('en')} coins`, `${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`].concat(s.level > 1 ? [`level ${s.level}`] : []);
     const sentence = `This deletes your ${lost.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
     const buttons: Button[] = [
       this.button(this.sheet, 'fresh', PAD, 300, W - PAD * 2, 120, 'danger', 'DELETE AND START'),
@@ -687,8 +717,8 @@ export class StartMenu {
 
   /**
    * The pause card, wide like the start card: Paused, the time open and the
-   * best on the left; RESUME, How to play and Settings, and END THE
-   * EVENING on the right.
+   * guests served on the left; RESUME, How to play and Settings, and MAIN
+   * MENU (the level is saved as it stands) on the right.
    */
   private layoutPause(s: PauseState): void {
     const SW = Math.round(this.card.width / this.k);
@@ -705,7 +735,7 @@ export class StartMenu {
       this.button(this.card, 'resume', cx, yResume, cw, 150, 'primary', 'RESUME'),
       this.button(this.card, 'how', cx, yRow, half, 96, 'secondary', '? How to play', undefined, false, 30),
       this.button(this.card, 'settings', cx + half + TOUCH_GAP, yRow, half, 96, 'secondary', '⚙ Settings', undefined, false, 30),
-      this.button(this.card, 'end', cx, yEnd, cw, 96, 'danger', 'END THE EVENING'),
+      this.button(this.card, 'end', cx, yEnd, cw, 96, 'secondary', 'MAIN MENU'),
     ];
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
@@ -714,8 +744,78 @@ export class StartMenu {
       this.paper(ctx, pen(this.card.canvas), 0, H, SW);
       const mid = lx + lw / 2;
       text(ctx, 'Paused', mid, H / 2 - 90, 68, SKETCH.ink);
-      text(ctx, s.time, mid, H / 2 + 6, 64, SKETCH.ink);
-      if (s.best) text(ctx, `BEST ${s.best}`, mid, H / 2 + 88, 34, SKETCH.soft, 'center', false);
+      text(ctx, `Level ${s.level}`, mid, H / 2 + 6, 64, SKETCH.ink);
+      text(ctx, `${s.served} of ${s.goal} guests served`, mid, H / 2 + 88, 34, SKETCH.soft, 'center', false);
+      ctx.restore();
+    }, buttons);
+  }
+
+  /**
+   * The level card, wide like the start card: on the left a lantern-gold
+   * seal with the level's number; on the right what it brings (the coins,
+   * the guests to serve next) and CONTINUE. Nothing on it moves or flashes;
+   * the confetti is thrown in the room (StripSystem).
+   */
+  private layoutLevel(s: LevelState): void {
+    const SW = Math.round(this.card.width / this.k);
+    const H = Math.round(this.card.height / this.k);
+    const lx = PAD;
+    const lw = 360;
+    const cx = lx + lw + 30;
+    const cw = SW - PAD - cx;
+    const buttons: Button[] = [this.button(this.card, 'level-continue', cx, H - PAD - 150, cw, 150, 'primary', 'CONTINUE')];
+    this.card.set((ctx) => {
+      ctx.clearRect(0, 0, this.card.width, this.card.height);
+      ctx.save();
+      ctx.scale(this.k, this.k);
+      const rc = pen(this.card.canvas);
+      this.paper(ctx, rc, 0, H, SW);
+      const mid = lx + lw / 2;
+      // The seal: a gold disc, a timber ring, the number.
+      rc.circle(mid, H / 2 + 20, 300, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, strokeWidth: 5, seed: this.seed + 70 }));
+      rc.circle(mid, H / 2 + 20, 250, this.o({ stroke: SKETCH.timber, strokeWidth: 2.5, seed: this.seed + 71 }));
+      text(ctx, 'LEVEL', mid, H / 2 - 50, 44, SKETCH.ink);
+      text(ctx, `${s.level}`, mid, H / 2 + 50, 130, SKETCH.ink);
+      const tx = cx + cw / 2;
+      text(ctx, `Level ${s.level - 1} done!`, tx, PAD + 70, 56, SKETCH.ink);
+      const coinsY = PAD + 170;
+      ctx.font = font(44);
+      const word = `+${s.bonus} coins`;
+      const ww = ctx.measureText(word).width;
+      rc.circle(tx - ww / 2 - 34, coinsY, 48, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, seed: this.seed + 72 }));
+      text(ctx, word, tx + 20, coinsY, 44, SKETCH.ink);
+      text(ctx, `Next: serve ${s.goal} guests`, tx, coinsY + 90, 34, SKETCH.soft, 'center', false);
+      ctx.restore();
+    }, buttons);
+  }
+
+  /**
+   * The café's happiness ran out: the level starts again. The coins and
+   * the staff are kept, and the card says so; TRY AGAIN is the main
+   * button.
+   */
+  private layoutFailed(s: FailState): void {
+    const SW = Math.round(this.card.width / this.k);
+    const H = Math.round(this.card.height / this.k);
+    const lx = PAD;
+    const lw = 360;
+    const cx = lx + lw + 30;
+    const cw = SW - PAD - cx;
+    const yMenu = H - PAD - 96;
+    const buttons: Button[] = [
+      this.button(this.card, 'again', cx, yMenu - TOUCH_GAP - 150, cw, 150, 'primary', 'TRY AGAIN'),
+      this.button(this.card, 'menu', cx, yMenu, cw, 96, 'secondary', 'MAIN MENU'),
+    ];
+    this.card.set((ctx) => {
+      ctx.clearRect(0, 0, this.card.width, this.card.height);
+      ctx.save();
+      ctx.scale(this.k, this.k);
+      this.paper(ctx, pen(this.card.canvas), 0, H, SW);
+      const mid = lx + lw / 2;
+      text(ctx, 'A rough evening', mid, H / 2 - 110, 46, SKETCH.ink);
+      text(ctx, `Level ${s.level}`, mid, H / 2 - 20, 64, SKETCH.ink);
+      text(ctx, `${s.served} of ${s.goal} guests served`, mid, H / 2 + 60, 34, SKETCH.soft, 'center', false);
+      text(ctx, 'Your coins and staff are kept.', mid, H / 2 + 120, 30, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
   }

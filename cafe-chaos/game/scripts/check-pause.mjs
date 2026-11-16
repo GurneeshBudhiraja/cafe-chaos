@@ -88,7 +88,7 @@ await h.screenshot('artifacts/pause-shop.png');
 await page.evaluate(() => window.__cafe.game.click('shop-close'));
 const backTo = await page.evaluate(() => ({ kind: window.__cafe.game.menu.cardKind, phase: window.__cafe.game.phase }));
 check('the pause card offers Resume, How to play, Settings and End; Shop opens the shop, HIRE hires and shows the next price, CLOSE goes back to the pause card',
-  ids.join(',') === 'resume,how,settings,end' && shopOpen.kind === 'shop' && shopOpen.phase === 'paused' && after.staff === 2 && after.phase === 'paused' && /120/.test(after.next ?? '') && backTo.kind === 'pause' && backTo.phase === 'paused',
+  ids.join(',') === 'resume,how,settings,end' && shopOpen.kind === 'shop' && shopOpen.phase === 'paused' && after.staff === 2 && after.phase === 'paused' && /150/.test(after.next ?? '') && backTo.kind === 'pause' && backTo.phase === 'paused',
   `${ids.join(',')} | shop ${JSON.stringify(shopOpen)} -> ${JSON.stringify(after)} -> ${JSON.stringify(backTo)}`);
 await h.screenshot('artifacts/pause-card.png');
 // Then all the way through.
