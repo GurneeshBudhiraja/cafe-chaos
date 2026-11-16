@@ -80,12 +80,25 @@ const RESUME_COUNT = 3;
 /** The café's size in Settings (percent of what fits the table): the range and the step. */
 const SIZE = { min: 60, max: 140, step: 10 };
 /**
- * The start card: this far from the eyes along the gaze (metres) and this
- * much below the line of sight, so it is centred in view and pressed
- * without reaching (Meta's direct touch range is about 42 to 46 cm).
- * It glides back in front when the player turns more than `follow` degrees away.
+ * The start card: `distance` from the eyes (metres) and `below` degrees
+ * under the level line of sight, centred there and turned to face the eyes.
+ *
+ * - Distance: 45 cm, at the far end of Meta's range for direct touch (42 to
+ *   46 cm), so it is within easy reach without being up against the face,
+ *   and well short of the 0.5 to 0.8 m Meta says to avoid (too far to
+ *   touch, too near for a ray).
+ * - Height: 25 degrees down. The eyes rest 10 to 20 degrees below the
+ *   horizon (Microsoft), the line of sight sits 10 to 15 degrees down
+ *   (Magic Leap), and content belongs 0 to 35 degrees below (Microsoft):
+ *   25 puts the middle of the card just under the resting gaze, its top
+ *   edge a little below eye level, and its buttons (in its lower half,
+ *   as Meta asks) low enough to press with the arm relaxed.
+ * It glides back in front when the player turns more than `follow` degrees away,
+ * or when the head has moved more than `shift` metres from where it was when
+ * the card was put there and stayed moved for `dwell` seconds (a lean in, or
+ * sitting back): the card goes with the player, not left behind.
  */
-const MENU_SPOT = { ahead: 0.36, drop: 0.24, follow: 35, glide: 4 };
+const MENU_SPOT = { distance: 0.45, below: 25, follow: 35, glide: 4, shift: 0.12, dwell: 0.6 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
 
@@ -161,6 +174,18 @@ export class GameSystem extends createSystem({}) {
   private readonly headQ = new Quaternion();
   private menuPlaced = false;
   private menuFollowing = false;
+  /** Where the head was when the card was last put in front of it, and how long it has been well away from there (seconds). */
+  private readonly menuHead = new Vector3();
+  private menuAway = 0;
+  /**
+   * Seconds left in which the card is put afresh in front of the head every
+   * frame: the first moments of the headset view, while the tracking
+   * settles. The card goes up before the headset view starts, from the
+   * page's own (made-up) head, so it is put again from the real head.
+   */
+  private menuSettle = 0;
+  /** How long the card is put afresh after the headset view starts (seconds). */
+  private static readonly MENU_SETTLE_S = 0.6;
   /** Times the wrist menu has been opened (WristMenuSystem counts them; the first run waits for one). */
   wristOpens = 0;
   /** Where How to play was opened from: back there when it is closed. */
@@ -253,6 +278,9 @@ export class GameSystem extends createSystem({}) {
     };
     xr.addEventListener('sessionstart', () => {
       xr.getSession()?.addEventListener('visibilitychange', onVisibility);
+      // The card was put from the page's head: put it again from the real one once tracking settles.
+      this.menuSettle = GameSystem.MENU_SETTLE_S;
+      this.menuPlaced = false;
       // Back in the headset mid-run: the pause card is there again.
       if (this.phase === 'paused' && this.resuming <= 0) this.showPauseCard();
     });
@@ -348,9 +376,9 @@ export class GameSystem extends createSystem({}) {
 
   /**
    * Where the start card stands: straight ahead (by the way the head points,
-   * not by how it tilts), MENU_SPOT.ahead out and MENU_SPOT.drop below the
-   * eyes, so it lies low in front like a tablet held on a desk and the eyes
-   * look down at it (about 34 degrees), tilted back to face them. It faces the player
+   * not by how it tilts), MENU_SPOT.distance from the eyes and
+   * MENU_SPOT.below degrees under the level line of sight, tilted back to
+   * face them. It faces the player
    * once, when it is put there, and then stays still: a nod or a lean while a
    * finger presses does not move or turn it. Only if the player turns well
    * away (over MENU_SPOT.follow degrees) with no fingertip near does it glide
@@ -377,12 +405,20 @@ export class GameSystem extends createSystem({}) {
       this.forward.set(0, 0, -1).applyQuaternion(this.headQ).setY(0);
       if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
       this.forward.normalize();
-      this.wanted.copy(this.head).addScaledVector(this.forward, MENU_SPOT.ahead);
-      this.wanted.y -= MENU_SPOT.drop;
+      const below = (MENU_SPOT.below * Math.PI) / 180;
+      this.wanted.copy(this.head).addScaledVector(this.forward, MENU_SPOT.distance * Math.cos(below));
+      this.wanted.y -= MENU_SPOT.distance * Math.sin(below);
+      // Outside the headset view, and in its first moments, the head is not yet the player's: keep putting it afresh.
+      if (!this.world.renderer.xr.isPresenting || this.menuSettle > 0) {
+        this.menuSettle = Math.max(0, this.menuSettle - delta);
+        this.menuPlaced = false;
+      }
       if (!this.menuPlaced) {
         this.menuSpot.copy(this.wanted);
         this.menuPlaced = true;
         this.menuFollowing = false;
+        this.menuHead.copy(this.head);
+        this.menuAway = 0;
         card.faceNow();
         card.turn = 0;
       } else {
@@ -392,11 +428,17 @@ export class GameSystem extends createSystem({}) {
         const tips = this.hold?.tip;
         const fingerNear = !!tips && HANDS.some((h) => tips[h].tracked && tips[h].point.distanceTo(this.menuSpot) < 0.15);
         if (off > MENU_SPOT.follow && !fingerNear) this.menuFollowing = true;
+        // The head moved and stayed moved (a lean, sitting back): the card goes with it.
+        const shifted = this.head.distanceTo(this.menuHead) > MENU_SPOT.shift;
+        this.menuAway = shifted && !fingerNear ? this.menuAway + delta : 0;
+        if (this.menuAway > MENU_SPOT.dwell) this.menuFollowing = true;
         if (this.menuFollowing) {
           card.turn = 3;
           this.menuSpot.lerp(this.wanted, 1 - Math.exp(-MENU_SPOT.glide * delta));
           if (this.menuSpot.distanceTo(this.wanted) < 0.01) {
             this.menuFollowing = false;
+            this.menuHead.copy(this.head);
+            this.menuAway = 0;
             card.turn = 0;
           }
         }
@@ -868,6 +910,20 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'keep':
         this.closeSheet();
+        break;
+      case 'quit':
+        // Asks first (KEEP PLAYING is the main button, so a stray press stays).
+        this.menu.card.dimmed = true;
+        this.menu.openQuit();
+        break;
+      case 'quit-no':
+        this.closeSheet();
+        break;
+      case 'quit-yes':
+        // Save, then leave the headset view: the page before the headset is back.
+        this.keep();
+        this.closeSheet();
+        void this.world.renderer.xr.getSession()?.end();
         break;
       case 'fresh':
         this.startFresh();
