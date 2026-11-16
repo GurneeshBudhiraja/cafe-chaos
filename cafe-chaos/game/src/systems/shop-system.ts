@@ -60,6 +60,8 @@ export class ShopSystem extends createSystem({}) {
     this.baristas.staffSize = this.staff;
     this.janitor = janitor;
     this.baristas.janitorHired = janitor;
+    // Staff no longer on the books (a fresh start) leave at once.
+    this.baristas.dismiss();
     this.tables = [...new Set([...START_TABLES, ...tables.filter((t) => Number.isInteger(t) && t >= 0 && t < 32)])];
   }
 

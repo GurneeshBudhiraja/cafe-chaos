@@ -1369,6 +1369,7 @@ export class GameSystem extends createSystem({}) {
       case 'buy-no':
         this.closeBuy(true);
         break;
+      case 'hire-janitor-later':
       case 'hire-later':
         // Not yet: the bank cannot pay, or another comes first. The shop says no.
         this.shop.refused++;

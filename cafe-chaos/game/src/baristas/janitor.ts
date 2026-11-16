@@ -7,12 +7,12 @@
  * a wipe; this class then plays them.)
  */
 
-import { AssetManager, type Object3D } from '@iwsdk/core';
+import { AssetManager, Group, type Object3D } from '@iwsdk/core';
 import { copyModel } from '../systems/cafe-system.js';
 import type { BaristaClip } from './barista.js';
 
 /** How the made motion looks: the walk's bob (metres, times a second) and the wipe's sway (radians, times a second). */
-const MOTION = { bob: 0.0025, bobHz: 3.2, sway: 0.16, swayHz: 2.4 };
+const MOTION = { bob: 0.0025, bobHz: 3.2, squash: 0.06, lean: 0.12, sway: 0.16, swayHz: 2.4, ease: 8 };
 
 /** True once the janitor's model has loaded. */
 export function janitorLoaded(): boolean {
@@ -38,8 +38,15 @@ export class Janitor {
       mesh.castShadow = false;
       mesh.receiveShadow = false;
     });
-    this.body = this.root.children[0] ?? this.root;
+    // All of it moves together: its parts go under one group the motion is made on.
+    this.body = new Group();
+    this.body.name = 'JanitorBody';
+    for (const child of [...this.root.children]) this.body.add(child);
+    this.root.add(this.body);
   }
+  /** The sway and lean as shown (eased toward what the motion asks). */
+  private sway = 0;
+  private lean = 0;
 
   /** What it is doing: 'Walk' bobs, 'Work' (wiping) sways, the rest stand still. */
   play(clip: BaristaClip, _once = false): void {
@@ -62,7 +69,17 @@ export class Janitor {
 
   update(delta: number): void {
     this.time += delta;
-    if (this.clip === 'Walk' || this.clip === 'Carry') this.body.position.y = Math.abs(Math.sin(this.time * MOTION.bobHz * Math.PI * 2)) * MOTION.bob;
-    else if (this.clip === 'Work' || this.clip === 'Serve') this.body.rotation.z = Math.sin(this.time * MOTION.swayHz * Math.PI * 2) * MOTION.sway;
+    const walking = this.clip === 'Walk' || this.clip === 'Carry';
+    const wiping = this.clip === 'Work' || this.clip === 'Serve';
+    // Walking: a bob with a little squash as each foot lands, leaning into the walk.
+    const step = Math.abs(Math.sin(this.time * MOTION.bobHz * Math.PI * 2));
+    this.body.position.y = walking ? step * MOTION.bob : 0;
+    const squash = walking ? (1 - step) * MOTION.squash : 0;
+    this.body.scale.set(1 + squash * 0.5, 1 - squash, 1 + squash * 0.5);
+    // Wiping: an eased side-to-side sway.
+    const k = 1 - Math.exp(-MOTION.ease * delta);
+    this.sway += ((wiping ? Math.sin(this.time * MOTION.swayHz * Math.PI * 2) * MOTION.sway : 0) - this.sway) * k;
+    this.lean += ((walking ? MOTION.lean : 0) - this.lean) * k;
+    this.body.rotation.set(this.lean, 0, this.sway);
   }
 }

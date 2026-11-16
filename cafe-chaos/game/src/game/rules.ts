@@ -226,7 +226,7 @@ export function tablePrice(bought: number): number {
  * (estimate: 3 s, a wipe's worth; with one barista a round trip is 16 s
  * measured, so a stop to clean adds a fifth)
  */
-export const CLEAN = { seconds: 3, near: 0.3, vanish: 0.4, bigMess: 1.3, smallMess: 0.8, home: { x: 0.17, z: -0.2, reach: 0.1 } };
+export const CLEAN = { seconds: 3, near: 0.3, vanish: 0.4, bigMess: 1.3, smallMess: 0.6, home: { x: 0.17, z: -0.2, reach: 0.1 } };
 export const JANITOR_PRICE = 120;
 
 /**

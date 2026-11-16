@@ -25,6 +25,7 @@ import type { Theme } from '../audio/theme.js';
 import { createSystem, Vector3, type Object3D } from '@iwsdk/core';
 import { bubble, clink, closing, coins, cricket, espresso, furin, grumble, pop, refuse, roomTone, seated, tick, trayDown, trickle, unlock, voice, newBest } from '../audio/voices.js';
 import { BaristaSystem } from './barista-system.js';
+import { MessSystem } from './mess-system.js';
 import { CafeSystem } from './cafe-system.js';
 import { GameSystem } from './game-system.js';
 import { StripSystem } from './strip-system.js';
@@ -62,9 +63,10 @@ export class SoundSystem extends createSystem({}) {
   private cafe!: CafeSystem;
   private guests: GuestSystem | null = null;
   private baristas: BaristaSystem | null = null;
+  private mess: MessSystem | null = null;
   private shop: ShopSystem | null = null;
   private readonly next: Record<keyof typeof EVERY, number> = { bubble: 0, espresso: 8, clink: 3, trickle: 0, cricket: 2 };
-  private seen = { arrived: 0, pickedUp: 0, seated: 0, gaveUp: 0, served: 0, purchases: 0, refused: 0, scored: 0, clicks: 0, closed: false, placements: -1, records: 0 };
+  private seen = { dirtied: 0, arrived: 0, pickedUp: 0, seated: 0, gaveUp: 0, served: 0, purchases: 0, refused: 0, scored: 0, clicks: 0, closed: false, placements: -1, records: 0 };
   private score: ScoreSystem | null = null;
   private game: GameSystem | null = null;
   private strip: StripSystem | null = null;
@@ -76,6 +78,7 @@ export class SoundSystem extends createSystem({}) {
     this.cafe = this.world.getSystem(CafeSystem)!;
     this.guests = this.world.getSystem(GuestSystem) ?? null;
     this.baristas = this.world.getSystem(BaristaSystem) ?? null;
+    this.mess = this.world.getSystem(MessSystem) ?? null;
     this.shop = this.world.getSystem(ShopSystem) ?? null;
     this.score = this.world.getSystem(ScoreSystem) ?? null;
     this.game = this.world.getSystem(GameSystem) ?? null;
@@ -239,6 +242,10 @@ export class SoundSystem extends createSystem({}) {
       seen.seated = guests.seated;
       seen.gaveUp = guests.gaveUp;
     }
+    // A table left dirty: a soft clink of crockery from it.
+    const mess = this.mess;
+    if (mess && mess.dirtied > seen.dirtied) this.emit('clink', PLACES.room, SOUND.bar * 0.6, 0.4, clink);
+    if (mess) seen.dirtied = mess.dirtied;
     const baristas = this.baristas;
     if (baristas && baristas.servedCount > seen.served) {
       const id = baristas.servedLog[baristas.servedLog.length - 1];

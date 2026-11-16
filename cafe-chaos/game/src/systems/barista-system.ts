@@ -225,13 +225,18 @@ export class BaristaSystem extends createSystem({}) {
       this.takeOrders();
       this.sinceplan += delta;
       const waiting = this.orders.some((order) => !order.served && !order.server);
-      const chores = !!this.mess && this.mess.dirtyTables().length > 0 && this.staff.some((m) => m.state === 'working' && m.chore < 0);
+      const chores = !!this.mess && this.mess.dirtyCount > this.mess.coming.size && this.staff.some((m) => m.state === 'working' && m.chore < 0);
       if (this.serving && (this.dirty || ((waiting || chores) && this.sinceplan >= REPLAN_SECONDS))) this.plan();
     }
     for (const member of this.staff) {
       this.act(member, delta);
       this.move(member, delta);
       member.barista.update(delta);
+    }
+    // Which dirty tables someone is seeing to (their signs show a broom).
+    if (this.mess) {
+      this.mess.coming.clear();
+      for (const member of this.staff) if (member.chore >= 0) this.mess.coming.add(member.chore);
     }
     this.keepTrays(delta);
   }
@@ -273,6 +278,24 @@ export class BaristaSystem extends createSystem({}) {
     return this.staff.find((m) => m.role === 'janitor') ?? null;
   }
 
+  /**
+   * Let go of staff no longer on the books (DELETE AND START): the janitor
+   * when it is not hired, and baristas past `staffSize`. Their orders and
+   * chores go back to the others.
+   */
+  dismiss(): void {
+    const baristas = this.baristas;
+    for (let i = this.staff.length - 1; i >= 0; i--) {
+      const member = this.staff[i];
+      const extra = member.role === 'janitor' ? !this.janitorHired : baristas.indexOf(member) >= this.staffSize;
+      if (!extra) continue;
+      if (member.order) member.order.server = null;
+      member.barista.root.removeFromParent();
+      this.staff.splice(i, 1);
+    }
+    this.dirty = true;
+  }
+
   /** Bring the janitor on, by the counter's end, once it is hired and its model has loaded. */
   private hireJanitor(): void {
     if (!this.janitorHired || this.janitor || !janitorLoaded()) return;
@@ -287,6 +310,7 @@ export class BaristaSystem extends createSystem({}) {
   }
 
   private reset(): void {
+    this.unreachable.clear();
     for (const member of this.staff) {
       member.barista.hold(null);
       member.barista.root.position.copy(member.home);
@@ -487,8 +511,10 @@ export class BaristaSystem extends createSystem({}) {
     const baristas = this.baristas;
     // 4. Orders waiting, nobody at the bar: break off cleaning, one cleaner per waiting order.
     if (waiting.length > 0 && !baristas.some(atBar)) {
+      // One cleaner per waiting order, less the ones already on their way back (they will take them).
+      const returning = baristas.filter((m) => m.state === 'back').length;
       const cleaners = baristas.filter(cleaningUp);
-      for (const member of cleaners.slice(0, waiting.length)) {
+      for (const member of cleaners.slice(0, Math.max(0, waiting.length - returning))) {
         member.chore = -1;
         this.cleaningsBrokenOff++;
         this.sendHome(member);
@@ -498,10 +524,10 @@ export class BaristaSystem extends createSystem({}) {
     const claimed = new Set(this.staff.filter((m) => m.chore >= 0).map((m) => m.chore));
     const open = mess.dirtyTables().filter((t) => !claimed.has(t));
     if (open.length === 0) return;
-    // The janitor: the longest dirty first.
+    // The janitor: the longest dirty first (`open` is in that order).
     const janitor = this.janitor;
     if (janitor && janitor.state === 'working') {
-      const table = this.nearestTable(janitor, open, Infinity) ?? open[0];
+      const table = open[0];
       if (this.goClean(janitor, table)) {
         claimed.add(table);
         open.splice(open.indexOf(table), 1);
@@ -518,16 +544,20 @@ export class BaristaSystem extends createSystem({}) {
     }
   }
 
-  /** Of `tables`, the one with the least walking from where `member` stands, within `within` metres of path; null if none. */
+  /**
+   * Of `tables`, the nearest to where `member` stands, within `within`
+   * metres: as the crow flies (cheap enough to ask every plan; the walk
+   * itself is found once, in `goClean`). Null if none.
+   */
   private nearestTable(member: Staff, tables: number[], within: number): number | null {
     let best: number | null = null;
     let bestLength = within;
+    const from = member.barista.root.position;
     for (const table of tables) {
+      if (this.unreachable.has(table)) continue;
       const point = this.servePoints.find((p) => p.table === table);
       if (!point) continue;
-      const way = this.cafeSystem.nav.findPath(member.barista.root.position, point.stand);
-      if (!way) continue;
-      const length = lengthOf(way);
+      const length = Math.hypot(point.stand.x - from.x, point.stand.z - from.z);
       if (length <= bestLength) {
         bestLength = length;
         best = table;
@@ -535,13 +565,18 @@ export class BaristaSystem extends createSystem({}) {
     }
     return best;
   }
+  /** Tables no way was found to (for this café as placed): not tried again. */
+  private readonly unreachable = new Set<number>();
 
   /** Send a member of staff to clean a table: empty-handed, to where a server stands at it. */
   private goClean(member: Staff, table: number): boolean {
     const point = this.servePoints.find((p) => p.table === table);
     if (!point) return false;
     const way = this.cafeSystem.nav.findPath(member.barista.root.position, point.stand);
-    if (!way) return false;
+    if (!way) {
+      this.unreachable.add(table);
+      return false;
+    }
     member.barista.hold(null);
     member.order = null;
     member.chore = table;

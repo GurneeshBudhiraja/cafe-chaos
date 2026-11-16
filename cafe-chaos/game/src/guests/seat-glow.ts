@@ -16,7 +16,8 @@
  * While a guest is carried, the seat it would land on says whether it
  * meets the guest's wishes: mint if it meets them all, red if it does
  * not (so a seat that would let the guest down is plain before letting
- * go). The other free seats keep their small dots: mint for the seats
+ * go); amber if its table is dirty (the guest will not sit there: let go,
+ * it goes back to the line). The dirty table's sign says so too. The other free seats keep their small dots: mint for the seats
  * that would meet every wish, violet for the rest.
  * One set per hand; the dots are one instanced mesh.
  */
@@ -33,7 +34,7 @@ export const GRANT = { color: 0x58e39a, dot: 1.7 };
 /** The landing seat when it would not meet every wish of the carried guest: a warm red. */
 export const DENY = { color: 0xff4a3a };
 /** A seat on a dirty table, while a guest is carried: an amber dot (not for sitting until it is cleaned). */
-export const DIRTY = { color: 0xf2a95b, dot: 1.25 };
+export const DIRTY = { color: 0xf2a95b, dot: 0.8 };
 /** The landing glow breathes between these, this many times a second: slow, like the lanterns. */
 const PULSE = { low: 0.72, high: 1, rate: 0.9 };
 /** How strong each layer is (0 to 1): enough to find at a glance, no more. */
@@ -162,7 +163,7 @@ export class SeatGlow {
       glow.group.visible = !!seat;
       if (!seat) continue;
       glow.group.position.set(seat.position.x, seat.position.y + GLOW.lift, seat.position.z);
-      const tint = granting ? (granting.has(seat) ? this.mint : this.red) : this.violet;
+      const tint = seat.dirty ? this.amber : granting ? (granting.has(seat) ? this.mint : this.red) : this.violet;
       glow.pad.color.copy(tint);
       glow.halo.color.copy(tint);
       glow.column.color.copy(tint);

@@ -135,23 +135,6 @@ export interface ShopState {
     id: string;
   }[];
 }
-/** The buy card: the table pointed at (its name, its picture and seats), what it costs, and the bank. */
-export interface BuyState {
-  name: string;
-  /** Its picture in the icon set (ICONS). */
-  icon: number;
-  seats: number;
-  price: number;
-  coins: number;
-}
-/** The card when the café's happiness ran out: the level, and how far it got. */
-export interface FailState {
-  level: number;
-  served: number;
-  goal: number;
-  /** Guests who left unhappy in the level: why the happiness ran out. */
-  left: number;
-}
 export interface WarnState {
   coins: number;
   staff: number;
@@ -975,7 +958,7 @@ export class StartMenu {
     let y = y0;
     s.rows.forEach((r) => {
       if (r.status !== 'full' && r.price !== undefined) {
-        buttons.push(this.priceButton(this.card, r.status === 'hire' ? r.id : 'hire-later', SW - PAD - bw, y + (ROW - bh) / 2, bw, bh, r.status === 'hire' ? 'primary' : 'off', 'HIRE', r.price));
+        buttons.push(this.priceButton(this.card, r.status === 'hire' ? r.id : `${r.id}-later`, SW - PAD - bw, y + (ROW - bh) / 2, bw, bh, r.status === 'hire' ? 'primary' : 'off', 'HIRE', r.price));
       }
       y += ROW + ROW_GAP;
     });
@@ -1010,9 +993,9 @@ export class StartMenu {
         // How many work: a pip each, filled for the ones hired.
         if (r.most > 1) {
           for (let k = 0; k < r.most; k++) rc.circle(tx + 12 + k * 34, py + 66, 22, this.o({ seed: this.seed + 200 + i * 10 + k, strokeWidth: 2.5, fill: k < r.working ? SKETCH.moss : SKETCH.paper, fillStyle: 'solid' }));
-          text(ctx, `${r.working} of ${r.most} working`, tx + r.most * 34 + 6, py + 67, 26, SKETCH.soft, 'left', false);
+          text(ctx, `${r.working} of ${r.most} hired`, tx + r.most * 34 + 6, py + 67, 26, SKETCH.soft, 'left', false);
         } else if (r.working > 0) text(ctx, 'Working for you', tx, py + 67, 26, SKETCH.moss, 'left', false);
-        if (r.status === 'full') text(ctx, r.most > 1 ? 'All working' : 'Working', SW - PAD - 14, py + 2, 34, SKETCH.moss, 'right');
+        if (r.status === 'full') text(ctx, r.most > 1 ? `All ${r.most} hired` : 'Hired', SW - PAD - 14, py + 2, 34, SKETCH.moss, 'right');
         ry += ROW + ROW_GAP;
       });
       ctx.restore();

@@ -65,7 +65,8 @@ export function seatUnder(seats: Seat[], point: Vector3, reach: number, own: Sea
   let best: Seat | null = null;
   let bestDistance = reach;
   for (const seat of seats) {
-    if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked || seat.dirty) continue;
+    // A dirty seat can be aimed at (it glows amber and refuses the guest), so the player sees why it will not sit there.
+    if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked) continue;
     const up = point.y - seat.position.y;
     if (up < -0.03 || up > 0.2) continue;
     const across = Math.hypot(point.x - seat.position.x, point.z - seat.position.z);

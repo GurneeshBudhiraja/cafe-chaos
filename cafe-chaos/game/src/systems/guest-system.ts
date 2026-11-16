@@ -410,7 +410,7 @@ export class GuestSystem extends createSystem({}) {
         at = this.cardAt.copy(guest.actor.root.position);
         at.y += guest.actor.bubbleAnchor.position.y;
       }
-      const preview = carried && carried.target ? this.grantsEach(carried, carried.target) : null;
+      const preview = carried && carried.target && !carried.target.dirty ? this.grantsEach(carried, carried.target) : null;
       this.cards.update(
         i,
         guest ? { id: guest.id, name: guest.name, wishes: guest.wishes, sings: guest.sings, hurried: guest.hurried, friend: this.guests.find((g) => g.id === guest.friend)?.name ?? null, left: guest.patience / guest.patienceFull, seconds: guest.patience, preview } : null,
@@ -452,6 +452,9 @@ export class GuestSystem extends createSystem({}) {
   private lockedTables: ReadonlySet<number> = new Set();
   /** The wishes an open seat can meet (all of them until the game says which tables are locked). */
   private wishPool: WishId[] | null = null;
+
+  /** Guests let go over a dirty table and sent back to the line (for the checks). */
+  refusedDirty = 0;
 
   /** True while a hand is carrying a guest. */
   get carrying(): boolean {
@@ -997,7 +1000,7 @@ export class GuestSystem extends createSystem({}) {
     let best: Seat | null = null;
     let bestDistance = AIM_SNAP_M;
     for (const seat of this.seats) {
-      if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked || seat.dirty) continue;
+      if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked) continue;
       const d = Math.hypot(spot.x - seat.position.x, spot.z - seat.position.z);
       if (d < bestDistance) {
         bestDistance = d;
@@ -1011,6 +1014,11 @@ export class GuestSystem extends createSystem({}) {
   private letGo(guest: Guest): void {
     const home = guest.home;
     const homeSeat = home && 'seat' in home ? home.seat : null;
+    // Let go over a dirty table: it will not sit there (the seat glowed amber); back to its place in the line.
+    if (guest.target?.dirty) {
+      guest.target = null;
+      this.refusedDirty++;
+    }
     const seat = guest.target ?? homeSeat;
     guest.hand = null;
     guest.target = null;
