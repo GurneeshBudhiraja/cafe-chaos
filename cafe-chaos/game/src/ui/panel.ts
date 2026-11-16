@@ -79,8 +79,9 @@ export class Panel {
   readonly mesh: Mesh;
   readonly canvas: HTMLCanvasElement;
   readonly ctx: CanvasRenderingContext2D;
-  readonly width: number;
-  readonly height: number;
+  /** Canvas size (pixels); `resize` changes it. */
+  width: number;
+  height: number;
   buttons: Button[] = [];
   /** The button a hand is over, and the one just pressed (with how long ago, seconds). */
   hover: string | null = null;
@@ -107,6 +108,13 @@ export class Panel {
    */
   dimmed = false;
   private dimNow = 0;
+  /**
+   * How much bigger than its size in metres it stands (1: as made). The
+   * menu cards stand a metre away and twice as big, so they look the same
+   * size as they would at 50 cm and their text and buttons stay as easy to
+   * read and to point at.
+   */
+  size = 1;
   /** Draw the paper card behind the content (false: the content draws its own). */
   frame = true;
   /** Draw over everything in the scene (nothing in front of it hides it). */
@@ -141,6 +149,23 @@ export class Panel {
   /** How far it is shown now (0 hidden to 1 up, eased): things laid over the card fade with it. */
   get shownAmount(): number {
     return this.mesh.visible ? this.shown : 0;
+  }
+
+  /**
+   * A new size (metres): the canvas, the texture and the plane follow. For a
+   * card that shows different things at different shapes (the menu card:
+   * wide for the start, tall for the pause card). Call `set` after it.
+   */
+  resize(widthM: number, heightM: number): void {
+    const w = Math.round(widthM * PPM);
+    const h = Math.round(heightM * PPM);
+    if (w === this.width && h === this.height) return;
+    this.width = this.canvas.width = w;
+    this.height = this.canvas.height = h;
+    // Freed on the GPU; uploaded again at the new size on the next draw.
+    this.texture.dispose();
+    this.mesh.geometry.dispose();
+    this.mesh.geometry = new PlaneGeometry(widthM, heightM);
   }
 
   /** True while it is up (or coming up). */
@@ -186,7 +211,7 @@ export class Panel {
     this.material.color.setScalar(1 - 0.42 * this.dimNow);
     // Its size is in real metres, whatever the café's scale.
     const parent = this.mesh.parent ? this.mesh.parent.getWorldScale(this.scale).x : 1;
-    const s = (0.9 + 0.1 * this.shown) / (parent || 1);
+    const s = (this.size * (0.9 + 0.1 * this.shown)) / (parent || 1);
     this.mesh.scale.set(s, s, s);
     if (this.turn === Infinity || !this.faced) {
       this.mesh.lookAt(head);

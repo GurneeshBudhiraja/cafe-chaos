@@ -5,9 +5,10 @@
  * 2. a hand away from the café, pointed at Pause, shows the ray and lights
  *    the button; a pinch pauses, and the pause card stands in front of the
  *    eyes (RESUME, How to play, Settings, END THE EVENING; no Hire);
- * 3. pointed at Pause again (now a play arrow) and pinched: 3, 2, 1, run;
+ * 3. paused, the café (and the bar) are hidden behind the card; RESUME on
+ *    the card, pointed at and pinched: the run goes on at once;
  * 4. with the coins, Shop pauses and opens the shop; HIRE hires the next
- *    barista (the price taken); CLOSE counts back into the run;
+ *    barista (the price taken); CLOSE carries on with the run;
  * 5. a hand over the café has no ray, and its pinch presses nothing;
  * 6. nothing on the console.
  *
@@ -49,16 +50,16 @@ await page.waitForTimeout(800);
 let s = await page.evaluate(() => ({ controls: window.__cafe.strip.controls, buttons: window.__cafe.strip.panel.buttons.map((b) => b.id), tab: !!window.__cafe.game.tab }));
 check('the bar has Pause and Shop, live in a run; no pause tab', s.controls === 'live' && s.buttons.join() === 'bar-pause,bar-shop' && !s.tab, JSON.stringify(s));
 
-/** Hold the right hand at `from` (world), turned so its ray points at a bar button's centre. */
-const aimAt = async (id, from = [-1.08, 1.0, 0.1]) => {
-  const target = await page.evaluate((id) => {
-    const p = window.__cafe.strip.panel;
+/** Hold the right hand at `from` (world), turned so its ray points at a button's centre: on the bar, or (`card`) on the menu card. */
+const aimAt = async (id, from = [-1.08, 1.0, 0.1], card = false) => {
+  const target = await page.evaluate(([id, card]) => {
+    const p = card ? window.__cafe.game.menu.card : window.__cafe.strip.panel;
     const b = p.buttons.find((x) => x.id === id);
     const g = p.mesh.geometry.parameters;
     const V = p.mesh.position.constructor;
     const s = p.mesh.getWorldScale(new V()).z;
     return p.mesh.localToWorld(new V(((b.x + b.w / 2) / p.width - 0.5) * g.width, (0.5 - (b.y + b.h / 2) / p.height) * g.height, 0.0 / s)).toArray();
-  }, id);
+  }, [id, card]);
   // A quaternion turning -Z to the direction from the hand to the target.
   const d = target.map((v, i) => v - from[i]);
   const len = Math.hypot(...d);
@@ -77,7 +78,7 @@ const tap = async () => {
   await pinch(0);
   await frames(4);
 };
-const state = () => page.evaluate(() => { const { game, strip, shop, score } = window.__cafe; return { phase: game.phase, aim: game.aim.right, ray: game.rays.showing('right'), hover: strip.panel.hover, kind: game.menu.cardKind, card: game.menu.card.open, cardButtons: game.menu.card.buttons.map((b) => b.id), resuming: game.resuming, hires: shop.hires, bank: score.bank, controls: strip.controls }; });
+const state = () => page.evaluate(() => { const { game, strip, shop, score } = window.__cafe; return { phase: game.phase, aim: game.aim.right, ray: game.rays.showing('right'), hover: strip.panel.hover, kind: game.menu.cardKind, card: game.menu.card.open, cardButtons: game.menu.card.buttons.map((b) => b.id), hires: shop.hires, bank: score.bank, controls: strip.controls }; });
 
 // 2. Point at Pause: the ray shows, the button lights; pinch: paused, the card in front.
 await aimAt('bar-pause');
@@ -87,21 +88,20 @@ await page.screenshot({ path: 'artifacts/bar-aim.png' });
 await tap();
 s = await state();
 const spot = await page.evaluate(() => { const { game } = window.__cafe; const m = game.menu.card.mesh; return { d: m.position.distanceTo(game.head), below: game.head.y - m.position.y }; });
-check('a pinch pauses; the pause card stands in front of the eyes, without Hire', s.phase === 'paused' && s.kind === 'pause' && s.card && s.cardButtons.join() === 'resume,how,settings,end' && spot.d < 0.5 && spot.below > 0.08, `${JSON.stringify({ phase: s.phase, kind: s.kind, buttons: s.cardButtons })}, ${(spot.d * 100).toFixed(0)} cm away, ${(spot.below * 100).toFixed(0)} cm below the eyes`);
+check('a pinch pauses; the pause card stands in front of the eyes, without Hire', s.phase === 'paused' && s.kind === 'pause' && s.card && s.cardButtons.join() === 'resume,how,settings,end' && spot.d > 0.85 && spot.d < 1.15 && spot.below > 0.08, `${JSON.stringify({ phase: s.phase, kind: s.kind, buttons: s.cardButtons })}, ${(spot.d * 100).toFixed(0)} cm away, ${(spot.below * 100).toFixed(0)} cm below the eyes`);
 await page.waitForTimeout(600);
 await page.screenshot({ path: 'artifacts/bar-paused.png' });
 
-// 3. Pause again (now play): 3, 2, 1, run.
-await aimAt('bar-pause');
-// Watch for the count in the page itself: on a slow emulator it can be over before the next look.
-await page.evaluate(() => { window.__sawCount = false; const t = setInterval(() => { const g = window.__cafe.game; if (g.resuming > 0 && g.menu.cardKind === 'count') { window.__sawCount = true; clearInterval(t); } }, 16); });
+// 3. While paused the café (and the bar with it) is hidden behind the card; RESUME on the card: the run goes on at once.
+const hidden = await page.evaluate(() => !window.__cafe.system.cafe.visible);
+check('paused, the café is hidden behind the card (not drawn)', hidden, `hidden ${hidden}`);
+await aimAt('resume', undefined, true);
 await tap();
 s = await state();
-const counting = await page.evaluate(() => window.__sawCount);
-const back = await until(() => window.__cafe.game.phase === 'run' && !window.__cafe.game.menu.card.open, null, 15000);
-check('Pause while paused counts back in, then the run goes on', counting && back, `counting ${counting} (${s.kind}), back ${back}`);
+const shown = await page.evaluate(() => window.__cafe.system.cafe.visible);
+check('RESUME carries on at once, the café shown again', s.phase === 'run' && !s.card && shown, JSON.stringify({ phase: s.phase, card: s.card, shown }));
 
-// 4. Shop: pauses and opens the shop; HIRE; CLOSE counts back in.
+// 4. Shop: pauses and opens the shop; HIRE; CLOSE carries on.
 await page.evaluate(() => (window.__cafe.score.bank = 75));
 await frames(4);
 const badge = await page.evaluate(() => window.__cafe.shop.affordable);
@@ -116,7 +116,7 @@ s = await state();
 check('HIRE hires the next barista, the price taken; the shop shows it', s.hires === 1 && s.bank === 15 && s.kind === 'shop' && s.cardButtons.includes('hire-later'), JSON.stringify({ hires: s.hires, bank: s.bank, buttons: s.cardButtons }));
 await page.evaluate(() => window.__cafe.game.click('shop-close'));
 const closed = await until(() => window.__cafe.game.phase === 'run' && !window.__cafe.game.menu.card.open, null, 15000);
-check('CLOSE counts back into the run', closed, `${closed}`);
+check('CLOSE carries on with the run', closed, `${closed}`);
 
 // 5. A hand over the café: no ray, and a pinch presses nothing on the bar.
 const cafeTop = await page.evaluate(() => { const c = window.__cafe.system.cafe.position; return [c.x, c.y + 0.08, c.z]; });

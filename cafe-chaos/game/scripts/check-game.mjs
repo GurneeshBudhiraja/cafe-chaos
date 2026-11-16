@@ -221,7 +221,7 @@ check('Pause stops the clock', s.phase === 'paused' && s.card && stillAt === pau
 await h.screenshot('artifacts/game-paused.png');
 await page.waitForTimeout(1000);
 await poke('menu', 'resume');
-// Resume counts 3, 2, 1 first (on real time), then the café moves again.
+// Resume: the café moves again at once.
 await until(() => window.__cafe.game.phase === 'run', null, 60000);
 await page.waitForTimeout(3000);
 s = await state();

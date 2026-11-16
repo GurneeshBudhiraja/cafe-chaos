@@ -129,7 +129,7 @@ export class WristMenuSystem extends createSystem({}) {
       this.panel.press(touch.pressed.id);
       this.press(touch.pressed.id);
     }
-    const now = `${this.game.phase}|${this.game.resuming > 0}|${this.score.bank}|${this.shop.price}`;
+    const now = `${this.game.phase}|${this.score.bank}|${this.shop.price}`;
     if (now !== this.shown) {
       this.shown = now;
       this.layout();
@@ -176,15 +176,14 @@ export class WristMenuSystem extends createSystem({}) {
   }
 
   private press(id: string): void {
-    if (id === 'w-pause') // Mid-count back from a pause, it pauses again.
-    this.game.click(this.game.phase === 'paused' && this.game.resuming <= 0 ? 'resume' : 'pause');
+    if (id === 'w-pause') this.game.click(this.game.phase === 'paused' ? 'resume' : 'pause');
     if (id === 'w-hire') this.game.click('hire');
     if (id === 'w-how') this.game.click('how');
   }
 
   private layout(): void {
     const { width: w, height: h, canvas } = this.panel;
-    const paused = this.game?.phase === 'paused' && this.game.resuming <= 0;
+    const paused = this.game?.phase === 'paused';
     const price = this.shop?.price ?? null;
     const bank = this.score?.bank ?? 0;
     const canPay = price !== null && bank >= price;

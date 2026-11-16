@@ -4,9 +4,9 @@
  *    when it is gone the game stays paused until the player resumes;
  * 2. while paused the café is still (clock stopped, hands kept off the guests),
  *    its lamps go down and the theme is turned down;
- * 3. Resume counts 3, 2, 1 on the card with the café still frozen, then the
- *    café moves again and the lamps and theme come back up;
- * 4. pressing the bar's Pause during the count holds the pause (the pause card is back);
+ * 3. paused, the café is hidden behind the card; Resume carries on at once:
+ *    the café shows and moves again, and the lamps and theme come back up;
+ * 4. the bar's Pause pauses again at once (the pause card is back);
  * 5. the pause card has Resume, How to play, Settings and End (no Hire); the
  *    bar's Shop, while paused, opens the shop; HIRE there hires and shows the
  *    next price; CLOSE goes back to the pause card.
@@ -31,7 +31,7 @@ const check = (name, pass, detail) => { results.push(pass); console.log(`${pass 
 const until = (fn, timeout = 60000) => page.waitForFunction(fn, null, { timeout, polling: 200 }).then(() => true, () => false);
 const state = () => page.evaluate(() => {
   const { game, mood, theme, guests } = window.__cafe;
-  return { phase: game.phase, resuming: +game.resuming.toFixed(2), clock: +game.clock.toFixed(2), card: game.menu.card.open, dim: +mood.paused.toFixed(2), handsOff: guests.handsOff, duck: theme.ducked, tabPressed: null };
+  return { phase: game.phase, clock: +game.clock.toFixed(2), card: game.menu.card.open, dim: +mood.paused.toFixed(2), handsOff: guests.handsOff, duck: theme.ducked, tabPressed: null };
 });
 for (const k of ['left', 'right']) await page.evaluate((k) => window.IWER_DEVICE.remote.dispatch('set_transform', { device: `hand-${k}`, position: { x: k === 'left' ? -1.4 : -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } }), k);
 await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); game.click('skip'); });
@@ -54,19 +54,29 @@ check('paused: the café is still and hands are kept off the guests', s.clock ==
 check('paused: the lamps go down and the theme is turned down', s.dim > 0.9 && s.duck, JSON.stringify(s));
 await h.screenshot('artifacts/pause-1-paused.png');
 
-// 3. Resume: 3, 2, 1 with the café still frozen, then it moves.
+// 3. Paused, the café is hidden behind the card; Resume: at once, the café shows and moves again (no count).
+// The café's place in the world (position, turn, size), before the pause card hides it and after Resume.
+const pose = () => page.evaluate(() => {
+  const c = window.__cafe.system.cafe;
+  c.updateWorldMatrix(true, false);
+  return { m: c.matrixWorld.toArray() };
+});
+const hiddenWhilePaused = await page.evaluate(() => !window.__cafe.system.cafe.visible);
+const before = await pose();
 await page.evaluate(() => window.__cafe.game.click('resume'));
-await page.waitForTimeout(500);
+await page.waitForTimeout(50);
 s = await state();
-const tabCount = await page.evaluate(() => window.__cafe.game.resuming);
-check('Resume starts a 3-2-1 with the café still frozen', s.phase === 'paused' && s.resuming > 0 && s.resuming <= 3 && s.clock === at && s.card, JSON.stringify(s));
-await until(() => Math.ceil(window.__cafe.game.resuming) === 2, 30000);
-await h.screenshot('artifacts/pause-2-count.png');
-// 4. Pause during the count: held.
+const shownAgain = await page.evaluate(() => window.__cafe.system.cafe.visible);
+const afterPose = await pose();
+const moved = Math.max(...before.m.map((v, i) => Math.abs(v - afterPose.m[i])));
+check('paused the café is hidden; Resume carries on at once, the café shown again', hiddenWhilePaused && s.phase === 'run' && !s.card && shownAgain, JSON.stringify({ hiddenWhilePaused, shownAgain, phase: s.phase, card: s.card }));
+check('on Resume the café is back exactly where it was (same place, turn and size)', moved < 1e-6, `largest change in its world matrix ${moved.toExponential(1)}`);
+// 4. Pause again: paused at once, the card back.
 await page.evaluate(() => window.__cafe.game.click('bar-pause'));
-await page.waitForTimeout(1500);
+await page.waitForTimeout(800);
 s = await state();
-check('pressing pause during the count holds the pause', s.phase === 'paused' && s.resuming === 0 && s.card && s.clock === at, JSON.stringify(s));
+const at2 = s.clock;
+check('Pause again pauses at once, the card back', s.phase === 'paused' && s.card, JSON.stringify(s));
 // 5. The pause card (no Hire); the shop from the bar, while paused.
 const ids = await page.evaluate(() => window.__cafe.game.menu.card.buttons.map((b) => b.id));
 await page.evaluate(() => { window.__cafe.score.bank = 100; window.__cafe.game.click('bar-shop'); });
@@ -76,9 +86,9 @@ await page.waitForTimeout(800);
 const after = await page.evaluate(() => ({ staff: window.__cafe.shop.staff, phase: window.__cafe.game.phase, next: window.__cafe.game.menu.card.buttons.find((b) => b.id.startsWith('hire'))?.label, wrist: window.__cafe.wrist.open }));
 await h.screenshot('artifacts/pause-shop.png');
 await page.evaluate(() => window.__cafe.game.click('shop-close'));
-const backTo = await page.evaluate(() => ({ kind: window.__cafe.game.menu.cardKind, phase: window.__cafe.game.phase, resuming: window.__cafe.game.resuming }));
+const backTo = await page.evaluate(() => ({ kind: window.__cafe.game.menu.cardKind, phase: window.__cafe.game.phase }));
 check('the pause card offers Resume, How to play, Settings and End; Shop opens the shop, HIRE hires and shows the next price, CLOSE goes back to the pause card',
-  ids.join(',') === 'resume,how,settings,end' && shopOpen.kind === 'shop' && shopOpen.phase === 'paused' && after.staff === 2 && after.phase === 'paused' && /120/.test(after.next ?? '') && backTo.kind === 'pause' && backTo.phase === 'paused' && backTo.resuming === 0,
+  ids.join(',') === 'resume,how,settings,end' && shopOpen.kind === 'shop' && shopOpen.phase === 'paused' && after.staff === 2 && after.phase === 'paused' && /120/.test(after.next ?? '') && backTo.kind === 'pause' && backTo.phase === 'paused',
   `${ids.join(',')} | shop ${JSON.stringify(shopOpen)} -> ${JSON.stringify(after)} -> ${JSON.stringify(backTo)}`);
 await h.screenshot('artifacts/pause-card.png');
 // Then all the way through.
@@ -87,9 +97,9 @@ await until(() => window.__cafe.game.phase === 'run', 60000);
 await page.waitForTimeout(3000);
 await until(() => window.__cafe.mood.paused < 0.1, 30000);
 s = await state();
-check('after the count the café moves again, lamps and theme back up', s.phase === 'run' && s.clock > at && !s.card && !s.handsOff && s.dim < 0.1 && !s.duck, JSON.stringify(s));
+check('after Resume the café moves again, lamps and theme back up', s.phase === 'run' && s.clock > at2 && !s.card && !s.handsOff && s.dim < 0.1 && !s.duck, JSON.stringify(s));
 await h.screenshot('artifacts/pause-3-running.png');
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');
-console.log(`${results.filter(Boolean).length}/${results.length} checks passed (count started at ${tabCount.toFixed(2)})`);
+console.log(`${results.filter(Boolean).length}/${results.length} checks passed`);
 process.exit(results.every(Boolean) ? 0 : 1);
