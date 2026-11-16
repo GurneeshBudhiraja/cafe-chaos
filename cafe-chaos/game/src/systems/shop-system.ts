@@ -12,7 +12,7 @@
  */
 
 import { createSystem } from '@iwsdk/core';
-import { HIRE_PRICES, MAX_STAFF, START_TABLES, STARTING_STAFF, tablePrice } from '../game/rules.js';
+import { HIRE_PRICES, JANITOR_PRICE, MAX_STAFF, START_TABLES, STARTING_STAFF, tablePrice } from '../game/rules.js';
 import { BaristaSystem } from './barista-system.js';
 import { ScoreSystem } from './score-system.js';
 
@@ -28,6 +28,8 @@ export class ShopSystem extends createSystem({}) {
   tables: number[] = [...START_TABLES];
   /** Tables bought this session (for the sounds and the checks). */
   tablesBought = 0;
+  /** The janitor (one only): hired or not. */
+  janitor = false;
   private baristas!: BaristaSystem;
   private score!: ScoreSystem;
 
@@ -53,10 +55,30 @@ export class ShopSystem extends createSystem({}) {
   }
 
   /** The café as it was saved: this many servers already hired, these tables open (nothing is spent). */
-  restore(hires: number, tables: readonly number[] = START_TABLES): void {
+  restore(hires: number, tables: readonly number[] = START_TABLES, janitor = false): void {
     this.hires = Math.max(0, Math.min(HIRE_PRICES.length, Math.floor(hires)));
     this.baristas.staffSize = this.staff;
-    this.tables = [...new Set([...START_TABLES, ...tables.filter((t) => Number.isInteger(t) && t >= 0)])];
+    this.janitor = janitor;
+    this.baristas.janitorHired = janitor;
+    this.tables = [...new Set([...START_TABLES, ...tables.filter((t) => Number.isInteger(t) && t >= 0 && t < 32)])];
+  }
+
+  /** What the janitor costs; null once hired. */
+  get janitorPrice(): number | null {
+    return this.janitor ? null : JANITOR_PRICE;
+  }
+
+  /** Hire the janitor; false (and counted as refused) if hired already or the bank cannot pay. */
+  hireJanitor(): boolean {
+    if (this.janitor || !this.score.spend(JANITOR_PRICE)) {
+      this.refused++;
+      return false;
+    }
+    this.janitor = true;
+    this.purchases++;
+    this.baristas.janitorHired = true;
+    for (const done of this.bought) done();
+    return true;
   }
 
   /** How many tables have been bought (the starting ones are not bought). */

@@ -38,8 +38,10 @@
 
 import { AssetManager, createSystem, Vector3, type Material, type Mesh, type Object3D } from '@iwsdk/core';
 import { Barista, BARISTA_NAMES, baristaLoaded, type BaristaName } from '../baristas/barista.js';
-import { BACK_BAR_YAW, servePointFor, servePointsForPlace, SHUFFLE_M, STATION_YAW, stationPoint, type ServePoint } from '../baristas/routes.js';
-import { MAX_STAFF } from '../game/rules.js';
+import { BACK_BAR_YAW, servePointFor, servePointsForPlace, SHUFFLE_M, STATION_X, STATION_YAW, stationPoint, type ServePoint } from '../baristas/routes.js';
+import { CLEAN, MAX_STAFF } from '../game/rules.js';
+import { Janitor, janitorLoaded } from '../baristas/janitor.js';
+import { MessSystem } from './mess-system.js';
 import { BACK_BAR_SECONDS, FIDGET_SECONDS, MAX_OUT, REPLAN_SECONDS, SAME_TIME_SECONDS, SET_DOWN_AT, SPEED, SWITCH_GAIN_M, TRAY_FADE_SECONDS, TRAY_SLIDE_SECONDS, TURN_SPEED, WAVE_CHANCE } from '../baristas/rules.js';
 import type { Seat } from '../guests/seats.js';
 import { Walk, yawDelta } from '../guests/walker.js';
@@ -49,9 +51,14 @@ import { GuestSystem } from './guest-system.js';
 /**
  * working: at its station. shuffling: a step along the bar. backBar:
  * turned to the back bar. waving. out: carrying a tray to a guest.
- * serving: the lean at the table, until the order is down. back: walking home.
+ * serving: the lean at the table, until the order is down. back: walking
+ * home. toClean: walking to a dirty table, empty-handed. cleaning: wiping
+ * it (CLEAN.seconds).
  */
-export type BaristaState = 'working' | 'shuffling' | 'backBar' | 'waving' | 'out' | 'serving' | 'back';
+export type BaristaState = 'working' | 'shuffling' | 'backBar' | 'waving' | 'out' | 'serving' | 'back' | 'toClean' | 'cleaning';
+
+/** What a member of staff is driven through: a barista's rig, or the janitor's made motion (baristas/janitor.ts). */
+export type Figure = Barista | Janitor;
 
 /** A guest's order, from the moment it is seated until it leaves the seat. */
 export interface Order {
@@ -73,8 +80,12 @@ export interface Order {
 }
 
 export interface Staff {
-  barista: Barista;
+  barista: Figure;
+  /** 'barista': serves, and cleans when there is nothing to serve. 'janitor': only cleans. */
+  role: 'barista' | 'janitor';
   station: number;
+  /** Where it stands when idle (café space): a barista's station on the duckboard, the janitor's spot by the counter's end. */
+  home: Vector3;
   state: BaristaState;
   /** Seconds in the current state, and how long it lasts (for the timed ones). */
   t: number;
@@ -87,8 +98,11 @@ export interface Staff {
   shift: number;
   /** The order it is bringing, if out. */
   order: Order | null;
-  /** Trips made (for the checks). */
+  /** The table it is going to clean, or cleaning (an index into the café's pieces); -1 if none. */
+  chore: number;
+  /** Trips made, and tables cleaned (for the checks). */
   trips: number;
+  cleans: number;
 }
 
 /** A tray set down for a guest: it slides into place, stays while the guest does, and fades when the guest has gone. */
@@ -105,6 +119,7 @@ const TRAY_MODELS = ['tray-tea', 'tray-coffee'] as const;
 const between = (range: [number, number]): number => range[0] + Math.random() * (range[1] - range[0]);
 const lengthOf = (path: Vector3[]): number => path.reduce((sum, p, i) => (i ? sum + p.distanceTo(path[i - 1]) : 0), 0);
 const atBar = (member: Staff): boolean => member.state === 'working' || member.state === 'shuffling' || member.state === 'backBar' || member.state === 'waving';
+const cleaningUp = (member: Staff): boolean => member.state === 'toClean' || member.state === 'cleaning';
 
 export class BaristaSystem extends createSystem({}) {
   readonly staff: Staff[] = [];
@@ -122,6 +137,12 @@ export class BaristaSystem extends createSystem({}) {
    * all); the checks and recordings (test mode) keep all three.
    */
   staffSize: number = MAX_STAFF;
+  /** The janitor is on the staff (the shop hires it; the janitor only cleans). */
+  janitorHired = false;
+  /** Tables cleaned by the staff, and cleanings broken off for an order (for the checks). */
+  cleanedCount = 0;
+  cleaningsBrokenOff = 0;
+  private mess: MessSystem | null = null;
   /** Counts, for the checks. */
   servedCount = 0;
   switches = 0;
@@ -145,6 +166,7 @@ export class BaristaSystem extends createSystem({}) {
 
   init(): void {
     this.cafeSystem = this.world.getSystem(CafeSystem)!;
+    this.mess = this.world.getSystem(MessSystem) ?? null;
     this.guests = this.world.getSystem(GuestSystem);
     const cafe = this.cafeSystem.cafe;
     cafe.updateMatrixWorld(true);
@@ -201,7 +223,8 @@ export class BaristaSystem extends createSystem({}) {
       this.takeOrders();
       this.sinceplan += delta;
       const waiting = this.orders.some((order) => !order.served && !order.server);
-      if (this.serving && (this.dirty || (waiting && this.sinceplan >= REPLAN_SECONDS))) this.plan();
+      const chores = !!this.mess && this.mess.dirtyTables().length > 0 && this.staff.some((m) => m.state === 'working' && m.chore < 0);
+      if (this.serving && (this.dirty || ((waiting || chores) && this.sinceplan >= REPLAN_SECONDS))) this.plan();
     }
     for (const member of this.staff) {
       this.act(member, delta);
@@ -213,35 +236,61 @@ export class BaristaSystem extends createSystem({}) {
 
   /** How many are out on the floor now. */
   get out(): number {
-    return this.staff.filter((m) => !atBar(m)).length;
+    return this.baristas.filter((m) => !atBar(m)).length;
   }
 
   // ------------------------------------------------------------- the staff
 
   /** Bring on every barista on the staff whose model has loaded (they load in the background); a new hire waves hello. */
   private hire(): void {
-    if (this.staff.length >= this.staffSize) return;
+    this.hireJanitor();
+    if (this.baristas.length >= this.staffSize) return;
     BARISTA_NAMES.slice(0, this.staffSize).forEach((name: BaristaName, station) => {
       if (this.staff.some((m) => m.barista.name === name) || !baristaLoaded(name)) return;
       const barista = new Barista(name);
-      barista.root.position.copy(stationPoint(station));
+      const home = stationPoint(station);
+      barista.root.position.copy(home);
       barista.root.rotation.y = STATION_YAW;
       this.cafeSystem.cafe.add(barista.root);
       barista.play('Work');
       const fresh = this.cafeSystem.placed && this.staff.length > 0;
-      this.staff.push({ barista, station, state: 'working', t: Math.random() * 2, lasts: between(FIDGET_SECONDS), walk: null, speed: SPEED.walk, yaw: STATION_YAW, targetYaw: STATION_YAW, shift: 0, order: null, trips: 0 });
+      this.staff.push({ barista, role: 'barista', station, home, state: 'working', t: Math.random() * 2, lasts: between(FIDGET_SECONDS), walk: null, speed: SPEED.walk, yaw: STATION_YAW, targetYaw: STATION_YAW, shift: 0, order: null, chore: -1, trips: 0, cleans: 0 });
       // One hired in the middle of the evening says hello to the player.
       if (fresh) this.greetPlayer(this.staff[this.staff.length - 1]);
       this.dirty = true;
     });
   }
 
+  /** The baristas on the staff (not the janitor). */
+  get baristas(): Staff[] {
+    return this.staff.filter((m) => m.role === 'barista');
+  }
+
+  /** The janitor, once hired and its model is in. */
+  get janitor(): Staff | null {
+    return this.staff.find((m) => m.role === 'janitor') ?? null;
+  }
+
+  /** Bring the janitor on, by the counter's end, once it is hired and its model has loaded. */
+  private hireJanitor(): void {
+    if (!this.janitorHired || this.janitor || !janitorLoaded()) return;
+    const nav = this.cafeSystem.nav;
+    const home = nav.nearest(CLEAN.home.x, CLEAN.home.z, CLEAN.home.reach) ?? stationPoint(STATION_X.length - 1);
+    const janitor = new Janitor();
+    janitor.root.position.copy(home);
+    janitor.root.rotation.y = STATION_YAW;
+    this.cafeSystem.cafe.add(janitor.root);
+    this.staff.push({ barista: janitor, role: 'janitor', station: -1, home, state: 'working', t: 0, lasts: Infinity, walk: null, speed: SPEED.walk, yaw: STATION_YAW, targetYaw: STATION_YAW, shift: 0, order: null, chore: -1, trips: 0, cleans: 0 });
+    this.dirty = true;
+  }
+
   private reset(): void {
     for (const member of this.staff) {
       member.barista.hold(null);
-      member.barista.root.position.copy(stationPoint(member.station));
+      member.barista.root.position.copy(member.home);
       member.walk = null;
       member.order = null;
+      member.chore = -1;
       member.shift = 0;
       member.yaw = member.targetYaw = STATION_YAW;
       this.work(member);
@@ -254,9 +303,10 @@ export class BaristaSystem extends createSystem({}) {
   private work(member: Staff): void {
     member.state = 'working';
     member.t = 0;
-    member.lasts = between(FIDGET_SECONDS);
+    // The janitor stands still at its spot (no bar to fidget at) until a table needs it.
+    member.lasts = member.role === 'janitor' ? Infinity : between(FIDGET_SECONDS);
     member.targetYaw = STATION_YAW;
-    member.barista.play('Work');
+    member.barista.play(member.role === 'janitor' ? 'Idle' : 'Work');
     // A server back at the bar can take the next order.
     this.dirty = true;
   }
@@ -319,9 +369,10 @@ export class BaristaSystem extends createSystem({}) {
   private plan(): void {
     this.dirty = false;
     this.sinceplan = 0;
-    const enRoute = this.staff.filter((m) => m.state === 'out');
-    const free = this.staff.filter(atBar);
-    const busy = this.staff.filter((m) => m.state === 'serving' || m.state === 'back').length;
+    const baristas = this.baristas;
+    const enRoute = baristas.filter((m) => m.state === 'out');
+    const free = baristas.filter(atBar);
+    const busy = baristas.filter((m) => m.state === 'serving' || m.state === 'back' || cleaningUp(m)).length;
 
     // The walking distance from a server to an order, worked out when asked for and remembered for this plan
     // (a free server's is from its station, which the grid remembers between plans too).
@@ -331,7 +382,7 @@ export class BaristaSystem extends createSystem({}) {
       if (!row) cost.set(order, (row = new Map()));
       let d = row.get(member);
       if (d === undefined) {
-        const from = atBar(member) ? stationPoint(member.station) : member.barista.root.position;
+        const from = atBar(member) ? member.home : member.barista.root.position;
         d = this.wayTo(from, order)?.length ?? Infinity;
         row.set(member, d);
       }
@@ -349,7 +400,7 @@ export class BaristaSystem extends createSystem({}) {
 
     // 1. From the bar: first come, first served. The oldest waiting orders, as many as may set off now; orders
     //    placed together are equals, the nearer first. Each goes to a free server so the walking in all is least.
-    const departures = Math.max(0, Math.min(free.length, this.maxOut - busy - this.staff.filter((m) => m.state === 'out').length));
+    const departures = Math.max(0, Math.min(free.length, this.maxOut - busy - enRoute.length));
     if (departures > 0 && free.length > 0) {
       const nearestFree = (order: Order): number => Math.min(...free.map((member) => distance(member, order)));
       const next = waiting()
@@ -382,7 +433,7 @@ export class BaristaSystem extends createSystem({}) {
 
     // 2. On the way: a server walking to one guest turns to a waiting guest that is nearer it (by a real margin).
     //    The guest it was walking to goes back to the front of the queue, and cannot be passed over again.
-    const walking = this.staff.filter((m) => m.state === 'out' && m.order);
+    const walking = baristas.filter((m) => m.state === 'out' && m.order);
     for (const member of walking) {
       const mine = member.order!;
       if (mine.bumped > 0) continue;
@@ -411,6 +462,125 @@ export class BaristaSystem extends createSystem({}) {
         this.send(b, first);
       }
     }
+    this.chores();
+  }
+
+  // ------------------------------------------------------------- cleaning
+
+  /**
+   * The chores, after the orders (an order always comes first):
+   * 4. Orders still waiting with nobody free at the bar: a barista off
+   *    cleaning leaves the table (the mess stays) and comes back for a
+   *    tray; the plan runs again when it is home.
+   * 5. A barista at the bar with no order waiting goes to the nearest
+   *    dirty table nobody is seeing to. The janitor goes to the one
+   *    longest dirty, whatever the orders.
+   */
+  private chores(): void {
+    const mess = this.mess;
+    if (!mess) return;
+    const waiting = this.orders.filter((order) => !order.served && !order.server);
+    const baristas = this.baristas;
+    // 4. Orders waiting, nobody at the bar: break off cleaning, one cleaner per waiting order.
+    if (waiting.length > 0 && !baristas.some(atBar)) {
+      const cleaners = baristas.filter(cleaningUp);
+      for (const member of cleaners.slice(0, waiting.length)) {
+        member.chore = -1;
+        this.cleaningsBrokenOff++;
+        this.sendHome(member);
+        this.dirty = true;
+      }
+    }
+    const claimed = new Set(this.staff.filter((m) => m.chore >= 0).map((m) => m.chore));
+    const open = mess.dirtyTables().filter((t) => !claimed.has(t));
+    if (open.length === 0) return;
+    // The janitor: the longest dirty first.
+    const janitor = this.janitor;
+    if (janitor && janitor.state === 'working') {
+      const table = this.nearestTable(janitor, open, Infinity) ?? open[0];
+      if (this.goClean(janitor, table)) {
+        claimed.add(table);
+        open.splice(open.indexOf(table), 1);
+      }
+    }
+    // 5. Baristas with nothing to serve: the nearest dirty table each.
+    if (waiting.length > 0) return;
+    for (const member of baristas) {
+      if (member.state !== 'working' || open.length === 0) continue;
+      const table = this.nearestTable(member, open, Infinity);
+      if (table === null || !this.goClean(member, table)) continue;
+      claimed.add(table);
+      open.splice(open.indexOf(table), 1);
+    }
+  }
+
+  /** Of `tables`, the one with the least walking from where `member` stands, within `within` metres of path; null if none. */
+  private nearestTable(member: Staff, tables: number[], within: number): number | null {
+    let best: number | null = null;
+    let bestLength = within;
+    for (const table of tables) {
+      const point = this.servePoints.find((p) => p.table === table);
+      if (!point) continue;
+      const way = this.cafeSystem.nav.findPath(member.barista.root.position, point.stand);
+      if (!way) continue;
+      const length = lengthOf(way);
+      if (length <= bestLength) {
+        bestLength = length;
+        best = table;
+      }
+    }
+    return best;
+  }
+
+  /** Send a member of staff to clean a table: empty-handed, to where a server stands at it. */
+  private goClean(member: Staff, table: number): boolean {
+    const point = this.servePoints.find((p) => p.table === table);
+    if (!point) return false;
+    const way = this.cafeSystem.nav.findPath(member.barista.root.position, point.stand);
+    if (!way) return false;
+    member.barista.hold(null);
+    member.order = null;
+    member.chore = table;
+    member.state = 'toClean';
+    member.walk = new Walk(way);
+    member.speed = SPEED.walk;
+    member.shift = 0;
+    return true;
+  }
+
+  /**
+   * An order set down: with nothing waiting and a dirty table nobody is
+   * seeing to within CLEAN.near of walking, clean it on the way; else home.
+   */
+  private afterServe(member: Staff): void {
+    const mess = this.mess;
+    const waiting = this.orders.some((order) => !order.served && !order.server);
+    if (mess && !waiting) {
+      const claimed = new Set(this.staff.filter((m) => m.chore >= 0).map((m) => m.chore));
+      const table = this.nearestTable(member, mess.dirtyTables().filter((t) => !claimed.has(t)), CLEAN.near);
+      if (table !== null && this.goClean(member, table)) return;
+    }
+    this.sendHome(member);
+  }
+
+  /** The table is wiped: cleaned, and on to the next (the janitor always; a barista only with nothing to serve), else home. */
+  private finishCleaning(member: Staff): void {
+    const mess = this.mess;
+    const table = member.chore;
+    member.chore = -1;
+    if (mess && table >= 0 && mess.isDirty(table)) {
+      mess.clean(table);
+      member.cleans++;
+      this.cleanedCount++;
+    }
+    const waiting = this.orders.some((order) => !order.served && !order.server);
+    if (mess && (member.role === 'janitor' || !waiting)) {
+      const claimed = new Set(this.staff.filter((m) => m.chore >= 0).map((m) => m.chore));
+      const next = this.nearestTable(member, mess.dirtyTables().filter((t) => !claimed.has(t)), Infinity);
+      if (next !== null && this.goClean(member, next)) return;
+    }
+    this.dirty = true;
+    this.sendHome(member);
   }
 
   /** Send a server to an order: from the bar it takes a tray and sets off; already out, it turns to the new guest. */
@@ -438,8 +608,9 @@ export class BaristaSystem extends createSystem({}) {
   /** Back to its station (with its tray, if it never served it). */
   private sendHome(member: Staff): void {
     member.order = null;
+    member.chore = -1;
     member.state = 'back';
-    const home = stationPoint(member.station);
+    const home = member.home;
     const way = this.cafeSystem.nav.findPath(member.barista.root.position, home) ?? [member.barista.root.position.clone()];
     member.walk = new Walk([...way, home]);
     member.speed = SPEED.walk;
@@ -510,7 +681,7 @@ export class BaristaSystem extends createSystem({}) {
     if (arrived === this.guestsSeen) return;
     this.guestsSeen = arrived;
     if (Math.random() > WAVE_CHANCE) return;
-    const free = this.staff.filter((m) => m.state === 'working');
+    const free = this.baristas.filter((m) => m.state === 'working');
     if (free.length === 0) return;
     this.greetPlayer(free[Math.floor(Math.random() * free.length)]);
   }
@@ -544,11 +715,16 @@ export class BaristaSystem extends createSystem({}) {
           break;
         }
         if (barista.tray && member.order && member.t >= SET_DOWN_AT) this.setDown(member);
-        // The order is down: straight back to the counter, no bow. It is free for the next order from here.
+        // The order is down: straight back to the counter, no bow (or a dirty table on the way is cleaned first).
         if (!barista.tray && member.t >= SET_DOWN_AT) {
           this.dirty = true;
-          this.sendHome(member);
+          this.afterServe(member);
         }
+        break;
+      case 'cleaning':
+        // Someone else got there first: on to the next.
+        if (member.chore < 0 || !this.mess?.isDirty(member.chore)) this.finishCleaning(member);
+        else if (member.t >= CLEAN.seconds) this.finishCleaning(member);
         break;
       default:
         break;
@@ -600,6 +776,16 @@ export class BaristaSystem extends createSystem({}) {
 
   private arrive(member: Staff): void {
     member.walk = null;
+    if (member.state === 'toClean') {
+      // At the table: wipe it, facing it.
+      member.state = 'cleaning';
+      member.t = 0;
+      member.lasts = CLEAN.seconds;
+      const point = this.servePoints.find((p) => p.table === member.chore);
+      if (point) member.targetYaw = point.yaw;
+      member.barista.play('Work');
+      return;
+    }
     if (member.state === 'out') {
       if (!member.order) {
         // The guest left before it got there: back it goes.

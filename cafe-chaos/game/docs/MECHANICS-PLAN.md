@@ -72,6 +72,7 @@ One payment per guest, 1–10 coins: `1 + 9 × (0.4 × speed + 0.6 × share of w
 
 - A table turns dirty when its last guest leaves; no seating until cleaned (~3 s). Dropping a guest on it: amber glow, guest does not land.
 - Baristas clean automatically; the player does not act on dirty tables. Priority: serve first; after a set-down clean a nearby dirty table if no order waits; with no orders clean the nearest; an order interrupts cleaning and it is resumed after; all clean → back behind the counter.
+- Built (phase 3): a mess model on the table and amber seat dots while dirty; the barista breaks off cleaning when an order waits and nobody is at the bar; the janitor stands by the counter's end and takes the longest-dirty table first. The shop shows one row per job, not per person (owner's call): Barista (its render, "1 of 3 working", HIRE for the next at its price, then "All working") and Janitor (HIRE 120, then "Working"); the janitor is drawn until its Blender render is made (phase 6).
 - Staff, priced by what they add: barista 2 = 50 (needed early), janitor = 120 (one only, only cleans, nearest first), barista 3 = 150 (max 3, M: a 4th has nothing to do). Total 320.
 - Everything together 3,190 coins, about 50 minutes (E, assumes ~6.5 coins per guest).
 - Not agreed yet: a coin bonus at each level-up (5 × level).

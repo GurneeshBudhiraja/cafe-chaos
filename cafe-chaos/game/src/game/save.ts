@@ -19,8 +19,9 @@ export interface Save {
   bank: number;
   /** The tables the player has open (indices into the café's pieces), the two starting ones included. */
   tables: number[];
-  /** Servers hired beyond the first (0 to HIRE_PRICES.length). */
+  /** Servers hired beyond the first (0 to HIRE_PRICES.length), and whether the janitor is hired. */
   hires: number;
+  janitor: boolean;
   tutorialDone: boolean;
   /** The level the player is on (1-based), guests served in it so far, and the café's happiness. */
   level: number;
@@ -47,7 +48,7 @@ const OLD_KEY = 'cafe-chaos/save/v2';
 export const TEST_MODE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('test');
 
 export function freshSave(): Save {
-  return { bank: 0, tables: [...START_TABLES], hires: 0, tutorialDone: false, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, runs: 0, music: 2, sounds: 3, size: 100 };
+  return { bank: 0, tables: [...START_TABLES], hires: 0, janitor: false, tutorialDone: false, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, runs: 0, music: 2, sounds: 3, size: 100 };
 }
 
 export function loadSave(): Save {

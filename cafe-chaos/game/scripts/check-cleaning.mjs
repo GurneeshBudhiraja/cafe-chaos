@@ -1,0 +1,165 @@
+/**
+ * Cleaning check, in the real game from the seat (docs/MECHANICS-PLAN.md §7):
+ *  1. a guest served and gone leaves its table dirty: a mess on the top,
+ *     its seats closed (not offered; an amber dot while a guest is carried);
+ *  2. a barista with nothing to serve goes and cleans it (CLEAN.seconds at
+ *     the table), then the mess goes and the seats are open again;
+ *  3. an order always comes first: a barista off cleaning breaks off when a
+ *     guest is seated and nobody is at the bar, serves, and cleans after;
+ *  4. on its way back from serving, a dirty table near by is cleaned first;
+ *  5. the shop offers the janitor at 120, once: HIRE puts it by the counter's
+ *     end; it cleans the longest dirty table first and never serves;
+ *  6. the janitor is saved and comes back after a reload; the messes do not
+ *     (a clean café); pause freezes a cleaner; no console errors.
+ * Usage: dev server running, then `node scripts/check-cleaning.mjs`.
+ */
+
+process.env.APP_URL = process.env.APP_URL_GAME ?? 'https://localhost:8082/';
+const { startHeadset } = await import('./lib/headset.mjs');
+const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
+const LOOK = { x: -1.3, y: 0.79, z: 0.28 };
+const ready = (h) => h.page.waitForFunction(() => window.__cafe?.system.placed && !window.__cafe.system.arriving && window.__cafe.game.phase === 'title', null, { timeout: 60000 });
+const h = await startHeadset({
+  async prepare(h) {
+    await h.head(SEAT, LOOK);
+    await h.page.evaluate(() => { localStorage.removeItem('cafe-chaos/save/v3'); window.__cafe.system.replace(); });
+    await ready(h);
+  },
+});
+const { page } = h;
+const results = [];
+const check = (name, pass, detail) => { results.push(pass); console.log(`${pass ? 'PASS' : 'FAIL'} ${name}: ${detail}`); };
+const until = (fn, timeout = 60000) => page.waitForFunction(fn, null, { timeout, polling: 100 }).then(() => true, () => false);
+const state = () => page.evaluate(() => {
+  const { game, guests, mess, baristas, shop, score, system } = window.__cafe;
+  return {
+    phase: game.phase, dirty: mess.dirtyTables(), dirtied: mess.dirtied, cleaned: mess.cleaned, closed: guests.seats.filter((s) => s.dirty).map((s) => s.table),
+    staff: baristas.staff.map((m) => ({ role: m.role, state: m.state, chore: m.chore, cleans: m.cleans, trips: m.trips, at: m.barista.root.position.toArray().map((v) => +v.toFixed(3)) })),
+    cleanedCount: baristas.cleanedCount, brokenOff: baristas.cleaningsBrokenOff, orders: baristas.orders.length, served: baristas.servedCount,
+    janitor: shop.janitor, janitorPrice: shop.janitorPrice, bank: score.bank, speed: system.timeScale, card: game.menu.card.open ? game.menu.cardKind : null, buttons: game.menu.card.buttons.map((b) => b.id),
+    saved: JSON.parse(localStorage.getItem('cafe-chaos/save/v3') ?? 'null'),
+  };
+});
+/** Seat a new guest (its wishes dropped) at the free open seat nearest (x, z), café space; returns the seat's table. */
+const seatAt = (x, z) => page.evaluate(([x, z]) => {
+  const { guests } = window.__cafe;
+  const open = guests.seats.filter((s) => s.occupant === 0 && !s.locked && !s.dirty);
+  const seat = open.reduce((best, s) => (Math.hypot(s.position.x - x, s.position.z - z) < Math.hypot(best.position.x - x, best.position.z - z) ? s : best));
+  const guest = guests.spawn();
+  guest.wishes = [];
+  guests.seatGuest(guest.id, seat.index);
+  return { guest: guest.id, table: seat.table, seat: seat.index };
+}, [x, z]);
+for (const k of ['left', 'right']) await page.evaluate((k) => window.IWER_DEVICE.remote.dispatch('set_transform', { device: `hand-${k}`, position: { x: k === 'left' ? -1.4 : -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } }), k);
+await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); game.click('skip'); });
+await until(() => window.__cafe.game.phase === 'run');
+// Nobody comes on their own, meals are quick, and all twelve main tables are open (room to work with).
+await page.evaluate(() => { const { guests, shop, system, game } = window.__cafe; guests.arrivals = false; guests.mealSeconds = 1.5; shop.restore(shop.hires, system.tables.filter((i) => i < 13), false); game.applyLocks(); });
+await page.waitForTimeout(500);
+
+// 1. A guest served and gone: its table is dirty.
+const first = await seatAt(0, 0.025);
+await until(() => window.__cafe.baristas.servedCount >= 1, 60000);
+await until(() => window.__cafe.mess.dirtyTables().length >= 1, 60000);
+let s = await state();
+check('a guest served and gone leaves its table dirty: a mess on it, its seats closed', s.dirty.join() === `${first.table}` && s.closed.every((t) => t === first.table) && s.closed.length >= 2 && s.dirtied === 1, JSON.stringify({ table: first.table, dirty: s.dirty, closed: s.closed }));
+const offered = await page.evaluate((table) => {
+  const { guests } = window.__cafe;
+  const V = guests.seats[0].position.constructor;
+  const seat = guests.seats.find((x) => x.table === table);
+  const over = new V(seat.position.x, seat.position.y + 0.05, seat.position.z);
+  const aimed = guests.seatAimed(over, over, null, null);
+  return aimed ? { table: aimed.table, dirty: aimed.dirty } : null;
+}, first.table);
+check('a guest held over the dirty table is offered no seat there', offered === null || offered.table !== first.table, JSON.stringify(offered));
+await h.screenshot('artifacts/cleaning-1-dirty.png');
+
+// 2. The barista, with nothing to serve, cleans it.
+await until(() => window.__cafe.baristas.staff.some((m) => m.state === 'cleaning'), 60000);
+const cleaningAt = await state();
+await until(() => window.__cafe.mess.cleaned >= 1, 60000);
+s = await state();
+const wipe = await page.evaluate(() => window.__cafe.baristas.staff[0].lasts);
+check('the barista goes to the dirty table and wipes it for 3 s; the mess goes and the seats are open again', cleaningAt.staff[0].state === 'cleaning' && cleaningAt.staff[0].chore === first.table && wipe === 3 && s.cleaned === 1 && s.dirty.length === 0 && s.closed.length === 0 && s.cleanedCount === 1, JSON.stringify({ was: cleaningAt.staff[0], wipe, dirty: s.dirty, closed: s.closed, cleaned: s.cleaned }));
+await until(() => window.__cafe.baristas.staff[0].state === 'working', 60000);
+
+// 3. An order comes first: break off, serve, clean after.
+await page.evaluate(() => { const { mess } = window.__cafe; mess.soil(1); mess.soil(5); });
+await until(() => window.__cafe.baristas.staff[0].state === 'toClean' || window.__cafe.baristas.staff[0].state === 'cleaning', 60000);
+const second = await seatAt(0, 0.025);
+await until(() => window.__cafe.baristas.cleaningsBrokenOff >= 1, 30000);
+const broke = await state();
+await until(() => window.__cafe.baristas.servedCount >= 2, 90000);
+// Then every table clean again (the second guest's own table too, once it has gone).
+await until(() => window.__cafe.mess.cleaned >= 3 && window.__cafe.mess.dirtyTables().length === 0 && !window.__cafe.guests.guests.some((g) => g.state === 'seated'), 180000);
+await page.waitForTimeout(2500);
+await until(() => window.__cafe.mess.dirtyTables().length === 0, 60000);
+s = await state();
+check('a guest seated while the only barista is off cleaning: it breaks off, serves, then cleans the rest', broke.brokenOff === 1 && broke.staff[0].state === 'back' && s.served >= 2 && s.cleaned >= 3 && s.dirty.length === 0, JSON.stringify({ broke: broke.staff[0], served: s.served, cleaned: s.cleaned, dirty: s.dirty, secondTable: second.table }));
+
+// 4. On the way back: a dirty table near by is cleaned first.
+await until(() => window.__cafe.baristas.staff[0].state === 'working', 60000);
+await page.evaluate(() => { window.__cafe.guests.mealSeconds = 60; });
+const third = await seatAt(-0.13, 0.025);
+await until(() => window.__cafe.baristas.staff[0].state === 'serving', 60000);
+// The table beside it (the centre front one, 13 cm away) is dirty as the tray goes down.
+await page.evaluate(() => window.__cafe.mess.soil(8));
+await until(() => window.__cafe.baristas.staff[0].state !== 'serving', 30000);
+const after = await state();
+check('an order set down, a dirty table near by is cleaned on the way back (not from the bar)', (after.staff[0].state === 'toClean' || after.staff[0].state === 'cleaning') && after.staff[0].chore === 8, JSON.stringify({ after: after.staff[0], thirdTable: third.table }));
+await until(() => window.__cafe.mess.dirtyTables().length === 0, 60000);
+// The third guest finishes and its table is cleaned too, so the café is clean before the janitor comes.
+await page.evaluate(() => { window.__cafe.guests.mealSeconds = 1.5; });
+await until(() => !window.__cafe.guests.guests.some((g) => g.state === 'seated'), 90000);
+await page.waitForTimeout(2500);
+await until(() => window.__cafe.mess.dirtyTables().length === 0 && window.__cafe.baristas.staff[0].state === 'working', 90000);
+
+// 5. The janitor in the shop.
+await page.evaluate(() => { window.__cafe.score.bank = 100; window.__cafe.game.click('bar-shop'); });
+await until(() => window.__cafe.game.menu.cardKind === 'shop');
+s = await state();
+check('the shop offers the janitor at 120 (pale with 100 in the bank)', s.card === 'shop' && s.janitorPrice === 120 && !s.buttons.includes('hire-janitor') && s.buttons.filter((b) => b === 'hire-later').length >= 1, JSON.stringify({ buttons: s.buttons, janitorPrice: s.janitorPrice }));
+await page.evaluate(() => { window.__cafe.score.bank = 130; window.__cafe.game.click('shop-close'); window.__cafe.game.click('bar-shop'); });
+await until(() => window.__cafe.game.menu.cardKind === 'shop' && window.__cafe.game.menu.card.buttons.some((b) => b.id === 'hire-janitor'));
+await h.screenshot('artifacts/cleaning-2-shop.png');
+await page.evaluate(() => window.__cafe.game.click('hire-janitor'));
+await until(() => window.__cafe.baristas.janitor !== null, 60000);
+s = await state();
+const jan = s.staff.find((m) => m.role === 'janitor');
+check('HIRE: the janitor is hired for 120, once, and stands by the counter\'s end', s.janitor && s.janitorPrice === null && s.bank === 10 && !!jan && jan.at[0] > 0.05 && jan.at[2] < -0.1 && s.saved?.janitor === true, JSON.stringify({ janitor: s.janitor, price: s.janitorPrice, bank: s.bank, at: jan?.at, saved: s.saved?.janitor }));
+await page.evaluate(() => window.__cafe.game.click('shop-close'));
+await until(() => window.__cafe.game.phase === 'run');
+// Two tables dirty, the older first; a guest seated at the same time: the barista serves, the janitor cleans.
+await page.evaluate(() => window.__cafe.mess.soil(3));
+await page.waitForTimeout(300);
+await page.evaluate(() => window.__cafe.mess.soil(10));
+const fourth = await seatAt(0, 0.025);
+await until(() => window.__cafe.baristas.janitor?.state === 'toClean', 30000);
+const going = await state();
+await until(() => window.__cafe.baristas.janitor?.cleans >= 2 && window.__cafe.baristas.servedCount >= 4, 180000);
+s = await state();
+const janAfter = s.staff.find((m) => m.role === 'janitor');
+check('the janitor goes to the longest dirty table first and never serves; the barista serves meanwhile', going.staff.find((m) => m.role === 'janitor').chore === 3 && janAfter.cleans === 2 && janAfter.trips === 0 && s.served >= 4, JSON.stringify({ going: going.staff, cleans: janAfter.cleans, trips: janAfter.trips, served: s.served, fourthTable: fourth.table }));
+await h.screenshot('artifacts/cleaning-3-janitor.png');
+
+// 6. Pause freezes a cleaner; the janitor is saved, the messes are not.
+await page.evaluate(() => window.__cafe.mess.soil(7));
+await until(() => window.__cafe.baristas.staff.some((m) => m.state === 'toClean' || m.state === 'cleaning'), 30000);
+await page.evaluate(() => window.__cafe.game.click('bar-pause'));
+await until(() => window.__cafe.game.phase === 'paused');
+const p1 = await state();
+await page.waitForTimeout(1500);
+const p2 = await state();
+check('paused, a cleaner stands where it was', p1.speed === 0 && JSON.stringify(p1.staff.map((m) => m.at)) === JSON.stringify(p2.staff.map((m) => m.at)), JSON.stringify({ speed: p1.speed, moved: p1.staff.map((m, i) => Math.hypot(...m.at.map((v, k) => v - p2.staff[i].at[k]))) }));
+await h.reload();
+await ready(h);
+await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); game.click('skip'); });
+await until(() => window.__cafe.game.phase === 'run');
+await until(() => window.__cafe.baristas.janitor !== null, 60000);
+s = await state();
+check('after a reload the janitor is back and the café is clean', s.janitor && s.staff.some((m) => m.role === 'janitor') && s.dirty.length === 0, JSON.stringify({ janitor: s.janitor, roles: s.staff.map((m) => m.role), dirty: s.dirty }));
+
+const errors = await h.finish();
+check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');
+console.log(`${results.filter(Boolean).length}/${results.length} checks passed`);
+process.exit(results.every(Boolean) ? 0 : 1);

@@ -123,6 +123,9 @@ check('the card asks BUY 10', named === 'BUY 10', `${named}`);
 await send('set_transform', { device: 'hand-right', position: { x: -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
 await h.screenshot('artifacts/tables-3-buy.png');
 
+const calls = await page.evaluate(() => window.__cafe.world.renderer.info.render.calls);
+check('the tags and the per-table batches keep the draw calls modest (under 400)', calls > 0 && calls < 400, `${calls} draw calls with the buy card up`);
+
 // 3. NOT NOW.
 await page.evaluate(() => window.__cafe.game.click('buy-no'));
 await frames(3);

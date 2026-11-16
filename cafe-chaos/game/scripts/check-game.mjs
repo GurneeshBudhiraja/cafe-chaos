@@ -123,7 +123,8 @@ await until(() => window.__cafe.game.step === 1, null, 20000);
 const step1 = (await state()).step;
 const over = await page.evaluate(() => {
   const { guests, system } = window.__cafe;
-  const seat = guests.seats.find((x) => x.occupant === 0 && x.position.z > 0 && Math.abs(x.position.x) < 0.1) ?? guests.seats.find((x) => x.occupant === 0);
+  // An open seat (the tables either side of the centre ones start locked).
+  const seat = guests.seats.find((x) => x.occupant === 0 && !x.locked && x.position.z > 0 && Math.abs(x.position.x) < 0.1) ?? guests.seats.find((x) => x.occupant === 0 && !x.locked);
   const p = seat.position.clone();
   p.y += 0.06;
   return system.cafe.localToWorld(p).toArray();
@@ -131,6 +132,8 @@ const over = await page.evaluate(() => {
 await pinchAt(over);
 await frames(25);
 await pinch(0);
+// Open fingers over the seat until the guest is let go (a real hand does not jump away in the same instant).
+await until(() => window.__cafe.guests.guests[0]?.state !== 'held', null, 10000);
 await handTo(AWAY);
 await until(() => window.__cafe.guests.seated >= 1, null, 30000);
 await until(() => window.__cafe.game.step === 2, null, 20000);
@@ -172,7 +175,7 @@ const fumer = await page.evaluate(() => {
   guests.arrivals = false;
   guests.patienceFrozen = true;
   const g = guests.line.find((x) => x.state === 'queued');
-  const seat = guests.seats.find((x) => x.occupant === 0);
+  const seat = guests.seats.find((x) => x.occupant === 0 && !x.locked);
   guests.seatGuest(g.id, seat.index);
   // Watch for the fuming from inside the page: at the emulator's frame time it can come and go between two looks from here.
   window.__fumed = null;

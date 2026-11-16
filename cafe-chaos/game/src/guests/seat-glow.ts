@@ -32,6 +32,8 @@ export const GLOW = { color: 0x9a86ff, pad: 0.034, halo: 0.07, column: { radius:
 export const GRANT = { color: 0x58e39a, dot: 1.7 };
 /** The landing seat when it would not meet every wish of the carried guest: a warm red. */
 export const DENY = { color: 0xff4a3a };
+/** A seat on a dirty table, while a guest is carried: an amber dot (not for sitting until it is cleaned). */
+export const DIRTY = { color: 0xf2a95b, dot: 1.25 };
 /** The landing glow breathes between these, this many times a second: slow, like the lanterns. */
 const PULSE = { low: 0.72, high: 1, rate: 0.9 };
 /** How strong each layer is (0 to 1): enough to find at a glance, no more. */
@@ -101,6 +103,7 @@ export class SeatGlow {
   private readonly violet = new Color(GLOW.color);
   private readonly mint = new Color(GRANT.color);
   private readonly red = new Color(DENY.color);
+  private readonly amber = new Color(DIRTY.color);
   private readonly place = new Vector3();
 
   constructor(cafe: Group, seatCount: number) {
@@ -171,10 +174,10 @@ export class SeatGlow {
     if (carrying) {
       for (const seat of seats) {
         if (seat.occupant !== 0 || seat.locked || targets.includes(seat)) continue;
-        const grant = granting?.has(seat) ?? false;
-        this.scale.setScalar(GLOW.dot * (grant ? GRANT.dot : 1));
+        const grant = !seat.dirty && (granting?.has(seat) ?? false);
+        this.scale.setScalar(GLOW.dot * (seat.dirty ? DIRTY.dot : grant ? GRANT.dot : 1));
         this.matrix.compose(this.place.set(seat.position.x, seat.position.y + GLOW.lift, seat.position.z), this.flat, this.scale);
-        this.dots.setColorAt(count, grant ? this.mint : this.violet);
+        this.dots.setColorAt(count, seat.dirty ? this.amber : grant ? this.mint : this.violet);
         this.dots.setMatrixAt(count++, this.matrix);
       }
       this.dots.instanceMatrix.needsUpdate = true;

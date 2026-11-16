@@ -95,9 +95,11 @@ export interface LevelState {
   bonus: number;
   goal: number;
 }
-/** The buy card: the table pointed at (its name and seats), what it costs, and the bank. */
+/** The buy card: the table pointed at (its name, its picture and seats), what it costs, and the bank. */
 export interface BuyState {
   name: string;
+  /** Its picture in the icon set (ICONS). */
+  icon: number;
   seats: number;
   price: number;
   coins: number;
@@ -110,20 +112,67 @@ export interface FailState {
   /** Guests who left unhappy in the level: why the happiness ran out. */
   left: number;
 }
-/** The shop: the bank, and each barista in hiring order. */
+/**
+ * The shop: the bank, and a row for each kind of staff (not each person):
+ * the baristas (how many work of how many there can be, and HIRE for the
+ * next at its price, or "All working") and the janitor (HIRE, or
+ * "Working"). The row stays the same shape as the staff grows.
+ */
 export interface ShopState {
   coins: number;
   rows: {
+    kind: 'barista' | 'janitor';
     name: string;
-    /** 'working': hired (or the first). 'hire': next, and the bank can pay. 'short': next, and it cannot. 'later': after the next. */
-    status: 'working' | 'hire' | 'short' | 'later';
+    /** What it does, under its name. */
+    line: string;
+    /** How many work now, of the most there can be. */
+    working: number;
+    most: number;
+    /** 'hire': the bank can pay. 'short': it cannot. 'full': as many as there can be. */
+    status: 'hire' | 'short' | 'full';
     price?: number;
+    /** What HIRE does. */
+    id: string;
   }[];
+}
+/** The buy card: the table pointed at (its name, its picture and seats), what it costs, and the bank. */
+export interface BuyState {
+  name: string;
+  /** Its picture in the icon set (ICONS). */
+  icon: number;
+  seats: number;
+  price: number;
+  coins: number;
+}
+/** The card when the café's happiness ran out: the level, and how far it got. */
+export interface FailState {
+  level: number;
+  served: number;
+  goal: number;
+  /** Guests who left unhappy in the level: why the happiness ran out. */
+  left: number;
 }
 export interface WarnState {
   coins: number;
   staff: number;
   level: number;
+}
+
+/**
+ * The icon set (public/models/unlock-icons.png, rendered in Blender from
+ * the real models in the café's materials): 4 x 2 tiles of 256 px. The
+ * staff and the tables are shown by their pictures, not drawings.
+ */
+export const ICONS = { barista: 0, table2: 1, table4: 2, bar: 3, quiet: 4, janitor: -1 } as const;
+let icons: HTMLImageElement | null = null;
+const iconListeners: (() => void)[] = [];
+if (typeof Image !== 'undefined') {
+  const img = new Image();
+  img.onload = () => {
+    icons = img;
+    for (const f of iconListeners) f();
+  };
+  img.src = `${import.meta.env.BASE_URL}models/unlock-icons.png`;
 }
 
 let cover: HTMLImageElement | null = null;
@@ -185,6 +234,7 @@ export class StartMenu {
     this.k = this.sheet.width / W;
     this.kh = this.how.width / HW;
     coverListeners.push(() => this.card.paint());
+    iconListeners.push(() => this.card.paint());
   }
 
   /** How to play, in front of the eyes where the start card stands (the game hides the card behind), from `index`. */
@@ -864,13 +914,16 @@ export class StartMenu {
       const rc = pen(this.card.canvas);
       this.paper(ctx, rc, 0, H, SW);
       const mid = lx + lw / 2;
-      // The seal: a paper disc with a padlock.
+      // The table's picture (the real model's render), a small padlock on its frame.
       const sy = H / 2 - 40;
-      rc.circle(mid, sy, 230, this.o({ fill: SKETCH.paper, fillStyle: 'solid', stroke: SKETCH.timber, strokeWidth: 5, seed: this.seed + 80 }));
-      rc.rectangle(mid - 44, sy - 10, 88, 70, this.o({ fill: SKETCH.ink, fillStyle: 'solid', stroke: SKETCH.ink, seed: this.seed + 81 }));
-      rc.arc(mid, sy - 10, 64, 80, Math.PI, Math.PI * 2, false, this.o({ strokeWidth: 7, seed: this.seed + 82 }));
-      text(ctx, s.name, mid, sy + 170, 44, SKETCH.ink);
-      text(ctx, `Seats ${s.seats}`, mid, sy + 222, 32, SKETCH.soft, 'center', false);
+      this.iconPortrait(ctx, rc, s.icon, mid, sy, 260, this.seed + 80);
+      const lx2 = mid + 92;
+      const ly2 = sy + 88;
+      rc.circle(lx2, ly2, 64, this.o({ fill: SKETCH.paper, fillStyle: 'solid', stroke: SKETCH.timber, strokeWidth: 3, seed: this.seed + 84 }));
+      rc.rectangle(lx2 - 15, ly2 - 4, 30, 24, this.o({ fill: SKETCH.ink, fillStyle: 'solid', stroke: SKETCH.ink, seed: this.seed + 81 }));
+      rc.arc(lx2, ly2 - 4, 22, 28, Math.PI, Math.PI * 2, false, this.o({ strokeWidth: 4, seed: this.seed + 82 }));
+      text(ctx, s.name, mid, sy + 182, 44, SKETCH.ink);
+      text(ctx, `Seats ${s.seats}`, mid, sy + 230, 32, SKETCH.soft, 'center', false);
       const tx = cx + cw / 2;
       text(ctx, 'Open this table?', tx, PAD + 60, 50, SKETCH.ink);
       const coinsY = PAD + 150;
@@ -882,6 +935,14 @@ export class StartMenu {
       if (!can) text(ctx, `Need ${(s.price - s.coins).toLocaleString('en')} more`, tx, coinsY + 56, 30, SKETCH.koi, 'center', false);
       ctx.restore();
     }, buttons);
+  }
+
+  /** The janitor's place in the shop: a round frame with a mop in their colour. */
+  private mopPortrait(rc: RoughCanvas, x: number, y: number, d: number, tint: string, seed: number): void {
+    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
+    rc.line(x + d * 0.12, y - d * 0.3, x - d * 0.08, y + d * 0.22, this.o({ seed: seed + 1, strokeWidth: 3.5 }));
+    rc.ellipse(x - d * 0.1, y + d * 0.27, d * 0.34, d * 0.16, this.o({ seed: seed + 2, strokeWidth: 2.5, fill: tint, fillStyle: 'solid' }));
+    for (const side of [-1, 0, 1]) rc.line(x - d * 0.1 + side * d * 0.1, y + d * 0.3, x - d * 0.12 + side * d * 0.13, y + d * 0.42, this.o({ seed: seed + 4 + side, strokeWidth: 2 }));
   }
 
   /** A barista's place in the shop: a round frame with a steaming cup in their colour. */
@@ -905,29 +966,28 @@ export class StartMenu {
     const SW = Math.round(this.card.width / this.k);
     const H = Math.round(this.card.height / this.k);
     const HEAD = 84;
-    const ROW_GAP = 16;
-    const y0 = PAD + HEAD + 20;
-    const ROW = Math.min(124, Math.floor((H - PAD - y0 - ROW_GAP * (s.rows.length - 1)) / Math.max(1, s.rows.length)));
+    const ROW_GAP = 24;
+    const y0 = PAD + HEAD + 24;
+    const ROW = Math.floor((H - PAD - y0 - ROW_GAP * (s.rows.length - 1)) / Math.max(1, s.rows.length));
     const buttons: Button[] = [];
     const bw = 290;
-    const bh = Math.min(100, ROW - 16);
+    const bh = Math.min(110, ROW - 20);
     let y = y0;
     s.rows.forEach((r) => {
-      if (r.status !== 'working' && r.price !== undefined) {
-        buttons.push(this.priceButton(this.card, r.status === 'hire' ? 'hire' : 'hire-later', SW - PAD - bw, y + (ROW - bh) / 2, bw, bh, r.status === 'hire' ? 'primary' : 'off', 'HIRE', r.price));
+      if (r.status !== 'full' && r.price !== undefined) {
+        buttons.push(this.priceButton(this.card, r.status === 'hire' ? r.id : 'hire-later', SW - PAD - bw, y + (ROW - bh) / 2, bw, bh, r.status === 'hire' ? 'primary' : 'off', 'HIRE', r.price));
       }
       y += ROW + ROW_GAP;
     });
     const qw = 170;
     buttons.push(this.button(this.card, 'shop-close', SW - PAD - qw, PAD, qw, HEAD, 'secondary', 'CLOSE'));
-    const tints = ['#7a9a6e', '#d48a8a', '#8aa3c9'];
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
       ctx.scale(this.k, this.k);
       const rc = pen(this.card.canvas);
       this.paper(ctx, rc, 0, H, SW);
-      text(ctx, 'Hire baristas', PAD + 4, PAD + HEAD / 2, 52, SKETCH.ink, 'left');
+      text(ctx, 'Hire staff', PAD + 4, PAD + HEAD / 2, 52, SKETCH.ink, 'left');
       const coins = `${s.coins.toLocaleString('en')} coins`;
       ctx.font = font(36);
       const cw = ctx.measureText(coins).width;
@@ -936,13 +996,43 @@ export class StartMenu {
       text(ctx, coins, coinX, PAD + HEAD / 2 + 2, 36, SKETCH.ink, 'left');
       let ry = y0;
       s.rows.forEach((r, i) => {
-        const d = Math.min(100, ROW - 10);
-        this.portrait(rc, PAD + d / 2 + 8, ry + ROW / 2, d, tints[i % tints.length], this.seed + 100 + i * 10);
-        text(ctx, r.name, PAD + d + 40, ry + ROW / 2 + 2, 44, SKETCH.ink, 'left');
-        if (r.status === 'working') text(ctx, 'Works for you', SW - PAD - 14, ry + ROW / 2 + 2, 32, SKETCH.moss, 'right');
+        // The picture: the real model's render in a round paper frame (the janitor drawn until its render is made).
+        const d = Math.min(150, ROW - 8);
+        const px = PAD + d / 2 + 4;
+        const py = ry + ROW / 2;
+        if (r.kind === 'janitor') this.mopPortrait(rc, px, py, d, '#6f8f5a', this.seed + 100 + i * 10);
+        else this.iconPortrait(ctx, rc, ICONS.barista, px, py, d, this.seed + 100 + i * 10);
+        const tx = PAD + d + 32;
+        // The words stop short of the HIRE button: what it does on up to two lines.
+        const room = SW - PAD - bw - 24 - tx;
+        text(ctx, r.name, tx, py - 34, 48, SKETCH.ink, 'left');
+        this.wrap(ctx, r.line, 28, false, room).slice(0, 2).forEach((l, n) => text(ctx, l, tx, py + 4 + n * 30, 28, SKETCH.soft, 'left', false));
+        // How many work: a pip each, filled for the ones hired.
+        if (r.most > 1) {
+          for (let k = 0; k < r.most; k++) rc.circle(tx + 12 + k * 34, py + 66, 22, this.o({ seed: this.seed + 200 + i * 10 + k, strokeWidth: 2.5, fill: k < r.working ? SKETCH.moss : SKETCH.paper, fillStyle: 'solid' }));
+          text(ctx, `${r.working} of ${r.most} working`, tx + r.most * 34 + 6, py + 67, 26, SKETCH.soft, 'left', false);
+        } else if (r.working > 0) text(ctx, 'Working for you', tx, py + 67, 26, SKETCH.moss, 'left', false);
+        if (r.status === 'full') text(ctx, r.most > 1 ? 'All working' : 'Working', SW - PAD - 14, py + 2, 34, SKETCH.moss, 'right');
         ry += ROW + ROW_GAP;
       });
       ctx.restore();
     }, buttons);
+  }
+
+  /** A model's picture from the icon set in a round paper frame (a blank disc until the set has loaded). */
+  private iconPortrait(ctx: CanvasRenderingContext2D, rc: RoughCanvas, tile: number, x: number, y: number, d: number, seed: number): void {
+    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
+    if (!icons || tile < 0) return;
+    const tw = icons.width / 4;
+    const th = icons.height / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, d / 2 - 4, 0, Math.PI * 2);
+    ctx.clip();
+    // The renders have room round them: the middle of the tile, larger, fills the frame.
+    const crop = 0.18;
+    const s = d * 0.98;
+    ctx.drawImage(icons, (tile % 4) * tw + tw * crop, Math.floor(tile / 4) * th + th * crop * 0.6, tw * (1 - crop * 2), th * (1 - crop * 2), x - s / 2, y - s / 2, s, s);
+    ctx.restore();
   }
 }

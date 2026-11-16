@@ -3,8 +3,8 @@
  * pen, a padlock on the left and the price beside a coin, standing a
  * little above the table and turned to the player. It is a Panel with one
  * button over all of it, so the hand ray lights it (Meta: show the hover)
- * and a pinch on it opens the buy card (GameSystem); a fingertip in reach
- * presses it too.
+ * and a pinch on it opens the buy card (GameSystem). The ray only: a
+ * fingertip or a pinch among the tables is for the guests, never a tag.
  *
  * Moss with the padlock open when the bank can pay, plain paper with it
  * shut when it cannot (never colour alone: WCAG 1.4.1, Meta's
@@ -22,7 +22,7 @@ import { hand, line, pen, SKETCH, sketchCoin } from './sketch.js';
  * for a ray target each way; its digits about 0.9 degrees, over
  * Microsoft's 0.4 to 0.5 minimum for text at arm's length.
  */
-export const LOCK_TAG = { width: 0.06, height: 0.042, above: 0.05 };
+export const LOCK_TAG = { width: 0.066, height: 0.042, above: 0.05 };
 
 export class LockTag {
   readonly panel: Panel;
@@ -35,7 +35,8 @@ export class LockTag {
     this.panel.frame = false;
     this.panel.onTop = true;
     this.panel.turn = 3;
-    this.panel.mesh.renderOrder = 32;
+    // Over the café (no depth test), under the menu cards (drawn at 30): the buy card covers the other tags.
+    this.panel.mesh.renderOrder = 29;
   }
 
   /** Draw (again) for this price, and whether the bank can pay it. */
@@ -75,13 +76,22 @@ export class LockTag {
     // The shackle: shut over the body, or (the bank can pay) swung open to the side, standing on one leg.
     if (this.affordable) rc.arc(bx + bw * 0.42, by - bh / 2 - bh * 0.35, bw * 0.7, bh * 1.1, Math.PI * 0.5, Math.PI * 1.5, false, line(320 + this.table, lw * 1.1, { stroke: ink }));
     else rc.arc(bx, by - bh / 2, bw * 0.7, bh * 1.1, Math.PI, Math.PI * 2, false, line(320 + this.table, lw * 1.1, { stroke: ink }));
-    // The price beside a coin.
-    const cx = w * 0.42;
-    sketchCoin(rc, cx, h * 0.5 + dip, h * 0.34, 330 + this.table, lw * 0.9);
-    ctx.font = hand(h * 0.42, 700);
+    // The price beside a coin, the figures made smaller if three or more would not fit.
+    const cx = w * 0.4;
+    sketchCoin(rc, cx, h * 0.5 + dip, h * 0.32, 330 + this.table, lw * 0.9);
+    const word = `${this.price}`;
+    const from = cx + h * 0.22;
+    const room = w - lw * 3 - h * 0.08 - from;
+    let size = h * 0.42;
+    ctx.font = hand(size, 700);
+    const wide = ctx.measureText(word).width;
+    if (wide > room) {
+      size *= room / wide;
+      ctx.font = hand(size, 700);
+    }
     ctx.fillStyle = ink;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${this.price}`, cx + h * 0.26, h * 0.53 + dip);
+    ctx.fillText(word, from, h * 0.53 + dip);
   }
 }

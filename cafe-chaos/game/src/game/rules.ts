@@ -180,6 +180,23 @@ export function tablePrice(bought: number): number {
 }
 
 /**
+ * Cleaning. A table is dirty from the moment its last guest leaves until
+ * a member of staff has wiped it for `seconds`; nobody is seated at a
+ * dirty table. A barista cleans when it has nothing to serve: on its way
+ * back from a table, a dirty one within `near` metres of walking; from
+ * the bar, the nearest; an order always comes first, and a barista
+ * cleaning when one comes in leaves the table and goes to serve. The
+ * janitor (one, `JANITOR_PRICE`, bought in the shop) only cleans, the
+ * longest dirty first, from its spot by the counter's end (`home`, café
+ * space). The mess is sized for a small table (`bigMess`, `smallMess`
+ * scale it for the others) and shrinks away over `vanish` seconds.
+ * (estimate: 3 s, a wipe's worth; with one barista a round trip is 16 s
+ * measured, so a stop to clean adds a fifth)
+ */
+export const CLEAN = { seconds: 3, near: 0.3, vanish: 0.4, bigMess: 1.3, smallMess: 0.8, home: { x: 0.17, z: -0.2, reach: 0.1 } };
+export const JANITOR_PRICE = 120;
+
+/**
  * The staff. The café opens with `STARTING_STAFF` server; each further
  * one is hired with coins and stays hired (it is saved). `HIRE_PRICES[n]`
  * is the price of the server after the n-th hire, so the second server

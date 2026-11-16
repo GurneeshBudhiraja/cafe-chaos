@@ -406,7 +406,7 @@ export class GuestSystem extends createSystem({}) {
         scale,
         Math.min(0.1, delta),
       );
-      if (carried) for (const seat of this.seats) if (seat.occupant === 0 && !seat.locked && this.wouldGrant(carried, seat)) this.granting.add(seat);
+      if (carried) for (const seat of this.seats) if (seat.occupant === 0 && !seat.locked && !seat.dirty && this.wouldGrant(carried, seat)) this.granting.add(seat);
     });
   }
 
@@ -924,7 +924,7 @@ export class GuestSystem extends createSystem({}) {
     let best: Seat | null = null;
     let bestDistance = AIM_SNAP_M;
     for (const seat of this.seats) {
-      if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked) continue;
+      if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked || seat.dirty) continue;
       const d = Math.hypot(spot.x - seat.position.x, spot.z - seat.position.z);
       if (d < bestDistance) {
         bestDistance = d;
