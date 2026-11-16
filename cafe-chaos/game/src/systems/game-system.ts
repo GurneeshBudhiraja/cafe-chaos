@@ -36,6 +36,7 @@ import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 import { HandRays } from '../hands/hand-ray.js';
 import { arrivalPace, HIRE_PRICES, MEAL_SECONDS, patienceShare, STARTING_STAFF, WISH, wishChance } from '../game/rules.js';
 import { BARISTA_NAMES } from '../baristas/barista.js';
+import { HOW_TO_PLAY } from '../game/how-to-play.js';
 import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS } from '../guests/rules.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
@@ -103,19 +104,16 @@ const MENU_SPOT = { distance: 0.45, below: 25, follow: 35, glide: 4, shift: 0.12
 const MM = 2.4;
 
 /**
- * The game in three pictures, taken from the game itself
- * (scripts/shoot-howto.mjs). How to play shows the first three; the first run's
- * coach card shows the one for the step in hand.
+ * The first run's coach card: a picture for each move, taken from the game
+ * itself (scripts/shoot-howto.mjs). How to play has its own list of steps,
+ * with videos (game/how-to-play.ts).
  */
 const MOVES = [
   { picture: 'howto-pinch.jpg', title: 'Pinch a guest', text: 'Put your fingers above a guest at the gate. When the guest glows, pinch.' },
   { picture: 'howto-seat.jpg', title: 'Seat the guest', text: 'Move the guest above the café. Open your fingers. The guest goes to the seat that glows.' },
   { picture: 'howto-happy.jpg', title: 'Keep guests happy', text: 'Seat guests quickly. The bar above the café shows how happy the guests are.' },
-  // The coach card only (How to play shows the first three).
   { picture: 'howto-pause.jpg', title: 'Pause and shop', text: 'Point your hand at the bar and pinch. Pause is at the left end. Shop is at the right end.' },
 ];
-/** How many of the MOVES How to play shows. */
-const HOW_MOVES = 3;
 /** The bank is saved this often during a run (seconds), so little is lost if the page is closed. */
 const AUTOSAVE_SECONDS = 20;
 
@@ -238,9 +236,7 @@ export class GameSystem extends createSystem({}) {
       const image = new Image();
       image.onload = () => {
         this.pictures[i] = image;
-        if (i < HOW_MOVES) this.menu.howPictures[i] = image;
-        // Cards already up are drawn again with it.
-        this.how.paint();
+        // The coach card, if it is up, is drawn again with it.
         this.coach.paint();
       };
       image.src = `${import.meta.env.BASE_URL}ui/${move.picture}`;
@@ -512,13 +508,13 @@ export class GameSystem extends createSystem({}) {
     this.openCafe(this.save.tutorialDone ? 'run' : 'tutorial');
   }
 
-  /** How to play: the game in three pictures, each with a line. */
+  /** How to play: the steps one at a time, each a looping video and a line (game/how-to-play.ts). */
   toRules(): void {
     this.rulesFrom = this.phase;
     this.phase = 'rules';
     this.card.show(false);
     this.menu.hideAll();
-    this.menu.showHow(MOVES.slice(0, HOW_MOVES));
+    this.menu.showHow(HOW_TO_PLAY);
   }
 
   /** The first run's teaching: a guest waits at the gate, its patience held, and the coach card says what to do. */
@@ -960,7 +956,15 @@ export class GameSystem extends createSystem({}) {
       case 'rules':
         this.toRules();
         break;
+      case 'how-prev':
+        this.menu.howStep(-1);
+        break;
+      case 'how-next':
+        this.menu.howStep(1);
+        break;
+      case 'how-done':
       case 'back':
+        // Closing How to play (its close button, or DONE on the last step): back where it was opened from.
         if (this.rulesFrom === 'paused') {
           this.how.show(false);
           this.phase = 'paused';

@@ -93,9 +93,11 @@ await page.screenshot({ path: 'artifacts/bar-paused.png' });
 
 // 3. Pause again (now play): 3, 2, 1, run.
 await aimAt('bar-pause');
+// Watch for the count in the page itself: on a slow emulator it can be over before the next look.
+await page.evaluate(() => { window.__sawCount = false; const t = setInterval(() => { const g = window.__cafe.game; if (g.resuming > 0 && g.menu.cardKind === 'count') { window.__sawCount = true; clearInterval(t); } }, 16); });
 await tap();
 s = await state();
-const counting = s.resuming > 0 && s.kind === 'count';
+const counting = await page.evaluate(() => window.__sawCount);
 const back = await until(() => window.__cafe.game.phase === 'run' && !window.__cafe.game.menu.card.open, null, 15000);
 check('Pause while paused counts back in, then the run goes on', counting && back, `counting ${counting} (${s.kind}), back ${back}`);
 

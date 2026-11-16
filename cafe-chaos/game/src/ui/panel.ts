@@ -138,6 +138,11 @@ export class Panel {
     this.mesh.userData.dynamic = true;
   }
 
+  /** How far it is shown now (0 hidden to 1 up, eased): things laid over the card fade with it. */
+  get shownAmount(): number {
+    return this.mesh.visible ? this.shown : 0;
+  }
+
   /** True while it is up (or coming up). */
   get open(): boolean {
     return this.want;

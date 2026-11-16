@@ -24,7 +24,9 @@
  * Everything is drawn in design units (720 across) and scaled to the panel.
  */
 
+import { LinearFilter, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, VideoTexture } from '@iwsdk/core';
 import type { RoughCanvas } from 'roughjs/bin/canvas';
+import type { HowToStep } from '../game/how-to-play.js';
 import type { Options } from 'roughjs/bin/core';
 import { Panel, type Button } from './panel.js';
 import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
@@ -32,18 +34,18 @@ import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
 /** The two cards' sizes (metres). The start card is 24 cm across; the sheet the same width. */
 export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.21 };
 /**
- * How to play: the same card as on the web page (index.html #how), wider for
- * its three steps side by side: 33 cm across, drawn in 1080 design units.
- * Its paper is centred on the panel and only as tall as what is on it (the
- * panel leaves room for longer text).
+ * How to play: one step at a time, as on the web page (index.html #how):
+ * the step's video (looping, silent) over its title and line, PREVIOUS and
+ * NEXT at the bottom (DONE on the last step), and a close button at the
+ * top. 33 cm across, drawn in 1080 design units; the steps come from
+ * game/how-to-play.ts.
  */
 export const HOW_SIZE = { width: 0.33, height: 0.32 };
 const HW = 1080;
-/** One step of How to play: a picture (drawn once loaded), a title and a line. */
-export interface HowStep {
-  title: string;
-  text: string;
-}
+/** Canvas pixels per metre of panel (as ui/panel.ts). */
+const PPM = 2400;
+/** The video's frame on the How to play card (design units): 16:9, centred. */
+const HOW_VIDEO = { width: 880, height: 495 };
 /** Design units across. */
 const W = 720;
 const PAD = 36;
@@ -114,9 +116,17 @@ export class StartMenu {
   readonly card = new Panel('StartCard', MENU_SIZE.width, MENU_SIZE.height);
   readonly sheet = new Panel('MenuSheet', MENU_SIZE.width, MENU_SIZE.sheetHeight);
   readonly how = new Panel('HowCard', HOW_SIZE.width, HOW_SIZE.height);
-  /** How to play's pictures, by step, once loaded (the game loads them; set one and paint `how`). */
-  readonly howPictures: (HTMLImageElement | null)[] = [];
-  private howSteps: HowStep[] = [];
+  private howSteps: readonly HowToStep[] = [];
+  /** The step How to play shows (0-based). */
+  howIndex = 0;
+  /** Each step's still picture, by its path, once loaded. */
+  private readonly posters = new Map<string, HTMLImageElement | null>();
+  /** The step's video: one element, its texture on a plane laid over the card's picture frame. */
+  private readonly video: HTMLVideoElement | null = typeof document !== 'undefined' ? document.createElement('video') : null;
+  private videoPlane: Mesh<PlaneGeometry, MeshBasicMaterial> | null = null;
+  private videoFor = '';
+  /** Players who ask the system for less motion see the still picture, not the clip. */
+  private readonly still = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** What the sheet shows ('none' when it is closed). */
   sheetKind: 'none' | 'settings' | 'warn' | 'quit' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card, the shop, or the count back in. */
@@ -140,12 +150,92 @@ export class StartMenu {
     coverListeners.push(() => this.card.paint());
   }
 
-  /** How to play, in front of the eyes where the start card stands (the game hides the card behind). */
-  showHow(steps: HowStep[]): void {
+  /** How to play, in front of the eyes where the start card stands (the game hides the card behind), from `index`. */
+  showHow(steps: readonly HowToStep[], index = 0): void {
     this.howSteps = steps;
+    this.howIndex = Math.max(0, Math.min(steps.length - 1, index));
+    for (const step of steps) this.loadPoster(step.poster);
     this.layoutHow();
     this.how.show(true);
   }
+
+  /** The next or the previous step (`by` +1 or -1). False when there is none that way. */
+  howStep(by: number): boolean {
+    const to = this.howIndex + by;
+    if (to < 0 || to >= this.howSteps.length) return false;
+    this.howIndex = to;
+    this.layoutHow();
+    return true;
+  }
+
+  private loadPoster(path: string): void {
+    if (this.posters.has(path) || typeof Image === 'undefined') return;
+    this.posters.set(path, null);
+    const img = new Image();
+    img.onload = () => {
+      this.posters.set(path, img);
+      if (this.how.open) this.how.paint();
+    };
+    img.src = `${import.meta.env.BASE_URL}${path}`;
+  }
+
+  /**
+   * The video plane: made once, a child of the How to play card, so it moves,
+   * turns and scales with it; it stands a hair in front of the paper.
+   */
+  private ensureVideoPlane(): Mesh<PlaneGeometry, MeshBasicMaterial> | null {
+    if (this.videoPlane || !this.video) return this.videoPlane;
+    const v = this.video;
+    v.muted = true;
+    v.loop = true;
+    v.playsInline = true;
+    v.crossOrigin = 'anonymous';
+    v.preload = 'auto';
+    const texture = new VideoTexture(v);
+    texture.colorSpace = SRGBColorSpace;
+    texture.minFilter = LinearFilter;
+    texture.magFilter = LinearFilter;
+    const m = (units: number): number => (units * this.kh) / PPM;
+    const plane = new Mesh(new PlaneGeometry(m(HOW_VIDEO.width), m(HOW_VIDEO.height)), new MeshBasicMaterial({ map: texture, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
+    plane.name = 'HowVideo';
+    plane.renderOrder = this.how.mesh.renderOrder + 1;
+    plane.visible = false;
+    this.how.mesh.add(plane);
+    this.videoPlane = plane;
+    return plane;
+  }
+
+  /** Each frame: the step's clip plays over its frame while How to play is up; otherwise it stops. */
+  private tickVideo(): void {
+    const v = this.video;
+    if (!v) return;
+    const step = this.how.open ? this.howSteps[this.howIndex] : undefined;
+    const want = step?.video && !this.still ? `${import.meta.env.BASE_URL}${step.video}` : '';
+    if (!want) {
+      if (!v.paused) v.pause();
+      if (this.videoPlane) this.videoPlane.visible = false;
+      return;
+    }
+    const plane = this.ensureVideoPlane();
+    if (!plane) return;
+    if (this.videoFor !== want) {
+      this.videoFor = want;
+      v.src = want;
+      v.currentTime = 0;
+    }
+    if (v.paused) void v.play().catch(() => {});
+    // Over the picture frame (design units to the card's own metres, y up).
+    const top = this.howVideoTop;
+    const m = (units: number): number => (units * this.kh) / PPM;
+    plane.position.set(0, HOW_SIZE.height / 2 - m(top + HOW_VIDEO.height / 2), 0.0008);
+    // Shown once it has a picture, fading with the card.
+    const ready = v.readyState >= 2;
+    plane.visible = ready && this.how.shownAmount > 0;
+    plane.material.opacity = this.how.shownAmount;
+  }
+
+  /** Where the video's frame starts on the card (design units from the top), set by the layout. */
+  private howVideoTop = 0;
 
   /** Draw the start card for this state (and put it up). */
   showStart(state: StartState): void {
@@ -215,6 +305,7 @@ export class StartMenu {
 
   /** Each frame: the boil (a new seed, ten times a second) while a card is up. */
   tick(delta: number): void {
+    this.tickVideo();
     this.clock += delta;
     const seed = 1 + Math.floor(this.clock * BOIL_HZ);
     if (seed === this.seed) return;
@@ -366,70 +457,74 @@ export class StartMenu {
   }
 
   /**
-   * How to play, laid out as on the web page: the title; two notes for
-   * before you start (sit at a table, put down your controllers); the three
-   * steps side by side, each a picture, a numbered title and a line; CLOSE.
+   * How to play, one step at a time: the title and a close button at the
+   * top; the step's video (or still) in a 16:9 frame; its number, title and
+   * line; then PREVIOUS and NEXT at the bottom, where the hand rests (Meta:
+   * the most used controls low on the panel), with a dot for each step
+   * between them. The last step's NEXT reads DONE and closes, as the close
+   * button does.
    */
   private layoutHow(): void {
     const ctx = this.how.ctx;
     const H = Math.round(this.how.height / this.kh);
     const P = 54;
     const CW = HW - P * 2;
-    const GAP_H = 24;
-    const before = ['Sit at a table. The café stands on the table.', 'Put down your controllers. Use only your hands.'];
-    const bw = (CW - 18) / 2;
-    const beforeLines = before.map((b) => this.wrap(ctx, b, 30, false, bw - 36));
-    const bh = Math.max(...beforeLines.map((l) => l.length)) * 40 + 30;
-    const sw = (CW - GAP_H * 2) / 3;
-    const ph = Math.round(sw * 0.75);
-    const BADGE = 48;
-    const steps = this.howSteps.map((st) => ({
-      title: this.wrap(ctx, st.title, 33, true, sw - BADGE - 14),
-      text: this.wrap(ctx, st.text, 27, false, sw),
-    }));
-    const titleH = Math.max(BADGE, ...steps.map((st) => st.title.length * 38));
-    const textH = Math.max(0, ...steps.map((st) => st.text.length * 37));
-    const CLOSE_H = 104;
-    const used = P + 60 + 20 + bh + GAP_H + ph + 16 + titleH + 12 + textH + 30 + CLOSE_H + P;
+    const steps = this.howSteps;
+    const i = this.howIndex;
+    const step = steps[i];
+    if (!step) return;
+    const last = i === steps.length - 1;
+    const BADGE = 52;
+    const titleLines = this.wrap(ctx, step.title, 40, true, CW - BADGE - 16);
+    const textLines = this.wrap(ctx, step.text, 31, false, CW);
+    const HEAD = 96;
+    const NAV_H = 104;
+    const used = P + HEAD + 20 + HOW_VIDEO.height + 26 + titleLines.length * 48 + 10 + textLines.length * 42 + 30 + NAV_H + P;
     const top = Math.max(0, Math.round((H - used) / 2));
-    const yBefore = top + P + 80;
-    const ySteps = yBefore + bh + GAP_H;
-    const yClose = top + used - P - CLOSE_H;
-    const buttons = [this.button(this.how, 'back', P, yClose, CW, CLOSE_H, 'primary', 'CLOSE')];
+    const vx = (HW - HOW_VIDEO.width) / 2;
+    const vy = top + P + HEAD + 20;
+    this.howVideoTop = vy;
+    const yTitle = vy + HOW_VIDEO.height + 26;
+    const yText = yTitle + titleLines.length * 48 + 10;
+    const yNav = top + used - P - NAV_H;
+    const navW = 300;
+    const buttons: Button[] = [
+      this.button(this.how, 'back', HW - P - HEAD, top + P, HEAD, HEAD, 'secondary', '✕', undefined, true),
+      this.button(this.how, 'how-prev', P, yNav, navW, NAV_H, i === 0 ? 'off' : 'secondary', 'PREVIOUS'),
+      last ? this.button(this.how, 'how-done', HW - P - navW, yNav, navW, NAV_H, 'primary', 'DONE') : this.button(this.how, 'how-next', HW - P - navW, yNav, navW, NAV_H, 'primary', 'NEXT'),
+    ];
     this.how.set((c) => {
       c.clearRect(0, 0, this.how.canvas.width, this.how.canvas.height);
       c.save();
       c.scale(this.kh, this.kh);
       const rc = pen(this.how.canvas);
       this.paper(c, rc, top, H, HW);
-      text(c, 'How to play', HW / 2, top + P + 30, 52, SKETCH.ink);
-      beforeLines.forEach((lines, i) => {
-        const x = P + i * (bw + 18);
-        rc.rectangle(x, yBefore, bw, bh, this.o({ fill: '#e4d9c6', fillStyle: 'solid', strokeWidth: 3, seed: this.seed + 20 + i }));
-        const y0 = yBefore + bh / 2 - ((lines.length - 1) * 40) / 2;
-        lines.forEach((l, j) => text(c, l, x + bw / 2, y0 + j * 40, 30, SKETCH.ink, 'center', false));
-      });
-      steps.forEach((st, i) => {
-        const x = P + i * (sw + GAP_H);
-        const img = this.howPictures[i];
-        c.fillStyle = '#2a2420';
-        c.fillRect(x, ySteps, sw, ph);
-        if (img) {
-          // Cover the frame (crop, never stretch).
-          const s = Math.max(sw / img.width, ph / img.height);
-          const iw = sw / s;
-          const ih = ph / s;
-          c.drawImage(img, (img.width - iw) / 2, (img.height - ih) / 2, iw, ih, x, ySteps, sw, ph);
-        }
-        rc.rectangle(x, ySteps, sw, ph, this.o({ strokeWidth: 3, seed: this.seed + 30 + i }));
-        const yt = ySteps + ph + 16;
-        c.fillStyle = SKETCH.moss;
-        c.fillRect(x, yt, BADGE, BADGE);
-        text(c, `${i + 1}`, x + BADGE / 2, yt + BADGE / 2 + 2, 30, '#f2ebdd');
-        const ty = yt + (st.title.length === 1 ? BADGE / 2 : 19);
-        st.title.forEach((l, j) => text(c, l, x + BADGE + 14, ty + j * 38 + 2, 33, SKETCH.ink, 'left'));
-        const py = yt + titleH + 12 + 18;
-        st.text.forEach((l, j) => text(c, l, x, py + j * 37, 27, SKETCH.soft, 'left', false));
+      text(c, 'How to play', P, top + P + HEAD / 2, 52, SKETCH.ink, 'left');
+      // The frame: the still picture (shown until the clip plays, and for less motion), then the clip on top (tickVideo).
+      c.fillStyle = '#2a2420';
+      c.fillRect(vx, vy, HOW_VIDEO.width, HOW_VIDEO.height);
+      const img = this.posters.get(step.poster);
+      if (img) {
+        // Cover the frame: crop, never stretch.
+        const s = Math.max(HOW_VIDEO.width / img.width, HOW_VIDEO.height / img.height);
+        const iw = HOW_VIDEO.width / s;
+        const ih = HOW_VIDEO.height / s;
+        c.drawImage(img, (img.width - iw) / 2, (img.height - ih) / 2, iw, ih, vx, vy, HOW_VIDEO.width, HOW_VIDEO.height);
+      }
+      rc.rectangle(vx, vy, HOW_VIDEO.width, HOW_VIDEO.height, this.o({ strokeWidth: 3, seed: this.seed + 30 }));
+      // The step: its number in a moss square, its title, its line.
+      c.fillStyle = SKETCH.moss;
+      c.fillRect(P, yTitle, BADGE, BADGE);
+      text(c, `${i + 1}`, P + BADGE / 2, yTitle + BADGE / 2 + 2, 34, '#f2ebdd');
+      titleLines.forEach((l, j) => text(c, l, P + BADGE + 16, yTitle + BADGE / 2 + j * 48 + 2, 40, SKETCH.ink, 'left'));
+      textLines.forEach((l, j) => text(c, l, P, yText + 24 + j * 42, 31, SKETCH.soft, 'left', false));
+      // Where you are: a dot for each step, the current one filled.
+      const dot = 20;
+      const dotGap = 22;
+      const dotsW = steps.length * dot + (steps.length - 1) * dotGap;
+      const dx = HW / 2 - dotsW / 2;
+      steps.forEach((_, k) => {
+        rc.circle(dx + k * (dot + dotGap) + dot / 2, yNav + NAV_H / 2, dot, this.o({ strokeWidth: 2.5, seed: this.seed + 60 + k, fill: k === i ? SKETCH.moss : 'transparent', fillStyle: 'solid', stroke: k === i ? SKETCH.mossDeep : '#b6a993' }));
       });
       c.restore();
     }, buttons);
