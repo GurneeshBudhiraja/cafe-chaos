@@ -104,7 +104,7 @@ await h.screenshot('artifacts/wrist-3-paused.png');
 await poke('w-pause');
 await page.waitForFunction(() => window.__cafe.game.phase === 'run', null, { timeout: 60000 }).catch(() => {});
 s = await state();
-check('pressed again it resumes (after its 3-2-1)', s.phase === 'run', JSON.stringify(s));
+check('pressed again it resumes', s.phase === 'run', JSON.stringify(s));
 // 5. How to play pauses, Got it comes back to the pause.
 await poke('w-how');
 s = await state();
