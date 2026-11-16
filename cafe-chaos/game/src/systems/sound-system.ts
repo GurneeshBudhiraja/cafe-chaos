@@ -55,6 +55,9 @@ export class SoundSystem extends createSystem({}) {
   /** Settings (0 off to 5): the theme's level (2 is its usual volume) and the café's own sounds (3 is usual). */
   musicLevel = 2;
   soundLevel = 3;
+  /** Tips shown so far (the game counts them; each new one gets a soft pop). */
+  tips = 0;
+  private tipsHeard = 0;
   /** The theme (index.ts hands it over), ducked while the game is paused. */
   theme: Theme | null = null;
   master: GainNode | null = null;
@@ -242,6 +245,9 @@ export class SoundSystem extends createSystem({}) {
       seen.seated = guests.seated;
       seen.gaveUp = guests.gaveUp;
     }
+    // A tip comes up: a soft pop (hands have no haptics, so every new thing to look at gets a sound: Meta).
+    if (this.tips > this.tipsHeard) this.emit('pop', PLACES.room, SOUND.hands * 0.7, 0.2, pop);
+    this.tipsHeard = this.tips;
     // A table left dirty: a soft clink of crockery from it.
     const mess = this.mess;
     if (mess && mess.dirtied > seen.dirtied) this.emit('clink', PLACES.room, SOUND.bar * 0.6, 0.4, clink);

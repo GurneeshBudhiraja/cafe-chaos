@@ -50,6 +50,8 @@ import { StripSystem } from './strip-system.js';
 import { SoundSystem } from './sound-system.js';
 import { ICONS, LEVELS, MENU_SIZE, StartMenu } from '../ui/start-menu.js';
 import { LockTag, LOCK_TAG } from '../ui/lock-tag.js';
+import { TipCard, TIP } from '../ui/tip-card.js';
+import { TIP_GAP, TIP_ORDER, TIPS, tipIcon, type TipId } from '../game/tips.js';
 import { CafeSystem } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
 import { HandleSystem } from './handle-system.js';
@@ -162,6 +164,16 @@ export class GameSystem extends createSystem({}) {
   readonly tags: LockTag[] = [];
   /** The table the buy card is about (an index into the café's pieces), while it is up. */
   buying = -1;
+  /** The tip card (game/tips.ts), the tip it shows (null: none), how long it has been up, and how long since the last went. */
+  readonly tip = new TipCard();
+  tipShown: TipId | null = null;
+  tipsShown = 0;
+  private tipAge = 0;
+  private tipRest = 0;
+  /** What the tip is next to: a guest's id, a table's index, or the bar's Shop button. */
+  private tipAt: { guest?: number; table?: number; shop?: boolean } = {};
+  /** Counts when the tip went up, to tell when the player has done it. */
+  private tipMark = 0;
   /** The extension: asked for once the main room is all open; its tables are locked and tagged once it has risen. */
   private wantAnnex = false;
   private annexTablesTagged = false;
@@ -272,6 +284,7 @@ export class GameSystem extends createSystem({}) {
     // A pinch on a card is the card's, never the café's or a guest's.
     this.hold?.claims.push((point) => this.card.covers(point) || this.how.covers(point) || this.coach.covers(point));
     this.world.createTransformEntity(this.rays.group);
+    this.cafe.cafe.add(this.tip.panel.mesh);
     // The start menu stands in the world (the café is hidden until it is opened).
     // The menu cards stand a metre away, twice as big (MENU_SPOT).
     for (const p of [this.menu.card, this.menu.sheet, this.menu.how]) p.size = MENU_SPOT.size;
@@ -355,6 +368,7 @@ export class GameSystem extends createSystem({}) {
     }
     this.easeTime(cardDelta);
     this.tendTables(cardDelta);
+    this.tendTips(cardDelta);
     this.strip.controls = this.phase === 'run' ? 'live' : this.phase === 'paused' ? 'paused' : 'off';
     if (!cafe.placed || cafe.arriving) {
       for (const hand of HANDS) this.rays.update(hand, null, null, null, cardDelta);
@@ -1103,6 +1117,135 @@ export class GameSystem extends createSystem({}) {
     }
   }
 
+  // ------------------------------------------------------------------ tips
+
+  /**
+   * The tips (game/tips.ts): in a run, the first time each new thing turns
+   * up, a few words next to it; one at a time, each once a save, gone
+   * when done or after its seconds. A hurried guest's clock waits while
+   * its tip is up.
+   */
+  private tendTips(delta: number): void {
+    const tip = this.tip;
+    tip.panel.update(delta, this.head);
+    if (this.tipShown) {
+      this.tipAge += delta;
+      const done = this.tipDone(this.tipShown);
+      const t = TIPS[this.tipShown];
+      if (done || this.tipAge >= t.seconds || this.phase !== 'run' && this.phase !== 'buying') {
+        if (this.phase === 'run' || done) this.endTip();
+        else tip.hide();
+        return;
+      }
+      if (this.phase !== 'run') return;
+      this.placeTip();
+      // Reading the tip costs a hurried guest nothing: its clock waits.
+      if (this.tipShown === 'hurry' && this.tipAt.guest) {
+        const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
+        if (g && (g.state === 'queued' || g.state === 'arriving')) g.patience = Math.min(g.patienceFull, g.patience + delta * this.cafe.timeScale);
+      }
+      return;
+    }
+    if (this.phase !== 'run' || TEST_MODE) return;
+    this.tipRest += delta;
+    if (this.tipRest < TIP_GAP) return;
+    for (const id of TIP_ORDER) {
+      if (this.save.tips.includes(id) || !this.tipDue(id)) continue;
+      this.startTip(id);
+      return;
+    }
+  }
+
+  /** Is this tip's moment here (and is there something to put it next to)? */
+  private tipDue(id: TipId): boolean {
+    const guests = this.guests.guests;
+    switch (id) {
+      case 'hurry': {
+        const g = guests.find((x) => x.hurried && x.state === 'queued');
+        this.tipAt = g ? { guest: g.id } : {};
+        return !!g;
+      }
+      case 'pair': {
+        const g = guests.find((x) => x.friend && x.state === 'queued' && guests.some((y) => y.id === x.friend && y.state === 'queued'));
+        this.tipAt = g ? { guest: g.id } : {};
+        return !!g;
+      }
+      case 'table': {
+        const tag = this.shop.tableAffordable ? this.tags.find((t) => t.panel.open) : undefined;
+        this.tipAt = tag ? { table: tag.table } : {};
+        return !!tag;
+      }
+      case 'dirty': {
+        const table = this.mess.dirtyTables()[0];
+        this.tipAt = table !== undefined ? { table } : {};
+        return table !== undefined;
+      }
+      case 'shop':
+        this.tipAt = { shop: true };
+        return this.shop.affordable && this.strip.panel.open;
+    }
+  }
+
+  /** Has the player done what the tip says? */
+  private tipDone(id: TipId): boolean {
+    switch (id) {
+      case 'table':
+        return this.shop.tablesBought > this.tipMark;
+      case 'shop':
+        return this.shop.purchases > this.tipMark || (this.menu.card.open && this.menu.cardKind === 'shop');
+      case 'hurry':
+      case 'pair': {
+        const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
+        return !g || g.state === 'seated' || g.state === 'leaving';
+      }
+      case 'dirty':
+        return this.tipAt.table === undefined || !this.mess.isDirty(this.tipAt.table);
+    }
+  }
+
+  private startTip(id: TipId): void {
+    this.tipShown = id;
+    this.tipAge = 0;
+    this.tipsShown++;
+    if (this.sound) this.sound.tips = this.tipsShown;
+    this.save.tips.push(id);
+    this.tipMark = id === 'table' ? this.shop.tablesBought : id === 'shop' ? this.shop.purchases : 0;
+    const t = TIPS[id];
+    this.tip.show(t.title, t.text, tipIcon(id));
+    this.placeTip();
+    this.tip.panel.faceNow();
+    this.keep();
+  }
+
+  private endTip(): void {
+    this.tipShown = null;
+    this.tipRest = 0;
+    this.tip.hide();
+  }
+
+  /** Over what it is about (café space): a guest's head, a table's top, or just below the bar's Shop button. */
+  private placeTip(): void {
+    const mesh = this.tip.panel.mesh;
+    const at = this.tipAt;
+    if (at.guest !== undefined) {
+      const g = this.guests.guests.find((x) => x.id === at.guest);
+      if (!g) return;
+      mesh.position.copy(g.actor.root.position);
+      mesh.position.y += g.actor.bubbleAnchor.position.y + TIP.above;
+    } else if (at.table !== undefined) {
+      if (!this.cafe.tableTop(at.table, this.spot)) return;
+      mesh.position.set(this.spot.x, this.spot.y + TIP.above + 0.03, this.spot.z);
+    } else if (at.shop) {
+      const bar = this.strip.panel;
+      const b = bar.buttons.find((x) => x.id === 'bar-shop');
+      if (!b) return;
+      const g = (bar.mesh.geometry as PlaneGeometry).parameters;
+      bar.mesh.localToWorld(this.spot.set(((b.x + b.w / 2) / bar.width - 0.5) * g.width, -g.height / 2 - TIP.height * 0.7, 0.01));
+      this.cafe.cafe.worldToLocal(this.spot);
+      mesh.position.copy(this.spot);
+    }
+  }
+
   /** A padlock tag pinched: the café stands still (in view) and the buy card asks. */
   private openBuy(index: number): void {
     if (this.phase !== 'run' || !this.cafe.isLocked(index)) return;
@@ -1164,6 +1307,8 @@ export class GameSystem extends createSystem({}) {
     const m = this.menu;
     const targets = [m.sheet, m.how, m.card].filter((p) => p.open && !p.dimmed);
     if (toBar && this.strip.panel.open && !this.cafeAway) targets.push(this.strip.panel);
+    // The first run's coach card stands over the back of the café, beyond a seated reach: its Next and Skip take the ray.
+    if (this.coach.open) targets.push(this.coach);
     // The padlock tags over the locked tables, in a run (pointed at from anywhere: they stand in the café).
     if (this.phase === 'run') for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
     if (!targets.length) return null;
@@ -1251,6 +1396,7 @@ export class GameSystem extends createSystem({}) {
     const m = this.menu;
     const targets = [m.sheet, m.how, m.card].filter((p) => p.open && !p.dimmed);
     if (this.strip.panel.open && !this.cafeAway && this.strip.controls !== 'off') targets.push(this.strip.panel);
+    if (this.coach.open) targets.push(this.coach);
     if (this.phase === 'run') for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
     let best: { panel: Panel; button: Button; t: number } | null = null;
     for (const panel of targets) {
