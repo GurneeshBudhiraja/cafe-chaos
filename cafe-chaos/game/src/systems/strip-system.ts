@@ -253,8 +253,8 @@ export class StripSystem extends createSystem({}) {
     const face = h * 0.4;
     sketchFace(rc, x + face / 2, h * 0.5, face, mood, 31, lw);
     x += face + inner;
-    // Shop at the right end, after the coins.
-    const right = w - h * BAR_BUTTON.pad - btn - around - bankW - inner - icon - around;
+    // Shop at the right end, after the coins, with a wider gap before it so the button stands apart from the number.
+    const right = w - h * BAR_BUTTON.pad - btn - around * 2.2 - bankW - inner - icon - around;
     rc.line(right, h * 0.17, right - 2, h * 0.83, line(22, lw * 0.8));
     const x0 = x;
     const span = right - around - x0;
@@ -305,7 +305,8 @@ export class StripSystem extends createSystem({}) {
     const lw = Math.max(2, this.panel.height * 0.016);
     const off = this.controls === 'off';
     const dip = pressed ? b.h * 0.04 : 0;
-    rc.rectangle(b.x, b.y + dip, b.w, b.h, line(seed, lw * 1.1, { fill: hover && !off ? '#e4d9c6' : SKETCH.paper, fillStyle: 'solid', roughness: 1.2, stroke: off ? SKETCH.empty : SKETCH.ink }));
+    // Lit: a deeper tan, as on the menu cards, so the button aimed at is plain to see.
+    rc.rectangle(b.x, b.y + dip, b.w, b.h, line(seed, lw * 1.1, { fill: hover && !off ? '#c4b397' : SKETCH.paper, fillStyle: 'solid', roughness: 1.2, stroke: off ? SKETCH.empty : SKETCH.ink }));
     if (hover && !off) {
       ctx.save();
       ctx.beginPath();
@@ -333,22 +334,43 @@ export class StripSystem extends createSystem({}) {
     for (const side of [-1, 1]) rc.rectangle(cx + side * s * 0.12 - s * 0.06, cy - s * 0.22, s * 0.12, s * 0.44, line(72 + side, lw * 0.9, { fill: ink, fillStyle: 'solid', stroke: ink }));
   }
 
-  /** Shop: a shopping bag; a lantern dot with + while a hire is affordable, a moss check once all are hired. */
+  /**
+   * Shop: a little shop front (a striped awning over a window and a door);
+   * a lantern dot with + while a hire is affordable, a moss check once all
+   * are hired.
+   */
   private drawShop(ctx: CanvasRenderingContext2D, b: Button, hover: boolean, pressed: boolean): void {
     const rc = pen(this.panel.canvas);
     const lw = Math.max(2, this.panel.height * 0.016);
-    const { cx, cy, s, ink } = this.square(ctx, b, hover, pressed, 80);
+    const sq = this.square(ctx, b, hover, pressed, 80);
+    const { s, ink } = sq;
+    // A little left of and below the middle, clear of the badge in the top right corner.
+    const cx = sq.cx - s * 0.06;
+    const cy = sq.cy + s * 0.04;
     const off = this.controls === 'off';
-    const bw = s * 0.5;
-    const bh = s * 0.42;
-    const top = cy - s * 0.1;
-    rc.arc(cx, top, bw * 0.5, bw * 0.62, Math.PI, Math.PI * 2, false, line(82, lw * 1.2, { stroke: ink }));
-    rc.rectangle(cx - bw / 2, top, bw, bh, line(83, lw * 1.1, { fill: off ? SKETCH.paper : SKETCH.lantern, fillStyle: 'solid', stroke: ink }));
-    rc.line(cx - bw / 2, top + bh * 0.22, cx + bw / 2, top + bh * 0.22, line(84, lw * 0.7, { stroke: ink }));
+    const stripe = off ? SKETCH.empty : SKETCH.red;
+    // The front: a wall, its window (lit) and its door.
+    const fw = s * 0.52;
+    const fTop = cy - s * 0.06;
+    const fBottom = cy + s * 0.3;
+    rc.rectangle(cx - fw / 2, fTop, fw, fBottom - fTop, line(83, lw, { fill: SKETCH.paper, fillStyle: 'solid', stroke: ink }));
+    rc.rectangle(cx - fw / 2 + s * 0.06, fTop + s * 0.08, s * 0.18, s * 0.13, line(84, lw * 0.8, { fill: off ? SKETCH.paper : SKETCH.lantern, fillStyle: 'solid', stroke: ink }));
+    rc.rectangle(cx + s * 0.04, fTop + s * 0.07, s * 0.14, fBottom - fTop - s * 0.07, line(85, lw * 0.8, { fill: off ? SKETCH.paper : SKETCH.timber, fillStyle: 'solid', stroke: ink }));
+    // The awning: four stripes, red and paper, with a scalloped edge.
+    const aw = s * 0.62;
+    const aTop = cy - s * 0.27;
+    const aBottom = cy - s * 0.06;
+    const n = 4;
+    const sw = aw / n;
+    for (let i = 0; i < n; i++) {
+      const x = cx - aw / 2 + i * sw;
+      rc.polygon([[x, aTop], [x + sw, aTop], [x + sw, aBottom], [x, aBottom]], line(86 + i, lw * 0.7, { fill: i % 2 === 0 ? stripe : SKETCH.paper, fillStyle: 'solid', stroke: ink }));
+      rc.arc(x + sw / 2, aBottom, sw, sw * 0.8, 0, Math.PI, false, line(90 + i, lw * 0.7, { fill: i % 2 === 0 ? stripe : SKETCH.paper, fillStyle: 'solid', stroke: ink }));
+    }
     if (off) return;
-    const r = s * 0.13;
-    const bx = b.x + b.w - r - s * 0.06;
-    const by = b.y + r + s * 0.06 + (pressed ? b.h * 0.04 : 0);
+    const r = s * 0.11;
+    const bx = b.x + b.w - r - s * 0.04;
+    const by = b.y + r + s * 0.04 + (pressed ? b.h * 0.04 : 0);
     if (this.shop.price === null) {
       rc.circle(bx, by, r * 2, line(92, lw * 0.9, { fill: SKETCH.moss, fillStyle: 'solid', stroke: SKETCH.mossDeep }));
       rc.linearPath([[bx - r * 0.45, by], [bx - r * 0.1, by + r * 0.4], [bx + r * 0.5, by - r * 0.4]], line(93, lw * 1.1, { stroke: '#f2ebdd' }));
