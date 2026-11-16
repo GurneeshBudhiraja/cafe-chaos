@@ -19,11 +19,12 @@
 
 import { CanvasTexture, Group, Sprite, SpriteMaterial, SRGBColorSpace, type Vector3 } from '@iwsdk/core';
 import { wishTexture } from './wish-art.js';
+import { HAND_FONT } from '../ui/sketch.js';
 
 export type PopupKind = 'up' | 'down' | 'anger' | 'heart' | 'shrug' | 'note';
 
 /** Sizes (metres across, café space), how long a popup lasts and how far it rises (seconds, metres). */
-export const POPUP = { size: 0.022, coinSize: 0.03, seconds: 1.8, rise: 0.035 };
+export const POPUP = { size: 0.022, coinSize: 0.03, resultSize: 0.04, seconds: 1.8, rise: 0.035 };
 
 interface Live {
   sprite: Sprite;
@@ -199,6 +200,18 @@ export class Popups {
     this.add(coinPicture(amount), at, POPUP.coinSize, 2, POPUP.seconds * 1.1);
   }
 
+  /**
+   * How a guest's wishes came out when it sat down: a lantern badge with
+   * a tick and "2/3", or a star when every wish was met, a koi cross when
+   * none was.
+   */
+  result(met: number, of: number, at: Vector3): void {
+    this.shown.result = (this.shown.result ?? 0) + 1;
+    if (met === of) this.shown.heart = (this.shown.heart ?? 0) + 1;
+    if (met === 0) this.shown.shrug = (this.shown.shrug ?? 0) + 1;
+    this.add(resultPicture(met, of), at, POPUP.resultSize, 2, POPUP.seconds * 1.4);
+  }
+
   /** Let a held popup go: it floats off and fades from now. */
   release(sprite: Sprite): void {
     const live = this.live.find((l) => l.sprite === sprite);
@@ -251,4 +264,34 @@ export class Popups {
     this.live.push({ sprite, age: 0, lasts, y: at.y });
     return sprite;
   }
+}
+
+/** The result badge: a lantern-coloured tag with a timber rim; a tick and "2/3", a star for all, a cross for none. */
+function resultPicture(met: number, of: number): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 192;
+  canvas.height = 96;
+  const ctx = canvas.getContext('2d')!;
+  const all = met === of;
+  const none = met === 0;
+  ctx.fillStyle = 'rgba(30, 20, 12, 0.3)';
+  ctx.beginPath();
+  ctx.roundRect(8, 12, 176, 78, 18);
+  ctx.fill();
+  ctx.fillStyle = '#66462f';
+  ctx.beginPath();
+  ctx.roundRect(6, 6, 180, 80, 18);
+  ctx.fill();
+  ctx.fillStyle = all ? '#f0c987' : none ? '#e8c2b6' : '#e8dfcf';
+  ctx.beginPath();
+  ctx.roundRect(13, 13, 166, 66, 13);
+  ctx.fill();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = all ? '#2f522d' : none ? '#9a2208' : '#16171d';
+  ctx.font = `800 46px ${HAND_FONT}, 'Trebuchet MS', sans-serif`;
+  ctx.fillText(`${all ? '★' : none ? '✕' : '✓'} ${met}/${of}`, 96, 48);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
 }

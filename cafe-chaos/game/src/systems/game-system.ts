@@ -34,7 +34,7 @@
 
 import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 import { HandRays } from '../hands/hand-ray.js';
-import { arrivalPace, HIRE_PRICES, MEAL_SECONDS, patienceShare, STARTING_STAFF, WISH, wishChance } from '../game/rules.js';
+import { arrivalPace, HIRE_PRICES, MEAL_SECONDS, patienceShare, STARTING_STAFF, WISH } from '../game/rules.js';
 import { BARISTA_NAMES } from '../baristas/barista.js';
 import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS } from '../guests/rules.js';
@@ -710,7 +710,7 @@ export class GameSystem extends createSystem({}) {
   private pace(): void {
     this.guests.spawnPace = arrivalPace(this.clock);
     this.guests.patienceSeconds = PATIENCE_SECONDS * patienceShare(this.clock);
-    this.guests.wishChance = wishChance(this.clock);
+    this.guests.evening = this.clock;
     this.guests.singerChance = this.clock >= WISH.after ? WISH.singer : 0;
   }
 
@@ -736,7 +736,7 @@ export class GameSystem extends createSystem({}) {
     this.guests.patienceFrozen = true;
     this.guests.spawnPace = 1;
     this.guests.patienceSeconds = PATIENCE_SECONDS;
-    this.guests.wishChance = 0;
+    this.guests.evening = 0;
     this.guests.singerChance = 0;
     this.score.running = false;
     if (this.phase === 'title') this.guests.clear();

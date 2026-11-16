@@ -70,22 +70,41 @@ export function patienceShare(seconds: number): number {
 }
 
 /**
- * Wishes (guests/wishes.ts). A guest whose wish is granted when it pays
- * adds `coins` to its tip and `happiness` to the café; one whose wish was
- * ignored pays one step down (a quick seating pays as a fair one, a fair
- * as a late one) and is never a penalty beyond that.
+ * Wishes (guests/wishes.ts). Every guest wishes for 1 to 3 things about
+ * where it sits; they are judged once, the moment it sits down (it cannot
+ * be moved after that). When it pays, each wish met adds `coins` to its
+ * tip and `happiness` to the café; each one missed takes `miss` happiness;
+ * all met (of two or more) adds `allBonus` coins more. One with none met
+ * also pays one step down (a quick seating pays as a fair one).
  *
- * How many guests have a wish: none for the first `after` seconds of a
- * run (the first minute teaches seating), then `chance.start`, rising by
- * `chance.perMinute` to `chance.max`. Singers come with chance `singer`
- * once wishes have begun, one at a time.
+ * How many wishes a new guest has, by how long the café has been open:
+ * from each `counts[i].from` seconds, 1, 2 or 3 wishes with the chances
+ * `weights`. Singers come with chance `singer` from `after` seconds on,
+ * one at a time.
  */
-export const WISH = { coins: 4, happiness: 2, after: 45, chance: { start: 0.35, perMinute: 0.1, max: 0.75 }, singer: 0.14 };
+export const WISH = {
+  coins: 4,
+  happiness: 2,
+  miss: 1,
+  allBonus: 4,
+  counts: [
+    { from: 0, weights: [1, 0, 0] },
+    { from: 60, weights: [0.5, 0.5, 0] },
+    { from: 180, weights: [0.3, 0.4, 0.3] },
+  ],
+  after: 45,
+  singer: 0.14,
+};
 
-/** The share of new guests who have a wish, `seconds` into the run. */
-export function wishChance(seconds: number): number {
-  if (seconds < WISH.after) return 0;
-  return Math.min(WISH.chance.max, WISH.chance.start + (WISH.chance.perMinute * (seconds - WISH.after)) / 60);
+/** How many wishes (1 to 3) a new guest has, `seconds` into the evening. */
+export function wishCount(seconds: number, random: () => number = Math.random): number {
+  const band = [...WISH.counts].reverse().find((c) => seconds >= c.from) ?? WISH.counts[0];
+  let r = random();
+  for (let i = 0; i < band.weights.length; i++) {
+    r -= band.weights[i];
+    if (r < 0) return i + 1;
+  }
+  return 1;
 }
 
 /**

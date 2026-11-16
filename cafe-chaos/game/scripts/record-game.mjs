@@ -207,7 +207,7 @@ async function drop(at, linger = 700) {
   await pause(600);
 }
 // Every guest in the recording has a wish (the game sets the share each frame: hold it here), and they eat quickly.
-const pacer = setInterval(() => page.evaluate(() => { const g = window.__cafe.guests; if (window.__cafe.game.phase === 'run') { g.wishChance = 1; g.spawnPace = 1.4; g.mealSeconds = 6; } }).catch(() => {}), 120);
+const pacer = setInterval(() => page.evaluate(() => { const g = window.__cafe.guests; if (window.__cafe.game.phase === 'run') { g.spawnPace = 1.4; g.mealSeconds = 6; } }).catch(() => {}), 120);
 
 await measureTip();
 // 1. Seated: the café pops up, the title card over it, the side board beside it.
@@ -241,7 +241,7 @@ await pause(2500);
 
 // 4. The run. A guest with a wish: the hand over it brings up its card; carried, the seats that grant it are mint.
 await h.head(P(lineView), P(await toWorld([0.5, 0.05, 0.12])), 1500);
-await until(() => window.__cafe.guests.line.some((g) => g.state === 'queued' && !g.walk && g.wish));
+await until(() => window.__cafe.guests.line.some((g) => g.state === 'queued' && !g.walk && g.wishes.length > 1));
 {
   const grip = await page.evaluate(() => { const { guests, system } = window.__cafe; const g = guests.line.find((x) => x.state === 'queued' && !x.walk); return g.actor.grip.getWorldPosition(new system.cafe.position.constructor()).toArray(); });
   await reach(1200, add(grip, [0.012, 0.035, 0.005]), true);

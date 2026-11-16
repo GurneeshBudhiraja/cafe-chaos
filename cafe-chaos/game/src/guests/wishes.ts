@@ -51,6 +51,17 @@ export const WISHES: Record<WishId, WishInfo> = {
   music: { id: 'music', wants: 'to sit near the singer', says: 'I love a good tune.' },
 };
 
+/** Each wish in a few words, for the request card's rows (ui/wish-card.ts). */
+export const WISH_SHORT: Record<WishId, string> = {
+  window: 'Window seat',
+  door: 'By the gate',
+  counter: 'By the counter',
+  quiet: 'Somewhere quiet',
+  alone: 'Table to itself',
+  company: 'Some company',
+  music: 'Near the singer',
+};
+
 /** The wishes a guest may be given when nobody on stage sings (`music` needs a singer). */
 const ALWAYS: WishId[] = ['window', 'door', 'counter', 'quiet', 'alone', 'company'];
 
@@ -133,12 +144,44 @@ export function pickName(taken: Set<string>, random: () => number = Math.random)
 }
 
 /**
- * A wish for a new guest: none with chance `1 - chance`; otherwise one at
- * random, `music` among them only while someone on stage sings, and never
- * the wish the last guest had (so the line is a mix).
+ * Wishes that cannot both be met, or make no sense together: at most one
+ * place (window, gate, counter); never alone with company; never quiet
+ * with the singer or with company.
  */
-export function pickWish(chance: number, singerAbout: boolean, last: WishId | null, random: () => number = Math.random): WishId | null {
-  if (random() >= chance) return null;
-  const from = (singerAbout ? [...ALWAYS, 'music' as const] : ALWAYS).filter((w) => w !== last);
-  return from[Math.floor(random() * from.length)];
+const CLASHES: [WishId, WishId][] = [
+  ['window', 'door'],
+  ['window', 'counter'],
+  ['door', 'counter'],
+  ['alone', 'company'],
+  ['quiet', 'music'],
+  ['quiet', 'company'],
+];
+
+/** Can these wishes all be met together? */
+export function compatible(wishes: WishId[]): boolean {
+  return CLASHES.every(([a, b]) => !(wishes.includes(a) && wishes.includes(b)));
+}
+
+/**
+ * `count` wishes (1 to 3) for a new guest, all compatible, `music` among
+ * the choices only while someone on stage sings, and not the very same
+ * set the last guest had (so the line is a mix). Every set it makes can be
+ * met by some seat in the café: at most one place wish, and the rest about
+ * company and quiet, which any table can grant.
+ */
+export function pickWishes(count: number, singerAbout: boolean, last: WishId[], random: () => number = Math.random): WishId[] {
+  const pool = singerAbout ? [...ALWAYS, 'music' as const] : [...ALWAYS];
+  const want = Math.max(1, Math.min(3, Math.round(count)));
+  for (let attempt = 0; attempt < 24; attempt++) {
+    const picked: WishId[] = [];
+    const left = [...pool];
+    while (picked.length < want && left.length > 0) {
+      const wish = left.splice(Math.floor(random() * left.length), 1)[0];
+      if (compatible([...picked, wish])) picked.push(wish);
+    }
+    if (picked.length === 0) continue;
+    const same = picked.length === last.length && picked.every((w) => last.includes(w));
+    if (!same || attempt > 12) return picked;
+  }
+  return [pool[Math.floor(random() * pool.length)]];
 }
