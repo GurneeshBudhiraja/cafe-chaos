@@ -25,11 +25,15 @@
  * on later starts with an empty, clean café.
  */
 
-import { createSystem, Vector3, type Object3D } from '@iwsdk/core';
+import { createSystem, Vector3, type Material, type Mesh, type Object3D } from '@iwsdk/core';
+import { laidOn } from '../lib/decal.js';
 import { CLEAN, MESS } from '../game/rules.js';
 import type { Seat } from '../guests/seats.js';
 import { CafeSystem, copyModel } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
+
+/** How far a mess is lifted off its table top (metres, café space): its lowest crumbs sit just under its origin. */
+const MESS_LIFT = 0.0015;
 
 interface Mess {
   seat: Seat;
@@ -138,6 +142,14 @@ export class MessSystem extends createSystem({}) {
     this.dirtied++;
   }
 
+  /** The mess's own copy of a material, counted nearer than the table under it (one copy each, shared by all messes). */
+  private laid(material: Material): Material {
+    let copy = this.laidCopies.get(material);
+    if (!copy) this.laidCopies.set(material, (copy = laidOn(material.clone())));
+    return copy;
+  }
+  private readonly laidCopies = new Map<Material, Material>();
+
   /** Every place at the table dirty (the checks and recordings: a table left by a full party). */
   soil(table: number): void {
     for (const seat of this.guests.seats) if (seat.table === table) this.soilSeat(seat);
@@ -184,15 +196,19 @@ export class MessSystem extends createSystem({}) {
       if (anchor) cafe.worldToLocal(anchor.getWorldPosition(this.at));
       else if (!this.cafe.tableTop(seat.table, this.at)) return null;
     }
+    // Resting on the top, not sunk into it (the model's lowest crumbs are half a millimetre under its origin), its
+    // materials counted nearer: it never flickers against the table (lib/decal.ts).
     model.position.copy(this.at);
+    model.position.y += MESS_LIFT;
     model.rotation.y = (piece?.rotation.y ?? 0) + (Math.random() - 0.5) * 0.6;
     model.scale.setScalar(this.scaleFor(seat));
     model.userData.dynamic = true;
     model.traverse((node) => {
-      const mesh = node as { isMesh?: boolean; castShadow?: boolean; receiveShadow?: boolean };
+      const mesh = node as Mesh;
       if (!mesh.isMesh) return;
       mesh.castShadow = false;
       mesh.receiveShadow = false;
+      if (!Array.isArray(mesh.material)) mesh.material = this.laid(mesh.material);
     });
     cafe.add(model);
     return model;

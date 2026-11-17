@@ -22,6 +22,7 @@
  * One set per hand; the dots are one instanced mesh.
  */
 
+import { laidOn } from '../lib/decal.js';
 import {
   CanvasTexture, Color, CustomBlending, CylinderGeometry, DoubleSide, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, OneFactor, PlaneGeometry, Quaternion, SrcAlphaFactor, Vector3, ZeroFactor,
 } from '@iwsdk/core';
@@ -72,15 +73,15 @@ function rising(): CanvasTexture {
 
 /** Added to what is behind (colour only, see light/spill.ts): for light. */
 function light(map: CanvasTexture, opacity: number): MeshBasicMaterial {
-  return new MeshBasicMaterial({
+  return laidOn(new MeshBasicMaterial({
     color: new Color(GLOW.color), map, transparent: true, opacity, depthWrite: false, toneMapped: false, side: DoubleSide,
     blending: CustomBlending, blendSrc: SrcAlphaFactor, blendDst: OneFactor, blendSrcAlpha: ZeroFactor, blendDstAlpha: OneFactor,
-  });
+  }));
 }
 
 /** Painted over what is behind: for the violet of the pad and the dots. */
 function paint(map: CanvasTexture, opacity: number): MeshBasicMaterial {
-  return new MeshBasicMaterial({ color: new Color(GLOW.color), map, transparent: true, opacity, depthWrite: false, toneMapped: false });
+  return laidOn(new MeshBasicMaterial({ color: new Color(GLOW.color), map, transparent: true, opacity, depthWrite: false, toneMapped: false }));
 }
 
 /** One landing glow: pad, halo and column, with its origin on the seat top. */
