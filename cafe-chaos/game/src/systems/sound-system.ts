@@ -58,6 +58,9 @@ export class SoundSystem extends createSystem({}) {
   /** Tips shown so far (the game counts them; each new one gets a soft pop). */
   tips = 0;
   private tipsHeard = 0;
+  /** Notes under the bar shown (GameSystem): each gets the same soft pop as a tip. */
+  notes = 0;
+  private notesHeard = 0;
   /** The theme (index.ts hands it over), ducked while the game is paused. */
   theme: Theme | null = null;
   master: GainNode | null = null;
@@ -256,6 +259,8 @@ export class SoundSystem extends createSystem({}) {
     // A tip comes up: a soft pop (hands have no haptics, so every new thing to look at gets a sound: Meta).
     if (this.tips > this.tipsHeard) this.emit('pop', PLACES.room, SOUND.hands * 0.7, 0.2, pop);
     this.tipsHeard = this.tips;
+    if (this.notes > this.notesHeard) this.emit('note', PLACES.room, SOUND.hands * 0.7, 0.2, pop);
+    this.notesHeard = this.notes;
     // A table left dirty: a soft clink of crockery from it.
     const mess = this.mess;
     if (mess && mess.dirtied > seen.dirtied) this.emit('clink', PLACES.room, SOUND.bar * 0.6, 0.4, clink);

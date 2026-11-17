@@ -91,6 +91,8 @@ await h.screenshot('artifacts/tips-1-table.png');
 await page.evaluate(() => { const { game } = window.__cafe; const tag = game.tags[0]; game.click(`table-${tag.table}`); game.click('buy-yes'); });
 await until(() => window.__cafe.game.tipShown === null, 10000);
 check('buying a table sends the tip away', (await tip()).shown === null, 'gone');
+// The bank emptied: the guests seated next pay a little, never the 40 a barista costs, so "More hands" waits for its step.
+await page.evaluate(() => { window.__cafe.score.bank = 0; });
 
 // 3. The first guest in a hurry.
 const hurried = await page.evaluate(() => { const { guests } = window.__cafe; guests.patienceFrozen = false; guests.hurryIn(1); const g = guests.spawn(); return g.id; });

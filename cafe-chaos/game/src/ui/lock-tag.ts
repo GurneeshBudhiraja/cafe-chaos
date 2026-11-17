@@ -22,14 +22,48 @@ import { hand, line, pen, SKETCH, sketchCoin } from './sketch.js';
  * about 0.8 m from the seat it is 4.3 by 3 degrees: over Meta's 2.5 to 3
  * for a ray target each way; its digits about 0.9 degrees, over
  * Microsoft's 0.4 to 0.5 minimum for text at arm's length.
+ *
+ * It keeps that angular size, not its size in metres (Meta: keep a
+ * target's angular size as it moves in depth): a tag further than `at`
+ * from the eyes grows with the distance, up to `most` times. A table the
+ * bank can pay for stands out: `ready` times as big, `aboveReady` over its
+ * top, in full colour; one it cannot stays as made and faded (Panel
+ * `dimmed`), so which tables can open is plain at a glance. When a table
+ * first becomes affordable its tag pulses twice (`pulse`: seconds, growth).
  */
-export const LOCK_TAG = { width: 0.066, height: 0.042, above: 0.05 };
+export const LOCK_TAG = { width: 0.066, height: 0.042, above: 0.05, aboveReady: 0.07, at: 0.8, most: 1.8, ready: 1.4, pulse: { seconds: 1.2, grow: 0.25 } };
 
 export class LockTag {
   readonly panel: Panel;
   private price = 0;
   private affordable = false;
   private drawn = '';
+  private pulseAge = Infinity;
+  /** The table top's height under it (its parent's space; GameSystem sets it). */
+  top = 0;
+
+  /** Pulse twice (a table just became affordable). */
+  pulse(): void {
+    this.pulseAge = 0;
+  }
+
+  /**
+   * Its size and height this frame: grown with its distance from the eyes
+   * (`distance`, metres) so it keeps its angular size, bigger and higher
+   * when the bank can pay, pulsing if asked.
+   */
+  fit(distance: number, delta: number): void {
+    const far = Math.min(LOCK_TAG.most, Math.max(1, distance / LOCK_TAG.at));
+    let size = far * (this.affordable ? LOCK_TAG.ready : 1);
+    if (this.pulseAge < LOCK_TAG.pulse.seconds) {
+      this.pulseAge += delta;
+      // Two swells in the time.
+      size *= 1 + LOCK_TAG.pulse.grow * Math.max(0, Math.sin((this.pulseAge / LOCK_TAG.pulse.seconds) * Math.PI * 4));
+    }
+    this.panel.size = size;
+    this.panel.dimmed = !this.affordable;
+    this.panel.mesh.position.y = this.top + (this.affordable ? LOCK_TAG.aboveReady : LOCK_TAG.above);
+  }
 
   constructor(readonly table: number) {
     this.panel = new Panel(`LockTag-${table}`, LOCK_TAG.width, LOCK_TAG.height);
@@ -38,6 +72,11 @@ export class LockTag {
     this.panel.turn = 3;
     // Over the café (no depth test), under the menu cards (drawn at 30): the buy card covers the other tags.
     this.panel.mesh.renderOrder = 29;
+  }
+
+  /** Whether the bank can pay for this table now (its tag is bigger, and the ray helps more: GameSystem TAG_RAY). */
+  get canBuy(): boolean {
+    return this.affordable;
   }
 
   /** Draw (again) for this price, and whether the bank can pay it. */

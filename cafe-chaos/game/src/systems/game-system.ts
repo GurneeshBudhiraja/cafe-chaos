@@ -86,6 +86,21 @@ const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as cons
  * not flicker off.
  */
 const RAY = { awayFromCafe: 0.04, reach: 4, edge: 0.15 };
+/**
+ * The hand ray's help with the padlock tags, the furthest and smallest
+ * things it points at (the back tables are 77 to 88 cm from a seated
+ * player's shoulder). A tag the bank can pay for takes the ray `edge` of
+ * its height beyond its drawing (Meta: the hit target, not the visual);
+ * the tag already lit holds it out to `stick` (so tracking jitter does not
+ * flicker it); a ray missing every target but passing within `assist`
+ * degrees of an affordable tag takes the nearest (the bubble cursor idea:
+ * Baloup et al. 2018, about 90 % fewer errors on small far targets; few,
+ * spread targets here, so no jumping between them). A pinch counts the
+ * target the ray was on `before` seconds earlier if it changed just as the
+ * fingers closed: a pinch nudges the hand, and a ray magnifies it (the
+ * Heisenberg effect, Wolf et al. CHI 2020).
+ */
+const TAG_RAY = { edge: 0.5, stick: 0.9, assist: 2, before: 0.12 };
 /** The café's size in Settings (percent of what fits the table): the range and the step. */
 const SIZE = { min: 60, max: 140, step: 10 };
 /**
@@ -159,12 +174,16 @@ export class GameSystem extends createSystem({}) {
   /** `score.servedGuests` when this level's count stood at zero. */
   private servedMark = 0;
   /**
-   * One-line notes under the middle of the bar, one at a time (a level's
+   * Short notes under the middle of the bar, one at a time (a level's
    * next goal, a table that can open): each for its `seconds`, shown only
    * in a run, with a short gap between. Not tips: they come every time.
    */
   readonly note = new TipCard();
-  private readonly notes: { title: string; icon: TipId; seconds: number }[] = [];
+  private readonly notes: { title: string; icon: TipId; seconds: number; text: string }[] = [];
+  /** The table price the "A table can open" note was last given for (it comes once a price). */
+  private readyAt = -1;
+  /** Notes shown (the sound system pops for each). */
+  notesShown = 0;
   private noteLeft = 0;
   private noteRest = 0;
   /** The padlock tags over the locked tables (one per table still locked), children of the café. */
@@ -812,9 +831,9 @@ export class GameSystem extends createSystem({}) {
     this.addNote(`Next: serve ${levelGoal(this.level)} guests`, 'goal', NOTE.seconds);
   }
 
-  /** Queue a one-line note under the bar (see `note`). */
-  addNote(title: string, icon: TipId, seconds: number): void {
-    this.notes.push({ title, icon, seconds });
+  /** Queue a note under the bar (see `note`): one line, or with `text` a second. */
+  addNote(title: string, icon: TipId, seconds: number, text = ''): void {
+    this.notes.push({ title, icon, seconds, text });
   }
 
   private clearNotes(): void {
@@ -845,11 +864,19 @@ export class GameSystem extends createSystem({}) {
     }
     this.noteRest -= delta;
     const next = this.notes[0];
-    if (!next || this.noteRest > 0) return;
+    // One thing under the bar at a time: a tip there (the level's goal, More hands) goes first.
+    if (!next || this.noteRest > 0 || this.tipUnderBar()) return;
     this.noteLeft = next.seconds;
-    this.note.show(next.title, '', tipIcon(next.icon));
+    this.note.show(next.title, next.text, tipIcon(next.icon));
+    this.notesShown++;
+    if (this.sound) this.sound.notes = this.notesShown;
     this.placeNote();
     panel.faceNow();
+  }
+
+  /** Is a tip up under the bar (by its level count or its Shop button)? Notes wait for it, and it for them. */
+  private tipUnderBar(): boolean {
+    return this.tipShown !== null && (!!this.tipAt.bar || !!this.tipAt.shop);
   }
 
   /** Under the middle of the bar, clear of its bottom edge (café space). */
@@ -1036,11 +1063,21 @@ export class GameSystem extends createSystem({}) {
       const aimed = !busy && !done && !near ? this.aimRay(hand, toBar, !hold.nearCafe(pinch.point, RAY.awayFromCafe)) : null;
       this.aim[hand] = aimed ? (aimed.button?.id ?? '') : null;
       this.rays.update(hand, aimed ? this.rayFrom : null, aimed ? this.rayHit : null, aimed ? this.barNormal : null, delta);
-      if (!aimed?.button) continue;
-      this.hovers[panels.indexOf(aimed.panel)] = aimed.button.id;
-      if (fresh && performance.now() - this.gazePressAt > 250) {
-        aimed.panel.press(aimed.button.id);
-        this.click(aimed.button.id);
+      // What the ray is on, and what it was on before (for a pinch that nudged it: TAG_RAY.before).
+      const now = performance.now();
+      const was = this.aimNow[hand];
+      const on = aimed?.button ? { panel: aimed.panel, button: aimed.button } : null;
+      if ((on?.button.id ?? null) !== (was?.button.id ?? null) || on?.panel !== was?.panel) {
+        if (was) this.aimBefore[hand] = { panel: was.panel, button: was.button };
+        this.aimNow[hand] = on ? { ...on, since: now } : null;
+      }
+      const nudged = fresh && this.aimBefore[hand] && now - (this.aimNow[hand]?.since ?? 0) < TAG_RAY.before * 1000 ? this.aimBefore[hand] : null;
+      const target = nudged ?? on;
+      if (!target) continue;
+      if (on) this.hovers[panels.indexOf(on.panel)] = on.button.id;
+      if (fresh && now - this.gazePressAt > 250 && (target.panel.open || target === on)) {
+        target.panel.press(target.button.id);
+        this.click(target.button.id);
       }
     }
     for (let i = 0; i < panels.length; i++) panels[i]?.setHover(this.hovers[i] ?? null);
@@ -1053,7 +1090,7 @@ export class GameSystem extends createSystem({}) {
   }
 
   private rebuildPanels(): void {
-    this.panels = [this.card, this.how, this.coach, this.menu.card, this.menu.sheet, this.strip.panel, ...this.tags.map((t) => t.panel)];
+    this.panels = [this.card, this.how, this.coach, this.menu.card, this.menu.sheet, this.strip.panel, this.strip.drawer.panel, ...this.tags.map((t) => t.panel)];
     this.hovers.length = this.panels.length;
     this.hovers.fill(null);
   }
@@ -1087,6 +1124,7 @@ export class GameSystem extends createSystem({}) {
     const top = this.cafe.tableTop(index, this.spot);
     if (!top) return;
     const tag = new LockTag(index);
+    tag.top = top.y;
     tag.panel.mesh.position.set(top.x, top.y + LOCK_TAG.above, top.z);
     this.cafe.cafe.add(tag.panel.mesh);
     tag.set(this.shop.tablePrice, this.shop.tableAffordable);
@@ -1099,12 +1137,28 @@ export class GameSystem extends createSystem({}) {
     this.tags.splice(this.tags.indexOf(tag), 1);
   }
 
-  /** Each frame: the tags show in a run (and under the buy card) and say the price now. */
+  /**
+   * Each frame: the tags show in a run (and under the buy card), say the
+   * price now, and keep their angular size (LOCK_TAG), the ones the bank
+   * can pay for bigger. When the bank first reaches the next table's price
+   * (once a price: buying one raises it), those tags pulse and, once the
+   * "Open a table" tip has been seen, a note under the bar says so with a
+   * pop: mid-rush nobody looks at the padlocks (the owner's playtest).
+   */
   private tendTables(delta: number): void {
     const show = (this.phase === 'run' || this.phase === 'buying') && this.cafe.placed && !this.cafe.arriving;
+    const price = this.shop.tablePrice;
+    const can = this.shop.tableAffordable;
+    const ready = show && this.phase === 'run' && can && price !== this.readyAt && this.tags.length > 0;
+    if (ready) {
+      this.readyAt = price;
+      for (const tag of this.tags) tag.pulse();
+      if (this.save.tips.includes('table')) this.addNote('A table can open', 'table', NOTE.seconds, 'Point at a padlock and pinch.');
+    }
     for (const tag of this.tags) {
       if (tag.panel.open !== show) tag.panel.show(show);
-      tag.set(this.shop.tablePrice, this.shop.tableAffordable);
+      tag.set(price, can);
+      tag.fit(tag.panel.mesh.getWorldPosition(this.spot).distanceTo(this.head), delta);
       tag.panel.update(delta, this.head);
     }
     // The café's floor never grows (the owner's call): no extension, only its own tables unlock.
@@ -1141,6 +1195,8 @@ export class GameSystem extends createSystem({}) {
     if (this.tipRest < TIP_GAP) return;
     for (const id of TIP_ORDER) {
       if (this.save.tips.includes(id) || !this.tipDue(id)) continue;
+      // A note up under the bar: a tip that would stand there waits for it.
+      if ((id === 'goal' || id === 'shop') && this.note.panel.open) continue;
       this.startTip(id);
       return;
     }
@@ -1329,19 +1385,49 @@ export class GameSystem extends createSystem({}) {
     if (!targets.length) return null;
     this.castRay(hand);
     let best: { panel: Panel; button: Button | null; t: number } | null = null;
+    const lit = this.litTag[hand];
     for (const panel of targets) {
-      const hit = this.rayAt(panel);
+      // A tag the bank can pay for has a wider hit area; the one already lit holds the ray wider still (TAG_RAY).
+      const tag = this.tagOf(panel);
+      const edge = tag === null ? RAY.edge : panel === lit ? TAG_RAY.stick : tag.canBuy ? TAG_RAY.edge : RAY.edge;
+      const hit = this.rayAt(panel, edge);
       if (hit && (!best || hit.t < best.t)) {
-        best = { panel, button: hit.button, t: hit.t };
+        // A tag is one button: its whole hit area (wider than its drawing) presses it.
+        best = { panel, button: hit.button ?? (tag ? (panel.buttons[0] ?? null) : null), t: hit.t };
         this.bestHit.copy(this.rayHit);
         this.bestNormal.copy(this.barNormal);
       }
     }
+    // A near miss: the affordable tag nearest the ray, within TAG_RAY.assist degrees outside its hit area (measured
+    // from the edge of that area: its half height plus TAG_RAY.edge of its height, as seen from the hand).
+    if (!best && this.phase === 'run') {
+      let angle = (TAG_RAY.assist * Math.PI) / 180;
+      for (const tag of this.tags) {
+        if (!tag.canBuy || !tag.panel.open) continue;
+        const mesh = tag.panel.mesh;
+        const to = mesh.getWorldPosition(this.rayScratch).sub(this.rayFrom);
+        const tall = (mesh.geometry as PlaneGeometry).parameters.height * mesh.getWorldScale(this.spot).y;
+        const reach = Math.atan((tall * (0.5 + TAG_RAY.edge)) / Math.max(0.01, to.length()));
+        const a = to.angleTo(this.rayDir) - reach;
+        if (a < angle) {
+          angle = a;
+          best = { panel: tag.panel, button: tag.panel.buttons[0] ?? null, t: to.length() };
+          tag.panel.mesh.getWorldPosition(this.bestHit);
+          this.bestNormal.set(0, 0, 1).applyQuaternion(tag.panel.mesh.getWorldQuaternion(this.headQ));
+        }
+      }
+    }
+    this.litTag[hand] = best && this.tagOf(best.panel) ? best.panel : null;
     if (!best) return null;
     this.rayHit.copy(this.bestHit);
     this.barNormal.copy(this.bestNormal);
     return best;
   }
+  /** The tag panel each hand's ray lit last frame (it holds the ray a little wider: TAG_RAY.stick). */
+  private readonly litTag: Record<Hand, Panel | null> = { left: null, right: null };
+  /** What each hand's ray was on before its current target, and since when it has been on that (ms): TAG_RAY.before. */
+  private readonly aimBefore: Record<Hand, { panel: Panel; button: Button } | null> = { left: null, right: null };
+  private readonly aimNow: Record<Hand, { panel: Panel; button: Button; since: number } | null> = { left: null, right: null };
   private readonly bestHit = new Vector3();
   private readonly bestNormal = new Vector3();
   private readonly rayScratch = new Vector3();
@@ -1373,7 +1459,7 @@ export class GameSystem extends createSystem({}) {
   }
 
   /** Where the ray (castRay) meets a card's face, from the front: how far, and the button there; null if it misses. Sets rayHit and barNormal. */
-  private rayAt(panel: Panel): { t: number; button: Button | null } | null {
+  private rayAt(panel: Panel, edgeShare = RAY.edge): { t: number; button: Button | null } | null {
     const mesh = panel.mesh;
     mesh.getWorldPosition(this.spot);
     mesh.getWorldQuaternion(this.headQ);
@@ -1386,7 +1472,7 @@ export class GameSystem extends createSystem({}) {
     this.rayHit.copy(this.rayFrom).addScaledVector(this.rayDir, t);
     const local = mesh.worldToLocal(this.rayScratch.copy(this.rayHit));
     const g = (mesh.geometry as PlaneGeometry).parameters;
-    const edge = g.height * RAY.edge;
+    const edge = g.height * edgeShare;
     if (Math.abs(local.x) > g.width / 2 + edge || Math.abs(local.y) > g.height / 2 + edge) return null;
     return { t, button: panel.hit(this.rayHit) };
   }

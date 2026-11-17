@@ -6,7 +6,10 @@
  *     or the door (no open seat is there);
  *  2. the hand ray on a tag lights it; a pinch opens the buy card: the café
  *     still and in view, the card naming the table and its seats;
- *  3. NOT NOW: the café moves again;
+ *  3. NOT NOW: the café moves again; padlocks keep their angular size,
+ *     faded while the bank is short; the bank reaching the price makes
+ *     them bigger, higher and in colour, with "A table can open" under the
+ *     bar (once a price) and a pop; a ray just past a far one still lights it;
  *  4. BUY with too little in the bank is refused (the card says how many
  *     more); with enough, the table opens: its ghost and tag go, its seats
  *     are offered, the price is taken, the next price is 20, and it is saved;
@@ -131,6 +134,75 @@ await page.evaluate(() => window.__cafe.game.click('buy-no'));
 await frames(3);
 s = await state();
 check('NOT NOW: the café moves again, nothing bought', s.phase === 'run' && s.speed === 1 && s.card === null && s.tables.join() === '2,8', JSON.stringify({ phase: s.phase, speed: s.speed, card: s.card, tables: s.tables }));
+
+// 3b. Which tables can open, at a glance, and the ray's help with them.
+const look = () => page.evaluate(() => {
+  const { game, strip, sound } = window.__cafe;
+  const V = game.head.constructor;
+  return {
+    tags: game.tags.map((t) => ({ table: t.table, can: t.canBuy, dimmed: t.panel.dimmed, size: +t.panel.size.toFixed(2), y: +t.panel.mesh.position.y.toFixed(3), far: +t.panel.mesh.getWorldPosition(new V()).distanceTo(game.head).toFixed(2) })),
+    note: game.note.panel.open ? game.note.drawn.split('|') : null, notes: game.notesShown, pops: sound.played.note ?? 0,
+  };
+});
+let l = await look();
+const near = l.tags.reduce((a, b) => (a.far < b.far ? a : b));
+const farthest = l.tags.reduce((a, b) => (a.far > b.far ? a : b));
+check('with the bank short every padlock is faded and as made; the farther ones grown to keep their angular size', l.tags.every((t) => !t.can && t.dimmed) && farthest.size > near.size && Math.abs(farthest.size / near.size - Math.min(1.8, farthest.far / 0.8) / Math.max(1, near.far / 0.8)) < 0.08, JSON.stringify({ near, farthest }));
+// The "Open a table" tip seen already: the bank reaching the price brings the note, a pop, and the padlocks swell.
+// (The level's goal tip, if still up under the bar, goes first: the note waits for it.)
+await page.evaluate(() => { const { game, score } = window.__cafe; for (const id of ['goal', 'table']) if (!game.save.tips.includes(id)) game.save.tips.push(id); if (game.tipShown) game.endTip(); score.bank = 20; });
+await until(() => window.__cafe.game.note.panel.open, 10000);
+await frames(3);
+l = await look();
+const big = l.tags.find((t) => t.table === near.table);
+check('the bank able to pay: those padlocks bigger (x1.4), higher and in full colour; "A table can open" under the bar, with a pop', l.tags.every((t) => t.can && !t.dimmed) && big.size >= near.size * 1.4 - 0.05 && big.y > near.y + 0.015 && l.note?.[0] === 'A table can open' && l.note?.[1] === 'Point at a padlock and pinch.' && l.pops >= 1, JSON.stringify({ before: near, after: big, note: l.note, pops: l.pops }));
+await h.screenshot('artifacts/tables-2b-ready.png');
+// Once a price: no second note for the same price.
+const notesNow = l.notes;
+await page.evaluate(() => { window.__cafe.score.bank = 2; });
+await frames(4);
+await page.evaluate(() => { window.__cafe.score.bank = 20; });
+await page.waitForTimeout(1500);
+check('the note comes once a price (not again when the bank dips and comes back)', (await look()).notes === notesNow, `${(await look()).notes} notes`);
+// A ray just past a far padlock's hit area still lights it (the near miss: TAG_RAY.assist).
+// The tag and side to miss on: the one whose near miss passes furthest (seen from the hand) from every other tag.
+const missBy = await page.evaluate((rest) => {
+  const { game } = window.__cafe;
+  const V = game.head.constructor;
+  const from = new V(...rest);
+  const centres = game.tags.map((t) => { t.panel.mesh.updateWorldMatrix(true, false); return t.panel.mesh.getWorldPosition(new V()); });
+  let best = null;
+  game.tags.forEach((t, i) => {
+    const m = t.panel.mesh;
+    const tall = m.geometry.parameters.height * m.getWorldScale(new V()).y;
+    const q = m.getWorldQuaternion(m.quaternion.clone());
+    for (const dir of [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0]]) {
+      // Just beyond the hit area: half its height and half again past the drawing, plus 1 cm.
+      const p = centres[i].clone().addScaledVector(new V(...dir).applyQuaternion(q), tall * 1.0 + 0.01);
+      const ray = p.clone().sub(from).normalize();
+      const clear = Math.min(...centres.filter((_, k) => k !== i).map((c) => c.clone().sub(from).angleTo(ray)));
+      if (!best || clear > best.clear) best = { table: t.table, point: p.toArray(), clear };
+    }
+  });
+  return best;
+}, REST);
+{
+  const d = missBy.point.map((v, i) => v - REST[i]);
+  const len = Math.hypot(...d);
+  const n = d.map((v) => v / len);
+  const ax = [0, 0, -1];
+  const dot = ax[0] * n[0] + ax[1] * n[1] + ax[2] * n[2];
+  const cr = [ax[1] * n[2] - ax[2] * n[1], ax[2] * n[0] - ax[0] * n[2], ax[0] * n[1] - ax[1] * n[0]];
+  const w = 1 + dot;
+  const ql = Math.hypot(cr[0], cr[1], cr[2], w);
+  await send('set_transform', { device: 'hand-right', position: { x: REST[0], y: REST[1], z: REST[2] }, orientation: { x: cr[0] / ql, y: cr[1] / ql, z: cr[2] / ql, w: w / ql } });
+  await frames(6);
+}
+const assisted = await page.evaluate(() => window.__cafe.game.aim.right);
+check('a ray just past an affordable padlock\'s hit area still lights it (the near-miss help)', assisted === `table-${missBy.table}`, `aim ${assisted}, meant table-${missBy.table}, ${(missBy.clear * 180 / Math.PI).toFixed(1)} degrees from any other tag`);
+await send('set_transform', { device: 'hand-right', position: { x: -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
+await page.evaluate(() => { window.__cafe.score.bank = 0; });
+await frames(3);
 
 // 4. BUY, short and then with enough.
 await page.evaluate(() => window.__cafe.game.click('table-6'));
