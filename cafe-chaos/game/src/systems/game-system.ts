@@ -1060,7 +1060,10 @@ export class GameSystem extends createSystem({}) {
    */
   private applyLocks(): void {
     const cafe = this.cafe;
-    for (const index of cafe.tables) cafe.setTableLocked(index, !this.shop.tables.includes(index));
+    let changed = false;
+    for (const index of cafe.tables) if (cafe.setTableLocked(index, !this.shop.tables.includes(index))) changed = true;
+    // The open tables are folded into the room's batch; the locked ones stand apart as ghosts.
+    if (changed) cafe.rebatch();
     this.guests.setLockedTables(cafe.lockedTables);
     // The extension's tables are offered only once the main room is all open (and after they have risen).
     const mainOpen = this.mainRoomOpen();
@@ -1124,11 +1127,6 @@ export class GameSystem extends createSystem({}) {
       // Back in a run after a pause or a level card: the tip that was up shows again.
       if (!tip.panel.open) tip.panel.show(true);
       this.placeTip();
-      // Reading the tip costs a hurried guest nothing: its clock waits.
-      if (this.tipShown === 'hurry' && this.tipAt.guest) {
-        const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
-        if (g && (g.state === 'queued' || g.state === 'arriving')) g.patience = Math.min(g.patienceFull, g.patience + delta * this.cafe.timeScale);
-      }
       return;
     }
     if (this.phase !== 'run' || TEST_MODE) return;
@@ -1201,12 +1199,21 @@ export class GameSystem extends createSystem({}) {
     this.tipMark = id === 'table' ? this.shop.tablesBought : id === 'shop' ? this.shop.purchases : 0;
     const t = TIPS[id];
     this.tip.show(t.title, t.text, tipIcon(id));
+    // Reading the tip costs a hurried guest nothing: its clock is held while the tip is up.
+    if (id === 'hurry' && this.tipAt.guest) {
+      const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
+      if (g) g.clockHeld = true;
+    }
     this.placeTip();
     this.tip.panel.faceNow();
     this.keep();
   }
 
   private endTip(): void {
+    if (this.tipShown === 'hurry' && this.tipAt.guest) {
+      const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
+      if (g) g.clockHeld = false;
+    }
     this.tipShown = null;
     this.tipRest = 0;
     this.tip.hide();

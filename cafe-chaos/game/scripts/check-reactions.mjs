@@ -66,8 +66,17 @@ await page.evaluate(() => { window.__cafe.baristas.serving = true; });
 const sad = await seat(2, ['window'], 1);
 const mid = await seat(6, ['window'], 0.5);
 const singer = await seat(12, [], 0.2, true);
-await until((ids) => ids.every((id) => { const f = window.__cafe.guests.reactions.feelingOf(id); return f && f !== 'served'; }), 120000, [sad, mid, singer]);
-const feelings = { sad: await feeling(sad), mid: await feeling(mid), singer: await feeling(singer) };
+// Each guest's feeling as it first shows (the bubble goes after 4 s, so the three are caught one by one, from the page).
+await page.evaluate((ids) => {
+  window.__felt = {};
+  const t = setInterval(() => {
+    for (const id of ids) { const f = window.__cafe.guests.reactions.feelingOf(id); if (f && f !== 'served' && !window.__felt[id]) window.__felt[id] = f; }
+    if (ids.every((id) => window.__felt[id])) clearInterval(t);
+  }, 50);
+}, [sad, mid, singer]);
+await until((ids) => ids.every((id) => window.__felt?.[id]), 120000, [sad, mid, singer]);
+const felt = await page.evaluate(() => window.__felt);
+const feelings = { sad: felt[String(sad)], mid: felt[String(mid)], singer: felt[String(singer)] };
 check('late with its wish unmet: not happy (frown); half way with some met: in between; a singer: notes', feelings.sad === 'unhappy' && (feelings.mid === 'okay' || feelings.mid === 'happy') && feelings.singer === 'singing', JSON.stringify(feelings));
 await page.waitForTimeout(400);
 await h.screenshot('artifacts/reactions-1-feelings.png');

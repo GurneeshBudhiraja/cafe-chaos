@@ -129,6 +129,8 @@ export interface Guest {
   anger: Sprite | null;
   /** In a hurry (game/rules.ts HURRY): a shorter wait, served first, pays more; an hourglass on its dot. */
   hurried: boolean;
+  /** Its clock is held (a tip about it is up): its patience does not run in the line or the hand. */
+  clockHeld: boolean;
   /** The friend it came with (a pair: each wishes to share a table with the other); 0 if none. */
   friend: number;
   /** Its own name; what it wishes for (1 to 3 wishes); and whether it sings while it sits. */
@@ -587,6 +589,7 @@ export class GuestSystem extends createSystem({}) {
       fuming: -1,
       anger: null,
       hurried,
+      clockHeld: false,
       friend: 0,
       name: pickName(taken),
       wishes,
@@ -658,7 +661,7 @@ export class GuestSystem extends createSystem({}) {
 
   /** A guest standing in the line: its patience runs down, shows, and runs out. */
   private wait(guest: Guest, delta: number): void {
-    if (!this.patienceFrozen) guest.patience -= delta;
+    if (!this.patienceFrozen && !guest.clockHeld) guest.patience -= delta;
     if (guest.patience <= 0) {
       this.gaveUp++;
       this.tell('gaveUp', guest);
@@ -677,7 +680,7 @@ export class GuestSystem extends createSystem({}) {
    */
   private waitInHand(guest: Guest, delta: number): void {
     if (!fromLine(guest)) return;
-    if (!this.patienceFrozen) guest.patience -= delta;
+    if (!this.patienceFrozen && !guest.clockHeld) guest.patience -= delta;
     if (guest.patience > 0) return;
     this.gaveUp++;
     this.tell('gaveUp', guest);

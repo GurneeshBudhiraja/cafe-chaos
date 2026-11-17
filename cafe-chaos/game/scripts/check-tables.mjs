@@ -148,8 +148,9 @@ await until(() => window.__cafe.game.phase === 'run', 10000);
 await frames(3);
 s = await state();
 check('BUY: the table opens, its tag goes, its seats are offered, 14 taken, the next costs 28, and it is saved', s.phase === 'run' && s.tables.join() === '2,6,8' && !s.locked.includes(6) && !s.tags.includes(6) && s.seatsOpen === 6 && s.bank === 2 && s.price === 28 && s.bought === 1 && s.saved?.join() === '2,6,8' && s.speed === 1, JSON.stringify({ tables: s.tables, locked: s.locked, tags: s.tags, seatsOpen: s.seatsOpen, bank: s.bank, price: s.price, saved: s.saved }));
-const opened = await page.evaluate(() => { let m = null; window.__cafe.system.pieces[6].traverse((n) => { if (!m && n.isMesh && n.visible) m = n.material; }); return m?.name; });
-check('the opened table is drawn in its own materials again', !!opened && !opened.startsWith('Ghost'), `${opened}`);
+// Its meshes have their own materials back and are folded into the room's batch (hidden under `batched`).
+const opened = await page.evaluate(() => { const r = { materials: [], batched: 0, meshes: 0 }; window.__cafe.system.pieces[6].traverse((n) => { if (!n.isMesh) return; r.meshes++; if (n.userData.batched) r.batched++; r.materials.push(n.material.name); }); return r; });
+check('the opened table is drawn in its own materials again, folded into the room\'s batch', opened.meshes > 0 && opened.materials.every((m) => !m.startsWith('Ghost')) && opened.batched === opened.meshes, JSON.stringify(opened));
 await page.waitForTimeout(500);
 await h.screenshot('artifacts/tables-4-opened.png');
 

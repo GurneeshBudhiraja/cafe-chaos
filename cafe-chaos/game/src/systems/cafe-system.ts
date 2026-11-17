@@ -39,7 +39,7 @@ import { DRESSING, FLOOR_TOP_M, OPENING_LAYOUT, type Placement } from '../cafe/l
 import { dressGreyBox } from '../cafe/materials.js';
 import { copyPart, splitOff, type Box } from '../cafe/split-mesh.js';
 import { ANNEX_LANTERNS_X, LANTERN_BOX } from '../light/mood.js';
-import { batchStatic, type BatchReport } from '../cafe/static-batch.js';
+import { batchStatic, unbatchStatic, type BatchReport } from '../cafe/static-batch.js';
 import { distanceToEdge, findSurfaceSpot, fitOnSurface, type DetectedSurface, type Fit, type Footprint } from '../lib/desk-placement.js';
 import { CAFE_NAV } from '../nav/cafe-nav.js';
 import { NavGrid } from '../nav/nav-grid.js';
@@ -142,9 +142,10 @@ export class CafeSystem extends createSystem({
    * The tables (indices into `pieces`: every piece with a meal anchor, so
    * the bar and the quiet corner too), and which are locked. A locked
    * table stands grey and see-through (`GHOST`), so it reads as not yet
-   * the player's; the game puts a padlock and a price over it. Each table
-   * is drawn as its own small batch, not folded into the room's, so one
-   * can change its look on its own.
+   * the player's; the game puts a padlock and a price over it. A locked
+   * table stays out of the room's static batch (its ghost is see-through,
+   * drawn on its own); an open one is folded in with the rest of the
+   * furniture, so the room is `rebatch()`ed when the locks change.
    */
   readonly tables: number[] = [];
   private readonly locked = new Set<number>();
@@ -222,14 +223,10 @@ export class CafeSystem extends createSystem({
         if (node) node.userData.dynamic = true;
       }
     }
-    // Each table its own small batch (so it can be greyed out on its own); the rest of the furniture as one mesh per material.
     this.pieces.forEach((piece, i) => {
-      if (!piece.getObjectByName('Meal-1')) return;
-      this.tables.push(i);
-      // `keepApart`, not `dynamic`: the table stays out of the room's batch but is still an obstacle on the grid.
-      piece.userData.keepApart = true;
-      batchStatic(piece as Group);
+      if (piece.getObjectByName('Meal-1')) this.tables.push(i);
     });
+    // The furniture as one mesh per material (the game locks its tables and folds the room again, see `rebatch`).
     this.batch = batchStatic(this.cafe);
     // From the café as built, the map the characters find their way by.
     this.nav = new NavGrid(this.cafe, CAFE_NAV);
@@ -280,18 +277,22 @@ export class CafeSystem extends createSystem({
   /**
    * Lock or open the table at `index` (into `pieces`). Locked, every mesh
    * of it takes a shared grey, see-through material; opened, each gets its
-   * own back.
+   * own back. True if that changed anything: the caller then `rebatch()`es
+   * the room once all the locks are set (a mesh folded into the batch
+   * shows no change of its own until then).
    */
-  setTableLocked(index: number, locked: boolean): void {
+  setTableLocked(index: number, locked: boolean): boolean {
     const piece = this.pieces[index];
-    if (!piece || this.locked.has(index) === locked) return;
+    if (!piece || this.locked.has(index) === locked) return false;
+    // `keepApart`, not `dynamic`: a locked table stays out of the room's batch but is still an obstacle on the grid.
+    piece.userData.keepApart = locked;
     if (locked) {
       this.locked.add(index);
       const ghost = new MeshBasicMaterial({ color: GHOST.colour, transparent: true, opacity: GHOST.opacity, depthWrite: false, toneMapped: false });
       ghost.name = `Ghost-${index}`;
       this.ghosts.set(index, ghost);
       piece.traverse((node) => {
-        if (!(node instanceof Mesh) || !node.visible) return;
+        if (!(node instanceof Mesh) || !(node.visible || node.userData.batched)) return;
         this.realMaterials.set(node, node.material);
         node.material = ghost;
       });
@@ -307,6 +308,17 @@ export class CafeSystem extends createSystem({
         this.realMaterials.delete(node);
       });
     }
+    return true;
+  }
+
+  /**
+   * Fold the room's furniture again after its tables changed (one opened,
+   * or locked at a new start): the old batches go and the open tables join
+   * the rest. A few milliseconds, once a purchase, with the buy card up.
+   */
+  rebatch(): void {
+    unbatchStatic(this.cafe);
+    this.batch = batchStatic(this.cafe);
   }
 
   /** A locked table lit under the hand (0 to 1): its ghost brightens. */
@@ -356,9 +368,6 @@ export class CafeSystem extends createSystem({
       piece.traverse((node) => {
         if (/^Seat-\d+$/.test(node.name)) this.seats.push(node);
       });
-      piece.userData.keepApart = true;
-      piece.updateMatrixWorld(true);
-      batchStatic(piece as Group);
     }
     this.hangLanterns(root);
     this.cafe.add(root);
