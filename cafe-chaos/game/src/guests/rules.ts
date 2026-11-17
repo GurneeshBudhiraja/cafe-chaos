@@ -109,6 +109,17 @@ export const PICK_STICKY_RADII = 1.8;
  * flickering open no longer drops it in the wrong place.
  */
 export const RELEASE_HOLD_S = 0.12;
+
+/**
+ * A hand lost to the tracking while it carries a guest (a fast move or a
+ * hand out of the cameras' view loses it for a few frames on the Quest):
+ * the guest waits where it is this long (seconds) for the hand to come
+ * back; back and still pinching, it is carried on; else it is let go. It
+ * used to be dropped the same frame, which felt unstable on quick moves
+ * (the owner's playtest). (estimate: a few frames to a third of a second
+ * of loss is common; Meta: interactions forgiving and reversible)
+ */
+export const TRACKING_GRACE_S = 0.4;
 /** A pinch within this many pick radii of a guest belongs to the guests: it never moves the café. */
 export const CLAIM_RADII = 1.7;
 /** A carried guest hangs from the pinch by its grip, this far up its body (café space, from the model). */

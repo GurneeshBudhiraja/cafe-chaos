@@ -48,7 +48,7 @@ import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, PAIR_FOLLOW_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
-  PATIENCE_SECONDS, PATIENCE_SPREAD, DROP_MARGIN_M, AIM_SNAP_M, HOVER_EXIT_RADII, HOVER_SWITCH, PICK_MEMORY_S, PICK_RADIUS_M, SIGHT, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
+  PATIENCE_SECONDS, PATIENCE_SPREAD, DROP_MARGIN_M, AIM_SNAP_M, HOVER_EXIT_RADII, HOVER_SWITCH, PICK_MEMORY_S, PICK_RADIUS_M, SIGHT, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, TRACKING_GRACE_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
@@ -518,6 +518,8 @@ export class GuestSystem extends createSystem({}) {
 
   /** Guests let go over a dirty table and sent back to the line (for the checks). */
   refusedDirty = 0;
+  /** How long each hand carrying a guest has been lost to the tracking (seconds; TRACKING_GRACE_S). */
+  private readonly lostFor: Record<Hand, number> = { left: 0, right: 0 };
   /**
    * Why each hand's guest will not sit where it is held (null: it would,
    * or it is over no seat), the tag that says so over the seat, and a
@@ -827,11 +829,20 @@ export class GuestSystem extends createSystem({}) {
       const recent = this.closedFor[hand] <= PICK_WINDOW_S;
       const carried = this.carriedBy(hand);
       if (carried) {
+        // The hand lost to the tracking: the guest waits where it is a moment (TRACKING_GRACE_S), then is let go.
+        if (pinch.gap === Infinity) {
+          this.lostFor[hand] += delta;
+          if (this.lostFor[hand] >= TRACKING_GRACE_S) this.letGo(carried);
+          else this.targets[i] = carried.target;
+          return;
+        }
+        this.lostFor[hand] = 0;
         // Let go only once the fingers have stayed open a moment (RELEASE_HOLD_S): a flicker never drops it.
-        if (!pinch.closed && (this.openFor[hand] >= RELEASE_HOLD_S || pinch.gap === Infinity)) this.letGo(carried);
+        if (!pinch.closed && this.openFor[hand] >= RELEASE_HOLD_S) this.letGo(carried);
         else this.targets[i] = this.carry(carried, pinch.point, delta);
         return;
       }
+      this.lostFor[hand] = 0;
       // One fading away in this hand stays in it while the fingers stay closed; it lands nowhere.
       const fading = this.guests.find((g) => g.state === 'vanishing' && g.hand === hand);
       if (fading) {
