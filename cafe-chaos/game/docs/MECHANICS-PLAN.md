@@ -130,3 +130,13 @@ Only what the player can act on stays on, the rest is brief (S: research on trac
 - The café's floor never grows: the 4-table extension is dropped (the owner's call: the model stays as it is; only its own tables unlock). 10 tables, 23 seats.
 - Prices 1.4× the first plan's: tables 14, 28, 50, 75, 110, 155, 205, 260, 320, 390; barista 2 = 70, janitor = 170, barista 3 = 210. The simulation (scripts/sim-levels.mjs) had near-perfect players earning 9–10 coins a guest, not the 6.5 estimated, with everything bought by about minute 30; the research asks 1–2 levels' earnings per unlock. 1.4 rather than more because real players earn less than the bots: check by playtest.
 
+## Simulation at the final prices (scripts/sim-levels.mjs, 10 levels)
+
+| Player (a seat every) | Level 10 reached | Everything bought | Coins a guest | Lost, levels 1–5 | Lost, levels 6–10 |
+|---|---|---|---|---|---|
+| quick, 3 s (old prices) | 26 min | 30 min | 9.9 | 1 | 0 |
+| average, 5 s (old prices) | 27 min | 28 min | 9.1 | 1 | 2 |
+| slow, 8 s (new prices) | 34 min | 40 min | 7.3 | 1 | 64 |
+
+The slow player falls behind from level 6, where arrivals are 8.5 s apart and under: the intended pressure to seat faster and hire; it bought the janitor at minute 16 and the third barista at 22. Real players earn less than these bots: check by playtest and move the prices (one list each in game/rules.ts).
+

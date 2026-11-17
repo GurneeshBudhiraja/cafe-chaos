@@ -38,6 +38,18 @@ const P = (a) => ({ x: a[0], y: a[1], z: a[2] });
 let pinchOffset = [0, 0, 0];
 let openOffset = [0, 0, 0];
 let page;
+function send(m, p) {
+  return page.evaluate(([m, p]) => window.IWER_DEVICE.remote.dispatch(m, p), [m, p]);
+}
+function frames(n) {
+  return page.evaluate((n) => new Promise((resolve) => { const info = window.__cafe.world.renderer.info.render; const target = info.frame + n; const t = setInterval(() => { if (info.frame >= target) { clearInterval(t); resolve(); } }, 8); }), n);
+}
+function handTo(hand, p, q = Q) {
+  return send('set_transform', { device: `hand-${hand}`, position: { x: p[0], y: p[1], z: p[2] }, orientation: q });
+}
+function pinch(value) {
+  return send('set_select_value', { device: 'hand-right', value });
+}
 
 const h = await startHeadset({
   record: process.env.NORECORD ? null : 'levels',
@@ -69,10 +81,6 @@ const h = await startHeadset({
 });
 const { pause } = h;
 
-const send = (m, p) => page.evaluate(([m, p]) => window.IWER_DEVICE.remote.dispatch(m, p), [m, p]);
-const frames = (n) => page.evaluate((n) => new Promise((resolve) => { const info = window.__cafe.world.renderer.info.render; const target = info.frame + n; const t = setInterval(() => { if (info.frame >= target) { clearInterval(t); resolve(); } }, 8); }), n);
-const handTo = (hand, p, q = Q) => send('set_transform', { device: `hand-${hand}`, position: { x: p[0], y: p[1], z: p[2] }, orientation: q });
-const pinch = (value) => send('set_select_value', { device: 'hand-right', value });
 let handAt = null;
 /** Move the right hand so its pinch point travels to `to` (world) over `ms` of video time, eased. */
 async function reach(ms, to, open = false) {
