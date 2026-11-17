@@ -39,7 +39,7 @@ for (const player of players) {
     const c = window.__cafe;
     localStorage.clear();
     c.score.bank = 0;
-    c.game.save.tips = ['table', 'shop', 'dirty', 'hurry', 'pair'];
+    c.game.save.tips = ['goal', 'table', 'shop', 'dirty', 'hurry', 'pair'];
     c.game.save.tutorialDone = true;
     c.system.placed = true;
     c.system.timeScale = scale;

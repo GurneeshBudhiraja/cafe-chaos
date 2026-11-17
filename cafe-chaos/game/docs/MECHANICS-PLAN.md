@@ -17,7 +17,7 @@ Each number is marked: **M** measured in the game, **S** backed by a published s
 
 | Level | Guests to serve | Arrival gap | Max in line | Staff needed |
 |---|---|---|---|---|
-| 1 | 5 | 20 s | 2 | 1 barista |
+| 1 | 5 | 15 s (was 20; bus-stop test, below) | 2 | 1 barista |
 | 2 | 7 | 18 s | 2 | 1 |
 | 3 | 10 | 15 s | 3 | 2 |
 | 4 | 14 | 12 s | 3 | 2 |
@@ -140,3 +140,11 @@ Only what the player can act on stays on, the rest is brief (S: research on trac
 
 The slow player falls behind from level 6, where arrivals are 8.5 s apart and under: the intended pressure to seat faster and hire; it bought the janitor at minute 16 and the third barista at 22. Real players earn less than these bots: check by playtest and move the prices (one list each in game/rules.ts).
 
+
+## Bus-stop test (owner, after the simulation)
+
+The rules' yardstick: a complete, satisfying moment in a short ride, a fast start, a clean pause. Three small changes from it:
+
+- Level 1 (and 2) arrivals every 15 s, not 20: the first minute no longer waits on an empty gate. Level 2's 18 s would have been a step back after level 1's end (15 × 0.85), so it holds at 15 too; from level 3 the gaps are as they were. The simulation table above was run at 20 s: level 1 is now about a quarter shorter.
+- The first run's coach card has three steps (pinch, seat, the tea comes), not four: "Pause and shop" is taught by the "More hands" tip the moment it matters, and the How to play card keeps the full list (Meta: teach when relevant, next to the thing).
+- A "Serve 5 guests · That finishes the level" tip under the bar's count at the start of level 1, once a save, gone when the first guest is served (or after 8 s). Level 1 only: from level 2 the level card names the next target.

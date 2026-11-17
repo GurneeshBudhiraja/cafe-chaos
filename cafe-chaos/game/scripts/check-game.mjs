@@ -139,25 +139,22 @@ await until(() => window.__cafe.guests.seated >= 1, null, 30000);
 await until(() => window.__cafe.game.step === 2, null, 20000);
 s = await state();
 check('picking the guest up and seating it move the coach card on', step1 === 1 && s.step === 2, `step after pick-up ${step1}, after seating ${s.step}`);
-// The server brings the tea; then the last step teaches the wrist menu (check-wrist.mjs opens it with a palm): Open! starts the run.
-const menuStep = await until(() => window.__cafe.game.step === 3, null, 240000);
-check('after the tea, the last first-run step teaches the wrist menu', menuStep && (await state()).coach, `step ${(await state()).step}`);
-await page.evaluate(() => window.__cafe.game.click('start'));
-const opened = await until(() => window.__cafe.game.phase === 'run', null, 20000);
+// The server brings the tea: the last first-run step is done with it (Open! on the card would start the run sooner), and the café opens.
+const opened = await until(() => window.__cafe.game.phase === 'run', null, 240000);
 s = await state();
-check('Open! starts the run: the clock near 0:00, the coach card away', opened && s.phase === 'run' && !s.coach && s.live && s.clock < 20, `phase ${s.phase}, coach ${s.coach}, clock ${s.clock.toFixed(1)}`);
+check('the tea served ends the first run\'s three steps: the run starts, the clock near 0:00, the coach card away', opened && s.phase === 'run' && !s.coach && s.live && s.clock < 20, `phase ${s.phase}, coach ${s.coach}, clock ${s.clock.toFixed(1)}`);
 await page.evaluate(() => {
   // From here guests eat quickly and nobody in the line gives up, so each outcome below is the one asked for.
   window.__cafe.guests.mealSeconds = 4;
   window.__cafe.guests.patienceFrozen = false;
 });
 
-// 4. Level 1: the clock counts up, guests about 20 s apart.
+// 4. Level 1: the clock counts up, guests about 15 s apart.
 const c0 = s.clock;
 await page.waitForTimeout(6000);
 s = await state();
 const gap = (s.gap[0] + s.gap[1]) / 2;
-check('the clock counts up; level 1 has guests about 20 s apart', s.clock > c0 && gap > 17 && gap <= 20 && s.level === 1, `clock ${c0.toFixed(1)} -> ${s.clock.toFixed(1)}, gap ${gap.toFixed(1)} s, level ${s.level}`);
+check('the clock counts up; level 1 has guests about 15 s apart', s.clock > c0 && gap > 12.5 && gap <= 15 && s.level === 1, `clock ${c0.toFixed(1)} -> ${s.clock.toFixed(1)}, gap ${gap.toFixed(1)} s, level ${s.level}`);
 
 // 5. The first guest, seated quickly, pays the top tip.
 await until(() => window.__cafe.score.log.some((e) => e.kind === 'paid'), null, 240000);

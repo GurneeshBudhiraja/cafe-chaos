@@ -64,7 +64,7 @@ await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); 
 await until(() => window.__cafe.game.phase === 'run');
 let s = await state();
 check('a fresh game opens on level 1: the bar shows it, 0 of 5 served', s.level === 1 && s.served === 0 && s.bar.join() === '1,0,5', JSON.stringify({ level: s.level, served: s.served, bar: s.bar }));
-check('level 1: a guest about every 20 s, two in the line at most, 30 s in the line, 40 s seated', Math.abs((s.gap[0] + s.gap[1]) / 2 - 20) < 0.5 && s.queue === 2 && s.line === 30 && s.seated === 40, JSON.stringify({ gap: s.gap, queue: s.queue, line: s.line, seated: s.seated }));
+check('level 1: a guest about every 15 s, two in the line at most, 30 s in the line, 40 s seated', Math.abs((s.gap[0] + s.gap[1]) / 2 - 15) < 0.5 && s.queue === 2 && s.line === 30 && s.seated === 40, JSON.stringify({ gap: s.gap, queue: s.queue, line: s.line, seated: s.seated }));
 await h.screenshot('artifacts/levels-1-level-1.png');
 
 // 2. The pay.
@@ -118,7 +118,7 @@ check('the level card waits for CONTINUE (nothing is timed)', (await state()).ph
 await page.evaluate(() => window.__cafe.game.click('level-continue'));
 await until(() => window.__cafe.system.timeScale === 1, 10000);
 s = await state();
-check('CONTINUE: the café shows and moves again, at level 2 (a guest about every 18 s, 29 s in the line)', s.phase === 'run' && s.cafe && s.speed === 1 && !s.handsOff && s.card === null && Math.abs((s.gap[0] + s.gap[1]) / 2 - 18) < 0.5 && s.line === 29 && s.bar.join() === '2,0,7', JSON.stringify({ phase: s.phase, cafe: s.cafe, speed: s.speed, gap: s.gap, line: s.line, bar: s.bar }));
+check('CONTINUE: the café shows and moves again, at level 2 (a guest about every 15 s, 29 s in the line)', s.phase === 'run' && s.cafe && s.speed === 1 && !s.handsOff && s.card === null && Math.abs((s.gap[0] + s.gap[1]) / 2 - 15) < 0.5 && s.line === 29 && s.bar.join() === '2,0,7', JSON.stringify({ phase: s.phase, cafe: s.cafe, speed: s.speed, gap: s.gap, line: s.line, bar: s.bar }));
 await h.screenshot('artifacts/levels-3-level-2.png');
 
 // 7. Pause, MAIN MENU, CONTINUE.
@@ -206,7 +206,7 @@ const rules = await page.evaluate(async () => {
   return { goals: levels.map((l) => r.levelGoal(l)), gaps: levels.map((l) => +r.arrivalGap(l).toFixed(2)), queue: levels.map((l) => r.queueCap(l)), line: levels.map((l) => r.linePatience(l)) };
 });
 check('goals 5, 7, 10, 14, 19, 25, 32, 40, 49, then 60 from level 10', rules.goals.join() === '5,7,10,14,19,25,32,40,49,60,60,60', rules.goals.join());
-check('gaps 20, 18, 15, 12, 8.5 (rush), 9.35 (breather), 7, 6, 5.5, then 5 (the floor); the line 2, 2, 3 ... 4; patience 30 down to 20', rules.gaps.join() === '20,18,15,12,8.5,9.35,7,6,5.5,5,5,5' && rules.queue.join() === '2,2,3,3,3,3,3,4,4,4,4,4' && rules.line[0] === 30 && rules.line[11] === 20, JSON.stringify(rules));
+check('gaps 15, 15, 15, 12, 8.5 (rush), 9.35 (breather), 7, 6, 5.5, then 5 (the floor); the line 2, 2, 3 ... 4; patience 30 down to 20', rules.gaps.join() === '15,15,15,12,8.5,9.35,7,6,5.5,5,5,5' && rules.queue.join() === '2,2,3,3,3,3,3,4,4,4,4,4' && rules.line[0] === 30 && rules.line[11] === 20, JSON.stringify(rules));
 
 // 11. An old save keeps only its settings.
 const migrated = await page.evaluate(async () => {

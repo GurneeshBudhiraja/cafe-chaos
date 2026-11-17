@@ -85,7 +85,7 @@ export const LEVEL = {
   firstGoal: 5,
   goalCap: 60,
   capFrom: 10,
-  gaps: [20, 18, 15, 12, 10, 8.5, 7, 6, 5.5, 5],
+  gaps: [15, 15, 15, 12, 10, 8.5, 7, 6, 5.5, 5],
   floor: 5,
   speedUp: 0.85,
   rush: { every: 5, gap: 0.85, after: 1.1 },

@@ -124,7 +124,6 @@ const MOVES = [
   { picture: 'howto-pinch.jpg', title: 'Pinch a guest', text: 'Put your fingers above a guest at the gate. When the guest glows, pinch.' },
   { picture: 'howto-seat.jpg', title: 'Seat the guest', text: 'Move the guest above the café. Open your fingers. The guest goes to the seat that glows.' },
   { picture: 'howto-happy.jpg', title: 'Keep guests happy', text: 'Seat guests quickly. The bar above the café shows how happy the guests are.' },
-  { picture: 'howto-pause.jpg', title: 'Pause and shop', text: 'Point your hand at the bar and pinch. Pause is at the left end. Shop is at the right end.' },
 ];
 /** The pieces of the main room (cafe/layout.ts): the shell and the twelve places to sit; the extension's come after. */
 const MAIN_PIECES = 13;
@@ -171,7 +170,7 @@ export class GameSystem extends createSystem({}) {
   private tipAge = 0;
   private tipRest = 0;
   /** What the tip is next to: a guest's id, a table's index, or the bar's Shop button. */
-  private tipAt: { guest?: number; table?: number; shop?: boolean } = {};
+  private tipAt: { guest?: number; table?: number; shop?: boolean; bar?: boolean } = {};
   /** Counts when the tip went up, to tell when the player has done it. */
   private tipMark = 0;
   /** The extension: asked for once the main room is all open; its tables are locked and tagged once it has risen. */
@@ -1145,6 +1144,10 @@ export class GameSystem extends createSystem({}) {
   private tipDue(id: TipId): boolean {
     const guests = this.guests.guests;
     switch (id) {
+      case 'goal':
+        // Level 1, nobody served yet: what the bar's count is for.
+        this.tipAt = { bar: true };
+        return this.level === 1 && this.levelServed === 0 && this.strip.panel.open;
       case 'hurry': {
         const g = guests.find((x) => x.hurried && x.state === 'queued');
         this.tipAt = g ? { guest: g.id } : {};
@@ -1175,6 +1178,8 @@ export class GameSystem extends createSystem({}) {
   /** Has the player done what the tip says? */
   private tipDone(id: TipId): boolean {
     switch (id) {
+      case 'goal':
+        return this.levelServed > 0;
       case 'table':
         return this.shop.tablesBought > this.tipMark;
       case 'shop':
@@ -1198,7 +1203,7 @@ export class GameSystem extends createSystem({}) {
     this.save.tips.push(id);
     this.tipMark = id === 'table' ? this.shop.tablesBought : id === 'shop' ? this.shop.purchases : 0;
     const t = TIPS[id];
-    this.tip.show(t.title, t.text, tipIcon(id));
+    this.tip.show(t.title.replace('{n}', `${levelGoal(this.level)}`), t.text, tipIcon(id));
     // Reading the tip costs a hurried guest nothing: its clock is held while the tip is up.
     if (id === 'hurry' && this.tipAt.guest) {
       const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
@@ -1219,7 +1224,7 @@ export class GameSystem extends createSystem({}) {
     this.tip.hide();
   }
 
-  /** Over what it is about (café space): a guest's head, a table's top, or just below the bar's Shop button. */
+  /** Over what it is about (café space): a guest's head, a table's top, or just below the bar (its Shop button, or its level count). */
   private placeTip(): void {
     const mesh = this.tip.panel.mesh;
     const at = this.tipAt;
@@ -1232,12 +1237,16 @@ export class GameSystem extends createSystem({}) {
       if (!this.cafe.tableTop(at.table, this.spot)) return;
       // Clear of a padlock tag whatever the café's size (the tag keeps its real size; the café's space scales).
       mesh.position.set(this.spot.x, this.spot.y + (TIP.above + 0.03) / Math.max(0.5, this.cafe.cafe.scale.x), this.spot.z);
-    } else if (at.shop) {
+    } else if (at.shop || at.bar) {
       const bar = this.strip.panel;
-      const b = bar.buttons.find((x) => x.id === 'bar-shop');
+      const b = bar.buttons.find((x) => x.id === (at.shop ? 'bar-shop' : 'bar-pause'));
       if (!b) return;
+      // Under the Shop button; or under the level and its count, which follow Pause and a divider (strip-system.ts draws them at
+      // 0.15 of the bar's height either side of the divider, in a block 1.35 heights wide).
+      const h = bar.height;
+      const cx = at.shop ? b.x + b.w / 2 : b.x + b.w + h * 0.3 + h * 1.35 / 2;
       const g = (bar.mesh.geometry as PlaneGeometry).parameters;
-      bar.mesh.localToWorld(this.spot.set(((b.x + b.w / 2) / bar.width - 0.5) * g.width, -g.height / 2 - TIP.height * 0.7, 0.01));
+      bar.mesh.localToWorld(this.spot.set((cx / bar.width - 0.5) * g.width, -g.height / 2 - TIP.height * 0.7, 0.01));
       this.cafe.cafe.worldToLocal(this.spot);
       mesh.position.copy(this.spot);
     }
@@ -1575,15 +1584,16 @@ export class GameSystem extends createSystem({}) {
 
 /**
  * The first run's steps, each done rather than read: pick up the guest,
- * seat it, watch its tea come, then a word about the pause button (press
- * Open!). Then the café opens.
+ * seat it, watch its tea come (or press Open! sooner). Then the café
+ * opens. Pause and the Shop are not taught here: the "More hands" tip
+ * points at the Shop the moment it matters (game/tips.ts), and the
+ * How to play card has the full list.
  */
 function firstRun(): Step[] {
   return [
     { picture: 0, title: MOVES[0].title, text: 'Put your fingers above the guest at the gate. When the guest glows, pinch.', done: (g) => g.guests.pickedUp > g.mark.pickedUp },
     { picture: 1, title: MOVES[1].title, text: MOVES[1].text, done: (g) => g.guests.seated > g.mark.seated },
-    { picture: 2, title: 'The guest gets tea', text: 'Guests pay when they get their tea. The bar above the café shows how happy the guests are.', done: (g) => g.baristas.servedCount > g.mark.served },
-    { picture: 3, title: MOVES[3].title, text: MOVES[3].text, next: true, done: () => false },
+    { picture: 2, title: 'The guest gets tea', text: 'Guests pay when they get their tea. The bar above the café shows how happy the guests are.', next: true, done: (g) => g.baristas.servedCount > g.mark.served },
   ];
 }
 

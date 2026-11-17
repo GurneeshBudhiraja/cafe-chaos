@@ -43,7 +43,7 @@ const h = await startHeadset({
       for (const c of guests.cards.cards) c.mesh.layers.set(7);
       for (const k of ['left', 'right']) window.IWER_DEVICE.remote.dispatch('set_transform', { device: `hand-${k}`, position: k === 'left' ? { x: -1.4, y: 0.4, z: 0.9 } : { x: r[0], y: r[1], z: r[2] }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
       // No tips in the videos (they would cover what is shown).
-      game.save.tips = ['table', 'shop', 'dirty', 'hurry', 'pair'];
+      game.save.tips = ['goal', 'table', 'shop', 'dirty', 'hurry', 'pair'];
       game.click('open');
     }, REST);
     await h.page.waitForFunction(() => !window.__cafe.system.waiting && !window.__cafe.system.arriving, null, { timeout: 60000 });

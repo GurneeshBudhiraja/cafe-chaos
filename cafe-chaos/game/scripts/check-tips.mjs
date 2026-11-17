@@ -2,7 +2,8 @@
  * Tips check, in the real game (game/tips.ts):
  *  1. the first run's coach card takes the hand ray (its Skip, out of a
  *     seated reach, is pressed with a point and a pinch);
- *  2. nothing at the start of a run; with the bank able to pay for a table,
+ *  2. at the start of level 1, "Serve 5 guests" under the bar's count, gone
+ *     once a guest is served; then with the bank able to pay for a table,
  *     "Open a table" next to a padlock, with a pop; buying one sends it away;
  *  3. the first guest in a hurry: "In a hurry!" over it, and its clock
  *     waits while the tip is up; seated, the tip goes;
@@ -71,15 +72,21 @@ check('the first run\'s coach card takes the hand ray: Skip pointed at and pinch
 await send('set_transform', { device: 'hand-right', position: { x: -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
 await page.evaluate(() => { const { guests } = window.__cafe; guests.arrivals = false; guests.patienceFrozen = true; guests.clear(); });
 
-// 2. Nothing at first; then the table tip.
-await page.waitForTimeout(3000);
+// 2. The goal first, under the bar's level count; then the table tip.
+await until(() => window.__cafe.game.tipShown === 'goal', 10000);
 let t = await tip();
-check('nothing at the start of a run', t.shown === null && t.count === 0, JSON.stringify(t));
-await page.evaluate(() => { window.__cafe.score.bank = 16; });
+// In the bar's own space (it turns to the player): below it, and left of its middle, where the level count is.
+const goalAt = await page.evaluate(() => { const { game, system } = window.__cafe; const V = system.cafe.position.constructor; const p = game.tip.panel.mesh.getWorldPosition(new V()); const bar = game.strip.panel.mesh.getWorldPosition(new V()); const local = game.strip.panel.mesh.worldToLocal(p.clone()); return { below: bar.y - p.y, left: -local.x, title: game.tip.drawn.split('|')[0] }; });
+check('at the start of level 1: "Serve 5 guests" under the bar, towards its level count', t.shown === 'goal' && t.open && goalAt.title === 'Serve 5 guests' && goalAt.below > 0.03 && goalAt.below < 0.12 && goalAt.left > 0.02, JSON.stringify({ ...t, ...goalAt }));
+await h.screenshot('artifacts/tips-0-goal.png');
+await page.evaluate(() => { window.__cafe.game.levelServed = 1; });
+await until(() => window.__cafe.game.tipShown === null, 10000);
+check('a guest served sends the goal tip away', (await tip()).shown === null, 'gone');
+await page.evaluate(() => { window.__cafe.game.levelServed = 0; window.__cafe.score.bank = 16; });
 await until(() => window.__cafe.game.tipShown === 'table', 10000);
 t = await tip();
 const pops = await page.evaluate(() => window.__cafe.sound.tips);
-check('the bank able to pay for a table: "Open a table" next to a padlock, with a pop; saved as seen', t.shown === 'table' && t.open && pops === 1 && t.saved.includes('table'), JSON.stringify({ ...t, pops }));
+check('the bank able to pay for a table: "Open a table" next to a padlock, with a pop; saved as seen', t.shown === 'table' && t.open && pops === 2 && t.saved.includes('table'), JSON.stringify({ ...t, pops }));
 await h.screenshot('artifacts/tips-1-table.png');
 await page.evaluate(() => { const { game } = window.__cafe; const tag = game.tags[0]; game.click(`table-${tag.table}`); game.click('buy-yes'); });
 await until(() => window.__cafe.game.tipShown === null, 10000);
@@ -127,7 +134,7 @@ await page.evaluate(() => window.__cafe.game.click('shop-close'));
 
 // 5. Once a save.
 t = await tip();
-check('each tip was shown once, one at a time, and saved', t.count === 5 && ['table', 'hurry', 'pair', 'dirty', 'shop'].every((x) => t.saved.includes(x)), JSON.stringify(t));
+check('each tip was shown once, one at a time, and saved', t.count === 6 && ['goal', 'table', 'hurry', 'pair', 'dirty', 'shop'].every((x) => t.saved.includes(x)), JSON.stringify(t));
 await page.evaluate(() => window.__cafe.game.click('bar-pause'));
 await until(() => window.__cafe.game.phase === 'paused');
 await h.reload();

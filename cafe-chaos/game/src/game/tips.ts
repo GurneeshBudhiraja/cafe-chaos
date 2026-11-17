@@ -6,6 +6,9 @@
  * Each shows once per save (Save.tips), one at a time, next to what it is
  * about, and goes when the player has done it or after `seconds`.
  *
+ * - goal: the start of level 1: what a level asks (the bar's "0/5 served"
+ *   says the count, not that it ends the level). Level 1 only: from then
+ *   on the level card names the next target.
  * - table: the bank can pay for a table: open one (point at a padlock and
  *   pinch). Ray and pinch is the move players most often fail untaught
  *   (Meta), so it stays up until a table is bought, or `seconds`.
@@ -16,7 +19,7 @@
  * - pair: the first two friends: one table for both.
  */
 
-export type TipId = 'table' | 'shop' | 'dirty' | 'hurry' | 'pair';
+export type TipId = 'goal' | 'table' | 'shop' | 'dirty' | 'hurry' | 'pair';
 
 export interface TipText {
   title: string;
@@ -26,6 +29,8 @@ export interface TipText {
 }
 
 export const TIPS: Record<TipId, TipText> = {
+  // `{n}` is the level's goal (game/rules.ts levelGoal).
+  goal: { title: 'Serve {n} guests', text: 'That finishes the level.', seconds: 8 },
   table: { title: 'Open a table', text: 'Point at a padlock and pinch.', seconds: 25 },
   shop: { title: 'More hands', text: 'Shop: hire a barista.', seconds: 9 },
   dirty: { title: 'Dirty table', text: 'Your staff will clean it.', seconds: 8 },
@@ -34,7 +39,7 @@ export const TIPS: Record<TipId, TipText> = {
 };
 
 /** The order tips are offered in when more than one is due (the one players act on first). */
-export const TIP_ORDER: TipId[] = ['hurry', 'pair', 'table', 'dirty', 'shop'];
+export const TIP_ORDER: TipId[] = ['goal', 'hurry', 'pair', 'table', 'dirty', 'shop'];
 
 /** Seconds between one tip going and the next appearing. */
 export const TIP_GAP = 2;
@@ -54,6 +59,20 @@ export function tipIcon(id: TipId): (ctx: CanvasRenderingContext2D, x: number, y
     ctx.fillStyle = '#f4ecdc';
     ctx.strokeStyle = '#f4ecdc';
     switch (id) {
+      case 'goal': {
+        // A flag on a pole.
+        ctx.beginPath();
+        ctx.moveTo(x - r * 0.3, y + r * 0.6);
+        ctx.lineTo(x - r * 0.3, y - r * 0.6);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - r * 0.3, y - r * 0.6);
+        ctx.lineTo(x + r * 0.5, y - r * 0.35);
+        ctx.lineTo(x - r * 0.3, y - r * 0.05);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      }
       case 'table': {
         // A padlock, open.
         ctx.fillRect(x - r * 0.42, y - r * 0.05, r * 0.84, r * 0.6);
