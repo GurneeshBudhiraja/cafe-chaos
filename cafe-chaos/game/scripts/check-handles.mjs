@@ -3,7 +3,8 @@
  * finder. With the viewer seated and the café placed, checks that:
  * 1. the pill lies outside the edge of the base facing the viewer, the
  *    four brackets wrap the corners, all their own size, and the pill
- *    moves to another edge when the viewer moves round the café;
+ *    moves to another edge when the viewer moves round the café; at rest
+ *    the pill is clearly lit and the brackets faintly;
  * 2. pinching the pill and dragging carries the café;
  * 3. pinching a bracket and pulling it out grows the café in place, and
  *    swinging it round turns it; it keeps both once let go;
@@ -148,7 +149,8 @@ const start = await state();
     return kinds.includes('x') && kinds.includes('z');
   });
   check('the arms of each bracket run back along the edges', inward, start.arms.map((t) => t.map((p) => `[${p[0].toFixed(2)}, ${p[2].toFixed(2)}]`).join(' & ')).join(' | '));
-  check('the handles rest well lit', start.pillShow > 0.7 && start.pillShow < 0.9 && start.bracketShow.every((s) => s > 0.7 && s < 0.9), `pill ${start.pillShow.toFixed(2)}, brackets ${start.bracketShow.map((s) => s.toFixed(2)).join(', ')}`);
+  // At rest the pill is clearly lit and the brackets faint (handles.ts SHOW.rest / bracketRest): the front stays tidy, but resizing is never hidden.
+  check('the handles rest lit: the pill clearly, the brackets faintly', start.pillShow > 0.7 && start.pillShow < 0.9 && start.bracketShow.every((s) => s > 0.2 && s < 0.4), `pill ${start.pillShow.toFixed(2)}, brackets ${start.bracketShow.map((s) => s.toFixed(2)).join(', ')}`);
   await page.screenshot({ path: 'artifacts/handles-1-seated.png' });
   // Move round to the café's right side (its +x), looking at it.
   const rightSide = toWorld(start, [b.max[0] + 0.5, 0.4, 0]);

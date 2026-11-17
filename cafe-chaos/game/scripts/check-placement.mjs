@@ -5,7 +5,8 @@
  * Sits the viewer at the emulated living room's desk-height table (as the
  * model size tests did), enters the session, and checks that the café:
  * 1. was placed on a detected table (plane detection), at table height;
- * 2. stands about 35 cm out from the eyes, its front toward the viewer;
+ * 2. stands a comfortable reach out (about 50 cm when the table allows,
+ *    as check-fit), its front toward the viewer;
  * 3. holds the whole layout: the shell, 10 tables, the bar and the quiet
  *    corner (29 seats), and no waiting bench, the tables bare (the baristas bring the food), with no console errors.
  * Then saves headset-view screenshots from a few viewpoints.
@@ -67,8 +68,9 @@ const state = await page.evaluate(() => {
 });
 check('the café is placed on a detected table', state.placed && state.onDesk && state.visible, `placed ${state.placed}, on desk ${state.onDesk}, at ${state.at.join(', ')}`);
 check('it stands at table height', Math.abs(state.at[1] - LOOK.y) < 0.03, `y ${state.at[1]} (table ${LOOK.y})`);
-// About 35 cm out when the table allows; the emulated table is small, so the edge margin moves the café toward its middle.
-check('within reach, facing the viewer', state.reach > 0.25 && state.reach < 0.6 && state.facing > 0.95, `reach ${state.reach} m, facing ${state.facing}`);
+// About 50 cm out when the table allows (lib/desk-placement.ts FIT_REACH_M); the café is squared to the
+// table and kept wholly on it, so on the emulated table it lands a little further out. Same range as check-fit.
+check('within reach, facing the viewer', state.reach >= 0.4 && state.reach <= 0.9 && state.facing > 0.95, `reach ${state.reach} m, facing ${state.facing}`);
 check('the layout is complete', state.shells === 1 && state.benches === 0 && state.tables === 10 && state.bars === 1 && state.corners === 1 && state.seats === 29 && state.meals === 0 && state.scale === 1, `${state.shells} shell, ${state.benches} benches, ${state.tables} tables, ${state.bars} bar, ${state.corners} quiet corner, ${state.seats} seats, ${state.meals} meals, scale ${state.scale}`);
 
 // Screenshots: the seated view, a lean over the front row, the gate side, the bar on the left wall, the quiet corner at the back right.

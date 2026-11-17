@@ -339,7 +339,8 @@ export class GameSystem extends createSystem({}) {
     this.world.createTransformEntity(this.menu.card.mesh);
     this.world.createTransformEntity(this.menu.sheet.mesh);
     this.hold?.claims.push((point) => this.menu.card.covers(point) || this.menu.sheet.covers(point));
-    this.cafe.hold = true;
+    // Test mode has no start card to open the café, so it comes straight up.
+    if (!TEST_MODE) this.cafe.hold = true;
     this.applySettings();
     void sketchFontReady.then(() => {
       if (this.menu.card.open) this.menu.card.paint();
