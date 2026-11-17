@@ -242,9 +242,12 @@ export const CLEAN = { seconds: 3, near: 0.3, vanish: 0.4, home: { x: 0.17, z: -
  * The mess is sized to its table: it covers at most `fit` of the top's
  * shorter side (measured from the models, metres), so it always sits
  * well inside the top, small and tidy, whatever the table (the owner:
- * minimal, never crowding a table). The mess model is `size` across.
+ * minimal, never crowding a table). Each guest leaves its own mess at its
+ * place, so on a table with more than one seat each is `place` of that
+ * (a table left by a full party still looks tidy). The mess model is
+ * `size` across.
  */
-export const MESS = { size: 0.032, fit: 0.65, tops: { 'table-2': 0.046, 'table-4': 0.04, 'bar-2': 0.026, 'quiet-corner': 0.024 } as Record<string, number> };
+export const MESS = { size: 0.032, fit: 0.65, place: 0.6, tops: { 'table-2': 0.046, 'table-4': 0.04, 'bar-2': 0.026, 'quiet-corner': 0.024 } as Record<string, number> };
 export const JANITOR_PRICE = 80;
 
 /**

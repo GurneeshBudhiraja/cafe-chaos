@@ -1,7 +1,8 @@
 /**
  * Cleaning check, in the real game from the seat (docs/MECHANICS-PLAN.md §7):
- *  1. a guest served and gone leaves its table dirty: a mess on the top,
- *     its seats closed (not offered; an amber dot while a guest is carried);
+ *  1. a guest served and gone leaves its own place dirty: a small mess at
+ *     its place, that seat closed (an amber dot while a guest is carried),
+ *     the table's other seats still open; a mess sized to its place;
  *  2. a barista with nothing to serve goes and cleans it (CLEAN.seconds at
  *     the table), then the mess goes and the seats are open again;
  *  3. an order always comes first: a barista off cleaning breaks off when a
@@ -68,7 +69,8 @@ const first = await seatAt(0, 0.025);
 await until(() => window.__cafe.baristas.servedCount >= 1, 60000);
 await until(() => window.__cafe.mess.dirtyTables().length >= 1, 60000);
 let s = await state();
-check('a guest served and gone leaves its table dirty: a mess on it, its seats closed', s.dirty.join() === `${first.table}` && s.closed.every((t) => t === first.table) && s.closed.length >= 2 && s.dirtied === 1, JSON.stringify({ table: first.table, dirty: s.dirty, closed: s.closed }));
+const openAtTable = await page.evaluate((t) => window.__cafe.guests.seats.filter((x) => x.table === t && !x.dirty && !x.locked).length, first.table);
+check('a guest served and gone leaves its own place dirty: a mess at its place, that seat closed, the table\'s other seats open', s.dirty.join() === `${first.table}` && s.closed.length === 1 && s.closed[0] === first.table && openAtTable >= 1 && s.dirtied === 1, JSON.stringify({ table: first.table, dirty: s.dirty, closed: s.closed, openAtTable }));
 const offered = await page.evaluate((table) => {
   const { guests } = window.__cafe;
   const V = guests.seats[0].position.constructor;
@@ -101,7 +103,7 @@ const fit = await page.evaluate(() => {
   mess.cleaned -= 3;
   return out;
 });
-check('the mess fits inside each table top (at most 65 % of its shorter side): 3.0 cm on a two-seater, 2.6 on a four-seater, 1.7 on the bar, 1.6 on the side table', fit['table-2'] <= 3.0 && fit['table-4'] <= 2.6 && fit['bar-2'] <= 1.7 && fit['quiet-corner'] <= 1.6, JSON.stringify(fit));
+check('each place\'s mess fits its share of the top (65 % of the shorter side, 60 % of that where the table seats more than one): about 1.8 cm on a two-seater, 1.6 on a four-seater, 1.0 on the bar, 1.6 on the side table', fit['table-2'] <= 1.8 && fit['table-4'] <= 1.6 && fit['bar-2'] <= 1.05 && fit['quiet-corner'] <= 1.6, JSON.stringify(fit));
 
 // 2. The barista, with nothing to serve, cleans it.
 await until(() => window.__cafe.baristas.staff.some((m) => m.state === 'toClean' || m.state === 'cleaning'), 60000);

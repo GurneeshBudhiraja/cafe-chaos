@@ -59,7 +59,8 @@ import { WishCards } from '../ui/wish-card.js';
 import { Popups } from '../guests/popups.js';
 import { SeatGlow } from '../guests/seat-glow.js';
 import { DIAL, PatienceDial } from '../guests/patience-dial.js';
-import { collectSeats, LANDING_REACH_M, seatUnder, type Seat } from '../guests/seats.js';
+import { collectSeats, LANDING_REACH_M, seatNear, seatUnder, type Seat } from '../guests/seats.js';
+import { SEAT_TAG, SeatTag, type SeatRefusal } from '../ui/seat-tag.js';
 import { Walk, yawDelta } from '../guests/walker.js';
 import { CafeSystem } from './cafe-system.js';
 import { HandleSystem } from './handle-system.js';
@@ -301,6 +302,7 @@ export class GuestSystem extends createSystem({}) {
     this.furniture = this.cafeSystem.furniture;
     // Room for the dots of seats that come later (the annex's).
     this.glow = new SeatGlow(cafe, this.seats.length + SEAT_HEADROOM);
+    for (const tag of this.seatTags) cafe.add(tag.card.panel.mesh);
     // A pinch on or just around a guest is the guests' business, never the café's.
     this.holdSystem?.claims.push((point) => this.nearestGuest(point, CLAIM_RADII) !== null);
   }
@@ -343,7 +345,55 @@ export class GuestSystem extends createSystem({}) {
     // After the wishes: the head is this frame's, so the bubbles turn to where the eyes are now.
     this.react(delta);
     this.glow.show(this.seats, this.targets, this.targets.some((t, i) => t !== null || this.carriedBy(HANDS[i]) !== undefined), delta, this.granting);
+    this.tendSeatTags(frameDelta);
     this.peak = Math.max(this.peak, this.guests.length);
+  }
+
+  /** The tag over a seat a carried guest will not take (or just refused): why, while it matters (ui/seat-tag.ts). */
+  private tendSeatTags(frameDelta: number): void {
+    // Real seconds, a frame at most 0.1 s (a hitch never swallows the linger).
+    const delta = Math.min(0.1, frameDelta);
+    const cafe = this.cafeSystem.cafe;
+    const scale = cafe.scale.x || 1;
+    HANDS.forEach((hand, i) => {
+      if (!this.carriedBy(hand)) {
+        this.refusals[i] = null;
+        this.lastAimed[i] = null;
+      }
+      const linger = this.lingering[i];
+      if (linger) {
+        linger.left -= delta;
+        if (linger.left <= 0) this.lingering[i] = null;
+      }
+      const r = this.handsOff ? null : (this.refusals[i] ?? this.lingering[i]);
+      const tag = this.seatTags[i];
+      if (r) {
+        const detail = r.why === 'dirty' ? 'Staff will clean it' : r.why === 'locked' ? this.lockedNote(r.seat.table) : 'Someone sits here';
+        tag.show(r.why, detail);
+        tag.card.panel.mesh.position.copy(r.seat.position);
+        tag.card.panel.mesh.position.y += SEAT_TAG.above / scale;
+      } else tag.hide();
+      tag.card.panel.update(delta, this.eye);
+    });
+  }
+
+  /**
+   * Why this carried guest will not sit where it is held, if it will not
+   * (`own`: its own seat, which it may take back). It is about the seat the
+   * guest is over, the nearest under it: a free seat it would land on
+   * means no tag; else that seat's own reason (taken, locked or dirty), or
+   * the dirty seat it is aimed at when it is over none.
+   */
+  private refusalFor(guest: Guest, own: Seat | null): { seat: Seat; why: SeatRefusal } | null {
+    const target = guest.target;
+    if (target && !target.dirty) return null;
+    const near = seatNear(this.seats, guest.actor.root.position, SEAT_REACH_M);
+    if (near && near !== own) {
+      if (near.occupant !== 0) return { seat: near, why: 'taken' };
+      if (near.locked) return { seat: near, why: 'locked' };
+      if (near.dirty) return { seat: near, why: 'dirty' };
+    }
+    return target?.dirty ? { seat: target, why: 'dirty' } : null;
   }
 
   // ----------------------------------------------------------------- wishes
@@ -468,6 +518,23 @@ export class GuestSystem extends createSystem({}) {
 
   /** Guests let go over a dirty table and sent back to the line (for the checks). */
   refusedDirty = 0;
+  /**
+   * Why each hand's guest will not sit where it is held (null: it would,
+   * or it is over no seat), the tag that says so over the seat, and a
+   * reason kept SEAT_TAG.linger seconds after a refused let-go.
+   */
+  readonly refusals: ({ seat: Seat; why: SeatRefusal } | null)[] = [null, null];
+  readonly seatTags = [new SeatTag(), new SeatTag()];
+  private readonly lingering: ({ seat: Seat; why: SeatRefusal; left: number } | null)[] = [null, null];
+  /** The second line for a locked table (the game says what it costs to open). */
+  lockedNote: (table: number) => string = () => 'Open it to seat guests here';
+  /** Guests let go over a seat that would not take them (the sound plays at `refusedAt`, café space). */
+  refusedSeats = 0;
+  readonly refusedAt = new Vector3();
+  /** Times a carried guest came over a seat that will take it (a soft tick at `aimedAt`, café space). */
+  aimedSeats = 0;
+  readonly aimedAt = new Vector3();
+  private readonly lastAimed: (Seat | null)[] = [null, null];
 
   /** True while a hand is carrying a guest. */
   get carrying(): boolean {
@@ -1046,6 +1113,17 @@ export class GuestSystem extends createSystem({}) {
     // The seat the other hand's guest is aimed at is spoken for.
     const spoken = this.guests.find((g) => g !== guest && g.state === 'held')?.target ?? null;
     guest.target = seatUnder(this.seats, root.position, SEAT_REACH_M, own, spoken) ?? this.seatAimed(root.position, pinch, own, spoken);
+    const hi = guest.hand ? HANDS.indexOf(guest.hand) : -1;
+    if (hi >= 0) {
+      this.refusals[hi] = this.refusalFor(guest, own);
+      // A seat that will take it, newly under it: a soft tick there.
+      const yes = guest.target && !guest.target.dirty ? guest.target : null;
+      if (yes && yes !== this.lastAimed[hi]) {
+        this.aimedSeats++;
+        this.aimedAt.copy(yes.meal ?? yes.position);
+      }
+      this.lastAimed[hi] = yes;
+    }
     // How it takes being held: one steady face (see guests/expressions.ts), by its patience, the seat below it and
     // how near the player's face it is.
     const held = this.held;
@@ -1138,6 +1216,15 @@ export class GuestSystem extends createSystem({}) {
     if (guest.target?.dirty) {
       guest.target = null;
       this.refusedDirty++;
+    }
+    // Let go where it will not sit: it goes back (below), the "uh-uh" plays at that seat and the tag stays a moment.
+    const hi = guest.hand ? HANDS.indexOf(guest.hand) : -1;
+    const refusal = hi >= 0 ? this.refusals[hi] : null;
+    if (refusal) {
+      this.lingering[hi] = { ...refusal, left: SEAT_TAG.linger };
+      this.refusedSeats++;
+      this.refusedAt.copy(refusal.seat.position);
+      this.refusals[hi] = null;
     }
     const seat = guest.target ?? homeSeat;
     guest.hand = null;

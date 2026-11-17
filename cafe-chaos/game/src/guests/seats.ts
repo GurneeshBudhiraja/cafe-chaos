@@ -56,6 +56,26 @@ export function collectSeats(cafe: Group, anchors: Object3D[], nav: NavGrid, pie
 }
 
 /**
+ * The seat nearest under a point (café space), whatever its state (taken,
+ * locked or dirty), within `reach` across and the same height window as
+ * `seatUnder`; null if none. For saying why a guest will not sit there.
+ */
+export function seatNear(seats: Seat[], point: Vector3, reach: number): Seat | null {
+  let best: Seat | null = null;
+  let bestDistance = reach;
+  for (const seat of seats) {
+    const up = point.y - seat.position.y;
+    if (up < -0.03 || up > 0.2) continue;
+    const across = Math.hypot(point.x - seat.position.x, point.z - seat.position.z);
+    if (across < bestDistance) {
+      bestDistance = across;
+      best = seat;
+    }
+  }
+  return best;
+}
+
+/**
  * The free seat (or `own`, the carried guest's own seat) nearest under a
  * point (café space), within `reach` across and not too far below or
  * above it; null if none. `spoken` is a seat the other hand's guest is

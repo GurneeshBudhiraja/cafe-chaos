@@ -291,6 +291,8 @@ export class GameSystem extends createSystem({}) {
     this.world.createTransformEntity(this.rays.group);
     this.cafe.cafe.add(this.tip.panel.mesh);
     this.cafe.cafe.add(this.note.panel.mesh);
+    // A carried guest held over a locked table's seat: the tag there says what it costs to open.
+    this.guests.lockedNote = () => `Open it for ${this.shop.tablePrice} coins`;
     // The start menu stands in the world (the café is hidden until it is opened).
     // The menu cards stand a metre away, twice as big (MENU_SPOT).
     for (const p of [this.menu.card, this.menu.sheet, this.menu.how]) p.size = MENU_SPOT.size;

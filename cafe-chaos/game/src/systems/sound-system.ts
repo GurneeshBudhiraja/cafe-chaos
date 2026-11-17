@@ -69,7 +69,7 @@ export class SoundSystem extends createSystem({}) {
   private mess: MessSystem | null = null;
   private shop: ShopSystem | null = null;
   private readonly next: Record<keyof typeof EVERY, number> = { bubble: 0, espresso: 8, clink: 3, trickle: 0, cricket: 2 };
-  private seen = { dirtied: 0, arrived: 0, pickedUp: 0, seated: 0, gaveUp: 0, served: 0, purchases: 0, refused: 0, scored: 0, clicks: 0, closed: false, placements: -1, records: 0 };
+  private seen = { dirtied: 0, arrived: 0, pickedUp: 0, seated: 0, gaveUp: 0, refusedSeats: 0, aimedSeats: 0, served: 0, purchases: 0, refused: 0, scored: 0, clicks: 0, closed: false, placements: -1, records: 0 };
   private score: ScoreSystem | null = null;
   private game: GameSystem | null = null;
   private strip: StripSystem | null = null;
@@ -220,6 +220,8 @@ export class SoundSystem extends createSystem({}) {
       seen.pickedUp = guests?.pickedUp ?? 0;
       seen.seated = guests?.seated ?? 0;
       seen.gaveUp = guests?.gaveUp ?? 0;
+      seen.refusedSeats = guests?.refusedSeats ?? 0;
+      seen.aimedSeats = guests?.aimedSeats ?? 0;
       seen.served = this.baristas?.servedCount ?? 0;
     }
     if (guests) {
@@ -240,10 +242,16 @@ export class SoundSystem extends createSystem({}) {
         const gone = guests.guests.filter((g) => g.state === 'vanishing' || (g.state === 'leaving' && g.side === null)).sort((a, b) => b.id - a.id)[0];
         this.emit('sigh', gone ? gone.actor.root.position : this.spot('Entrance', PLACES.room), SOUND.hands * 0.8, 0.8, (c, o, t) => voice(c, o, t, 'sigh'));
       }
+      // A carried guest over a seat that will take it: a soft tick from the seat; let go where it will not sit: the
+      // "uh-uh" from that seat (hands have no haptics: every yes and no gets a sound where it happens, Meta; Microsoft).
+      if (guests.aimedSeats > seen.aimedSeats) this.emit('aimed', guests.aimedAt, SOUND.hands * 0.35, 0.1, tick);
+      if (guests.refusedSeats > seen.refusedSeats) this.emit('refuse', guests.refusedAt, SOUND.hands, 0.4, refuse);
       seen.arrived = guests.arrived;
       seen.pickedUp = guests.pickedUp;
       seen.seated = guests.seated;
       seen.gaveUp = guests.gaveUp;
+      seen.aimedSeats = guests.aimedSeats;
+      seen.refusedSeats = guests.refusedSeats;
     }
     // A tip comes up: a soft pop (hands have no haptics, so every new thing to look at gets a sound: Meta).
     if (this.tips > this.tipsHeard) this.emit('pop', PLACES.room, SOUND.hands * 0.7, 0.2, pop);
