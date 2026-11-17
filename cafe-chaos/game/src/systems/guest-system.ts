@@ -743,7 +743,10 @@ export class GuestSystem extends createSystem({}) {
       return;
     }
     if (guest.walk) return;
-    const impatient = guest.patience < guest.patienceFull * (1 - IMPATIENT_AFTER);
+    // A guest in a hurry fidgets from the moment it waits (the clip others play only once their patience runs low):
+    // movement is what the eye catches first, even out of the corner of it, so it shows among a calm line without
+    // relying on its dot's colour or adding anything to the café (the owner's playtest).
+    const impatient = guest.hurried || guest.patience < guest.patienceFull * (1 - IMPATIENT_AFTER);
     guest.actor.play(impatient ? 'Impatient' : 'Idle');
   }
 

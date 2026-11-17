@@ -56,6 +56,12 @@ const hurried = await page.evaluate(() => {
 await until((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.state === 'queued', 30000, hurried.id);
 await page.waitForTimeout(300);
 const dot = await page.evaluate((id) => window.__cafe.guests.guests.find((g) => g.id === id).dial.drawn, hurried.id);
+// It fidgets from the start (the Impatient clip, its patience still full); a calm guest beside it stands idle.
+const calm = await page.evaluate(() => { const g = window.__cafe.guests.spawn(); return g.id; });
+await until((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.state === 'queued', 30000, calm);
+await page.waitForTimeout(300);
+const clips = await page.evaluate(([a, b]) => { const f = (id) => window.__cafe.guests.guests.find((g) => g.id === id); return { hurried: f(a).actor.clip, calm: f(b).actor.clip, left: +(f(a).patience / f(a).patienceFull).toFixed(2) }; }, [hurried.id, calm]);
+check('a hurried guest fidgets from the start (Impatient, its patience still full); a calm one stands idle', clips.hurried === 'Impatient' && clips.calm === 'Idle' && clips.left > 0.9, JSON.stringify(clips));
 check('a hurried guest waits 0.6 of the usual in the line (15 s at least), and its dot has the hourglass', hurried.hurried && hurried.patience >= 15 && hurried.patience <= hurried.usual * 0.6 * 1.16 && /\|true\|false$/.test(dot), JSON.stringify({ ...hurried, dot }));
 await h.screenshot('artifacts/types-1-hurried.png');
 const seatedFor = await page.evaluate((id) => {
