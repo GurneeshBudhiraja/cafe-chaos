@@ -32,6 +32,7 @@ import { LinearFilter, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, V
 import type { RoughCanvas } from 'roughjs/bin/canvas';
 import type { HowToStep } from '../game/how-to-play.js';
 import type { Options } from 'roughjs/bin/core';
+import type { CafeId } from '../cafe/style.js';
 import { Panel, type Button } from './panel.js';
 import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
 
@@ -39,6 +40,8 @@ import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
 export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.21 };
 /** The menu card (start, pause, shop): wide and short (metres), 960 by 600 design units. */
 export const START_SIZE = { width: 0.32, height: 0.2 };
+/** The start card with the two cafés: a little taller (960 by 720 design units). */
+export const PICKER_SIZE = { width: 0.32, height: 0.24 };
 /**
  * How to play: one step at a time, as on the web page (index.html #how):
  * the step's video (looping, silent) on the left, its title and line on
@@ -71,13 +74,34 @@ const BOIL_HZ = 10;
 /** Volume and size steps. */
 export const LEVELS = 5;
 
-export interface StartState {
-  /** 'first': no save. 'returning': a save to continue. */
-  kind: 'first' | 'returning';
-  coins: number;
-  staff: number;
-  /** The level the save is on. */
+/** One café on the start card. */
+export interface CafeTile {
+  id: CafeId;
+  name: string;
+  /** Its line under the name. */
+  line: string;
+  /** Owned (the Japanese café always); not owned: the free trial and Buy. */
+  owned: boolean;
+  /** A save to continue there (Continue and New game; else Start). */
+  started: boolean;
   level: number;
+  coins: number;
+  /** Chosen, and its models still loading. */
+  loading: boolean;
+}
+/** The start card: the cafés, the one played last first; and the Canadian café's price. */
+export interface StartState {
+  tiles: CafeTile[];
+  price: number;
+}
+/** The Buy question: the price, the Japanese café's coins, and where it is asked from. */
+export interface BuyCafeState {
+  price: number;
+  coins: number;
+  /** Asked in the trial: what was played there is kept. */
+  trial: boolean;
+  /** Asked in the Japanese café's Shop: the run goes on after. */
+  fromJapan: boolean;
 }
 export interface SettingsState {
   music: number;
@@ -107,6 +131,8 @@ export interface FailState {
   left: number;
 }
 export interface WarnState {
+  /** The café a new game is for. */
+  cafe: string;
   coins: number;
   staff: number;
   level: number;
@@ -129,15 +155,26 @@ if (typeof Image !== 'undefined') {
   img.src = `${import.meta.env.BASE_URL}models/unlock-icons.png`;
 }
 
-let cover: HTMLImageElement | null = null;
+/**
+ * The cafés' pictures on the start card: the Japanese café's cover, and the
+ * Canadian café from a seat (its top strip, a viewer's caption, is cropped
+ * away: `top`, a share of its height).
+ */
+const ART: Record<CafeId, { file: string; top: number }> = {
+  japan: { file: 'ui/cover.jpg', top: 0 },
+  canada: { file: 'ui/canada-cover.jpg', top: 0.07 },
+};
+const covers: Partial<Record<CafeId, HTMLImageElement>> = {};
 const coverListeners: (() => void)[] = [];
 if (typeof Image !== 'undefined') {
-  const img = new Image();
-  img.onload = () => {
-    cover = img;
-    for (const f of coverListeners) f();
-  };
-  img.src = `${import.meta.env.BASE_URL}ui/cover.jpg`;
+  for (const id of Object.keys(ART) as CafeId[]) {
+    const img = new Image();
+    img.onload = () => {
+      covers[id] = img;
+      for (const f of coverListeners) f();
+    };
+    img.src = `${import.meta.env.BASE_URL}${ART[id].file}`;
+  }
 }
 
 const font = (size: number, heavy = true): string => hand(size, heavy ? 700 : 400);
@@ -167,14 +204,14 @@ export class StartMenu {
   /** Players who ask the system for less motion see the still picture, not the clip. */
   private readonly still = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** What the sheet shows ('none' when it is closed). */
-  sheetKind: 'none' | 'settings' | 'warn' | 'quit' = 'none';
+  sheetKind: 'none' | 'settings' | 'warn' | 'quit' | 'buy' | 'leave' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card or the shop. */
   cardKind: 'start' | 'pause' | 'failed' | 'buy' = 'start';
   private seed = 1;
   private clock = 0;
-  private start: StartState = { kind: 'first', coins: 0, staff: 1, level: 1 };
+  private start: StartState = { tiles: [], price: 0 };
   private settings: SettingsState = { music: 2, sounds: 3 };
-  private warn: WarnState = { coins: 0, staff: 1, level: 1 };
+  private warn: WarnState = { cafe: '', coins: 0, staff: 1, level: 1 };
   private readonly k: number;
   /** How to play's scale (metres per design unit). */
   private readonly kh: number;
@@ -283,7 +320,7 @@ export class StartMenu {
   showStart(state: StartState): void {
     this.cardKind = 'start';
     this.start = state;
-    this.card.resize(START_SIZE.width, START_SIZE.height);
+    this.card.resize(PICKER_SIZE.width, PICKER_SIZE.height);
     this.layoutStart();
     this.card.show(true);
   }
@@ -332,6 +369,47 @@ export class StartMenu {
     this.sheetKind = 'warn';
     this.layoutWarn();
     this.sheet.show(true);
+  }
+
+  /** The Canadian café's Buy question (or, short of coins, how many more). */
+  openBuy(state: BuyCafeState): void {
+    this.sheetKind = 'buy';
+    const can = state.coins >= state.price;
+    const after = state.trial ? ' Your trial progress is kept.' : state.fromJapan ? '' : ' It starts at level 1.';
+    if (can)
+      this.layoutQuestion('Buy the Canadian café?', `It costs ${state.price} coins from the Japanese café. You will have ${(state.coins - state.price).toLocaleString('en')} coins left there.${after}`, [
+        { id: 'buy-yes', kind: 'primary', label: `BUY · ${state.price} COINS` },
+        { id: 'buy-no', kind: 'secondary', label: 'GO BACK' },
+      ]);
+    else
+      this.layoutQuestion('Not enough coins', `The Canadian café costs ${state.price} coins. The Japanese café has ${state.coins.toLocaleString('en')}. Earn ${(state.price - state.coins).toLocaleString('en')} more there.`, [{ id: 'buy-no', kind: 'primary', label: 'GO BACK' }]);
+    this.sheet.show(true);
+  }
+
+  /** Leave the trial? Its progress is not saved. */
+  openLeave(): void {
+    this.sheetKind = 'leave';
+    this.layoutQuestion('Leave the trial?', 'Your trial progress is not saved.', [
+      { id: 'leave-no', kind: 'primary', label: 'KEEP PLAYING' },
+      { id: 'leave-yes', kind: 'danger', label: 'LEAVE' },
+    ]);
+    this.sheet.show(true);
+  }
+
+  /** A question on the sheet: its title, a sentence (wrapped), and one or two wide buttons under it. */
+  private layoutQuestion(title: string, sentence: string, choices: { id: string; kind: 'primary' | 'secondary' | 'danger'; label: string }[]): void {
+    const H = Math.round(this.sheet.height / this.k);
+    const top = choices.length > 1 ? 300 : 300 + 120 + TOUCH_GAP;
+    const buttons = choices.map((c, i) => this.button(this.sheet, c.id, PAD, top + i * (120 + TOUCH_GAP), W - PAD * 2, 120, c.kind, c.label));
+    this.sheet.set((ctx) => {
+      ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
+      ctx.save();
+      ctx.scale(this.k, this.k);
+      this.paper(ctx, pen(this.sheet.canvas), 0, H);
+      text(ctx, title, W / 2, 80, 48, SKETCH.ink);
+      this.wrap(ctx, sentence, 32, false, W - PAD * 2).forEach((l, i) => text(ctx, l, W / 2, 150 + i * 44, 32, SKETCH.soft, 'center', false));
+      ctx.restore();
+    }, buttons);
   }
 
   /** Are you sure? before leaving the headset view. */
@@ -421,80 +499,93 @@ export class StartMenu {
     };
   }
 
+  /**
+   * The start card: the cafés side by side, the one played last on the
+   * left with the main button (moss); each with its picture, name, line,
+   * a status line, one big button that plays at once (START, CONTINUE, or
+   * TRY FREE for a café not owned), and a small one under it (New game,
+   * or Buy). How to play, Settings and Quit along the top.
+   *
+   *   ┌───────────────────────────────────────────────────┐
+   *   │ Café Chaos            [? How to play][⚙ Settings][Quit] │
+   *   │ ┌─────────────────┐    ┌─────────────────┐        │
+   *   │ │   picture       │    │   picture       │        │
+   *   │ └─────────────────┘    └─────────────────┘        │
+   *   │ Japanese café          Canadian café              │
+   *   │ A cherry-blossom...    A snowy log cabin...       │
+   *   │ Level 3 · 120 coins    Free trial · progress...   │
+   *   │ [    CONTINUE     ]    [    TRY FREE     ]        │
+   *   │ [    New game     ]    [ Buy · 750 coins ]        │
+   *   └───────────────────────────────────────────────────┘
+   */
   private layoutStart(): void {
-    const s = this.start;
-    const returning = s.kind === 'returning';
+    const st = this.start;
     const SW = Math.round(this.card.width / this.k);
     const H = Math.round(this.card.height / this.k);
-    // The cover art: the left column, full height.
-    const ax = PAD;
-    const ay = PAD;
-    const aw = 360;
-    const ah = H - PAD * 2;
-    // The buttons: the right column.
-    const cx = ax + aw + 30;
-    const cw = SW - PAD - cx;
     const buttons: Button[] = [];
-    const rowH = 84;
-    const half = (cw - TOUCH_GAP) / 2;
-    const bottom = H - PAD - rowH;
-    if (returning) {
-      const newY = bottom - TOUCH_GAP - 96;
-      const contY = newY - TOUCH_GAP - 140;
-      buttons.push(this.button(this.card, 'continue', cx, contY, cw, 140, 'primary', 'CONTINUE', `Level ${s.level} · ${s.coins.toLocaleString('en')} coins`));
-      buttons.push(this.button(this.card, 'new', cx, newY, cw, 96, 'secondary', 'NEW GAME'));
-    } else {
-      const h = 200;
-      buttons.push(this.button(this.card, 'new', cx, bottom - TOUCH_GAP - h, cw, h, 'primary', 'NEW GAME'));
-    }
-    // How to play and Settings side by side at the bottom (little reach).
-    buttons.push(this.button(this.card, 'help', cx, bottom, half, rowH, 'secondary', '? How to play', undefined, false, 30));
-    buttons.push(this.button(this.card, 'gear', cx + half + TOUCH_GAP, bottom, half, rowH, 'secondary', '⚙ Settings', undefined, false, 30));
-    // Quit: top right, away from the buttons pressed often (it asks first).
-    const qw = 150;
-    buttons.push(this.button(this.card, 'quit', SW - PAD - qw, PAD, qw, 72, 'secondary', 'Quit'));
+    // The top row: How to play, Settings and Quit (Quit asks first).
+    const topH = 72;
+    const qw = 120;
+    const gw = 190;
+    const hw = 230;
+    const qx = SW - PAD - qw;
+    const gx = qx - TOUCH_GAP - gw;
+    const hx = gx - TOUCH_GAP - hw;
+    buttons.push(this.button(this.card, 'help', hx, PAD, hw, topH, 'secondary', '? How to play', undefined, false, 28));
+    buttons.push(this.button(this.card, 'gear', gx, PAD, gw, topH, 'secondary', '⚙ Settings', undefined, false, 28));
+    buttons.push(this.button(this.card, 'quit', qx, PAD, qw, topH, 'secondary', 'Quit', undefined, false, 30));
+    // The tiles.
+    const tw = (SW - PAD * 2 - TOUCH_GAP) / 2;
+    const artY = PAD + topH + 24;
+    const artH = 170;
+    const nameY = artY + artH + 34;
+    const lineY = nameY + 40;
+    const statusY = lineY + 70;
+    const mainY = statusY + 24;
+    const mainH = 94;
+    const smallY = mainY + mainH + TOUCH_GAP;
+    const smallH = Math.min(76, H - PAD - smallY);
+    const tiles = st.tiles.map((t, i) => {
+      const x = PAD + i * (tw + TOUCH_GAP);
+      const label = t.loading ? 'LOADING…' : !t.owned ? 'TRY FREE' : t.started ? 'CONTINUE' : 'START';
+      buttons.push(this.button(this.card, `play-${t.id}`, x, mainY, tw, mainH, t.loading ? 'off' : i === 0 ? 'primary' : 'secondary', label, undefined, false, 40));
+      if (!t.owned) buttons.push(this.button(this.card, `buy-${t.id}`, x, smallY, tw, smallH, 'secondary', `Buy · ${st.price} coins`, undefined, false, 28));
+      else if (t.started) buttons.push(this.button(this.card, `new-${t.id}`, x, smallY, tw, smallH, 'secondary', 'New game', undefined, false, 28));
+      const status = !t.owned ? 'Free trial · progress not saved' : t.started ? `Level ${t.level} · ${t.coins.toLocaleString('en')} coins` : '';
+      return { t, x, status };
+    });
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
       ctx.scale(this.k, this.k);
       const rc = pen(this.card.canvas);
       this.paper(ctx, rc, 0, H, SW);
-      // The cover art, cropped to fill its column (never stretched), darkened toward the name.
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(ax, ay, aw, ah);
-      ctx.clip();
-      ctx.fillStyle = '#2a2420';
-      ctx.fillRect(ax, ay, aw, ah);
-      if (cover) {
-        const k = Math.max(aw / cover.width, ah / cover.height);
-        const iw = aw / k;
-        const ih = ah / k;
-        ctx.drawImage(cover, (cover.width - iw) / 2, (cover.height - ih) / 2, iw, ih, ax, ay, aw, ah);
-      }
-      const g = ctx.createLinearGradient(0, ay + ah * 0.4, 0, ay + ah);
-      g.addColorStop(0, 'rgba(22,23,29,0)');
-      g.addColorStop(1, 'rgba(22,23,29,.88)');
-      ctx.fillStyle = g;
-      ctx.fillRect(ax, ay, aw, ah);
-      ctx.restore();
-      rc.rectangle(ax, ay, aw, ah, this.o({ strokeWidth: 3, seed: this.seed + 3 }));
-      text(ctx, 'CAFÉ', ax + aw / 2, ay + ah - 150, 74, '#f2ebdd');
-      text(ctx, 'CHAOS', ax + aw / 2, ay + ah - 72, 74, '#f2ebdd');
-      // The level the save is on: a lantern-coloured badge.
-      if (returning) {
-        const word = `${s.level}`;
-        ctx.font = font(30);
-        const lw = ctx.measureText('LEVEL').width;
-        ctx.font = font(44);
-        const tw = ctx.measureText(word).width;
-        const bx = ax + 18;
-        const by = ay + 18;
-        const bw = 24 + lw + 18 + tw + 24;
-        rc.rectangle(bx, by, bw, 84, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, seed: this.seed + 50 }));
-        text(ctx, 'LEVEL', bx + 24, by + 44, 30, SKETCH.ink, 'left');
-        text(ctx, word, bx + bw - 22, by + 44, 44, SKETCH.ink, 'right');
-      }
+      text(ctx, 'Café Chaos', PAD + 6, PAD + topH / 2 + 2, 48, SKETCH.ink, 'left');
+      tiles.forEach(({ t, x, status }, i) => {
+        // The picture, cropped to fill its frame (never stretched).
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, artY, tw, artH);
+        ctx.clip();
+        ctx.fillStyle = '#2a2420';
+        ctx.fillRect(x, artY, tw, artH);
+        const img = covers[t.id];
+        if (img) {
+          const top = img.height * ART[t.id].top;
+          const ih0 = img.height - top;
+          const k = Math.max(tw / img.width, artH / ih0);
+          const iw = tw / k;
+          const ih = artH / k;
+          ctx.drawImage(img, (img.width - iw) / 2, top + (ih0 - ih) / 2, iw, ih, x, artY, tw, artH);
+        }
+        ctx.restore();
+        rc.rectangle(x, artY, tw, artH, this.o({ strokeWidth: 3, seed: this.seed + 3 + i }));
+        text(ctx, t.name, x + 4, nameY, 40, SKETCH.ink, 'left');
+        this.wrap(ctx, t.line, 25, false, tw - 8)
+          .slice(0, 2)
+          .forEach((l, j) => text(ctx, l, x + 4, lineY + j * 30, 25, SKETCH.soft, 'left', false));
+        if (status) text(ctx, status, x + 4, statusY, 25, t.owned ? SKETCH.ink : SKETCH.mossDeep, 'left');
+      });
       ctx.restore();
     }, buttons);
   }
@@ -644,7 +735,7 @@ export class StartMenu {
     const s = this.warn;
     const H = Math.round(this.sheet.height / this.k);
     const lost = [`${s.coins.toLocaleString('en')} coins`, `${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`].concat(s.level > 1 ? [`level ${s.level}`] : []);
-    const sentence = `This deletes your ${lost.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
+    const sentence = `This deletes its ${lost.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
     const buttons: Button[] = [
       this.button(this.sheet, 'fresh', PAD, 300, W - PAD * 2, 120, 'danger', 'DELETE AND START'),
       this.button(this.sheet, 'keep', PAD, 300 + 120 + TOUCH_GAP, W - PAD * 2, 120, 'secondary', 'GO BACK'),
@@ -655,7 +746,7 @@ export class StartMenu {
       ctx.scale(this.k, this.k);
       const rc = pen(this.sheet.canvas);
       this.paper(ctx, rc, 0, H);
-      text(ctx, 'Start a new café?', W / 2, 80, 54, SKETCH.ink);
+      text(ctx, `Start the ${s.cafe} again?`, W / 2, 80, 44, SKETCH.ink);
       ctx.font = font(34, false);
       const lines: string[] = [];
       let line = '';

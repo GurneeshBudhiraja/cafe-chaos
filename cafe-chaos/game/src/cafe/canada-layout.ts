@@ -14,9 +14,9 @@
  * in all; the game opens them table by table as the Japanese café's (the
  * first two inside tables at the start).
  *
- * Not yet wired: the game builds the Japanese layout (layout.ts) until the
- * café picker lands (phase 4 of the plan). The upper floor also needs its
- * own walk grid (see INTEGRATION.md, "The upper floor").
+ * CafeSystem builds it when the Canadian café is chosen on the start card;
+ * the upper floor has its own walk grid (nav/cafe-nav.ts CANADA_UPPER_NAV)
+ * and the stairs join the two (CafeSystem.findPath).
  */
 
 import type { Placement } from './layout.js';
@@ -26,26 +26,26 @@ export const CANADA_FLOOR_TOP_M = 0.024;
 export const CANADA_UPPER_TOP_M = 0.1548;
 
 export const CANADA_LAYOUT: Placement[] = [
-  { model: 'cafe-canada' as Placement['model'], x: 0, z: 0, y: 0 },
+  { model: 'cafe-canada' as const, x: 0, z: 0, y: 0 },
   // 1-2. The cabin's window wall: two tables for two, each under a socket (the second also by the fireplace).
-  { model: 'table-ca-2' as Placement['model'], x: -0.31, z: -0.10 },
-  { model: 'table-ca-2' as Placement['model'], x: -0.31, z: 0.10 },
+  { model: 'table-ca-2' as const, x: -0.31, z: -0.10 },
+  { model: 'table-ca-2' as const, x: -0.31, z: 0.10 },
   // 3. The middle table for four.
-  { model: 'table-ca-4' as Placement['model'], x: -0.17, z: -0.03, yawDeg: 90 },
+  { model: 'table-ca-4' as const, x: -0.17, z: -0.03, yawDeg: 90 },
   // 4-5. The deck: two bistro tables.
-  { model: 'patio-table' as Placement['model'], x: 0.16, z: 0.08 },
-  { model: 'patio-table' as Placement['model'], x: 0.31, z: 0.06 },
+  { model: 'patio-table' as const, x: 0.16, z: 0.08 },
+  { model: 'patio-table' as const, x: 0.31, z: 0.06 },
   // 6. The dock: the bench, its sitters facing the lake (and the player).
-  { model: 'dock-bench' as Placement['model'], x: 0.26, z: 0.25, y: 0.030 },
+  { model: 'dock-bench' as const, x: 0.26, z: 0.25, y: 0.030 },
   // 7-9. The bonfire: three chairs round the ring at (-0.27, 0.245), each turned to face it.
   ...[205, 270, 335].map((a) => {
     const r = 0.085;
     const rad = (a * Math.PI) / 180;
-    return { model: 'fire-chair' as Placement['model'], x: -0.27 + r * Math.cos(rad), z: 0.245 - r * Math.sin(rad), yawDeg: a - 90 };
+    return { model: 'fire-chair' as const, x: -0.27 + r * Math.cos(rad), z: 0.245 - r * Math.sin(rad), yawDeg: a - 90 };
   }),
   // 10-11. Upstairs: two bistro tables on the upper deck (the shell's UpperSpot-1/2), beside the piano.
-  { model: 'patio-table' as Placement['model'], x: -0.27, z: -0.2125, y: CANADA_UPPER_TOP_M },
-  { model: 'patio-table' as Placement['model'], x: -0.11, z: -0.2125, y: CANADA_UPPER_TOP_M },
+  { model: 'patio-table' as const, x: -0.27, z: -0.2125, y: CANADA_UPPER_TOP_M },
+  { model: 'patio-table' as const, x: -0.11, z: -0.2125, y: CANADA_UPPER_TOP_M },
 ];
 
 /**
@@ -53,7 +53,7 @@ export const CANADA_LAYOUT: Placement[] = [
  * tables), and the order the rest open in from the Shop: nearest the front
  * first, as the game does for the Japanese café.
  */
-export const CANADA_START_TABLES = [1, 2];
+export { CANADA_START_TABLES } from '../game/rules.js';
 
 /** The wishes the Canadian café can meet, by piece (the game's wish logic reads these; CANADA-PLAN.md). */
 export const CANADA_PLACES = {

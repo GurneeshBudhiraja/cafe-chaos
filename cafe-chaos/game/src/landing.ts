@@ -20,7 +20,7 @@
 import rough from 'roughjs';
 import { Theme } from './audio/theme.js';
 import { HOW_TO_PLAY } from './game/how-to-play.js';
-import { loadSave, TEST_MODE } from './game/save.js';
+import { SaveBook, TEST_MODE } from './game/save.js';
 
 const STROKES: Record<string, string> = { ink: '#16171d', timber: '#3e2a1c', 'moss-deep': '#2f522d', off: '#b6a993' };
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -138,7 +138,7 @@ addEventListener('load', () =>
 // click, tap or key if it could not start at once. It stops as the headset view opens (the game plays
 // its own) and comes back when the player returns to the page.
 const theme = new Theme(`${import.meta.env.BASE_URL}audio/theme.mp3`);
-theme.level = loadSave().music / 2;
+theme.level = new SaveBook().load('japan').music / 2;
 if (!TEST_MODE) theme.play();
 for (const kind of ['pointerdown', 'keydown', 'touchstart'] as const) addEventListener(kind, () => theme.nudge(), { capture: true });
 new MutationObserver(() => {
