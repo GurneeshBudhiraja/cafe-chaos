@@ -79,7 +79,7 @@ mat('Donut', (0.84, 0.62, 0.38), 0.8)
 mat('IcingPink', (0.96, 0.62, 0.72), 0.6)
 mat('IcingChoc', (0.38, 0.23, 0.14), 0.6)
 mat('IcingMaple', (0.86, 0.52, 0.22), 0.6)
-mat('Smoke', (0.92, 0.92, 0.94), 0.9, alpha=0.55)
+mat('Smoke', (0.93, 0.93, 0.95), 0.9, alpha=0.42)
 mat('Mountain', (0.47, 0.55, 0.68), 0.95)          # the near range, blue with distance
 mat('MountainFar', (0.64, 0.71, 0.82), 0.95)       # the far range, paler still
 mat('Mountains', (1.0, 1.0, 1.0), 0.95)            # the painted relief ranges (texture made in the backdrop block)
@@ -219,8 +219,11 @@ snow.boxb((0.23, 0.02, -0.195), (0.34, 0.004, 0.15))         # behind the deck: 
 snow.boxb((0.09, 0.02, 0.245), (0.06, 0.004, 0.13))          # between the bonfire and the lake
 snow.boxb((0.04, 0.02, -0.055), (0.04, 0.004, 0.43))         # the cabin's doorstep strip, under the deck's left edge
 # Soft banks where the snow meets the lake and the deck, and drifts along the plate's back edge.
-for x, z, sx, sz in ((0.06, 0.19, 0.08, 0.02), (0.27, 0.19, 0.30, 0.02), (0.445, 0.255, 0.03, 0.06), (-0.075, 0.285, 0.035, 0.022), (0.0, 0.215, 0.028, 0.018)):
-    snow.sphere((x, 0.024, z), 1.0, seg=10, rings=6, scale=(sx, 0.008, sz))   # low round drifts (a long one pointed at the player read as a boulder)
+# Every bank stays inside the plate (x ±0.46). The lake's back bank is two pieces, either side of the
+# dock (x 0.22 … 0.30): one long piece ran under the dock and 11 cm past the plate's right edge, its thin
+# tapered end a spike in the air. Long banks get more segments so their ends stay round, not pointed.
+for x, z, sx, sz in ((0.06, 0.19, 0.08, 0.02), (0.165, 0.19, 0.05, 0.018), (0.375, 0.19, 0.075, 0.018), (0.428, 0.255, 0.028, 0.055), (-0.075, 0.285, 0.035, 0.022), (0.0, 0.215, 0.028, 0.018)):
+    snow.sphere((x, 0.024, z), 1.0, seg=16 if sx > 2 * sz else 10, rings=6, scale=(sx, 0.008, sz))   # low round drifts (a long one pointed at the player read as a boulder)
 for i in range(7):
     x = -0.40 + i * 0.13
     snow.sphere((x, 0.024, -0.30), 1.0, seg=10, rings=6, scale=(0.07, 0.014 + 0.004 * (i % 2), 0.025))
@@ -420,11 +423,15 @@ tools.boxb((FPX + 0.028, FLOOR + 0.004, FPZ + 0.044), (0.008, 0.0012, 0.008))
 tools.done()
 Part('HearthRug', 'Plaid').boxb((FPX + 0.055, 0.0241, FPZ), (0.030, 0.0006, 0.052)).done()
 anchor('FireplaceSpot', (FPX + 0.03, FLOOR, FPZ), rot_y=-90)
-SMOKE_AT = (FPX + 0.006, CH_TOP + 0.022, FPZ)
+# The smoke: one soft wisp, not separate balls. Five small puffs, a fifth of a loop apart, so close that
+# they always overlap into a column; each is born inside the pot's mouth (hidden), rises and swells, and
+# shrinks away at the top (see the Ambient clip below). They lean one way, downwind, so it reads as a wisp.
+SMOKE_N = 5
+SMOKE_AT = (FPX + 0.006, CH_TOP + 0.014, FPZ)      # 2.5 mm inside the pot's rim (its top is CH_TOP + 0.0165)
 smoke_objs = []
-for i in range(3):
-    sm = Part(f'Smoke-{i}', 'Smoke', smooth=True).sphere((0, 0, 0), 0.008, seg=8, rings=6).done()
-    sm.location = G(SMOKE_AT[0], SMOKE_AT[1] + i * 0.016, SMOKE_AT[2])
+for i in range(SMOKE_N):
+    sm = Part(f'Smoke-{i}', 'Smoke', smooth=True).sphere((0, 0, 0), 0.0055, seg=10, rings=7).done()
+    sm.location = G(*SMOKE_AT)
     smoke_objs.append(sm)
 
 # ------------------------------------------------------------------ the counter and the back bar
@@ -492,7 +499,7 @@ Part('TillScreen', 'Wire').box((0.0, FLOOR + 0.084, -0.19), (0.026, 0.014, 0.004
 Part('TakeawayTag', 'Red').box((0.012, FLOOR + 0.072, CZ1 + 0.003), (0.02, 0.0005, 0.001)).done()
 text_mesh('TakeawayWords', 'PICK UP', 0.0056, 'Cream', (0.012, FLOOR + 0.0745, CZ1 + 0.0036), extrude=0.0003)
 Part('TakeawayTagBoard', 'Red').box((0.012, FLOOR + 0.0745, CZ1 + 0.002), (0.028, 0.01, 0.002)).done()
-anchor('TakeawaySpot', (0.0, FLOOR, -0.125), rot_y=180)
+anchor('TakeawaySpot', (0.0, FLOOR, -0.13), rot_y=180)   # 3 cm off the counter's front (z -0.16), clear of TableSpot-4
 anchor('BaristaSpot-1', (-0.235, 0.036, -0.204), rot_y=180)
 anchor('BaristaSpot-2', (-0.115, 0.036, -0.204), rot_y=180)
 anchor('BaristaSpot-3', (0.005, 0.036, -0.204), rot_y=180)
@@ -1048,10 +1055,16 @@ fence.done(); fsnow.done()
 
 anchor('FloorTop', (0, FLOOR, 0))
 anchor('BenchSpot', (0.235, FLOOR, 0.165))     # kept for compatibility; the queue stands outside the gate as now
-# Table spots inside the cabin, for the layout file.
-anchor('TableSpot-1', (-0.31, FLOOR, -0.10))
-anchor('TableSpot-2', (-0.31, FLOOR, 0.10))
-anchor('TableSpot-3', (-0.17, FLOOR, -0.03))
+# Table spots inside the cabin, for the layout file: three columns 14 cm apart (the window wall, the
+# middle, the door side) and two rows at z ±0.09 either side of the room's axis. The window and door
+# columns are tables for two (the window ones under the sockets), the middle one the long table for four
+# (turned 90°, centred on the axis), so each aisle beside it is 4.2 cm. The rows sit 1 cm in from the
+# sockets so the door column's back table clears a takeaway guest at the till (`TakeawaySpot`).
+anchor('TableSpot-1', (-0.31, FLOOR, -0.09))
+anchor('TableSpot-2', (-0.31, FLOOR, 0.09))
+anchor('TableSpot-3', (-0.17, FLOOR, 0.0))
+anchor('TableSpot-4', (-0.03, FLOOR, -0.09))
+anchor('TableSpot-5', (-0.03, FLOOR, 0.09))
 
 # ------------------------------------------------------------------ the Ambient clip: the smoke puffs rise, the flames flicker
 def fcurves_of(o):
@@ -1070,18 +1083,23 @@ def fcurves_of(o):
 sc.name = 'Ambient'
 sc.frame_start, sc.frame_end = 1, 48
 sc.render.fps = 24
+# Each puff leaves the pot small, rises 4.2 cm leaning downwind while it swells, then shrinks to nothing
+# at the top (a glTF clip cannot fade the alpha, so it vanishes by scale) and is born again in the pot:
+# it never hangs in the air and never sinks back down. Five puffs a fifth of a loop apart overlap into
+# one column that is narrow at the pot, full in the middle and thins away at the top.
+SMOKE_PATH = ((1, 0.000, 0.000, 0.55), (12, 0.010, 0.002, 1.05), (28, 0.024, 0.006, 1.35), (40, 0.035, 0.010, 1.0), (48, 0.042, 0.013, 0.0))
 for i, s in enumerate(smoke_objs):
     base = G(*SMOKE_AT)
-    for f in (1, 49):
-        s.location = base + Vector((0, 0, i * 0.016)); s.scale = (0.6 + 0.4 * i / 3,) * 3
+    wob = 0.0015 * (1 if i % 2 else -1)            # a little sideways wobble so the column is not a rod
+    for f, rise, dx, sc_ in SMOKE_PATH + ((49,) + SMOKE_PATH[0][1:],):
+        s.location = base + Vector((dx + (wob if 0 < rise < 0.04 else 0), 0, rise)); s.scale = (sc_,) * 3
         s.keyframe_insert('location', frame=f); s.keyframe_insert('scale', frame=f)
-    s.location = base + Vector((0.004 * (1 if i % 2 else -1), 0, 0.048 + i * 0.016)); s.scale = (1.6 + 0.4 * i / 3,) * 3
-    s.keyframe_insert('location', frame=25); s.keyframe_insert('scale', frame=25)
-    # Each puff cycles with a phase offset by shifting its curves.
+    # Each puff cycles with a phase offset by shifting its curves; the jump from the top back to the
+    # pot happens in the one frame the puff has no size (48 → 49 holds, then snaps).
     for fc in fcurves_of(s):
         for kp in fc.keyframe_points:
-            kp.co.x += i * 16
-            kp.interpolation = 'LINEAR'
+            kp.interpolation = 'CONSTANT' if round(kp.co.x) == 48 else 'LINEAR'
+            kp.co.x += i * 48 / SMOKE_N
         fc.modifiers.new('CYCLES')
 for i, f in enumerate(flames + hearth_flames):
     for frame, sy in ((1, 1.0), (9, 1.12), (17, 0.92), (29, 1.08), (41, 0.96), (49, 1.0)):

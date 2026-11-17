@@ -1,9 +1,9 @@
 # cafe-canada — the Canadian winter café (Hoser's · Coffee & Donuts)
 
-**File:** `cafe-canada.glb` — about 33,000 triangles (8,000 of them the two mountain ranges, 3,000 the
-flames), 211 meshes, 40 materials, 4.0 MB (JPEG textures: 19 colour maps, 15 normal maps, one 2048 px
+**File:** `cafe-canada.glb` — about 33,800 triangles (8,000 of them the two mountain ranges, 3,000 the
+flames), 213 meshes, 38 materials, 4.1 MB (JPEG textures: 19 colour maps, 15 normal maps, one 2048 px
 occlusion atlas), one 2 s `Ambient`
-clip (the chimney's smoke puffs rise, the bonfire's and the hearth's flames flicker, white water runs
+clip (the chimney's smoke rises as one soft wisp of five overlapping puffs that swell and shrink away, the bonfire's and the hearth's flames flicker, white water runs
 down the waterfall and foams at its foot). Built by `cafe_canada_build.py`
 in a background Blender (nothing lives in a .blend); run it again to change anything, then
 `node merge_anims.mjs cafe-canada.glb` (Blender exports a clip per animated object; the game plays
@@ -60,7 +60,10 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
   front and right walls knee high (4 logs) so every table shows from the seat; the door gap in the
   right wall at z −0.02 … 0.08. A 2 × 2 window in the left wall with green shutters; two wall
   sockets inside (`Socket-1` under the window at z −0.10, `Socket-2` at z 0.10). No roof over the
-  tables: the room is open to the hand from above.
+  tables: the room is open to the hand from above. The tables stand in a grid: three columns 14 cm
+  apart (x −0.31 window, −0.17 middle, −0.03 door side) and two rows at z ±0.09; the window and door
+  columns are tables for two, the middle the long table for four turned 90° on the room's axis, with
+  a 4.2 cm aisle either side of it.
 - **Fireplace** (inside, the left wall at z 0.015, between the window and the second window table,
   where the front half wall does not hide it from the player): a river-stone surround (the fieldstone
   texture: varied warm and cool stones, domed, in recessed sandy mortar) with a dark lintel and
@@ -69,7 +72,9 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
   a yellow core, swelling at the foot, licking to a curled tip; they flicker in the `Ambient` clip);
   a heavy pine beam mantel on two corbels with a spruce garland and red berries, two mugs and two
   hung stockings; the chimney breast narrowing at a shoulder into the stack, which stands 5.8 cm over
-  the wall top with a cap, a clay pot, snow and smoke; a fire-tool stand; a plaid rug.
+  the wall top with a cap, a clay pot, snow and smoke (five small puffs born inside the pot, a fifth of a
+  loop apart, overlapping into one column that leans downwind; each swells as it rises 4.2 cm and
+  shrinks to nothing at the top, since a glTF clip cannot fade alpha); a fire-tool stand; a plaid rug.
   `FireplaceSpot`. The tables either side are the warm seats.
 - **Counter** (the baristas' zone, as in the Japanese café): red front with cream panels, cream top
   at y 0.085, from x −0.355 to 0.03, front face z −0.16, leaving a **4.8 cm way out at its left end**
@@ -144,8 +149,8 @@ its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −9
 | `Entrance` | (0.39, 0.024, 0.055), facing −X | the gate opening; the queue forms outside the right edge as now |
 | `FloorTop` | (0, 0.024, 0) | the walk grid's floor sample |
 | `BaristaSpot-1/2/3` | (−0.235 / −0.115 / 0.005, 0.036, −0.204) | the three stations behind the counter |
-| `TakeawaySpot` | (0.0, 0.024, −0.125), facing −Z | where a takeaway guest stands at the counter's right end |
-| `TableSpot-1/2/3` | (−0.31, −0.10), (−0.31, 0.10), (−0.17, −0.03) | the cabin's tables: two by the window-wall sockets (either side of the fireplace), one in the middle |
+| `TakeawaySpot` | (0.0, 0.024, −0.13), facing −Z | where a takeaway guest stands at the counter's right end (3 cm off its front, clear of `TableSpot-4`) |
+| `TableSpot-1/2/3/4/5` | (−0.31, −0.09), (−0.31, 0.09), (−0.17, 0.0), (−0.03, −0.09), (−0.03, 0.09) | the cabin's tables: two by the window-wall sockets (either side of the fireplace), the long one in the middle, two on the door side mirroring the window pair |
 | `Socket-1/2` | the left wall at z −0.10 and 0.10, y 0.052 | the `socket` wish: met at TableSpot-1 and 2 |
 | `FireplaceSpot` | (−0.383, 0.024, 0.015), facing +X | the hearth: the `warm` wish (TableSpot-1 and 2 are beside it) |
 | `UpperFloorTop` | (−0.19, 0.1548, −0.17) | the upper floor's sample (for its own walk grid) |
@@ -191,7 +196,7 @@ Materials from `kit.py`, textured by `textures.py` with a 512 px occlusion atlas
 
 | File | What | Size (w × h × d, cm) | Seats | Where it stands |
 |---|---|---|---|---|
-| `table-ca-2.glb` | square maple table on a pedestal, two slat-back chairs with red cushions, a napkin holder | 9.3 × 3.9 × 4.2 | 1–2 (chairs at x ±3.3) | the cabin's window wall, `TableSpot-1/2` (under the sockets) |
+| `table-ca-2.glb` | square maple table on a pedestal, two slat-back chairs with red cushions, a napkin holder | 9.3 × 3.9 × 4.2 | 1–2 (chairs at x ±3.3) | the cabin's window wall, `TableSpot-1/2` (under the sockets), and the door side, `TableSpot-4/5` |
 | `table-ca-4.glb` | long maple table, a plaid-cushioned bench either side, a candle | 7.0 × 3.8 × 10.3 | 1–2 front bench, 3–4 back | the cabin's middle, `TableSpot-3`, turned 90° |
 | `patio-table.glb` | red steel bistro table with snow on it, two red bistro chairs | 9.0 × 3.7 × 4.4 | 1–2 | the deck, `PatioSpot-1/2`; and the upper deck, `UpperSpot-1/2` (y 0.1548) |
 | `dock-bench.glb` | pine bench for two facing +Z (the lake and the player), plaid cushion, snow on its back, a mug shelf on each arm (the meal spots) | 8.7 × 4.0 × 2.6 | 1–2 | the dock, `DockSpot` (y 0.030) |
@@ -217,7 +222,10 @@ All seven have the Japanese staff's eight clips (Idle, Work, Wave, Bow, Walk, Ca
 and four for the stairs: `ClimbUp`, `ClimbDown` (empty-handed: the lifted leg high going up, reaching
 down going down, the body leaning into it and bobbing on each step, the head watching the steps) and
 `CarryUp`, `CarryDown` (the same with the tray held out and riding the bob). 1 s, two steps a loop.
-One 64 px skin each, 108–228 triangles, 46–62 KB.
+One 64 px skin each, 108–228 triangles, 76–93 KB. Every clip carries all three channels of every part it
+poses, held still or not (the export keeps constant channels, `export_optimize_animation_keep_anim_object`,
+and drops only repeated keys): before, a part that held one pose for a whole clip was left out, so the
+pianist played standing with its legs through the bench and the fiddler's neck hand hung at its side.
 
 | File | Who | Look | Extra nodes / clips |
 |---|---|---|---|
@@ -226,7 +234,7 @@ One 64 px skin each, 108–228 triangles, 46–62 KB.
 | `barista-rowan.glb` | barista 3 | dark skin, black hair, cream toque with a red pompom, red apron | `Toque` (on the head) |
 | `barista-birch.glb` | janitor (open from the start) | red lumberjack plaid, dark overalls with a brass button, spruce toque | `Toque`, `Shovel` (on the back), `Cloth` (right hand), `Bucket` (beside, as the Japanese janitor: show it while cleaning); clip `Wipe` (2 s) |
 | `barista-cedar.glb` | janitor (to unlock) | green plaid, dark overalls, red toque band as earmuffs | `Earmuffs`, `Shovel`, `Cloth`, `Bucket`; clip `Wipe` |
-| `barista-fiddler.glb` | the violinist (purchasable) | cream quilted parka with a red zip, denim, red-and-cream toque | `Violin` (under the chin, on the body), `Bow` (in the right hand, so it saws); clip `Play` (2 s loop: bow arm sawing at chin height, a sway, a lean onto the chin rest) |
+| `barista-fiddler.glb` | the violinist (purchasable) | cream quilted parka with a red zip, denim, red-and-cream toque | `Violin` (on the body: on the left shoulder tucked under the chin, the neck reaching forward and out to the left, strings up), `Bow` (in the right hand, so it saws); clip `Play` (2 s loop: the left hand on the violin's neck with a vibrato, the bow arm sawing across the strings at chin height, a sway, a lean onto the chin rest) |
 | `barista-pianist.glb` | the pianist (purchasable) | navy cardigan, red bow tie, dark hair in a bun with a red ribbon | clip `PlayPiano` (2 s loop, sitting: the rig lowered 8 mm onto the bench, legs straight out under the keys, hands rising and falling out of step and drifting along the keys, a sway and a nod); place it at `PianoSpot` |
 
 The game plays the fiddler's `Play` where it plays the Japanese musician's `Strum`; the `Strum`
@@ -271,7 +279,7 @@ bodies too if ever wanted; the per-species ones (Hachimaki, Apron, Vest) do not 
 ## Still to come (see the plan)
 
 Phase 4 (game): the café picker, registering these files in `assets.ts`, the Canadian layout
-(`canada-layout.ts`: 21 seats on two floors), the upper floor's walk grid and the stair walk (above),
+(`canada-layout.ts`: 25 seats on two floors, with `TableSpot-4/5`), the upper floor's walk grid and the stair walk (above),
 the new wishes (`socket`, `outside`, `takeaway`, `lake`, `patio`, `bonfire`, `warm`, `upstairs`),
 the two musician purchases (the fiddler at `MusicianSpot`, the pianist at `PianoSpot`), the second
 janitor as a Shop row, no passthrough dimming here.
