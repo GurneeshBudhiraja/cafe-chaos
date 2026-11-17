@@ -1,6 +1,7 @@
 """The Canadian café's guests on the guest rig (base/guest_build.py + guest_anim.py +
 guest_accessories.py): three new snack species and a winter wardrobe. Exports
-guest-<species>.glb (same nodes, attach points and 10 clips as the Japanese guests) and
+guest-<species>.glb (same nodes, attach points and 10 clips as the Japanese guests, plus StairsUp and
+StairsDown for the stairs to the upper deck) and
 accessories-canada.glb (every item carries its `attach` extra, as accessories.glb).
 
   Blender --background --factory-startup --python guests_canada_build.py -- <out-dir>
@@ -179,7 +180,39 @@ for o in list(sc.collection.all_objects):
     bpy.data.objects.remove(o, do_unlink=True)
 rigs, M = gb["build_all"](sc, kinds=tuple(KINDS), spacing=0.08)
 gb["RIGS"] = rigs
-gb["animate_all"]()
+
+# Stairs (the upper deck): 1 s, two steps a loop, in place; the game moves the root up or down the stair's slope
+# (9 mm forward and 8.7 mm up a step, so 1.8 cm forward a second). Going up the lifted knee comes high and the
+# foot lands on the next tread, the body leans in and bobs as it pushes up, the arms pump; going down the leading
+# foot reaches down, the support knee bends as the body lowers, the body leans back a touch.
+K, face, curve = ga["K"], ga["face"], ga["curve"]
+GAIT_ARM, NEUTRAL = ga["GAIT_ARM"], ga["NEUTRAL"]
+UP_HIP = [(0, 14), (0.12, -6), (0.30, -52), (0.45, -46), (0.62, -14), (0.85, 10), (1, 14)]
+UP_KNEE = [(0, 8), (0.12, 40), (0.30, 82), (0.45, 64), (0.62, 26), (0.85, 10), (1, 8)]
+UP_RIG = [(0, 0), (0.25, 0.0009), (0.5, 0), (0.75, 0.0009), (1, 0)]
+DOWN_HIP = [(0, -6), (0.15, -24), (0.35, -34), (0.5, -26), (0.7, -2), (0.85, 6), (1, -6)]
+DOWN_KNEE = [(0, 38), (0.15, 20), (0.35, 6), (0.5, 12), (0.7, 34), (0.85, 44), (1, 38)]
+DOWN_RIG = [(0, -0.0007), (0.25, 0), (0.5, -0.0007), (0.75, 0), (1, -0.0007)]
+def stairs(R, up):
+    St = R["St"]; c = "StairsUp" if up else "StairsDown"
+    hips, knees, rig = (UP_HIP, UP_KNEE, UP_RIG) if up else (DOWN_HIP, DOWN_KNEE, DOWN_RIG)
+    face(c, St, 1, NEUTRAL)
+    N = 24
+    for f in range(1, N + 2):
+        i = (f - 1) % N
+        for side, off in (("L", 0.0), ("R", 0.5)):
+            p = (i / N + off) % 1.0
+            hip, knee = curve(hips, p), curve(knees, p)
+            K(c, St[f"Leg-{side}"], f, rot=(hip, 0, 0))
+            K(c, St[f"Shin-{side}"], f, rot=(knee, 0, 0))
+            K(c, St[f"Foot-{side}"], f, rot=(-(hip + knee) + (6 if up else -4), 0, 0))       # the sole stays level on the tread
+            K(c, St[f"Arm-{side}"], f, rot=(curve(GAIT_ARM, i / N + (0 if side == "L" else 0.5)) * (1.4 if up else 0.8), 0, 0))
+        K(c, St["Rig"], f, loc=(0, 0, curve(rig, i / N)))
+        K(c, St["Torso"], f, rot=(10 if up else -3, 0, 0))
+for kind, R in rigs.items():
+    ga["animate"](R, kind)
+    stairs(R, True); stairs(R, False)
+ga["finish"]()
 
 # ------------------------------------------------------------------ the wardrobe
 REGION = gc["REGION"]; uv_region = gc["uv_region"]; body_shell = gc["body_shell"]; since = gc["since"]
@@ -376,6 +409,10 @@ gb["undress"]()
 prev = gb["dress"](rigs, made, {"snowbit": ["Earmuffs-snowbit", "Parka-snowbit"], "beavertail": ["Toque-beavertail", "Scarf-beavertail"], "nanaimo": ["Scarf-nanaimo", "Earmuffs-nanaimo"]})
 gb["preview"](["Impatient"], 13)
 shot("guests-dressed-2.png", (0, 0, 0.032), 0.40, elev=10, azim=14)
+gb["preview"](["StairsUp"], 8)
+shot("guests-stairs-up.png", (0, 0, 0.03), 0.40, elev=8, azim=-75)
+gb["preview"](["StairsDown"], 8)
+shot("guests-stairs-down.png", (0, 0, 0.03), 0.40, elev=8, azim=-75)
 gb["undress"]()
 for k in KINDS:
     rigs[k]["seated"].location = (0, 0, 0.0)

@@ -1,8 +1,9 @@
 # cafe-canada — the Canadian winter café (Hoser's · Coffee & Donuts)
 
-**File:** `cafe-canada.glb` — about 19,600 triangles, 135 meshes, 29 materials, 6.5 MB (5 MB of
-it textures: 18 tiling colour maps, 14 normal maps, one 2048 px occlusion atlas), one 2 s `Ambient`
-clip (the chimney's smoke puffs rise, the bonfire's flames flicker). Built by `cafe_canada_build.py`
+**File:** `cafe-canada.glb` — about 22,700 triangles, 190 meshes, 37 materials, 6.7 MB (most of it
+textures: 18 tiling colour maps, 14 normal maps, one 2048 px occlusion atlas), one 2 s `Ambient`
+clip (the chimney's smoke puffs rise, the bonfire's and the hearth's flames flicker, white water runs
+down the waterfall and foams at its foot). Built by `cafe_canada_build.py`
 in a background Blender (nothing lives in a .blend); run it again to change anything, then
 `node merge_anims.mjs cafe-canada.glb` (Blender exports a clip per animated object; the game plays
 one named `Ambient`). The plan and the notes it answers: `../../game/docs/CANADA-PLAN.md`.
@@ -24,7 +25,7 @@ scripts after their palettes) turns the palette into textured materials and give
 - **Occlusion:** `bake_ao.py` gives every mesh a second UV set (`Lightmap`, smart-projected and
   packed together), bakes Cycles ambient occlusion (ray distance 6 cm, 32 samples) into one
   2048 px atlas, and wires it as the glTF `occlusionTexture` on `texCoord 1`. three.js puts that on
-  `aoMap`, which the game's Lambert swap keeps, so the log joins, the underside of the eave and
+  `aoMap`, which the game's Lambert swap keeps, so the log joins, the underside of the upper deck and
   the counter, the stones and the tree bases get contact shading with no run-time cost beyond one
   texture read. Each furniture file carries its own 512 px atlas the same way (`AO_RES` in
   `pieces_build.py`); their textures are capped at 256 px (`TEX_MAX`) because every file carries
@@ -40,27 +41,54 @@ scripts after their palettes) turns the palette into textured materials and give
 
 ## What it is
 
-A bright winter day. A log cabin on the left half of the plate with its counter along the back
-wall; a snow-dusted deck (the patio) on the right half between the cabin door and the gate; a frozen
-lake with a dock and a red canoe front right; a stone bonfire ring front left; snowy spruces at the
-corners; string lights over the deck; the gate arch with the hanging sign where the queue forms.
+A bright winter day under the Rockies. A log cabin on the left half of the plate with its counter
+along the back wall and a fireplace inside; over the counter, an open upper deck (the rooftop patio)
+with two tables and a piano, reached by stairs outside the cabin's right wall; a snow-dusted deck
+(the patio) on the right half between the cabin door and the gate; a frozen lake with a dock and a
+red canoe front right; a stone bonfire ring front left; snowy spruces at the corners; string lights
+over both decks; the gate arch with the hanging sign where the queue forms; a mountain range with a
+waterfall along the back.
 Flat pastel materials with the game's one sun: nothing glows but the string lights, the heater and
 the fire, and only a little (it is daytime). No walls glow, no dimming is meant for this café.
 
 - **Base:** the same 92 × 62 cm plate as `cafe-shell`, origin at the centre of its underside; snow
   on top at y 0.024 (the same height as the cabin floor and the deck: all walked).
-- **Cabin:** logs (stacked cylinders) x −0.42 … 0.04, z −0.27 … 0.16; the back and left walls full
-  height (0.155), the front and right walls knee high (4 logs) so every table shows from the seat;
-  the door gap in the right wall at z −0.02 … 0.08. A 2 × 2 window in the left wall with green
-  shutters; two wall sockets inside under it (`Socket-1/2`). A snow-capped eave over the counter
-  only (the tables are open to the hand), icicles under it, a chimney with smoke; the cream gable
-  above with the red oval sign.
+- **Cabin:** logs (stacked cylinders) x −0.42 … 0.04, z −0.27 … 0.16; the back and left walls nine
+  logs high (0.125, top y 0.149: just over the baristas' heads, so the upper deck sits on them), the
+  front and right walls knee high (4 logs) so every table shows from the seat; the door gap in the
+  right wall at z −0.02 … 0.08. A 2 × 2 window in the left wall with green shutters; two wall
+  sockets inside (`Socket-1` under the window at z −0.10, `Socket-2` at z 0.10). No roof over the
+  tables: the room is open to the hand from above.
+- **Fireplace** (inside, the left wall at z 0.015, between the window and the second window table,
+  where the front half wall does not hide it from the player): a fieldstone hearth with a fire
+  (flickering), a pine mantel with two mugs, the chimney breast up the wall and 5.8 cm out over it
+  with smoke, a plaid rug. `FireplaceSpot`. The tables either side are the warm seats.
 - **Counter** (the baristas' zone, as in the Japanese café): red front with cream panels, cream top
-  at y 0.085, from x −0.41 to 0.03, front face z −0.16; the duckboard behind at y 0.036
-  (`BaristaSpot-1/2/3` at x −0.235, −0.115, 0.005, z −0.204, matching `routes.ts`); the back bar
-  with two coffee urns, stacked cups with red lids, syrup bottles, a red tin, mugs; the chalk menu
-  board (2x2 COFFEE 2, SNOWBITS 3, BEAVER TAIL 4, MAPLE LATTE 3); the donut case and the till at
-  the right end, a PICK UP tag for takeaway.
+  at y 0.085, from x −0.355 to 0.03, front face z −0.16, leaving a **4.8 cm way out at its left end**
+  (x −0.413 … −0.365) for the baristas (it used to run wall to wall, which would have shut them in);
+  the duckboard behind at y 0.036 (`BaristaSpot-1/2/3` at x −0.235, −0.115, 0.005, z −0.204,
+  matching `routes.ts`); the back bar with two coffee urns, stacked cups with red lids, syrup
+  bottles, a red tin, mugs (all under 0.137, below the upper deck); the donut case and the till at
+  the right end, a PICK UP tag for takeaway. The chalk menu board (2x2 COFFEE 2, SNOWBITS 3, BEAVER
+  TAIL 4, MAPLE LATTE 3) hangs from the upper deck's front edge between the first two stations (the
+  back wall under the deck is out of the player's sight).
+- **Upper deck** (the rooftop patio): a pine deck over the counter and the back bar, x −0.425 …
+  0.04, z −0.275 … −0.150, top **y 0.1548** (2.6 cm over the tallest barista's toque), on the back
+  and side walls and two slim posts at its front edge (x −0.175, between the first two stations, and
+  x 0.034). Open to the sky, so its seats are reached from above like the rest; the lower floor's
+  seats stay in front of it, open too (nothing roofs a seat). A 2.2 cm rail round it (low: seated
+  guests show over it and a hand reaches over it), snow on the rail, icicles under its front edge
+  (kept clear of the three stations), string lights on two poles well above the seated guests' heads.
+  The rooftop sign (the cream board, the red oval, Hoser's / COFFEE & DONUTS) stands at its back on
+  two legs, 3 cm up so seated guests do not hide it. Two bistro tables stand on it
+  (`UpperSpot-1/2`, from the layout).
+- **Rooftop piano:** an upright at the upper deck's left end, side on to the player, keys toward the
+  deck, a red runner and a mug on top, its bench in front (`PianoSpot`, where the pianist sits).
+- **Stairs:** outside the cabin's right wall, from the patio by the door up to a landing level with
+  the upper deck: 15 open treads of 9 mm, 8.7 mm up each (under the walk grid's 1.35 cm step, about
+  a guest stride each), x 0.050 … 0.112 (6.2 cm wide: a guest with room either side), climbing away
+  from the player from z −0.012 to −0.147; stringers both sides, a handrail on the patio side. The
+  landing (x 0.04 … 0.112, z −0.24 … −0.147) joins the deck; its posts stand on the snow behind.
 - **Deck:** x 0.06 … 0.40, z −0.12 … 0.17, planks with snow at the edges; a back rail; three light
   poles with two sagging strings of bulbs; a patio heater at (0.235, 0.0); the musician's round
   stage at the back (0.30, −0.21) under a red scalloped awning with snow.
@@ -71,20 +99,26 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
   woodpile against the cabin's front; dark stepping slabs from the door round to the fire.
 - **Gate:** the arch at x 0.42, z −0.02 … 0.13, snow on its beam, the sign hanging in it (readable
   from both sides); the red mailbox by it; snowbanks along the plate's back edge.
+- **The Rockies:** two thin ranges along the plate's back edge like a stage backdrop (z −0.289 …
+  −0.306): the near one blue, the far one paler and taller, snow on every peak; the tallest peak is
+  0.35 up. Between two near peaks a dark rock outcrop with a **waterfall** down a notch in it
+  (white streaks run down it and foam churns at its foot in the `Ambient` clip) into a small pool
+  ringed with stones, behind the stage.
 
 ## Numbers the game needs
 
 | Thing | Value |
 |---|---|
 | Root node | `cafe-canada` |
-| glTF extras on the root | `cafe_model: true`, `cafe_style: "canada"`, `front_edge_z_m: 0.16`, `back_edge_z_m: -0.27`, `floor_top_y_m: 0.024`, `window_side: "-x"`, `entrance_side: "+x"` |
+| glTF extras on the root | `cafe_model: true`, `cafe_style: "canada"`, `front_edge_z_m: 0.16`, `back_edge_z_m: -0.27`, `floor_top_y_m: 0.024`, `window_side: "-x"`, `entrance_side: "+x"`, `upper_floor_top_y_m: 0.1548`, `stair_steps: 15`, `stair_rise_m: 0.00872`, `stair_run_m: 0.009` |
 | Plate footprint | 0.92 × 0.62 m; the trees stay inside it |
-| Floor / snow / deck top | y = 0.024; dock 0.030; stage 0.035; duckboard 0.036 (all under the walk grid's 1.35 cm step) |
-| Tallest point | the gable's snow, y ≈ 0.283 (under the Japanese cherry tree's 0.405) |
+| Floor / snow / deck top | y = 0.024; dock 0.030; stage 0.035; duckboard 0.036 (all under the walk grid's 1.35 cm step); **upper deck 0.1548** |
+| Tallest point | the far range's highest peak, y ≈ 0.352; the rooftop sign's snow 0.257 (all under the Japanese cherry tree's 0.405) |
 | Transparent materials | `Glass` (window, donut case), `Smoke` |
-| Emissive | `Fire`, `FireCore`, `Bulb` (the heater's glow shares `Bulb`) |
+| Emissive | `Fire`, `FireCore`, `Bulb` (the heater's glow shares `Bulb`), `Water` (faintly, so the waterfall reads) |
 
-**Axes:** +Y up, the player toward +Z, the entrance on +X, as `cafe-shell`.
+**Axes:** +Y up, the player toward +Z, the entrance on +X, as `cafe-shell`. An anchor's facing is
+its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −90°).
 
 ## Anchors (empties under the root; game space)
 
@@ -94,11 +128,18 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
 | `FloorTop` | (0, 0.024, 0) | the walk grid's floor sample |
 | `BaristaSpot-1/2/3` | (−0.235 / −0.115 / 0.005, 0.036, −0.204) | the three stations behind the counter |
 | `TakeawaySpot` | (0.0, 0.024, −0.125), facing −Z | where a takeaway guest stands at the counter's right end |
-| `TableSpot-1/2/3` | (−0.33, −0.10), (−0.33, 0.06), (−0.17, −0.03) | the cabin's tables: two by the window sockets, one in the middle |
-| `Socket-1/2` | the left wall at z −0.10 and 0.06, y 0.052 | the `socket` wish: met at TableSpot-1 and 2 |
+| `TableSpot-1/2/3` | (−0.31, −0.10), (−0.31, 0.10), (−0.17, −0.03) | the cabin's tables: two by the window-wall sockets (either side of the fireplace), one in the middle |
+| `Socket-1/2` | the left wall at z −0.10 and 0.10, y 0.052 | the `socket` wish: met at TableSpot-1 and 2 |
+| `FireplaceSpot` | (−0.383, 0.024, 0.015), facing +X | the hearth: the `warm` wish (TableSpot-1 and 2 are beside it) |
+| `UpperFloorTop` | (−0.19, 0.1548, −0.17) | the upper floor's sample (for its own walk grid) |
+| `UpperSpot-1/2` | (−0.27, 0.1548, −0.2125), (−0.11, 0.1548, −0.2125) | the upper deck's two bistro tables: `upstairs`, `outside` |
+| `PianoSpot` | (−0.365, 0.1548, −0.2125), facing −X | where the pianist sits (barista-pianist.glb, clip `PlayPiano`); seats in earshot meet `music` |
+| `StairBottom` | (0.081, 0.024, −0.002), facing −Z | the foot of the stairs, on the patio by the door |
+| `StairTop` | (0.081, 0.1548, −0.153), facing −Z | the top: the first spot on the landing |
+| `UpperLanding` | (0.076, 0.1548, −0.19), facing −X | on the landing, turned toward the deck |
 | `PatioSpot-1/2` | (0.16, 0.08), (0.31, 0.06) | the deck's tables: `patio` and `outside` |
 | `DockSpot` | (0.26, 0.030, 0.25) | the dock bench: `lake`, `outside` |
-| `FireSpot-1/2/3` | round the ring at radius 8.5 cm | the Muskoka chairs: `bonfire`, `outside` |
+| `FireSpot-1/2/3` | round the ring at radius 8.5 cm, each facing the fire | the Muskoka chairs: `bonfire`, `outside` |
 | `MusicianSpot` | (0.30, 0.035, −0.21), facing −Z | the violinist once bought; seats within earshot meet `music` |
 | `BenchSpot` | (0.235, 0.024, 0.165) | kept for compatibility (unused: the queue stands outside) |
 
@@ -108,6 +149,21 @@ From the gate (x 0.39) across the deck to the cabin door (x 0.04, z 0.03); from 
 cabin's front corner to the bonfire (the stepping slabs); from the deck onto the dock. The lake's ice
 is at walking height: a guest who crosses it is no harm (cute, even), but a path over it is 2 mm
 below the snow, so the grid's nearest-walkable logic treats it as floor.
+
+**The counter's way out:** the baristas leave the duckboard at the counter's left end (x −0.413 …
+−0.365) and come forward between the counter and the first window table (the window tables stand
+2 cm further right than in phase 1 to leave the room).
+
+**The upper floor.** The game's walk grid (`nav/nav-grid.ts`) treats everything above head height
+(`top`, 0.1) as overhead, so on the ground floor the upper deck is a ceiling: the baristas walk
+under it and its two front posts are thin obstacles. The upper floor needs a second grid of its
+own: the same `NavGrid` over the same café with the floor raised (`seed` at `UpperFloorTop`, heights
+measured from 0.1548, `top` 0.1548 + 0.1), or simply the two short paths it has (the landing to each
+table and to the piano, along z −0.17). Between the floors characters do not path-find: they walk
+`StairBottom` → `StairTop` in a straight line, the root rising 8.7 mm for every 9 mm (the slope in
+the root extras), playing `StairsUp` / `StairsDown` (guests) or `ClimbUp` / `ClimbDown` /
+`CarryUp` / `CarryDown` (staff), then on from `UpperLanding`. Going up is about 7.5 s at the clips'
+own pace (two steps a second); play the staff's at 2× to keep service brisk.
 
 ## The furniture (phase 2): `pieces_build.py`
 
@@ -120,7 +176,7 @@ Materials from `kit.py`, textured by `textures.py` with a 512 px occlusion atlas
 |---|---|---|---|---|
 | `table-ca-2.glb` | square maple table on a pedestal, two slat-back chairs with red cushions, a napkin holder | 9.3 × 3.9 × 4.2 | 1–2 (chairs at x ±3.3) | the cabin's window wall, `TableSpot-1/2` (under the sockets) |
 | `table-ca-4.glb` | long maple table, a plaid-cushioned bench either side, a candle | 7.0 × 3.8 × 10.3 | 1–2 front bench, 3–4 back | the cabin's middle, `TableSpot-3`, turned 90° |
-| `patio-table.glb` | red steel bistro table with snow on it, two red bistro chairs | 9.0 × 3.7 × 4.4 | 1–2 | the deck, `PatioSpot-1/2` |
+| `patio-table.glb` | red steel bistro table with snow on it, two red bistro chairs | 9.0 × 3.7 × 4.4 | 1–2 | the deck, `PatioSpot-1/2`; and the upper deck, `UpperSpot-1/2` (y 0.1548) |
 | `dock-bench.glb` | pine bench for two facing +Z (the lake and the player), plaid cushion, snow on its back, a mug shelf on each arm (the meal spots) | 8.7 × 4.0 × 2.6 | 1–2 | the dock, `DockSpot` (y 0.030) |
 | `fire-chair.glb` | red Muskoka chair with a log stump beside it (the meal spot), snow on both | 5.7 × 4.7 × 3.5 | 1 | round the fire, `FireSpot-1/2/3`, each turned to face it |
 
@@ -131,13 +187,20 @@ Both scripts exec the Japanese characters' build scripts from `base/` (copies of
 **every node name, attach point, anchor and clip the game already uses is the same**. Several
 characters are built in one scene, so run `python3 fix_names.py <glbs>` after an export: it strips
 Blender's `.001` name suffixes (the scripts' outputs here were run through it). Renders in `previews/`
-(`staff-lineup`, `staff-janitor-wipe`, `staff-fiddler-play`, `guests-lineup`, `guests-seated`,
-`guests-dressed`, `guests-dressed-2`, `guests-walk`).
+(`staff-lineup`, `staff-janitor-wipe`, `staff-fiddler-play`, `staff-pianist-play`, `staff-climb-carry`,
+`guests-lineup`, `guests-seated`, `guests-dressed`, `guests-dressed-2`, `guests-walk`,
+`guests-stairs-up`, `guests-stairs-down`). The whole café as the game will compose it (the layout's
+furniture, guests seated on both floors and on the stairs, a barista carrying a tray up, both
+musicians playing, with the game's matte materials) is `compose.html` (serve this folder with the
+glbs beside it); its screenshots are `previews/compose-*.jpg`.
 
 ### Staff (`barista-<name>.glb`, the barista rig: Rig, Body, Head, Blink, Arm-L/R, Leg-L/R, Tray, Guitar, Hand-L/R)
 
-All six have the Japanese staff's eight clips (Idle, Work, Wave, Bow, Walk, Carry, Serve, Strum).
-One 64 px skin each, 108–216 triangles, 46–61 KB.
+All seven have the Japanese staff's eight clips (Idle, Work, Wave, Bow, Walk, Carry, Serve, Strum)
+and four for the stairs: `ClimbUp`, `ClimbDown` (empty-handed: the lifted leg high going up, reaching
+down going down, the body leaning into it and bobbing on each step, the head watching the steps) and
+`CarryUp`, `CarryDown` (the same with the tray held out and riding the bob). 1 s, two steps a loop.
+One 64 px skin each, 108–228 triangles, 46–62 KB.
 
 | File | Who | Look | Extra nodes / clips |
 |---|---|---|---|
@@ -147,11 +210,17 @@ One 64 px skin each, 108–216 triangles, 46–61 KB.
 | `barista-birch.glb` | janitor (open from the start) | red lumberjack plaid, dark overalls with a brass button, spruce toque | `Toque`, `Shovel` (on the back), `Cloth` (right hand), `Bucket` (beside, as the Japanese janitor: show it while cleaning); clip `Wipe` (2 s) |
 | `barista-cedar.glb` | janitor (to unlock) | green plaid, dark overalls, red toque band as earmuffs | `Earmuffs`, `Shovel`, `Cloth`, `Bucket`; clip `Wipe` |
 | `barista-fiddler.glb` | the violinist (purchasable) | cream quilted parka with a red zip, denim, red-and-cream toque | `Violin` (under the chin, on the body), `Bow` (in the right hand, so it saws); clip `Play` (2 s loop: bow arm sawing at chin height, a sway, a lean onto the chin rest) |
+| `barista-pianist.glb` | the pianist (purchasable) | navy cardigan, red bow tie, dark hair in a bun with a red ribbon | clip `PlayPiano` (2 s loop, sitting: the rig lowered 8 mm onto the bench, legs straight out under the keys, hands rising and falling out of step and drifting along the keys, a sway and a nod); place it at `PianoSpot` |
 
 The game plays the fiddler's `Play` where it plays the Japanese musician's `Strum`; the `Strum`
 clip is still there (the guitar hand pose) if ever needed. The root extra `barista` holds the name.
 
-### Guests (`guest-<species>.glb`, the guest rig, 10 clips, St-/Se- poses, attach points HeadTop/Face/Neck/Chest/Guitar)
+### Guests (`guest-<species>.glb`, the guest rig, 12 clips, St-/Se- poses, attach points HeadTop/Face/Neck/Chest/Guitar)
+
+The Japanese guests' ten clips, and `StairsUp` / `StairsDown` (1 s, two steps a loop, on the
+standing pose: going up the lifted knee comes high and the foot lands level on the next tread, the
+body leans in and bobs, the arms pump; going down the leading foot reaches down while the support
+knee bends, the body leans back a touch).
 
 | File | Species (`guest_type`) | Shape | Signature accent node | Size (w × h × d) | Tris / pose |
 |---|---|---|---|---|---|
@@ -185,6 +254,7 @@ bodies too if ever wanted; the per-species ones (Hachimaki, Apron, Vest) do not 
 ## Still to come (see the plan)
 
 Phase 4 (game): the café picker, registering these files in `assets.ts`, the Canadian layout
-(`canada-layout.ts`), the new wishes (`socket`, `outside`, `takeaway`, `lake`, `patio`, `bonfire`),
-the musician purchase (the fiddler at `MusicianSpot`), the second janitor as a Shop row, no
-passthrough dimming here.
+(`canada-layout.ts`: 21 seats on two floors), the upper floor's walk grid and the stair walk (above),
+the new wishes (`socket`, `outside`, `takeaway`, `lake`, `patio`, `bonfire`, `warm`, `upstairs`),
+the two musician purchases (the fiddler at `MusicianSpot`, the pianist at `PianoSpot`), the second
+janitor as a Shop row, no passthrough dimming here.

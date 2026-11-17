@@ -12,6 +12,10 @@ Looks (all read at a glance across the café; Hoser's red and cream, winter wool
 - cedar:  the second janitor: green plaid, a red toque, earmuffs; the same shovel.
 - fiddler: the violinist: a cream parka with a red zip, a red-and-cream toque, a violin under the
   chin and a bow in the right hand.
+- pianist: the rooftop pianist: a navy cardigan, a red bow tie, dark hair in a bun with a red ribbon; plays the upright on the upper
+  deck (the piano is part of the shell) sitting on its bench (clip PlayPiano).
+Every look also climbs the stairs to the upper deck: ClimbUp and ClimbDown empty-handed, CarryUp and CarryDown
+with a tray (1 s, two steps a loop; the game moves the root up or down the stair's slope, 9 mm a step).
 Same node names as the Japanese staff (Rig, Body, Head, Blink, Arm-L/R, Leg-L/R, Tray, Guitar,
 Hand-L/R; the janitors' Bucket), so the game's staff code runs unchanged.
 """
@@ -49,6 +53,9 @@ LOOKS["rowan"] = look((0.52, 0.34, 0.22), (0.10, 0.08, 0.08), CREAM, RED, CREAM,
 LOOKS["birch"] = look((0.92, 0.72, 0.56), (0.55, 0.32, 0.16), RED, DARK, DARK, DARK, (0.30, 0.20, 0.14), SPRUCE, CREAM, "toque", plaid=(RED, rgb(0.42, 0.06, 0.08), CREAM))
 LOOKS["cedar"] = look((0.88, 0.68, 0.52), (0.26, 0.18, 0.12), SPRUCE, DARK, DARK, DARK, (0.22, 0.18, 0.16), RED, CREAM, "earmuffs", plaid=(SPRUCE, rgb(0.10, 0.24, 0.17), CREAM))
 LOOKS["fiddler"] = look((0.96, 0.82, 0.70), (0.60, 0.40, 0.24), CREAM, CREAM, RED, DENIM, (0.30, 0.20, 0.14), RED, CREAM, "toque", parka=True)
+NAVY = rgb(0.16, 0.22, 0.40)
+LOOKS["pianist"] = look((0.86, 0.66, 0.50), (0.20, 0.14, 0.10), NAVY, NAVY, CREAM, DARK, (0.12, 0.10, 0.10), rgb(0.20, 0.14, 0.10), RED, "bun",
+                        eye=(0.08, 0.06, 0.06), bowtie=True)
 
 def pixels(kind):
     img = bpy.data.images[f"BaristaSkin-{kind}"]
@@ -175,9 +182,12 @@ def props(kind):
         plaid(px, *L["plaid"])
     if L.get("parka"):
         parka(px)
+    if L.get("bowtie"):
+        put(px, "body_front", RED, x0=2, x1=6, y0=0, y1=1); put(px, "body_front", RED, x0=3, x1=5, y0=1, y1=2)
+        put(px, "body_front", CREAM, x0=0, x1=2, y0=0, y1=1); put(px, "body_front", CREAM, x0=6, x1=8, y0=0, y1=1)
     save(px_img, px)
 
-ORDER = ["maple", "aspen", "rowan", "birch", "cedar", "fiddler"]
+ORDER = ["maple", "aspen", "rowan", "birch", "cedar", "fiddler", "pianist"]
 sc = bpy.data.scenes[0]
 for o in list(sc.collection.all_objects):
     bpy.data.objects.remove(o, do_unlink=True)
@@ -211,11 +221,52 @@ def wipe(B):
         reach = (-74, -80, -74, -68)[i % 4]
         K(c, P["Arm-R"], f, rot=(reach, 0, side))
     blink(c, P, (30,))
+def climb(B, c, up, carry):
+    """1 s, two steps up (or down) the stairs, in place: the lifted leg comes higher than on the flat going up and
+    reaches down going down; the body leans into the climb (back a little coming down) and bobs on each step; the
+    head watches the steps. Carrying, the arms hold the tray out as in Carry and the tray rides the bob."""
+    P = B["P"]
+    fwd, back = (-50, 14) if up else (-30, 18)
+    lean, look = (12, 8) if up else (-4, 16)
+    for f, k in ((1, 1), (7, 0), (13, -1), (19, 0), (25, 1)):
+        a = fwd if k == 1 else back if k == -1 else (fwd + back) / 2 - 6
+        b = fwd if k == -1 else back if k == 1 else (fwd + back) / 2 - 6
+        K(c, P["Leg-L"], f, rot=(a, 0, 0)); K(c, P["Leg-R"], f, rot=(b, 0, 0))
+        bob = (0.16 if k == 0 else 0.0) if up else (0.0 if k == 0 else -0.10)
+        K(c, P["Body"], f, loc=(0, 0, bob), rot=(lean, 0, 3 * k))
+        K(c, P["Head"], f, rot=(look, 0, 0))
+        if carry:
+            K(c, P["Arm-L"], f, rot=(-78, 0, 6)); K(c, P["Arm-R"], f, rot=(-78, 0, -6))
+            K(c, P["Tray"], f, loc=(0, 0, bob * 0.5))
+        else:
+            sw = 22 if up else 14
+            K(c, P["Arm-L"], f, rot=(sw * k, 0, 0)); K(c, P["Arm-R"], f, rot=(-sw * k, 0, 0))
+    blink(c, P, (16,))
+
+def play_piano(B):
+    """2 s loop, sitting at the upright: the rig lowered onto the bench (legs straight out under the keys, as box
+    legs sit), hands on the keys rising and falling out of step and drifting along them, a sway and a nod."""
+    P = B["P"]; c = "PlayPiano"
+    for f in (1, 49):
+        K(c, P["Rig"], f, loc=(0, 0, -0.8))
+        K(c, P["Leg-L"], f, rot=(-90, 0, 0)); K(c, P["Leg-R"], f, rot=(-90, 0, 0))
+    for i, f in enumerate(range(1, 50, 4)):
+        drift = (6, 0, -6, 0)[i % 4]
+        K(c, P["Arm-L"], f, rot=(-60 + (9 if i % 2 else -3), 0, 8 + drift))
+        K(c, P["Arm-R"], f, rot=(-60 + (-3 if i % 2 else 9), 0, -8 + drift))
+    for f, (r, n) in ((1, (0, 4)), (13, (4, 10)), (25, (0, 4)), (37, (-4, 10)), (49, (0, 4))):
+        K(c, P["Body"], f, rot=(5, r, 0)); K(c, P["Head"], f, rot=(n, 0, -r * 1.5))
+    blink(c, P, (22,))
+
 for kind, B in built.items():
     if kind in ("birch", "cedar"):
         wipe(B)
     if kind == "fiddler":
         play(B)
+    if kind == "pianist":
+        play_piano(B)
+    climb(B, "ClimbUp", True, False); climb(B, "ClimbDown", False, False)
+    climb(B, "CarryUp", True, True); climb(B, "CarryDown", False, True)
 
 # Every part a clip moves gets all three channels, at rest where the clip leaves one alone (as the shipped models).
 def fcurves_of(o, act):
@@ -292,7 +343,7 @@ def play_clip(clip, frame):
 for o in bpy.data.objects:
     if o.name.startswith("Bucket"): o.scale = (0, 0, 0)
 play_clip("Idle", 1)
-look_at((2.5 * 8 * CM, 0, 0.037), 1.02, elev=12, azim=-8)
+look_at((3 * 8 * CM, 0, 0.037), 1.15, elev=12, azim=-8)
 scene.render.filepath = os.path.join(OUT, "staff-lineup.png"); bpy.ops.render.render(write_still=True)
 for o in bpy.data.objects:
     if o.name.startswith("Bucket"): o.scale = (1, 1, 1)
@@ -303,4 +354,10 @@ scene.render.filepath = os.path.join(OUT, "staff-janitor-wipe.png"); bpy.ops.ren
 play_clip("Play", 9)
 look_at((5 * 8 * CM, 0, 0.04), 0.22, elev=12, azim=-25)
 scene.render.filepath = os.path.join(OUT, "staff-fiddler-play.png"); bpy.ops.render.render(write_still=True)
+play_clip("PlayPiano", 9)
+look_at((6 * 8 * CM, 0, 0.03), 0.20, elev=14, azim=55)
+scene.render.filepath = os.path.join(OUT, "staff-pianist-play.png"); bpy.ops.render.render(write_still=True)
+play_clip("CarryUp", 1)
+look_at((0, 0, 0.04), 0.22, elev=10, azim=-70)
+scene.render.filepath = os.path.join(OUT, "staff-climb-carry.png"); bpy.ops.render.render(write_still=True)
 print('RENDERS DONE')

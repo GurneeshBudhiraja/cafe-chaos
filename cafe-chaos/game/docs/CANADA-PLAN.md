@@ -27,8 +27,12 @@ servers and janitors; the model first, then the characters).
 | **Near the musician** (violinist, bought) | A small round stage with a snow-capped awning at the back of the deck (`MusicianSpot`); once bought, seats within earshot meet `music` (the Japanese `music` wish, with a violinist instead of a singing guest). |
 | **By the bonfire** | A stone fire ring front left, three Muskoka chairs round it, a woodpile: `bonfire`. |
 | 3 baristas, 2 janitors (one open, one to unlock), 2–3 tables expandable (4 levels) | Progression stays the game's level system; the shell leaves room for 3 inside + 2 patio + dock + 3 bonfire seats (17 seats), tables bought from the Shop as now. A second janitor is a Shop row. |
-| Two-story: deprioritised | Not built (hand tracking cannot reach a lower floor under a roof). |
+| Two-story: deprioritised in the meeting (a hand cannot reach a lower floor under a roof) | Built as an open upper deck over the counter only (phase 3c): no seat is under it, so the worry does not arise. |
 | Fresh start per café; "coming soon" placeholders (European etc.) | Game side, later: the café picker on the start card. |
+| Two floors: seats on the upper end and the lower end ("second floor patio") | Phase 3c (built): an open upper deck over the counter (the part of the room the player never reaches into), two tables and the rooftop piano on it, stairs up from the patio outside the cabin's right wall. Nothing roofs a seat, so both floors stay in reach of the hand (the reason two floors were set aside in the meeting). |
+| A musician (violinist or guitarist; and a pianist) on the patio, purchasable | Phase 3c: the violinist on the patio stage and a pianist at the rooftop piano, each bought; seats in earshot meet `music`. |
+| Warmth ("I want temperature"), the Banff cabin | Phase 3c: a fieldstone fireplace inside the cabin; the tables beside it meet `warm`. |
+| The Rockies, the waterfall (the Seongsu "Banff Town" reference) | Phase 3c: a mountain backdrop with a waterfall into a pool, along the plate's back edge. |
 | Guests, servers and janitors with different looks | Phase 3 (built): Canadian snack spirits (a snowbit, a beavertail, a nanaimo bar) with toques, earmuffs, scarves and parkas; three baristas in red aprons (cap, bun, toque); two janitors in plaid with a snow shovel; the violinist in a parka with a violin and a Play clip. See `models/27-cafe-canada/INTEGRATION.md`. |
 | Bright sunny day, snow, not dark, no dimming | Flat snow with blue-tinted shade, one sun from the game's lighting, no emissive walls; the lamps and string lights glow only a little (it is daytime). The game's passthrough dimming is turned off for this café (game side). |
 
@@ -49,6 +53,7 @@ The Japanese shell is 35 k triangles and 28 materials, batched to a few dozen dr
 
 1. The shell (this document's layout), with previews from the seat. Review against the notes and Meta's MR guidance (grounding shadows, nothing too close, nothing above the gaze band).
 2. The furniture pieces: cabin tables and chairs, patio tables, the dock bench, the fire chairs, the musician's stand; the violinist.
+3c. The missing pieces from the notes (built): the upper deck with stairs and its seats, the rooftop piano and the pianist, the fireplace, the Rockies and the waterfall; stair clips for every character (guests `StairsUp`/`StairsDown`, staff `ClimbUp`/`ClimbDown`/`CarryUp`/`CarryDown`).
 3. The characters (built): three Canadian guest species with winter accessories; three baristas; two janitors; the musician. Scripts `staff_canada_build.py`, `guests_canada_build.py`; names fixed by `fix_names.py`.
 4. Game side (later): the café picker, the new wishes, the takeaway flow, the musician purchase, no dimming.
 

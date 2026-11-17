@@ -80,6 +80,14 @@ mat('IcingPink', (0.96, 0.62, 0.72), 0.6)
 mat('IcingChoc', (0.38, 0.23, 0.14), 0.6)
 mat('IcingMaple', (0.86, 0.52, 0.22), 0.6)
 mat('Smoke', (0.92, 0.92, 0.94), 0.9, alpha=0.55)
+mat('Mountain', (0.47, 0.55, 0.68), 0.95)          # the near range, blue with distance
+mat('MountainFar', (0.64, 0.71, 0.82), 0.95)       # the far range, paler still
+mat('Rock', (0.33, 0.37, 0.45), 0.95)              # the waterfall's outcrop, darker so the water shows on it
+mat('Water', (0.80, 0.92, 1.0), 0.2, emit=(0.82, 0.93, 1.0), strength=0.45)
+mat('PianoBlack', (0.08, 0.07, 0.08), 0.35)
+mat('PianoKeys', (0.97, 0.96, 0.92), 0.4)
+mat('Plaid', (0.62, 0.16, 0.18), 0.9)
+mat('Mug', (0.97, 0.95, 0.90), 0.6)
 
 # ------------------------------------------------------------------ helpers
 ROOT = bpy.data.objects.new('cafe-canada', None)
@@ -155,6 +163,13 @@ class Part:
 
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'textures.py')).read())   # textures + UVs onto the palette
 
+def flat_ellipse(name, material, at, rx, rz, thick, seg=24, parent=ROOT):
+    """A flat disc rx by rz (game x by z) of thickness `thick`, lying level, centred at `at`."""
+    part = Part(name, material, smooth=True)
+    g = bmesh.ops.create_cone(part.bm, cap_ends=True, segments=seg, radius1=1.0, radius2=1.0, depth=thick)
+    bmesh.ops.transform(part.bm, matrix=Matrix.Translation(G(*at)) @ Matrix.Diagonal(Vector((rx, rz, 1.0, 1))), verts=g['verts'])
+    return part.done(parent)
+
 def anchor(name, at, rot_y=0.0, parent=ROOT):
     e = bpy.data.objects.new(name, None)
     e.empty_display_size = 0.01
@@ -201,8 +216,8 @@ snow.boxb((0.23, 0.02, -0.195), (0.34, 0.004, 0.15))         # behind the deck: 
 snow.boxb((0.09, 0.02, 0.245), (0.06, 0.004, 0.13))          # between the bonfire and the lake
 snow.boxb((0.04, 0.02, -0.055), (0.04, 0.004, 0.43))         # the cabin's doorstep strip, under the deck's left edge
 # Soft banks where the snow meets the lake and the deck, and drifts along the plate's back edge.
-for x, z, sx, sz in ((0.06, 0.19, 0.08, 0.02), (0.27, 0.19, 0.30, 0.02), (0.44, 0.255, 0.04, 0.11), (-0.06, 0.25, 0.028, 0.10)):
-    snow.sphere((x, 0.024, z), 1.0, seg=10, rings=6, scale=(sx, 0.012, sz))
+for x, z, sx, sz in ((0.06, 0.19, 0.08, 0.02), (0.27, 0.19, 0.30, 0.02), (0.445, 0.255, 0.03, 0.06), (-0.075, 0.285, 0.035, 0.022), (0.0, 0.215, 0.028, 0.018)):
+    snow.sphere((x, 0.024, z), 1.0, seg=10, rings=6, scale=(sx, 0.008, sz))   # low round drifts (a long one pointed at the player read as a boulder)
 for i in range(7):
     x = -0.40 + i * 0.13
     snow.sphere((x, 0.024, -0.30), 1.0, seg=10, rings=6, scale=(0.07, 0.014 + 0.004 * (i % 2), 0.025))
@@ -210,15 +225,16 @@ snow.done()
 
 # ------------------------------------------------------------------ the cabin
 CAB = dict(x0=-0.42, x1=0.04, z0=-0.27, z1=0.16)   # outer walls
-H = 0.155                                            # wall height over the floor
 LOG_R = 0.0072
+WALL_LOGS = 9                                        # the walls stop just over the baristas' heads: the upper deck sits on them
+H = WALL_LOGS * (2 * LOG_R - 0.0006) + 0.0006        # wall height over the floor (0.125)
 Part('CabinFloor', 'PlankFloor').boxb((-0.19, 0.02, -0.055), (0.44, 0.004, 0.41)).done()
 grooves = Part('CabinFloorGrooves', 'PineDark')
 for i in range(10):
     grooves.boxb((-0.19, 0.0241, -0.245 + i * 0.042), (0.44, 0.0005, 0.0015))
 grooves.done()
 
-def log_wall(part, spans, z=None, x=None, y_from=FLOOR, logs=11, gap=None):
+def log_wall(part, spans, z=None, x=None, y_from=FLOOR, logs=WALL_LOGS, gap=None):
     """Horizontal logs stacked `logs` high along x (`z` fixed) or along z (`x` fixed); `spans` are (from, to) pairs along the wall; `gap` (lo, hi, log_lo, log_hi) leaves a window: logs log_lo..log_hi skip (lo, hi)."""
     for k in range(logs):
         y = y_from + LOG_R + k * (2 * LOG_R - 0.0006)
@@ -238,8 +254,8 @@ def log_wall(part, spans, z=None, x=None, y_from=FLOOR, logs=11, gap=None):
 walls = Part('CabinLogs', 'Pine', smooth=True)
 # Back wall: full height, behind the counter and the back bar.
 log_wall(walls, [(CAB['x0'], CAB['x1'])], z=CAB['z0'])
-# Left wall: full height, a window in its middle (logs 3..8 skip z -0.17..-0.03).
-log_wall(walls, [(CAB['z0'], CAB['z1'])], x=CAB['x0'], gap=(-0.17, -0.03, 3, 8))
+# Left wall: full height, a window in its middle (logs 3..7 skip z -0.17..-0.03).
+log_wall(walls, [(CAB['z0'], CAB['z1'])], x=CAB['x0'], gap=(-0.17, -0.03, 3, 7))
 # Front wall: a knee-high half wall (4 logs), so the player sees every table; a front window frame stands on it (below).
 log_wall(walls, [(CAB['x0'], CAB['x1'])], z=CAB['z1'], logs=4)
 # Right wall: a half wall each side of the door (the door at z -0.02..0.08), 4 logs.
@@ -247,7 +263,7 @@ log_wall(walls, [(CAB['z0'], -0.02), (0.08, CAB['z1'])], x=CAB['x1'], logs=4)
 walls.done()
 # Log ends: a darker disc at each wall corner (the crossed logs of a cabin).
 ends = Part('CabinLogEnds', 'PineDark', smooth=True)
-for k in range(11):
+for k in range(WALL_LOGS):
     y = FLOOR + LOG_R + k * (2 * LOG_R - 0.0006)
     for cx in (CAB['x0'], CAB['x1']):
         ends.cyl((cx, y, CAB['z0'] - 0.006), LOG_R * 0.95, 0.012, axis='z', seg=8)
@@ -260,14 +276,14 @@ ends.done()
 # Corner posts: cream-trimmed square posts at the four corners and either side of the door.
 posts = Part('CabinPosts', 'PineDark')
 for px, pz in ((CAB['x0'], CAB['z0']), (CAB['x1'], CAB['z0']), (CAB['x0'], CAB['z1']), (CAB['x1'], CAB['z1']), (CAB['x1'], -0.02), (CAB['x1'], 0.08)):
-    tall = H + 0.01 if pz == CAB['z0'] or px == CAB['x1'] and pz in (-0.02, 0.08) else 4 * (2 * LOG_R - 0.0006) + 0.01
+    tall = H if pz == CAB['z0'] or px == CAB['x1'] and pz in (-0.02, 0.08) else 4 * (2 * LOG_R - 0.0006) + 0.01
     posts.boxb((px, FLOOR, pz), (0.016, tall, 0.016))
 # The door's lintel, and a top rail along the front half wall.
 posts.box((CAB['x1'], FLOOR + 4 * (2 * LOG_R - 0.0006) + 0.07, 0.03), (0.016, 0.014, 0.13))
 posts.done()
 # The left window: frame, glass, cross bar; the front window over the half wall, glass only in its upper half.
 frames = Part('WindowFrames', 'Cream')
-wx, wz0, wz1, wy0, wy1 = CAB['x0'], -0.17, -0.03, FLOOR + 3 * (2 * LOG_R - 0.0006), FLOOR + 9 * (2 * LOG_R - 0.0006)
+wx, wz0, wz1, wy0, wy1 = CAB['x0'], -0.17, -0.03, FLOOR + 3 * (2 * LOG_R - 0.0006), FLOOR + 8 * (2 * LOG_R - 0.0006)
 for z in (wz0, wz1):
     frames.box((wx, (wy0 + wy1) / 2, z), (0.014, wy1 - wy0 + 0.008, 0.008))
 for y in (wy0, wy1):
@@ -283,76 +299,75 @@ shutters.done()
 Part('WindowGlass', 'Glass').box((wx, (wy0 + wy1) / 2, (wz0 + wz1) / 2), (0.003, wy1 - wy0, wz1 - wz0)).done()
 # Window sockets inside: two white plates on the left wall's inner face, one over each window table.
 sockets = Part('Sockets', 'Cream')
-for z in (-0.10, 0.06):
+for z in (-0.10, 0.10):
     sockets.box((wx + 0.009, FLOOR + 0.028, z), (0.003, 0.012, 0.012))
 sockets.done()
 slots = Part('SocketSlots', 'Wire')
-for z in (-0.10, 0.06):
+for z in (-0.10, 0.10):
     for dz in (-0.0025, 0.0025):
         slots.box((wx + 0.0108, FLOOR + 0.028, z + dz), (0.001, 0.004, 0.0012))
 slots.done()
 anchor('Socket-1', (wx + 0.01, FLOOR + 0.028, -0.10))
-anchor('Socket-2', (wx + 0.01, FLOOR + 0.028, 0.06))
+anchor('Socket-2', (wx + 0.01, FLOOR + 0.028, 0.10))
 
-# The eave over the counter: a sloped pine roof from the back wall out over the counter, snow on top, icicles under.
-eave = Part('EaveRoof', 'PineDark')
-EAVE_Y = FLOOR + H + 0.004
-eave.box((-0.19, EAVE_Y + 0.016, -0.215), (0.50, 0.008, 0.13), rot_x=-9)
-eave.done()
-# Rafters under it.
-rafters = Part('EaveRafters', 'Pine')
-for i in range(6):
-    rafters.box((-0.40 + i * 0.084, EAVE_Y + 0.009, -0.215), (0.01, 0.008, 0.126), rot_x=-9)
-rafters.done()
-snowcap = Part('EaveSnow', 'Snow', smooth=True)
-snowcap.box((-0.19, EAVE_Y + 0.028, -0.215), (0.505, 0.014, 0.134), rot_x=-9)
-for i in range(9):   # a soft rounded lip along the front edge of the snow
-    snowcap.sphere((-0.40 + i * 0.0525, EAVE_Y + 0.030, -0.152), 1.0, seg=8, rings=5, scale=(0.03, 0.012, 0.014))
-snowcap.done()
-icicles = Part('Icicles', 'Ice')
-for i, x in enumerate((-0.37, -0.31, -0.22, -0.13, -0.05, 0.01)):
-    icicles.cone((x, EAVE_Y + 0.004, -0.152), 0.003, -0.012 - 0.004 * (i % 3), seg=5)
-icicles.done()
-# The chimney: a stone stack through the eave, back left, with smoke puffs (animated below).
-Part('Chimney', 'StoneDark').boxb((-0.33, EAVE_Y, -0.245), (0.03, 0.055, 0.03)).done()
-Part('ChimneyCap', 'Stone').box((-0.33, EAVE_Y + 0.057, -0.245), (0.036, 0.006, 0.036)).done()
-Part('ChimneySnow', 'Snow').box((-0.33, EAVE_Y + 0.061, -0.245), (0.03, 0.004, 0.03)).done()
+# The fireplace: a fieldstone hearth on the left wall, just in front of the window, a fire in it, a pine mantel with two mugs,
+# the chimney breast up the wall and out over it with smoke; a plaid rug in front. Seats near it are warm.
+FPX, FPZ = CAB['x0'] + 0.0072, 0.015               # the wall's inner face and the hearth's middle (between the window and table 2: in sight over the half wall)
+hearth = Part('Hearth', 'Stone')
+hearth.boxb((FPX + 0.0065, FLOOR, FPZ), (0.013, 0.062, 0.058))                       # back slab
+for dz in (-0.0235, 0.0235):
+    hearth.boxb((FPX + 0.0205, FLOOR, FPZ + dz), (0.015, 0.062, 0.011))              # the jambs
+hearth.box((FPX + 0.0205, FLOOR + 0.048, FPZ), (0.015, 0.028, 0.036))                # the lintel
+hearth.boxb((FPX + 0.024, FLOOR, FPZ), (0.034, 0.004, 0.066))                        # the hearthstone
+hearth.done()
+Part('Firebox', 'StoneDark').box((FPX + 0.0135, FLOOR + 0.02, FPZ), (0.0012, 0.03, 0.036)).done()
+fire_logs = Part('HearthLogs', 'Trunk', smooth=True)
+fire_logs.cyl((FPX + 0.02, FLOOR + 0.007, FPZ), 0.0035, 0.03, axis='z', seg=8)
+fire_logs.cyl((FPX + 0.023, FLOOR + 0.0105, FPZ), 0.003, 0.026, axis='z', seg=8, rot_y=15)
+fire_logs.done()
+hearth_flames = []
+for i, (dz, h, r) in enumerate(((0.0, 0.020, 0.0075), (-0.008, 0.013, 0.005), (0.008, 0.012, 0.005))):
+    f = Part(f'HearthFlame-{i}', 'Fire', smooth=True).cone((0, 0, 0), r, h, seg=8).done()
+    f.location = G(FPX + 0.021, FLOOR + 0.012, FPZ + dz)
+    hearth_flames.append(f)
+hcore = Part('HearthFlameCore', 'FireCore', smooth=True).cone((0, 0, 0), 0.004, 0.012, seg=8).done()
+hcore.location = G(FPX + 0.021, FLOOR + 0.012, FPZ)
+hearth_flames.append(hcore)
+Part('Mantel', 'PineDark').box((FPX + 0.016, FLOOR + 0.064, FPZ), (0.036, 0.004, 0.07)).done()
+Part('MantelMugs', 'Mug', smooth=True).cyl((FPX + 0.02, FLOOR + 0.0705, FPZ - 0.02), 0.0042, 0.009, seg=10).cyl((FPX + 0.02, FLOOR + 0.0705, FPZ + 0.02), 0.0042, 0.009, seg=10).done()
+CH_TOP = FLOOR + H + 0.058                          # the chimney stands 5.8 cm proud of the wall
+Part('ChimneyBreast', 'Stone').boxb((FPX + 0.006, FLOOR + 0.066, FPZ), (0.024, CH_TOP - FLOOR - 0.066, 0.044)).done()
+Part('ChimneyCap', 'StoneDark').box((FPX + 0.006, CH_TOP + 0.003, FPZ), (0.03, 0.006, 0.05)).done()
+Part('ChimneySnow', 'Snow', smooth=True).box((FPX + 0.006, CH_TOP + 0.0075, FPZ), (0.028, 0.004, 0.046)).done()
+Part('HearthRug', 'Plaid').boxb((FPX + 0.05, 0.0241, FPZ), (0.032, 0.0006, 0.05)).done()
+anchor('FireplaceSpot', (FPX + 0.03, FLOOR, FPZ), rot_y=-90)
+SMOKE_AT = (FPX + 0.006, CH_TOP + 0.012, FPZ)
 smoke_objs = []
 for i in range(3):
-    s = Part(f'Smoke-{i}', 'Smoke', smooth=True).sphere((0, 0, 0), 0.009, seg=8, rings=6).done()
-    s.location = G(-0.33, EAVE_Y + 0.07 + i * 0.016, -0.245)
-    smoke_objs.append(s)
-
-# The gable over the eave with the sign: a cream board, the red oval, the words.
-Part('GableBoard', 'Cream').box((-0.19, EAVE_Y + 0.062, -0.262), (0.30, 0.06, 0.012)).done()
-Part('GableTrim', 'PineDark').box((-0.19, EAVE_Y + 0.094, -0.262), (0.31, 0.008, 0.016)).done()
-Part('GableSnow', 'Snow').box((-0.19, EAVE_Y + 0.100, -0.262), (0.31, 0.006, 0.018)).done()
-Part('SignOval', 'Red', smooth=True).ellipse((-0.19, EAVE_Y + 0.062, -0.254), 0.125, 0.025, 0.004).done()
-Part('SignOvalRim', 'Cream', smooth=True).ellipse((-0.19, EAVE_Y + 0.062, -0.2555), 0.131, 0.029, 0.002).done()
-text_mesh('SignWords', "Hoser's", 0.026, 'Cream', (-0.19, EAVE_Y + 0.0655, -0.2512), extrude=0.0008)
-text_mesh('SignSub', 'COFFEE & DONUTS', 0.0085, 'Cream', (-0.19, EAVE_Y + 0.047, -0.2512), extrude=0.0006)
+    sm = Part(f'Smoke-{i}', 'Smoke', smooth=True).sphere((0, 0, 0), 0.008, seg=8, rings=6).done()
+    sm.location = G(SMOKE_AT[0], SMOKE_AT[1] + i * 0.016, SMOKE_AT[2])
+    smoke_objs.append(sm)
 
 # ------------------------------------------------------------------ the counter and the back bar
 CZ0, CZ1 = -0.20, -0.16      # the counter's back and front faces (the baristas stand behind, at z -0.204)
 counter = Part('Counter', 'Red')
-counter.boxb((-0.19, FLOOR, (CZ0 + CZ1) / 2), (0.44, 0.058, CZ1 - CZ0))
+counter.boxb((-0.1625, FLOOR, (CZ0 + CZ1) / 2), (0.385, 0.058, CZ1 - CZ0))   # x -0.355..0.03: a way out at the left end
 counter.done()
 panels = Part('CounterPanels', 'Cream')
 for i in range(5):
-    panels.box((-0.37 + i * 0.09, FLOOR + 0.03, CZ1 + 0.001), (0.07, 0.036, 0.003))
+    panels.box((-0.325 + i * 0.0815, FLOOR + 0.03, CZ1 + 0.001), (0.064, 0.036, 0.003))
 panels.done()
-Part('CounterTop', 'Cream').box((-0.19, FLOOR + 0.061, (CZ0 + CZ1) / 2 + 0.004), (0.46, 0.006, CZ1 - CZ0 + 0.016)).done()
-Part('CounterTopEdge', 'PineDark').box((-0.19, FLOOR + 0.058, CZ1 + 0.010), (0.46, 0.004, 0.006)).done()
+Part('CounterTop', 'Cream').box((-0.1625, FLOOR + 0.061, (CZ0 + CZ1) / 2 + 0.004), (0.405, 0.006, CZ1 - CZ0 + 0.016)).done()
+Part('CounterTopEdge', 'PineDark').box((-0.1625, FLOOR + 0.058, CZ1 + 0.010), (0.405, 0.004, 0.006)).done()
 # The duckboard the baristas stand on (y 0.036: a 1.2 cm step, walked).
 Part('Duckboard', 'Deck').boxb((-0.19, FLOOR, -0.235), (0.44, 0.012, 0.07)).done()
 # The back bar: a pine shelf unit against the back wall, coffee urns, cups, a donut tower.
 Part('BackBar', 'Pine').boxb((-0.19, FLOOR, -0.255), (0.42, 0.075, 0.03)).done()
 Part('BackBarTop', 'PineDark').box((-0.19, FLOOR + 0.077, -0.255), (0.43, 0.004, 0.034)).done()
-Part('BackShelf', 'PineDark').box((-0.26, FLOOR + 0.118, -0.258), (0.27, 0.004, 0.024)).done()
 urns = Part('CoffeeUrns', 'Steel', smooth=True)
 for x in (-0.36, -0.31):
-    urns.cyl((x, FLOOR + 0.097, -0.255), 0.013, 0.036, seg=12)
-    urns.cyl((x, FLOOR + 0.117, -0.255), 0.006, 0.006, seg=8)
+    urns.cyl((x, FLOOR + 0.093, -0.255), 0.013, 0.028, seg=12)
+    urns.cyl((x, FLOOR + 0.109, -0.255), 0.006, 0.005, seg=8)
 urns.done()
 taps = Part('UrnTaps', 'Red')
 for x in (-0.36, -0.31):
@@ -368,18 +383,12 @@ for i, x in enumerate((-0.24, -0.215, -0.19, -0.165)):
 lids.done()
 # Shelf: syrup bottles, a maple leaf tin, a toque on a hook.
 bottles = Part('SyrupBottles', 'IcingMaple', smooth=True)
-for x in (-0.37, -0.345, -0.32):
-    bottles.cyl((x, FLOOR + 0.120 + 0.012, -0.258), 0.0045, 0.024, seg=8)
+for x in (-0.15, -0.135, -0.12):
+    bottles.cyl((x, FLOOR + 0.079 + 0.012, -0.258), 0.0045, 0.024, seg=8)
 bottles.done()
-Part('ShelfTins', 'Red').box((-0.26, FLOOR + 0.120 + 0.009, -0.258), (0.05, 0.018, 0.016)).done()
-Part('ShelfTinLid', 'Cream').box((-0.26, FLOOR + 0.139, -0.258), (0.052, 0.003, 0.018)).done()
-Part('ShelfMugs', 'Spruce', smooth=True).cyl((-0.18, FLOOR + 0.128, -0.258), 0.007, 0.014, seg=10).cyl((-0.155, FLOOR + 0.128, -0.258), 0.007, 0.014, seg=10).done()
-# The menu board on the back wall, right of the shelf, with chalk lines.
-Part('MenuBoard', 'Chalk').box((-0.03, FLOOR + 0.115, -0.2645), (0.11, 0.055, 0.004)).done()
-Part('MenuFrame', 'PineDark').box((-0.03, FLOOR + 0.115, -0.2655), (0.118, 0.063, 0.003)).done()
-for i, line in enumerate(('2x2 COFFEE  2', 'SNOWBITS  3', 'BEAVER TAIL  4', 'MAPLE LATTE  3')):
-    text_mesh(f'Menu-{i}', line, 0.0072, 'ChalkText', (-0.03, FLOOR + 0.133 - i * 0.012, -0.262), extrude=0.0003)
-text_mesh('MenuTitle', 'MENU', 0.006, 'ChalkText', (-0.03 - 0.04, FLOOR + 0.1385, -0.262), extrude=0.0003, align='LEFT')
+Part('ShelfTins', 'Red').box((-0.095, FLOOR + 0.079 + 0.009, -0.258), (0.03, 0.018, 0.016)).done()
+Part('ShelfTinLid', 'Cream').box((-0.095, FLOOR + 0.0985, -0.258), (0.032, 0.003, 0.018)).done()
+Part('ShelfMugs', 'Spruce', smooth=True).cyl((-0.055, FLOOR + 0.086, -0.255), 0.007, 0.014, seg=10).cyl((-0.035, FLOOR + 0.086, -0.255), 0.007, 0.014, seg=10).done()
 # The donut case at the counter's right end: a glass box of donuts, a till beside it.
 Part('DonutCaseBase', 'Cream').boxb((-0.02, FLOOR + 0.064, -0.18), (0.10, 0.004, 0.034)).done()
 Part('DonutCaseGlass', 'Glass').boxb((-0.02, FLOOR + 0.068, -0.18), (0.10, 0.03, 0.034)).done()
@@ -418,7 +427,7 @@ for i in range(12):
 dg.done()
 # Snow dusting on the deck: thin soft patches along its edges.
 dust = Part('DeckSnow', 'Snow', smooth=True)
-for x, z, sx, sz in ((0.10, -0.10, 0.05, 0.02), (0.36, -0.10, 0.06, 0.02), (0.38, 0.14, 0.04, 0.03), (0.09, 0.14, 0.04, 0.03), (0.22, 0.165, 0.10, 0.015)):
+for x, z, sx, sz in ((0.15, -0.10, 0.035, 0.02), (0.36, -0.10, 0.06, 0.02), (0.38, 0.14, 0.04, 0.03), (0.09, 0.14, 0.04, 0.03), (0.22, 0.165, 0.10, 0.015)):
     dust.sphere((x, 0.024, z), 1.0, seg=10, rings=6, scale=(sx, 0.0035, sz))
 dust.done()
 # The deck's back rail (toward the stage) with snow on it, and its corner posts.
@@ -482,11 +491,170 @@ anchor('MusicianSpot', (0.30, FLOOR + 0.011, -0.21), rot_y=180)
 anchor('PatioSpot-1', (0.16, FLOOR, 0.08))
 anchor('PatioSpot-2', (0.31, FLOOR, 0.06))
 
+# ------------------------------------------------------------------ the upper deck (the rooftop patio)
+# A pine deck on the cabin's back half, over the counter and the back bar (the part of the room the player never
+# reaches into), open to the sky so every seat on it is in reach from above; the lower floor's seats stay in front,
+# open too. It sits on the back and side walls and two slim posts at its front edge, 2.6 cm over the baristas'
+# heads. A low rail round it, string lights on two tall poles, icicles under its front edge, the menu board hanging
+# from it; the rooftop sign stands at its back. Guests reach it by the stairs outside the cabin's right wall, from
+# the patio. Everything on this floor is named Upper* / Stair* / Landing* / Piano* / RoofSign*.
+UY = FLOOR + H + 0.006                              # the upper floor's top (0.155)
+UX0, UX1, UZ0, UZ1 = CAB['x0'] - 0.005, CAB['x1'], CAB['z0'] - 0.005, -0.150
+ROOT['upper_floor_top_y_m'] = round(UY, 4)
+Part('UpperDeckFloor', 'Deck').box(((UX0 + UX1) / 2, UY - 0.003, (UZ0 + UZ1) / 2), (UX1 - UX0, 0.006, UZ1 - UZ0)).done()
+ug = Part('UpperDeckGrooves', 'PineDark')
+for i in range(1, 9):
+    ug.boxb(((UX0 + UX1) / 2, UY + 0.0001, UZ0 + i * (UZ1 - UZ0) / 9), (UX1 - UX0, 0.0005, 0.0015))
+ug.done()
+Part('UpperFascia', 'Cream').box(((UX0 + UX1) / 2, UY - 0.005, UZ1 + 0.001), (UX1 - UX0, 0.012, 0.003)).done()
+up = Part('UpperPosts', 'PineDark')
+for x in (-0.175, 0.034):                            # two slim posts under its front edge (between the stations, at the right wall)
+    up.boxb((x, FLOOR, UZ1 - 0.003), (0.008, UY - 0.006 - FLOOR, 0.008))
+up.done()
+# The rail: posts, a top and a middle rail along the front and the left end, the back behind the sign; low (2.2 cm)
+# so seated guests show over it and a hand reaches over it.
+RAIL_H = 0.022
+rail_u = Part('UpperRail', 'PineDark')
+for x in (UX0 + 0.003, -0.30, -0.19, -0.08, UX1 - 0.006):
+    rail_u.boxb((x, UY, UZ1 - 0.003), (0.005, RAIL_H, 0.005))
+for z in (UZ0 + 0.004, -0.21):
+    rail_u.boxb((UX0 + 0.003, UY, z), (0.005, RAIL_H, 0.005))
+for y in (RAIL_H, RAIL_H / 2):
+    rail_u.box(((UX0 + UX1) / 2, UY + y, UZ1 - 0.003), (UX1 - UX0, 0.003, 0.003))
+    rail_u.box((UX0 + 0.003, UY + y, (UZ0 + UZ1) / 2), (0.003, 0.003, UZ1 - UZ0))
+    rail_u.box(((UX0 + UX1) / 2, UY + y, UZ0 + 0.004), (UX1 - UX0, 0.003, 0.003))
+rail_u.box((UX1 - 0.003, UY + RAIL_H, -0.2575), (0.003, 0.003, 0.035))   # the short right-hand run behind the landing
+rail_u.boxb((UX1 - 0.003, UY, UZ0 + 0.004), (0.005, RAIL_H, 0.005))
+rail_u.done()
+Part('UpperRailSnow', 'Snow').box(((UX0 + UX1) / 2, UY + RAIL_H + 0.0025, UZ1 - 0.003), (UX1 - UX0, 0.003, 0.0045)).box((UX0 + 0.003, UY + RAIL_H + 0.0025, (UZ0 + UZ1) / 2), (0.0045, 0.003, UZ1 - UZ0)).done()
+usnow = Part('UpperSnow', 'Snow', smooth=True)
+for x, z, sx, sz in ((UX0 + 0.02, UZ0 + 0.012, 0.022, 0.010), (UX1 - 0.03, UZ0 + 0.01, 0.03, 0.009), (-0.19, UZ0 + 0.008, 0.05, 0.006)):
+    usnow.sphere((x, UY, z), 1.0, seg=10, rings=6, scale=(sx, 0.003, sz))
+usnow.done()
+uice = Part('UpperIcicles', 'Ice')
+for i, x in enumerate((-0.405, -0.345, -0.065, 0.032)):   # clear of the three stations, so no barista is hidden
+    uice.cone((x, UY - 0.011, UZ1 + 0.001), 0.0026, -0.009 - 0.003 * (i % 2), seg=5)
+uice.done()
+# String lights: two tall poles at the front corners, a sagging line of bulbs well over the seated guests' heads.
+Part('UpperLightPoles', 'PineDark').boxb((UX0 + 0.003, UY, UZ1 - 0.003), (0.007, 0.088, 0.007)).boxb((UX1 - 0.006, UY, UZ1 - 0.003), (0.007, 0.088, 0.007)).done()
+uwire = Part('UpperLightWire', 'Wire')
+ubulbs = Part('UpperLightBulbs', 'Bulb', smooth=True)
+pts = []
+a, b, n, sag = (UX0 + 0.003, UY + 0.086, UZ1 - 0.003), (UX1 - 0.006, UY + 0.086, UZ1 - 0.003), 10, 0.014
+for i in range(n + 1):
+    t = i / n
+    pts.append((a[0] + (b[0] - a[0]) * t, a[1] - sag * 4 * t * (1 - t), a[2]))
+for p, q in zip(pts, pts[1:]):
+    mid = ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, p[2])
+    tilt = math.degrees(math.atan2(q[1] - p[1], q[0] - p[0]))
+    uwire.box(mid, (math.dist(p, q), 0.0012, 0.0012), rot_z=-tilt)
+for p in pts[1:-1]:
+    ubulbs.sphere((p[0], p[1] - 0.004, p[2]), 0.0035, seg=8, rings=5)
+uwire.done(); ubulbs.done()
+# The menu board hangs from the deck's front edge, between the first two stations (the back wall is out of sight
+# under the deck), on two short chains.
+MBX, MBY, MBZ = -0.175, UY - 0.030, UZ1 + 0.0042
+Part('MenuFrame', 'PineDark').box((MBX, MBY, MBZ - 0.001), (0.076, 0.04, 0.003)).done()
+Part('MenuBoard', 'Chalk').box((MBX, MBY, MBZ), (0.07, 0.034, 0.003)).done()
+Part('MenuChains', 'Wire').box((MBX - 0.028, UY - 0.0105, MBZ - 0.001), (0.0012, 0.004, 0.0012)).box((MBX + 0.028, UY - 0.0105, MBZ - 0.001), (0.0012, 0.004, 0.0012)).done()
+text_mesh('MenuTitle', 'MENU', 0.0045, 'ChalkText', (MBX, MBY + 0.0128, MBZ + 0.0018), extrude=0.0003)
+for i, line in enumerate(('2x2 COFFEE  2', 'SNOWBITS  3', 'BEAVER TAIL  4', 'MAPLE LATTE  3')):
+    text_mesh(f'Menu-{i}', line, 0.0050, 'ChalkText', (MBX, MBY + 0.0062 - i * 0.0062, MBZ + 0.0018), extrude=0.0003)
+
+# The rooftop sign: the cream board with the red oval and the words, on two legs at the deck's back, its bottom
+# 3 cm up so the seated guests in front of it do not hide it; the mountains rise behind it.
+SGY = UY + 0.062
+Part('RoofSignLegs', 'PineDark').boxb((-0.31, UY, UZ0 + 0.006), (0.006, 0.03, 0.006)).boxb((-0.03, UY, UZ0 + 0.006), (0.006, 0.03, 0.006)).done()
+Part('RoofSignBoard', 'Cream').box((-0.17, SGY, UZ0 + 0.006), (0.30, 0.064, 0.008)).done()
+Part('RoofSignTrim', 'PineDark').box((-0.17, SGY + 0.034, UZ0 + 0.006), (0.31, 0.006, 0.012)).done()
+Part('RoofSignSnow', 'Snow', smooth=True).box((-0.17, SGY + 0.039, UZ0 + 0.006), (0.31, 0.005, 0.014)).done()
+Part('SignOvalRim', 'Cream', smooth=True).ellipse((-0.17, SGY, UZ0 + 0.0115), 0.131, 0.029, 0.002).done()
+Part('SignOval', 'Red', smooth=True).ellipse((-0.17, SGY, UZ0 + 0.0125), 0.125, 0.025, 0.003).done()
+text_mesh('SignWords', "Hoser's", 0.026, 'Cream', (-0.17, SGY + 0.0035, UZ0 + 0.0145), extrude=0.0008)
+text_mesh('SignSub', 'COFFEE & DONUTS', 0.0085, 'Cream', (-0.17, SGY - 0.015, UZ0 + 0.0145), extrude=0.0006)
+
+# The rooftop piano at the deck's left end, side on to the player: an upright, black, a red runner and a mug on
+# top, its keys toward the deck; the bench in front of it. The pianist (barista-pianist.glb, bought in the game)
+# sits on the bench at `PianoSpot`, facing the keys.
+PZ = -0.2125
+PX = UX0 + 0.004                                    # the piano's back, against the end rail
+Part('PianoBody', 'PianoBlack').boxb((PX + 0.012, UY, PZ), (0.024, 0.054, 0.065)).done()
+Part('PianoLid', 'PianoBlack').box((PX + 0.012, UY + 0.0555, PZ), (0.027, 0.003, 0.068)).done()
+Part('PianoShelf', 'PianoBlack').box((PX + 0.0295, UY + 0.028, PZ), (0.011, 0.004, 0.061)).done()
+Part('PianoLegs', 'PianoBlack').boxb((PX + 0.032, UY, PZ - 0.027), (0.003, 0.026, 0.003)).boxb((PX + 0.032, UY, PZ + 0.027), (0.003, 0.026, 0.003)).done()
+Part('PianoKeys', 'PianoKeys').box((PX + 0.0295, UY + 0.0306, PZ), (0.009, 0.0012, 0.057)).done()
+black = Part('PianoBlackKeys', 'PianoBlack')
+for k in range(14):
+    if k % 7 in (2, 6):
+        continue
+    black.box((PX + 0.0275, UY + 0.0318, PZ - 0.026 + k * 0.004), (0.005, 0.0014, 0.0022))
+black.done()
+Part('PianoMusicStand', 'PianoBlack').box((PX + 0.0255, UY + 0.040, PZ), (0.002, 0.012, 0.026), rot_z=-12).done()
+Part('PianoSheet', 'PianoKeys').box((PX + 0.0268, UY + 0.040, PZ), (0.0005, 0.010, 0.022), rot_z=-12).done()
+Part('PianoRunner', 'Red').box((PX + 0.012, UY + 0.0572, PZ), (0.02, 0.0006, 0.06)).done()
+Part('PianoMug', 'Mug', smooth=True).cyl((PX + 0.012, UY + 0.0620, PZ + 0.022), 0.004, 0.008, seg=10).done()
+Part('PianoBench', 'PianoBlack').boxb((PX + 0.054, UY, PZ), (0.014, 0.0095, 0.03)).done()
+Part('PianoBenchCushion', 'Red').box((PX + 0.054, UY + 0.010, PZ), (0.013, 0.0012, 0.028)).done()
+anchor('PianoSpot', (PX + 0.056, UY, PZ), rot_y=90)          # facing -X, the keys
+anchor('UpperFloorTop', (-0.19, UY, -0.17))
+anchor('UpperSpot-1', (-0.27, UY, PZ))
+anchor('UpperSpot-2', (-0.11, UY, PZ))
+
+# ------------------------------------------------------------------ the stairs up to it, outside the cabin's right wall
+# Fifteen 8.7 mm steps of 9 mm (under the walk grid's 1.35 cm step, and about one guest stride each), climbing
+# away from the player from the patio by the cabin door to a landing level with the upper deck. A stringer each
+# side, a handrail on the patio side.
+N_STEPS = 15
+RISE = (UY - FLOOR) / N_STEPS
+RUN = 0.009
+SX0, SX1 = 0.050, 0.112                             # 6.2 cm wide: a guest (4.3 cm) with room either side
+SZ_START = -0.012                                   # the front edge of the first step
+ROOT['stair_steps'] = N_STEPS
+ROOT['stair_rise_m'] = round(RISE, 5)
+ROOT['stair_run_m'] = RUN
+steps = Part('StairSteps', 'Deck')
+noses = Part('StairNosing', 'PineDark')
+for k in range(1, N_STEPS + 1):
+    z_front = SZ_START - (k - 1) * RUN
+    top = FLOOR + k * RISE
+    steps.box(((SX0 + SX1) / 2, top - 0.0013, z_front - RUN / 2 - 0.0005), (SX1 - SX0 - 0.006, 0.0026, RUN + 0.001))   # open treads
+    noses.box(((SX0 + SX1) / 2, top - 0.0008, z_front - 0.0004), (SX1 - SX0 - 0.006, 0.0016, 0.0014))
+steps.done(); noses.done()
+L_RUN = N_STEPS * RUN
+slope = math.degrees(math.atan2(UY - FLOOR, L_RUN))
+length = math.hypot(L_RUN, UY - FLOOR)
+stringers = Part('StairStringers', 'PineDark')
+for x in (SX0 + 0.001, SX1 - 0.001):
+    stringers.box((x, FLOOR + (UY - FLOOR) / 2 - 0.003, SZ_START - L_RUN / 2), (0.004, 0.014, length), rot_x=slope)
+stringers.done()
+hand = Part('StairHandrail', 'PineDark')
+hand.boxb((SX1 + 0.001, FLOOR, SZ_START - 0.002), (0.005, 0.032, 0.005))
+hand.box((SX1 + 0.001, FLOOR + (UY - FLOOR) / 2 + 0.028, SZ_START - L_RUN / 2), (0.003, 0.003, length + 0.004), rot_x=slope)
+hand.done()
+Part('StairHandrailSnow', 'Snow').box((SX1 + 0.001, FLOOR + 0.0335, SZ_START - 0.002), (0.006, 0.003, 0.006)).done()
+# The landing: level with the deck, joined to it, on three posts, a rail on its outer side and its back.
+LZ0, LZ1 = -0.240, SZ_START - L_RUN
+Part('LandingFloor', 'Deck').box(((UX1 + SX1) / 2, UY - 0.003, (LZ0 + LZ1) / 2), (SX1 - UX1, 0.006, LZ1 - LZ0)).done()
+lposts = Part('LandingPosts', 'PineDark')
+for x, z in ((SX1 - 0.004, LZ0 + 0.004), (SX1 - 0.004, LZ1 - 0.004), (UX1 + 0.004, LZ0 + 0.004)):
+    lposts.boxb((x, FLOOR, z), (0.007, UY - 0.006 - FLOOR, 0.007))
+lposts.done()
+lrail = Part('LandingRail', 'PineDark')
+for x, z in ((SX1 - 0.003, LZ0 + 0.003), (SX1 - 0.003, LZ1 - 0.002), (UX1 + 0.003, LZ0 + 0.003)):
+    lrail.boxb((x, UY, z), (0.005, RAIL_H, 0.005))
+for y in (RAIL_H, RAIL_H / 2):
+    lrail.box((SX1 - 0.003, UY + y, (LZ0 + LZ1) / 2), (0.003, 0.003, LZ1 - LZ0))
+    lrail.box(((UX1 + SX1) / 2, UY + y, LZ0 + 0.003), (SX1 - UX1, 0.003, 0.003))
+lrail.done()
+Part('LandingSnow', 'Snow', smooth=True).sphere((SX1 - 0.012, UY, LZ0 + 0.01), 1.0, seg=8, rings=5, scale=(0.012, 0.003, 0.008)).done()
+anchor('StairBottom', ((SX0 + SX1) / 2, FLOOR, SZ_START + 0.010), rot_y=180)   # where a guest starts up (facing -Z)
+anchor('StairTop', ((SX0 + SX1) / 2, UY, LZ1 - 0.006), rot_y=180)                # the first spot on the landing
+anchor('UpperLanding', ((UX1 + SX1) / 2, UY, -0.19), rot_y=90)                   # turned toward the deck (-X)
+
 # ------------------------------------------------------------------ the lake, the dock and the canoe
 LX0, LX1, LZ0, LZ1 = 0.12, 0.46, 0.20, 0.31
 Part('LakeIce', 'Ice').boxb((((LX0 + LX1) / 2), 0.02, (LZ0 + LZ1) / 2), (LX1 - LX0, 0.002, LZ1 - LZ0)).done()
-Part('IceSkatingPatch', 'IceDeep', smooth=True).ellipse((0.27, 0.0221, 0.255), 0.12, 0.045, 0.0004, seg=24).done()
-bpy.data.objects['IceSkatingPatch'].rotation_euler = (math.radians(90), 0, 0)
+flat_ellipse('IceSkatingPatch', 'IceDeep', (0.27, 0.0221, 0.255), 0.12, 0.045, 0.0004, seg=24)   # lying on the ice (it was turned about the plate's centre, under the plate)
 cracks = Part('IceCracks', 'SnowShade')
 for x, z, l, a in ((0.20, 0.26, 0.05, 20), (0.34, 0.235, 0.06, -35), (0.41, 0.28, 0.035, 60)):
     cracks.box((x, 0.0222, z), (0.0012, 0.0004, l), rot_y=a)
@@ -562,7 +730,7 @@ flames.append(core)
 # Three chair spots round the fire (the Muskoka chairs are pieces, phase 2) and a woodpile against the cabin's front.
 for i, a in enumerate((205, 270, 335)):
     r = 0.085
-    anchor(f'FireSpot-{i + 1}', (FX + r * math.cos(math.radians(a)), FLOOR, FZ - r * math.sin(math.radians(a))), rot_y=a - 90)
+    anchor(f'FireSpot-{i + 1}', (FX + r * math.cos(math.radians(a)), FLOOR, FZ - r * math.sin(math.radians(a))), rot_y=90 - a)   # facing the fire (an anchor's rot_y is the negative of three.js's yaw)
 wood = Part('Woodpile', 'Trunk', smooth=True)
 for row, n in enumerate((4, 3, 2)):
     for k in range(n):
@@ -613,20 +781,87 @@ spruce('SpruceBackLeft', (-0.43, 0.024, -0.275), 0.22)
 spruce('SpruceBackRight', (0.415, 0.024, -0.27), 0.20)
 spruce('SpruceFrontLeft', (-0.425, 0.024, 0.275), 0.16)
 spruce('SpruceLakeside', (0.43, 0.024, 0.20), 0.12)
-# Small snow-capped fence posts along the back right, behind the stage (a hint of a fence line).
+# ------------------------------------------------------------------ the Rockies behind, and a waterfall
+# Two thin ranges along the plate's back edge, like a stage backdrop: the near one blue, the far one paler and
+# taller (the haze of distance), snow on every peak. Between two near peaks a rock cliff with a waterfall running
+# down it into a small pool ringed with stones and foam (the Ambient clip runs the water and the foam). All inside
+# the plate; the tallest peak is 33 cm up, under the Japanese café's cherry tree.
+BASE_Y = 0.022
+HALF_W = PLATE_W / 2 - 0.004
+def range_part(name, mat_name, cap_name, z_front, depth, peaks):
+    body = Part(name, mat_name)
+    caps = Part(cap_name, 'Snow')
+    for x, w, h in peaks:
+        def clamp(px):
+            return max(-HALF_W, min(HALF_W, px))
+        outline = [(x - w / 2, 0), (x - w * 0.30, h * 0.42), (x - w * 0.16, h * 0.64), (x - w * 0.07, h * 0.86), (x, h),
+                   (x + w * 0.09, h * 0.80), (x + w * 0.20, h * 0.66), (x + w * 0.34, h * 0.38), (x + w / 2, 0)]
+        cap = [(x - w * 0.16, h * 0.64), (x - w * 0.07, h * 0.86), (x, h), (x + w * 0.09, h * 0.80), (x + w * 0.20, h * 0.66),
+               (x + w * 0.11, h * 0.70), (x + w * 0.04, h * 0.64), (x - w * 0.03, h * 0.71), (x - w * 0.10, h * 0.62)]
+        for part, pts, z0, d in ((body, outline, z_front, depth), (caps, cap, z_front + 0.0008, depth + 0.0016)):
+            front = [part.bm.verts.new(G(clamp(px), BASE_Y + py, z0)) for px, py in pts]
+            back = [part.bm.verts.new(G(clamp(px), BASE_Y + py, z0 - d)) for px, py in pts]
+            part.bm.faces.new(front)
+            part.bm.faces.new(back[::-1])
+            for i in range(len(pts)):
+                j = (i + 1) % len(pts)
+                part.bm.faces.new((front[j], front[i], back[i], back[j]))
+    bmesh.ops.recalc_face_normals(body.bm, faces=body.bm.faces)
+    bmesh.ops.recalc_face_normals(caps.bm, faces=caps.bm.faces)
+    body.done(); caps.done()
+range_part('MountainsFar', 'MountainFar', 'MountainsFarSnow', -0.300, 0.006,
+           ((-0.33, 0.26, 0.29), (-0.11, 0.28, 0.33), (0.13, 0.26, 0.30), (0.36, 0.22, 0.27)))
+range_part('MountainsNear', 'Mountain', 'MountainsNearSnow', -0.289, 0.009,
+           ((-0.40, 0.20, 0.17), (-0.22, 0.24, 0.22), (-0.02, 0.22, 0.19), (0.31, 0.26, 0.21), (0.45, 0.12, 0.14)))
+# The cliff the water comes down: rough stone blocks between the two near peaks at x 0.09..0.18.
+WFX = 0.135
+cliff = Part('WaterfallCliff', 'Rock')
+csnow = Part('WaterfallCliffSnow', 'Snow')
+def slab(part, pts, z0, d):
+    front = [part.bm.verts.new(G(WFX + px, BASE_Y + py, z0)) for px, py in pts]
+    back = [part.bm.verts.new(G(WFX + px, BASE_Y + py, z0 - d)) for px, py in pts]
+    part.bm.faces.new(front); part.bm.faces.new(back[::-1])
+    for i in range(len(pts)):
+        j = (i + 1) % len(pts)
+        part.bm.faces.new((front[j], front[i], back[i], back[j]))
+# an outcrop with shoulders either side of a notch the water pours from
+slab(cliff, [(-0.07, 0), (-0.06, 0.07), (-0.04, 0.105), (-0.016, 0.118), (-0.008, 0.112), (0.008, 0.112), (0.018, 0.124), (0.045, 0.10), (0.065, 0.06), (0.075, 0)], -0.282, 0.012)
+slab(csnow, [(-0.04, 0.105), (-0.016, 0.118), (-0.008, 0.112), (-0.014, 0.108), (-0.03, 0.102)], -0.2812, 0.0136)
+slab(csnow, [(0.008, 0.112), (0.018, 0.124), (0.045, 0.10), (0.03, 0.104), (0.016, 0.115)], -0.2812, 0.0136)
+bmesh.ops.recalc_face_normals(cliff.bm, faces=cliff.bm.faces); bmesh.ops.recalc_face_normals(csnow.bm, faces=csnow.bm.faces)
+cliff.done(); csnow.done()
+WF_TOP, WF_BOTTOM, WF_Z = BASE_Y + 0.113, FLOOR + 0.003, -0.2805
+Part('Waterfall', 'Water').box((WFX, (WF_TOP + WF_BOTTOM) / 2, WF_Z), (0.018, WF_TOP - WF_BOTTOM, 0.0016)).done()
+# Streaks of white water sliding down it, and foam at its foot (both moved by the Ambient clip).
+streaks = []
+for i, dx in enumerate((-0.006, 0.002, 0.007, -0.002)):
+    ob = Part(f'WaterStreak-{i}', 'Snow').box((0, 0, 0), (0.0022, 0.022, 0.0012)).done()
+    streaks.append({'ob': ob, 'top': (WFX + dx, WF_TOP - 0.012, WF_Z + 0.0012), 'bottom': (WFX + dx, WF_BOTTOM + 0.012, WF_Z + 0.0012)})
+    ob.location = G(*streaks[-1]['top'])
+flat_ellipse('WaterfallPool', 'Water', (WFX, 0.0244, -0.262), 0.036, 0.018, 0.0008, seg=20)
+pool_stones = Part('PoolStones', 'Stone', smooth=True)
+for i in range(9):
+    a = math.radians(-10 + i * 25)
+    pool_stones.sphere((WFX + 0.039 * math.cos(a), FLOOR + 0.003, -0.262 + 0.021 * math.sin(a)), 0.006, seg=7, rings=5, scale=(1.0, 0.7, 0.9))
+pool_stones.done()
+foam = []
+for i, (dx, dz, r) in enumerate(((0.0, 0.006, 0.008), (-0.009, 0.010, 0.006), (0.009, 0.009, 0.006))):
+    ob = Part(f'WaterFoam-{i}', 'Snow', smooth=True).sphere((0, 0, 0), r, seg=8, rings=5, scale=(1.0, 0.5, 0.8)).done()
+    ob.location = G(WFX + dx, FLOOR + 0.004, WF_Z + dz)
+    foam.append(ob)
+# Two fence posts at the stage's back right are all that is left of the back fence (the pool took its place).
 fence = Part('BackFence', 'PineDark')
 fsnow = Part('BackFenceSnow', 'Snow')
-for x in (0.12, 0.17, 0.22, 0.38):
+for x in (0.24, 0.38):
     fence.boxb((x, FLOOR, -0.285), (0.008, 0.04, 0.008))
     fsnow.box((x, FLOOR + 0.042, -0.285), (0.01, 0.004, 0.01))
-fence.box((0.17, FLOOR + 0.028, -0.285), (0.11, 0.004, 0.004))
 fence.done(); fsnow.done()
 
 anchor('FloorTop', (0, FLOOR, 0))
 anchor('BenchSpot', (0.235, FLOOR, 0.165))     # kept for compatibility; the queue stands outside the gate as now
 # Table spots inside the cabin, for the layout file.
-anchor('TableSpot-1', (-0.33, FLOOR, -0.10))
-anchor('TableSpot-2', (-0.33, FLOOR, 0.06))
+anchor('TableSpot-1', (-0.31, FLOOR, -0.10))
+anchor('TableSpot-2', (-0.31, FLOOR, 0.10))
 anchor('TableSpot-3', (-0.17, FLOOR, -0.03))
 
 # ------------------------------------------------------------------ the Ambient clip: the smoke puffs rise, the flames flicker
@@ -647,7 +882,7 @@ sc.name = 'Ambient'
 sc.frame_start, sc.frame_end = 1, 48
 sc.render.fps = 24
 for i, s in enumerate(smoke_objs):
-    base = G(-0.33, EAVE_Y + 0.07, -0.245)
+    base = G(*SMOKE_AT)
     for f in (1, 49):
         s.location = base + Vector((0, 0, i * 0.016)); s.scale = (0.6 + 0.4 * i / 3,) * 3
         s.keyframe_insert('location', frame=f); s.keyframe_insert('scale', frame=f)
@@ -659,7 +894,7 @@ for i, s in enumerate(smoke_objs):
             kp.co.x += i * 16
             kp.interpolation = 'LINEAR'
         fc.modifiers.new('CYCLES')
-for i, f in enumerate(flames):
+for i, f in enumerate(flames + hearth_flames):
     for frame, sy in ((1, 1.0), (9, 1.12), (17, 0.92), (29, 1.08), (41, 0.96), (49, 1.0)):
         f.scale = (1.0 + 0.04 * ((i + frame) % 3 - 1), 1.0 + 0.04 * ((i + frame) % 2), sy)
         f.keyframe_insert('scale', frame=frame)
@@ -669,8 +904,27 @@ for i, f in enumerate(flames):
         fc.modifiers.new('CYCLES')
 # One action named Ambient on the root is what the game plays; the glTF exporter gathers every object's action into
 # one animation per action name, so name them all Ambient.
-for ob in smoke_objs + flames:
+for i, st in enumerate(streaks):
+    top, bottom = G(*st['top']), G(*st['bottom'])
+    for frame, at, sc_ in ((1, top, 0.2), (7, top + (bottom - top) * 0.12, 1.0), (43, top + (bottom - top) * 0.88, 1.0), (49, bottom, 0.2)):
+        st['ob'].location = at; st['ob'].scale = (1, 1, sc_)
+        st['ob'].keyframe_insert('location', frame=frame); st['ob'].keyframe_insert('scale', frame=frame)
+    for fc in fcurves_of(st['ob']):
+        for kp in fc.keyframe_points:
+            kp.co.x += i * 12
+            kp.interpolation = 'LINEAR'
+        fc.modifiers.new('CYCLES')
+for i, fo in enumerate(foam):
+    for frame, k in ((1, 1.0), (13, 1.25), (25, 0.9), (37, 1.18), (49, 1.0)):
+        fo.scale = (k, k, 1.0 + (k - 1) * 0.6)
+        fo.keyframe_insert('scale', frame=frame)
+    for fc in fcurves_of(fo):
+        for kp in fc.keyframe_points:
+            kp.co.x += i * 7
+        fc.modifiers.new('CYCLES')
+for ob in smoke_objs + flames + hearth_flames + [st['ob'] for st in streaks] + foam:
     ob.animation_data.action.name = 'Ambient'
+
 
 # ------------------------------------------------------------------ baked occlusion, then export
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bake_ao.py')).read())
@@ -726,3 +980,7 @@ shot('above', (0.05, 1.05, 0.25), (0.0, 0.02, -0.03), lens=40)
 shot('bonfire', (-0.08, 0.20, 0.52), (-0.27, 0.03, 0.24), lens=60)
 shot('lake', (0.52, 0.22, 0.56), (0.30, 0.03, 0.24), lens=60)
 shot('counter', (-0.10, 0.22, 0.20), (-0.19, 0.09, -0.22), lens=50)
+shot('upper-deck', (0.10, 0.36, 0.30), (-0.17, 0.16, -0.21), lens=45)
+shot('stairs', (0.30, 0.22, 0.16), (0.07, 0.09, -0.09), lens=50)
+shot('fireplace', (-0.22, 0.16, 0.34), (-0.39, 0.06, 0.12), lens=55)
+shot('backdrop', (0.05, 0.30, 0.62), (0.05, 0.15, -0.29), lens=40)
