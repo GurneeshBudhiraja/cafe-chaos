@@ -40,8 +40,8 @@ import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
 export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.21 };
 /** The menu card (start, pause, shop): wide and short (metres), 960 by 600 design units. */
 export const START_SIZE = { width: 0.32, height: 0.2 };
-/** The start card with the two cafés: a little taller (960 by 720 design units). */
-export const PICKER_SIZE = { width: 0.32, height: 0.24 };
+/** The start card with the two cafés: as wide as the others (960 design units), its height fitted to its rows. */
+export const PICKER_SIZE = { width: 0.32 };
 /**
  * How to play: one step at a time, as on the web page (index.html #how):
  * the step's video (looping, silent) on the left, its title and line on
@@ -93,6 +93,8 @@ export interface CafeTile {
 export interface StartState {
   tiles: CafeTile[];
   price: number;
+  /** The first run's lesson is still ahead (a café not started says so). */
+  lesson: boolean;
 }
 /** The Buy question: the price, the Japanese café's coins, and where it is asked from. */
 export interface BuyCafeState {
@@ -209,7 +211,7 @@ export class StartMenu {
   cardKind: 'start' | 'pause' | 'failed' | 'buy' = 'start';
   private seed = 1;
   private clock = 0;
-  private start: StartState = { tiles: [], price: 0 };
+  private start: StartState = { tiles: [], price: 0, lesson: true };
   private settings: SettingsState = { music: 2, sounds: 3 };
   private warn: WarnState = { cafe: '', coins: 0, staff: 1, level: 1 };
   private readonly k: number;
@@ -320,7 +322,7 @@ export class StartMenu {
   showStart(state: StartState): void {
     this.cardKind = 'start';
     this.start = state;
-    this.card.resize(PICKER_SIZE.width, PICKER_SIZE.height);
+    // Its height is fitted to its rows (layoutStart).
     this.layoutStart();
     this.card.show(true);
   }
@@ -506,97 +508,97 @@ export class StartMenu {
   }
 
   /**
-   * The start card: the cafés side by side, the one played last on the
-   * left with the main button (moss); each with its picture, name, line,
-   * a status line, one big button that plays at once (START, CONTINUE, or
-   * TRY FREE for a café not owned), and a small one under it (New game,
-   * or Buy). How to play, Settings and Quit along the top.
+   * The start card: the cafés side by side, the same rows at the same
+   * heights in each (picture, name, line, status, the big button, the small
+   * one: an empty slot where a café has none), so the two big buttons line
+   * up. One primary (moss) button on the card: the café to play now (the
+   * one played last; on the first launch the Japanese café). The title alone
+   * at the top; How to play, Settings and Quit in one row under both tiles.
+   * The card's height is fitted to its rows, with PAD on all four sides.
    *
-   *   ┌───────────────────────────────────────────────────┐
-   *   │ Café Chaos            [? How to play][⚙ Settings][Quit] │
-   *   │ ┌─────────────────┐    ┌─────────────────┐        │
-   *   │ │   picture       │    │   picture       │        │
-   *   │ └─────────────────┘    └─────────────────┘        │
-   *   │ Japanese café          Canadian café              │
-   *   │ A cherry-blossom...    A snowy log cabin...       │
-   *   │ Level 3 · 120 coins    Free trial · progress...   │
-   *   │ [    CONTINUE     ]    [    TRY FREE     ]        │
-   *   │ [    New game     ]    [ Buy · 750 coins ]        │
-   *   └───────────────────────────────────────────────────┘
+   *   ┌───────────────────────────────────────────────┐
+   *   │ Café Chaos                                     │
+   *   │ ┌──────────────────┐   ┌──────────────────┐   │
+   *   │ │     picture      │   │     picture      │   │
+   *   │ └──────────────────┘   └──────────────────┘   │
+   *   │ Japanese café          Canadian café          │
+   *   │ A cherry-blossom...    A snowy log cabin...   │
+   *   │ New · starts with...   Free trial · progress..│
+   *   │ [      START      ]    [     TRY FREE     ]   │
+   *   │                        [ Buy · 750 coins  ]   │
+   *   │ [? How to play]   [⚙ Settings]   [  Quit  ]   │
+   *   └───────────────────────────────────────────────┘
+   *
+   * Sizes (the card stands a metre away, shown twice its size: a unit is
+   * 0.67 mm there): the big buttons 94 units (3.6 degrees), the small ones
+   * and the bottom row 72 (2.75), all over Meta's 2.5 to 3 degree minimum
+   * for a ray; 40 units (27 mm) between things pressed, over Meta's 12 mm.
    */
   private layoutStart(): void {
     const st = this.start;
     const SW = Math.round(this.card.width / this.k);
-    const H = Math.round(this.card.height / this.k);
     const buttons: Button[] = [];
-    // The top row: How to play, Settings and Quit (Quit asks first).
-    const topH = 72;
-    // Sized to their words (28 units) with room either side, so the title has the left of the row to itself.
-    const qw = 110;
-    const gw = 170;
-    const hw = 200;
-    const qx = SW - PAD - qw;
-    const gx = qx - TOUCH_GAP - gw;
-    const hx = gx - TOUCH_GAP - hw;
-    buttons.push(this.button(this.card, 'help', hx, PAD, hw, topH, 'secondary', '? How to play', undefined, false, 28));
-    buttons.push(this.button(this.card, 'gear', gx, PAD, gw, topH, 'secondary', '⚙ Settings', undefined, false, 28));
-    buttons.push(this.button(this.card, 'quit', qx, PAD, qw, topH, 'secondary', 'Quit', undefined, false, 30));
-    // The tiles.
+    const ROW = { title: 56, art: 160, name: 34, line: 32, status: 38, main: 94, small: 72, bottom: 72 };
+    // Down the card: the title, then the tiles' rows, then the bottom row; GAP between blocks, TOUCH_GAP between
+    // things pressed.
+    const titleY = PAD;
+    const artY = titleY + ROW.title + 16;
+    const nameY = artY + ROW.art + 14;
+    const lineY = nameY + ROW.name + 6;
+    const statusY = lineY + ROW.line * 2 + 6;
+    const mainY = statusY + ROW.status + 12;
+    const smallY = mainY + ROW.main + TOUCH_GAP;
+    const bottomY = smallY + ROW.small + TOUCH_GAP;
+    const H = bottomY + ROW.bottom + PAD;
+    this.card.resize(PICKER_SIZE.width, (H * this.k) / PPM);
     const tw = (SW - PAD * 2 - TOUCH_GAP) / 2;
-    const artY = PAD + topH + 24;
-    const artH = 170;
-    const nameY = artY + artH + 34;
-    const lineY = nameY + 40;
-    const statusY = lineY + 70;
-    const mainY = statusY + 24;
-    const mainH = 94;
-    const smallY = mainY + mainH + TOUCH_GAP;
-    const smallH = Math.min(76, H - PAD - smallY);
     const tiles = st.tiles.map((t, i) => {
       const x = PAD + i * (tw + TOUCH_GAP);
       const label = t.loading ? 'LOADING…' : !t.owned ? 'TRY FREE' : t.started ? 'CONTINUE' : 'START';
-      buttons.push(this.button(this.card, `play-${t.id}`, x, mainY, tw, mainH, t.loading ? 'off' : i === 0 ? 'primary' : 'secondary', label, undefined, false, 40));
-      if (!t.owned) buttons.push(this.button(this.card, `buy-${t.id}`, x, smallY, tw, smallH, 'secondary', `Buy · ${st.price} coins`, undefined, false, 28));
-      else if (t.started) buttons.push(this.button(this.card, `new-${t.id}`, x, smallY, tw, smallH, 'secondary', 'New game', undefined, false, 28));
-      const status = !t.owned ? 'Free trial · progress not saved' : t.started ? `Level ${t.level} · ${t.coins.toLocaleString('en')} coins` : '';
+      buttons.push(this.button(this.card, `play-${t.id}`, x, mainY, tw, ROW.main, t.loading ? 'off' : i === 0 ? 'primary' : 'secondary', label, undefined, false, 40));
+      if (!t.owned) buttons.push(this.button(this.card, `buy-${t.id}`, x, smallY, tw, ROW.small, 'secondary', `Buy · ${st.price} coins`, undefined, false, 28));
+      else if (t.started) buttons.push(this.button(this.card, `new-${t.id}`, x, smallY, tw, ROW.small, 'secondary', 'New game', undefined, false, 28));
+      const status = !t.owned ? 'Free trial · progress not saved' : t.started ? `Level ${t.level} · ${t.coins.toLocaleString('en')} coins` : st.lesson ? 'New · starts with a short lesson' : 'New';
       return { t, x, status };
     });
+    // The bottom row: three buttons across both tiles, the same width, evenly spaced.
+    const bw = (SW - PAD * 2 - TOUCH_GAP * 2) / 3;
+    buttons.push(this.button(this.card, 'help', PAD, bottomY, bw, ROW.bottom, 'secondary', '? How to play', undefined, false, 28));
+    buttons.push(this.button(this.card, 'gear', PAD + bw + TOUCH_GAP, bottomY, bw, ROW.bottom, 'secondary', '⚙ Settings', undefined, false, 28));
+    buttons.push(this.button(this.card, 'quit', PAD + (bw + TOUCH_GAP) * 2, bottomY, bw, ROW.bottom, 'secondary', 'Quit', undefined, false, 28));
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
       ctx.scale(this.k, this.k);
       const rc = pen(this.card.canvas);
       this.paper(ctx, rc, 0, H, SW);
-      // The title: as large as fits before the first button (at least a touch gap clear of it), 44 at most.
-      ctx.font = font(44);
-      const titleSize = Math.min(44, (44 * (hx - TOUCH_GAP - PAD - 6)) / ctx.measureText('Café Chaos').width);
-      text(ctx, 'Café Chaos', PAD + 6, PAD + topH / 2 + 2, titleSize, SKETCH.ink, 'left');
+      text(ctx, 'Café Chaos', PAD + 4, titleY + ROW.title / 2 + 2, 44, SKETCH.ink, 'left');
       tiles.forEach(({ t, x, status }, i) => {
-        // The picture, cropped to fill its frame (never stretched).
+        // The picture: the same frame for both, each cropped to fill it from its middle (never stretched).
         ctx.save();
         ctx.beginPath();
-        ctx.rect(x, artY, tw, artH);
+        ctx.rect(x, artY, tw, ROW.art);
         ctx.clip();
         ctx.fillStyle = '#2a2420';
-        ctx.fillRect(x, artY, tw, artH);
+        ctx.fillRect(x, artY, tw, ROW.art);
         const img = covers[t.id];
         if (img) {
           const top = img.height * ART[t.id].top;
           const ih0 = img.height - top;
-          const k = Math.max(tw / img.width, artH / ih0);
+          const k = Math.max(tw / img.width, ROW.art / ih0);
           const iw = tw / k;
-          const ih = artH / k;
-          ctx.drawImage(img, (img.width - iw) / 2, top + (ih0 - ih) / 2, iw, ih, x, artY, tw, artH);
+          const ih = ROW.art / k;
+          ctx.drawImage(img, (img.width - iw) / 2, top + (ih0 - ih) / 2, iw, ih, x, artY, tw, ROW.art);
         }
         ctx.restore();
-        rc.rectangle(x, artY, tw, artH, this.o({ strokeWidth: 3, seed: this.seed + 3 + i }));
-        text(ctx, t.name, x + 4, nameY, 40, SKETCH.ink, 'left');
-        // 27 units is 18 mm at the card's metre (shown twice its size): a cap height of about 0.65 degrees, inside the
-        // comfortable 0.6 to 0.75 for reading (Microsoft's mixed reality typography).
+        rc.rectangle(x, artY, tw, ROW.art, this.o({ strokeWidth: 3, seed: this.seed + 3 + i }));
+        text(ctx, t.name, x + 4, nameY + ROW.name / 2, 40, SKETCH.ink, 'left');
+        // 27 units is 18 mm at the card's metre: a cap height of about 0.65 degrees, inside the comfortable 0.6 to
+        // 0.75 for reading (Microsoft's mixed reality typography).
         this.wrap(ctx, t.line, 27, false, tw - 8)
           .slice(0, 2)
-          .forEach((l, j) => text(ctx, l, x + 4, lineY + j * 32, 27, SKETCH.soft, 'left', false));
-        if (status) text(ctx, status, x + 4, statusY, 27, t.owned ? SKETCH.ink : SKETCH.mossDeep, 'left');
+          .forEach((l, j) => text(ctx, l, x + 4, lineY + ROW.line / 2 + j * ROW.line, 27, SKETCH.soft, 'left', false));
+        text(ctx, status, x + 4, statusY + ROW.status / 2, 27, t.owned ? SKETCH.ink : SKETCH.mossDeep, 'left');
       });
       ctx.restore();
     }, buttons);

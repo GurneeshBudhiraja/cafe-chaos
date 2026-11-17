@@ -483,7 +483,7 @@ export class GameSystem extends createSystem({}) {
         loading: this.pending?.id === id,
       };
     });
-    this.menu.showStart({ tiles, price: CANADA_PRICE });
+    this.menu.showStart({ tiles, price: CANADA_PRICE, lesson: !this.save.tutorialDone });
   }
 
   /** A save worth continuing: the first run done, or anything earned. */
