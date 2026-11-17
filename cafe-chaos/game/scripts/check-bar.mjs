@@ -134,6 +134,30 @@ await tap();
 const after = await state();
 check('a hand over the café has no ray; its pinch does not pause', s.aim === null && !s.ray && after.phase === 'run', JSON.stringify({ aim: s.aim, ray: s.ray, phase: after.phase }));
 
+// 6. A raised hand pointing at nothing yet: the short beam, no cursor (so the ray is there to be found).
+{
+  const from = [-1.08, 1.0, 0.1];
+  // Up and off to the player's side, away from the bar and the café.
+  const d = [0.15, 0.35, 0.9];
+  const len = Math.hypot(...d);
+  const n = d.map((v) => v / len);
+  const a = [0, 0, -1];
+  const dot = a[0] * n[0] + a[1] * n[1] + a[2] * n[2];
+  const c = [a[1] * n[2] - a[2] * n[1], a[2] * n[0] - a[0] * n[2], a[0] * n[1] - a[1] * n[0]];
+  const w = 1 + dot;
+  const ql = Math.hypot(c[0], c[1], c[2], w);
+  await send('set_transform', { device: 'hand-right', position: { x: from[0], y: from[1], z: from[2] }, orientation: { x: c[0] / ql, y: c[1] / ql, z: c[2] / ql, w: w / ql } });
+  await frames(8);
+}
+const beam = await page.evaluate(() => ({ aim: window.__cafe.game.aim.right, showing: window.__cafe.game.rays.showing('right'), idle: window.__cafe.game.rays.idleBeam('right') }));
+check('a raised hand pointing at nothing shows the short beam without a cursor', beam.aim === null && beam.showing && beam.idle, JSON.stringify(beam));
+await page.screenshot({ path: 'artifacts/bar-beam.png' });
+// Lowered to rest: no beam.
+await send('set_transform', { device: 'hand-right', position: { x: -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
+await frames(30);
+const rest = await page.evaluate(() => window.__cafe.game.rays.showing('right'));
+check('a hand lowered to rest shows no beam', !rest, `showing ${rest}`);
+
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');
 const failed = results.filter((r) => !r.ok).length;

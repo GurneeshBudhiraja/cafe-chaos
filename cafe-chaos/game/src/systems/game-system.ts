@@ -101,6 +101,14 @@ const RAY = { awayFromCafe: 0.04, reach: 4, edge: 0.15 };
  * Heisenberg effect, Wolf et al. CHI 2020).
  */
 const TAG_RAY = { edge: 0.5, stick: 0.9, assist: 2, before: 0.12 };
+/**
+ * A free hand raised and pointing shows the short beam (hands/hand-ray.ts)
+ * even before the ray is on anything, so pointing is discoverable: a hand
+ * away from the café, no lower than `below` metres under the eyes, its ray
+ * not tipped more than `down` (the sine of the angle) below level (a hand
+ * reaching for the café, or resting, shows none).
+ */
+const BEAM = { below: 0.45, down: 0.5 };
 /** The café's size in Settings (percent of what fits the table): the range and the step. */
 const SIZE = { min: 60, max: 140, step: 10 };
 /**
@@ -1062,7 +1070,13 @@ export class GameSystem extends createSystem({}) {
       const toBar = this.strip.controls !== 'off' && !hold.nearCafe(pinch.point, RAY.awayFromCafe);
       const aimed = !busy && !done && !near ? this.aimRay(hand, toBar, !hold.nearCafe(pinch.point, RAY.awayFromCafe)) : null;
       this.aim[hand] = aimed ? (aimed.button?.id ?? '') : null;
-      this.rays.update(hand, aimed ? this.rayFrom : null, aimed ? this.rayHit : null, aimed ? this.barNormal : null, delta);
+      // Pointing at nothing yet: the short beam, so the ray can be found (BEAM).
+      let idle: Vector3 | null = null;
+      if (!aimed && !busy && !done && !near && pinch.gap !== Infinity && !hold.nearCafe(pinch.point, RAY.awayFromCafe) && pinch.point.y > this.head.y - BEAM.below) {
+        this.castRay(hand);
+        if (this.rayDir.y > -BEAM.down) idle = this.rayDir;
+      }
+      this.rays.update(hand, aimed || idle ? this.rayFrom : null, aimed ? this.rayHit : null, aimed ? this.barNormal : null, delta, idle);
       // What the ray is on, and what it was on before (for a pinch that nudged it: TAG_RAY.before).
       const now = performance.now();
       const was = this.aimNow[hand];
