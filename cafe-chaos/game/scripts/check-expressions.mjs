@@ -6,13 +6,14 @@
  * 2. picked up, it is surprised for a moment, then calm, and it stays
  *    calm: nothing cycles;
  * 3. carried, its eyes are on the seat it is held over (straight down
- *    when there is none);
+ *    when held clear of the café, where it is aimed at no seat);
  * 4. its face follows its patience dial: uneasy on amber, worried and
  *    drooping on coral;
  * 5. brought right up to the player's face it is puzzled, head on one
  *    side, looking straight at the player, until it is taken away;
- * 6. it only ever shows one face at a time, in that order; put back, its
- *    face is its own again; and no console errors.
+ * 6. it only ever shows one face at a time, in that order; let go clear
+ *    of the café it goes back to the line, its face its own again; and
+ *    no console errors.
  * Saves a close-up of each expression.
  *
  * Usage: dev server running, then `node scripts/check-expressions.mjs`.
@@ -152,9 +153,23 @@ const later = await guestState(id);
 check('picked up it is surprised for a moment, then calm, and stays so', surprised.state === 'held' && surprised.seen[0] === 'surprised' && calm.mouth === 'MouthSmile' && calm.distance > 0.33 && later.mood === 'calm' && later.seen.join() === 'surprised,calm',
   `first ${surprised.seen[0]} (${surprised.eyes}/${surprised.mouth}), then ${calm.mood} with ${calm.eyes}/${calm.mouth} at ${(calm.distance * 100).toFixed(0)} cm from the head; seven seconds on: ${later.seen.join(' > ')}`);
 
+// A point clear of the café: past its side by more than the drop margin, as high as `up`. A guest held over
+// the café aims at the seat the player points it at (by the line of sight through the pinch, guest-system
+// seatAimed), so only held out here is it aimed at no seat; let go here it goes back where it came from.
+const clear = await page.evaluate(async (y) => {
+  const { DROP_MARGIN_M } = await import('/src/guests/rules.ts');
+  const { system, hold } = window.__cafe;
+  const b = hold.bounds;
+  const local = new system.cafe.position.constructor(b.max.x + DROP_MARGIN_M + 0.08, 0, (b.min.z + b.max.z) / 2);
+  const p = system.cafe.localToWorld(local);
+  return [p.x, y, p.z];
+}, up[1]);
+
 // 3. Held over a free seat, its eyes are on that seat; away from any seat it looks straight down.
 let overSeat;
 {
+  await drag(up, clear, 5);
+  await frames(4);
   const noSeat = await guestState(id);
   const spot = await page.evaluate(() => {
     const { guests, system } = window.__cafe;
@@ -164,13 +179,13 @@ let overSeat;
     const at = system.cafe.localToWorld(new V(seat.position.x + 0.03, seat.position.y + 0.07 + 0.042, seat.position.z));
     return { index: seat.index, at: at.toArray() };
   });
-  await drag(up, spot.at, 5);
+  await drag(clear, spot.at, 5);
   await page.waitForFunction((id) => window.__cafe.guests.guests.find((x) => x.id === id)?.target != null || null, id, { timeout: 60000 });
   await frames(4);
   overSeat = { at: spot.at, ...(await guestState(id)) };
   await h.screenshot('artifacts/expr-2-eyes-on-the-seat.png');
   check('carried, it looks at the seat below it', noSeat.target === null && noSeat.look[1] < -0.0006 && Math.abs(noSeat.look[0]) < 0.0002 && overSeat.target === spot.index && overSeat.look[1] < -0.0004 && Math.abs(overSeat.look[0]) > 0.0002 && overSeat.mood === 'calm',
-    `over no seat: eyes ${(noSeat.look[0] * 1000).toFixed(2)}, ${(noSeat.look[1] * 1000).toFixed(2)} mm from centre (straight down); over seat ${spot.index}, held 3 cm to one side: eyes ${(overSeat.look[0] * 1000).toFixed(2)}, ${(overSeat.look[1] * 1000).toFixed(2)} mm (down and across to it), aimed at seat ${overSeat.target}`);
+    `held clear of the café: aimed at ${noSeat.target ?? 'no seat'}, eyes ${(noSeat.look[0] * 1000).toFixed(2)}, ${(noSeat.look[1] * 1000).toFixed(2)} mm from centre (straight down); over seat ${spot.index}, held 3 cm to one side: eyes ${(overSeat.look[0] * 1000).toFixed(2)}, ${(overSeat.look[1] * 1000).toFixed(2)} mm (down and across to it), aimed at seat ${overSeat.target}`);
 }
 
 // 4. Its face follows its dial: uneasy on amber, worried on coral, each steady.
@@ -212,9 +227,9 @@ const away = await moodIs('calm');
   check('one face at a time, in order, none of them at random', faces && away.seen.join() === 'surprised,calm,uneasy,worried,calm,puzzled,calm', `seen: ${away.seen.join(' > ')}; wide eyes and one mouth throughout ${faces}`);
 }
 
-// 6. Put back: its own face again.
+// 6. Let go clear of the café: back to the line, its own face again.
 await h.head(SEAT, LOOK, 300);
-await drag(up, add(rest.grip, [0.1, 0.2, 0.25]), 5);
+await drag(up, clear, 5);
 await pinch(0);
 await page.waitForFunction((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.state === 'queued', id, { timeout: 60000 });
 await handTo('right', AWAY.right);

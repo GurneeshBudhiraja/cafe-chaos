@@ -3,10 +3,12 @@
  * table and the café placed, checks that:
  * 1. the passthrough dimmer has faded in to its level, centred on the head,
  *    and the lamps have come up with it;
- * 2. the café carries its lamps (point lights with halos), the shadow-
- *    casting house light and the light spill on the table;
- * 3. the renderer is set up for the look (filmic tone mapping, soft shadow
- *    maps), with no console errors;
+ * 2. the café carries its lamps: three point lights (the door lamps share
+ *    one, the lanterns one, plus the room's warm light: every light costs
+ *    every lit pixel on the headset) and a halo on each of the five lamp
+ *    papers; the shadow-casting house light and the light spill on the
+ *    table;
+ * 3. the renderer is set up for the look (filmic tone mapping, shadow maps), with no console errors;
  * 4. the frame budget holds: the furniture is batched and the shadow map
  *    is only redrawn when the café moves;
  * 5. the theme is loaded, set to loop, and was asked to play when the
@@ -64,7 +66,7 @@ const state = await page.evaluate(() => {
   };
 });
 check('the passthrough has dimmed around the head and the lamps are up', state.dim >= 0.3 && state.domeVisible && state.domeOffset < 0.01 && state.lampsUp === 1 && state.lit, `level ${state.dim}, dome ${state.domeOffset} m from the head, lamps up ${state.lampsUp}, all lit ${state.lit}`);
-check('the café carries its lamps, house light and spill', state.lamps === 5 && state.halos === 5 && state.houseShadow && state.spill, `${state.lamps} lamps, ${state.halos} halos, house light shadows ${state.houseShadow}, spill ${state.spill}`);
+check('the café carries its lamps, house light and spill', state.lamps === 3 && state.halos === 5 && state.houseShadow && state.spill, `${state.lamps} lamp lights, ${state.halos} halos, house light shadows ${state.houseShadow}, spill ${state.spill}`);
 check('the renderer is set for the look', state.shadowMap && state.toneMapping === 4 && state.envIntensity < 0.8 && state.casters > 20, `shadow maps ${state.shadowMap}, tone mapping ${state.toneMapping} (4 = ACES), environment ${state.envIntensity}, ${state.casters} shadow casters`);
 
 // The frame budget: the furniture is batched, and with the café still the shadow map is not redrawn.
