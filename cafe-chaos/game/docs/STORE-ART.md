@@ -66,9 +66,12 @@ a source.
   name inside the centre 80%). favicon-32/48: the C.
 - cover-square-1440.png, cover-landscape-2560x1440.png,
   devpost-1500x1000.png: from the cast-on-a-chair picture.
-- Still to come: Hero 3000×900 and Mini 1080×360 (The Pinch, the table),
-  Portrait 1008×1440 (the tower). The landscape cover moves to The Pinch
-  when it arrives, if it reads better.
+- hero-3000x900.png, cover-portrait-1008x1440.png,
+  mini-landscape-1080x360.png: interim, from the same picture (the title
+  centred on the hero and the mini). Replace with The Pinch (hero), the
+  tower (portrait) and the table (mini) when they come in.
+- share-1200x630.png (link preview), video-thumbnail-1280x720.png.
+- Still needed for the store: 5 screenshots, 2560×1440, real captures.
 
 ## Prompts (Nano Banana)
 

@@ -158,16 +158,35 @@ def main() -> None:
     # Covers from the lockup (the cast on one chair; group at about x 490-1840, y 260-1100 of 2000×1116).
     art = Image.open(SRC / 'cover-lockup.jpg').convert('RGB')
     sq = paper_canvas(art, 1440, 1440, (400, -300, 1940, 1240))
-    place(sq, logo, 720, 245, 1180)
+    place(sq, logo, 720, 270, 1180)
     sq.save(OUT / 'cover-square-1440.png')
 
     land = paper_canvas(art, 2560, 1440, (-60, -40, 2060, 1153))
-    place(land, logo, 2560 * 0.33, 1440 * 0.17, 2560 * 0.5)
+    place(land, logo, 2560 * 0.33, 1440 * 0.21, 2560 * 0.5)
     land.save(OUT / 'cover-landscape-2560x1440.png')
 
     dev = paper_canvas(art, 1500, 1000, (240, -20, 2000, 1153))
-    place(dev, logo, 1500 * 0.33, 1000 * 0.16, 1500 * 0.56)
+    place(dev, logo, 1500 * 0.33, 1000 * 0.19, 1500 * 0.56)
     dev.save(OUT / 'devpost-1500x1000.png')
+
+    # Until The Pinch, the tower and the table come in: the same picture, the title centred (Meta: the hero's title centred).
+    hero = paper_canvas(art, 3000, 900, (-1093, -215, 3424, 1140))
+    place(hero, logo, 1500, 165, 820)
+    hero.save(OUT / 'hero-3000x900.png')
+
+    portrait = paper_canvas(art, 1008, 1440, (475, -811, 1855, 1160))
+    place(portrait, logo, 504, 450, 880)
+    portrait.save(OUT / 'cover-portrait-1008x1440.png')
+
+    mini = Image.new('RGB', (1080, 360), PAPER)
+    place(mini, logo, 540, 180, 800)
+    mini.save(OUT / 'mini-landscape-1080x360.png')
+
+    # Other places: a link preview (Open Graph), a video thumbnail.
+    share = paper_canvas(art, 1200, 630, (-100, -40, 2100, 1115))
+    place(share, logo, 1200 * 0.33, 630 * 0.21, 1200 * 0.5)
+    share.save(OUT / 'share-1200x630.png')
+    land.resize((1280, 720), Image.LANCZOS).save(OUT / 'video-thumbnail-1280x720.png')
     print('done:', ', '.join(sorted(p.name for p in OUT.iterdir())))
 
 
