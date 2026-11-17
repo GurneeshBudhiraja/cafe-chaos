@@ -19,6 +19,8 @@ import { hand, line, pen, SKETCH } from './sketch.js';
 
 /** The card's size (metres) and how far above its target it stands. */
 export const TIP = { width: 0.15, height: 0.05, above: 0.07 };
+/** A one-line note's height, as a share of TIP.height. */
+const ONE_LINE = 0.68;
 
 export class TipCard {
   readonly panel = new Panel('TipCard', TIP.width, TIP.height);
@@ -32,21 +34,28 @@ export class TipCard {
     this.panel.mesh.renderOrder = 28;
   }
 
-  /** Show `title` (bold, the keyword) and `text` beside a small `icon` picture. */
+  /**
+   * Show `title` (bold, the keyword) and `text` beside a small `icon`
+   * picture. With no `text`, a one-line note: the title alone, on a card
+   * two thirds as tall.
+   */
   show(title: string, text: string, icon: (ctx: CanvasRenderingContext2D, x: number, y: number, r: number) => void): void {
     const key = `${title}|${text}`;
     if (key !== this.drawn) {
       this.drawn = key;
-      // As wide as its words need (the icon, the longer line, a margin), never narrower than TIP.width.
+      // As wide as its words need (the icon, the longer line, a margin), never narrower than TIP.width; the words keep
+      // their size whatever the card's height (sized from TIP.height, at 2400 px a metre, ui/panel.ts).
+      const one = !text;
+      const hp = TIP.height * 2400;
+      const tall = one ? TIP.height * ONE_LINE : TIP.height;
       const ctx0 = this.panel.ctx;
-      const hp = this.panel.height;
       ctx0.font = hand(hp * 0.3, 700);
       const a = ctx0.measureText(title).width;
       ctx0.font = hand(hp * 0.23, 400);
-      const b = ctx0.measureText(text).width;
-      const needPx = hp * 0.92 + Math.max(a, b) + hp * 0.3;
-      // Canvas pixels to metres: the panels are drawn at 2400 px a metre (ui/panel.ts).
-      this.panel.resize(Math.max(TIP.width, needPx / 2400), TIP.height);
+      const b = one ? 0 : ctx0.measureText(text).width;
+      const lead = tall * 2400 * 0.92;
+      const needPx = lead + Math.max(a, b) + hp * 0.3;
+      this.panel.resize(Math.max(one ? 0 : TIP.width, needPx / 2400), tall);
       this.panel.set((ctx, w, h) => {
         ctx.clearRect(0, 0, w, h);
         const lw = Math.max(2, h * 0.04);
@@ -60,10 +69,11 @@ export class TipCard {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = SKETCH.ink;
-        ctx.font = hand(h * 0.3, 700);
-        ctx.fillText(title, x, h * 0.34);
+        ctx.font = hand(hp * 0.3, 700);
+        ctx.fillText(title, x, one ? h * 0.52 : h * 0.34);
+        if (one) return;
         ctx.fillStyle = SKETCH.soft;
-        ctx.font = hand(h * 0.23, 400);
+        ctx.font = hand(hp * 0.23, 400);
         ctx.fillText(text, x, h * 0.68);
       });
     }

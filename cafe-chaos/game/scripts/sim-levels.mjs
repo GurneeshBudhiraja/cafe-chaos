@@ -60,13 +60,8 @@ for (const player of players) {
     const buy = (what) => { const m = (clock / 60).toFixed(1); row.bought.push(`${what}@${m}`); bought.push({ what, minute: +m }); };
     const timer = setInterval(() => {
       const now = performance.now();
-      if (g.phase === 'run' || g.phase === 'levelup') clock += ((now - last) / 1000) * scale * (c.system.timeScale > 0 ? 1 : 0);
+      if (g.phase === 'run') clock += ((now - last) / 1000) * scale * (c.system.timeScale > 0 ? 1 : 0);
       last = now;
-      // Keep the speed up (the level card eases it down and back).
-      if (g.phase === 'levelup') {
-        if (c.system.timeScale === 0) g.click('level-continue');
-        return;
-      }
       if (g.phase === 'closed') { g.click('again'); c.system.timeScale = scale; return; }
       if (g.phase !== 'run') return;
       if (c.system.timeScale !== scale && c.system.timeScale > 0.99) c.system.timeScale = scale;

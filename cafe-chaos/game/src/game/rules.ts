@@ -78,8 +78,10 @@ export const LOSSES = {
  * - `wishes`: from each `from` level, the chances of 1, 2 or 3 wishes.
  *   `singerFrom`: singers come from this level. (estimate)
  * - `bonus`: coins for reaching a level, times its number.
- * - `rest`: seconds the café takes to slow to a stop for the level card,
- *   and to pick up again after it.
+ * - `breather`: seconds with no new guest after a level is reached (the
+ *   café keeps going: a moment to look up at the bar, not a stop).
+ *   (estimate; Meta: let players set their own pace, so a real break is
+ *   one pinch away on Pause.)
  */
 export const LEVEL = {
   firstGoal: 5,
@@ -101,7 +103,7 @@ export const LEVEL = {
   singerFrom: 2,
   singer: 0.14,
   bonus: 5,
-  rest: 0.3,
+  breather: 5,
 };
 
 const byLevel = <T>(list: readonly T[], level: number): T => list[Math.min(list.length, Math.max(1, Math.floor(level))) - 1];

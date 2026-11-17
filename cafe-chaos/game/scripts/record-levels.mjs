@@ -9,7 +9,7 @@
  * - the "Open a table" tip; a padlock pointed at (the tag opens into its
  *   price), pinched; BUY on the buy card; the table opens;
  * - a table left dirty; the barista wipes it;
- * - the level card with its confetti; CONTINUE;
+ * - a level reached: the bar's banner and confetti, the next goal under it, the café going on;
  * - level 2: a guest in a hurry (the hourglass) and its tip; the shop
  *   (Barista and Janitor rows); the janitor hired, cleaning;
  * - two friends; a guest storming out; Pause and Resume.
@@ -259,7 +259,7 @@ await until(() => window.__cafe.mess.dirtyCount > 0, null, 60000);
   await overview();
 }
 
-// 5. The level card.
+// 5. A level reached: the bar's banner, the confetti and the next goal; the café keeps going.
 while ((await page.evaluate(() => window.__cafe.game.levelServed < window.__cafe.score.levelGoal && window.__cafe.game.phase === 'run'))) {
   const seated = await until(() => window.__cafe.guests.line.some((g) => g.state === 'queued' && !g.walk) || window.__cafe.game.phase !== 'run', null, 60000);
   if (!seated) break;
@@ -267,10 +267,8 @@ while ((await page.evaluate(() => window.__cafe.game.levelServed < window.__cafe
   await seatOne(300);
   await rest();
 }
-await until(() => window.__cafe.game.phase === 'levelup' && window.__cafe.game.menu.card.open, null, 90000);
+await until(() => window.__cafe.strip.banner !== null, null, 90000);
 await pause(4000);
-await rayPinch(await buttonAt('window.__cafe.game.menu.card', 'level-continue'), 900, 900);
-await until(() => window.__cafe.game.phase === 'run', null, 10000);
 await rest();
 
 // 6. Level 2: a hurried guest and its tip; the shop, the janitor hired.

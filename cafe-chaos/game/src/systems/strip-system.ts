@@ -48,6 +48,8 @@ export const STRIP = { width: 0.72, height: 0.103, below: 0.03, clear: 0.03, bac
 /** How long a segment takes to drain or fill, and a coin pop lasts (seconds); the pulse under 30 % (times a second); how quickly it follows the eyes' height (per second). */
 const MOTION = { segment: 0.5, pop: 0.3, pulse: 1, follow: 1.2 };
 const SEGMENTS = 10;
+/** The level banner: how long the bar shows a level just reached (seconds), and its warmer paper. */
+export const LEVEL_BANNER = { seconds: 3, paper: '#f6e7b8' };
 /**
  * The bar's two buttons (Pause, Shop): their side as a share of the bar's
  * height (6.8 cm: about 4.6 degrees at the bar's distance, over Meta's 2.5 to
@@ -93,6 +95,8 @@ export class StripSystem extends createSystem({}) {
   controls: 'live' | 'paused' | 'off' = 'off';
   /** Times a new level was celebrated (the sound system plays the chime). */
   celebrations = 0;
+  /** A level just reached: the bar shows it, and its coins, for LEVEL_BANNER.seconds (null: the bar as usual). */
+  banner: { level: number; bonus: number; left: number } | null = null;
   /** The confetti: a burst of paper scraps, once, when a level is reached. */
   private readonly confetti = new InstancedMesh(new PlaneGeometry(0.009, 0.005), new MeshBasicMaterial({ side: DoubleSide, toneMapped: false, transparent: true }), CONFETTI.count);
   private readonly bits = Array.from({ length: CONFETTI.count }, () => ({ p: new Vector3(), v: new Vector3(), r: new Euler(), spin: new Vector3() }));
@@ -143,6 +147,10 @@ export class StripSystem extends createSystem({}) {
     this.flyConfetti(delta);
     const up = this.panel.update(delta, this.head);
     this.showTag(delta);
+    if (this.banner) {
+      this.banner.left -= delta;
+      if (this.banner.left <= 0) this.banner = null;
+    }
     if (!up) return;
     this.time += delta;
     const s = this.score;
@@ -164,7 +172,7 @@ export class StripSystem extends createSystem({}) {
     }
     const low = this.live && s.happiness / HAPPINESS.max <= 0.3 && s.happiness > 0;
     const shopNow = this.shop.price === null ? 'full' : this.shop.affordable ? 'can' : 'not';
-    const now = `${Math.round(s.happiness)}|${s.bank}|${s.level}|${s.levelServed}|${s.levelGoal}|${this.live}|${this.controls}|${shopNow}`;
+    const now = `${Math.round(s.happiness)}|${s.bank}|${s.level}|${s.levelServed}|${s.levelGoal}|${this.live}|${this.controls}|${shopNow}|${this.banner ? this.banner.level : 0}`;
     if (moving || low || now !== this.shown) {
       this.shown = now;
       this.panel.paint();
@@ -185,6 +193,12 @@ export class StripSystem extends createSystem({}) {
   celebrate(at?: Vector3): void {
     this.celebrations++;
     this.burst(at);
+  }
+
+  /** A level reached in a run: the bar says so with its coins for a moment, with confetti and the chime; the café keeps going. */
+  showLevel(level: number, bonus: number): void {
+    this.banner = { level, bonus, left: LEVEL_BANNER.seconds };
+    this.celebrate();
   }
 
   private burst(at?: Vector3): void {
@@ -251,6 +265,10 @@ export class StripSystem extends createSystem({}) {
   }
 
   private draw(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    if (this.banner) {
+      this.drawBanner(ctx, w, h, this.banner.level, this.banner.bonus);
+      return;
+    }
     const rc = pen(this.panel.canvas);
     const s = this.score;
     const mood = s.happiness / HAPPINESS.max;
@@ -314,6 +332,35 @@ export class StripSystem extends createSystem({}) {
     const coinX = right + around + icon / 2;
     sketchCoin(rc, coinX, h * 0.5, icon * pop, 41, lw);
     scrawl(ctx, `${s.bank}`, coinX + icon / 2 + inner, h * 0.53, bankSize * pop);
+  }
+
+  /**
+   * The level banner: the bar in a warmer paper, Pause and Shop where
+   * they always are, and between them "LEVEL n!" and the coins it brought.
+   */
+  private drawBanner(ctx: CanvasRenderingContext2D, w: number, h: number, level: number, bonus: number): void {
+    const rc = pen(this.panel.canvas);
+    const lw = Math.max(2, h * 0.016);
+    rc.rectangle(lw * 2, lw * 2, w - lw * 4, h - lw * 4, line(11, lw * 1.2, { fill: LEVEL_BANNER.paper, fillStyle: 'solid', roughness: 1.3 }));
+    const btn = h * BAR_BUTTON.size;
+    const around = h * 0.15;
+    const left = h * BAR_BUTTON.pad + btn + around;
+    const right = w - h * BAR_BUTTON.pad - btn - around;
+    rc.line(left, h * 0.17, left + 2, h * 0.83, line(20, lw * 0.8));
+    rc.line(right, h * 0.17, right - 2, h * 0.83, line(23, lw * 0.8));
+    const title = `LEVEL ${level}!`;
+    const plus = `+${bonus}`;
+    ctx.font = hand(h * 0.46, 700);
+    const tw = ctx.measureText(title).width;
+    ctx.font = hand(h * 0.34, 700);
+    const pw = ctx.measureText(plus).width;
+    const coin = h * 0.36;
+    let x = (left + right) / 2 - (tw + h * 0.4 + coin + h * 0.1 + pw) / 2;
+    scrawl(ctx, title, x, h * 0.55, h * 0.46);
+    x += tw + h * 0.4;
+    sketchCoin(rc, x + coin / 2, h * 0.5, coin, 41, lw);
+    x += coin + h * 0.1;
+    scrawl(ctx, plus, x, h * 0.54, h * 0.34, { color: SKETCH.mossDeep });
   }
 
   /** The tag over the lit button: its word, where it stands (over that button), shown while the button is lit. */

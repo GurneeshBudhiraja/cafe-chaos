@@ -492,6 +492,11 @@ export class GuestSystem extends createSystem({}) {
 
   // ------------------------------------------------------------- arrivals
 
+  /** No new guest for at least `seconds` (a level reached: a breather). */
+  holdArrivals(seconds: number): void {
+    this.nextSpawnIn = Math.max(this.nextSpawnIn, seconds);
+  }
+
   private spawnTick(delta: number): void {
     this.nextSpawnIn -= delta;
     if (this.nextSpawnIn > 0) return;

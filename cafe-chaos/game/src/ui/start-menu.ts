@@ -89,12 +89,6 @@ export interface PauseState {
   served: number;
   goal: number;
 }
-/** The level card: the level just reached, the coins it gives, and the guests to serve to pass it. */
-export interface LevelState {
-  level: number;
-  bonus: number;
-  goal: number;
-}
 /** The buy card: the table pointed at (its name, its picture and seats), what it costs, and the bank. */
 export interface BuyState {
   name: string;
@@ -209,7 +203,7 @@ export class StartMenu {
   /** What the sheet shows ('none' when it is closed). */
   sheetKind: 'none' | 'settings' | 'warn' | 'quit' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card or the shop. */
-  cardKind: 'start' | 'pause' | 'shop' | 'level' | 'failed' | 'buy' = 'start';
+  cardKind: 'start' | 'pause' | 'shop' | 'failed' | 'buy' = 'start';
   private seed = 1;
   private clock = 0;
   private start: StartState = { kind: 'first', coins: 0, staff: 1, level: 1 };
@@ -333,14 +327,6 @@ export class StartMenu {
     this.cardKind = 'pause';
     this.card.resize(START_SIZE.width, START_SIZE.height);
     this.layoutPause(state);
-    this.card.show(true);
-  }
-
-  /** A level reached: the banner, the coins it gives and what comes next; CONTINUE carries on. */
-  showLevel(state: LevelState): void {
-    this.cardKind = 'level';
-    this.card.resize(START_SIZE.width, START_SIZE.height);
-    this.layoutLevel(state);
     this.card.show(true);
   }
 
@@ -807,45 +793,6 @@ export class StartMenu {
       text(ctx, 'Paused', mid, H / 2 - 90, 68, SKETCH.ink);
       text(ctx, `Level ${s.level}`, mid, H / 2 + 6, 64, SKETCH.ink);
       text(ctx, `${s.served} of ${s.goal} guests served`, mid, H / 2 + 88, 34, SKETCH.soft, 'center', false);
-      ctx.restore();
-    }, buttons);
-  }
-
-  /**
-   * The level card, wide like the start card: on the left a lantern-gold
-   * seal with the level's number; on the right what it brings (the coins,
-   * the guests to serve next) and CONTINUE. Nothing on it moves or flashes;
-   * the confetti is thrown in the room (StripSystem).
-   */
-  private layoutLevel(s: LevelState): void {
-    const SW = Math.round(this.card.width / this.k);
-    const H = Math.round(this.card.height / this.k);
-    const lx = PAD;
-    const lw = 360;
-    const cx = lx + lw + 30;
-    const cw = SW - PAD - cx;
-    const buttons: Button[] = [this.button(this.card, 'level-continue', cx, H - PAD - 150, cw, 150, 'primary', 'CONTINUE')];
-    this.card.set((ctx) => {
-      ctx.clearRect(0, 0, this.card.width, this.card.height);
-      ctx.save();
-      ctx.scale(this.k, this.k);
-      const rc = pen(this.card.canvas);
-      this.paper(ctx, rc, 0, H, SW);
-      const mid = lx + lw / 2;
-      // The seal: a gold disc, a timber ring, the number.
-      rc.circle(mid, H / 2 + 20, 300, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, strokeWidth: 5, seed: this.seed + 70 }));
-      rc.circle(mid, H / 2 + 20, 250, this.o({ stroke: SKETCH.timber, strokeWidth: 2.5, seed: this.seed + 71 }));
-      text(ctx, 'LEVEL', mid, H / 2 - 50, 44, SKETCH.ink);
-      text(ctx, `${s.level}`, mid, H / 2 + 50, 130, SKETCH.ink);
-      const tx = cx + cw / 2;
-      text(ctx, `Level ${s.level - 1} done!`, tx, PAD + 70, 56, SKETCH.ink);
-      const coinsY = PAD + 170;
-      ctx.font = font(44);
-      const word = `+${s.bonus} coins`;
-      const ww = ctx.measureText(word).width;
-      rc.circle(tx - ww / 2 - 34, coinsY, 48, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, seed: this.seed + 72 }));
-      text(ctx, word, tx + 20, coinsY, 44, SKETCH.ink);
-      text(ctx, `Next: serve ${s.goal} guests`, tx, coinsY + 90, 34, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
   }

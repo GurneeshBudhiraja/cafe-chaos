@@ -61,12 +61,12 @@ import { ShopSystem } from './shop-system.js';
 import { MessSystem } from './mess-system.js';
 
 /**
- * 'levelup': a level has just been reached; the café slows to a stop and
- * the level card is up until CONTINUE. 'buying': a locked table was pinched;
+ * A level reached is not a phase: the bar shows it for a moment and the
+ * café keeps going (`levelUp`). 'buying': a locked table was pinched;
  * the café is still (and in view) under the buy card. 'closed': the café's happiness ran
  * out; the card offers the level again.
  */
-export type GamePhase = 'waiting' | 'title' | 'opening' | 'rules' | 'tutorial' | 'run' | 'paused' | 'levelup' | 'buying' | 'closed' | 'test';
+export type GamePhase = 'waiting' | 'title' | 'opening' | 'rules' | 'tutorial' | 'run' | 'paused' | 'buying' | 'closed' | 'test';
 
 /**
  * The cards: the big one (title, pause, closing), How to play, and the
@@ -111,6 +111,8 @@ const SIZE = { min: 60, max: 140, step: 10 };
  * where it was when the card was put there and stayed moved for `dwell`
  * seconds (a lean in, or sitting back).
  */
+/** The notes under the bar: how long each stays (seconds), the gap between two, and how far under the bar's edge (metres). */
+const NOTE = { seconds: 4, gap: 0.4, below: 0.012 };
 const MENU_SPOT = { distance: 1, size: 2, top: 4, lowest: 30, follow: 35, glide: 4, shift: 0.12, dwell: 0.6 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
@@ -155,10 +157,15 @@ export class GameSystem extends createSystem({}) {
   private savedHappiness = -1;
   /** `score.servedGuests` when this level's count stood at zero. */
   private servedMark = 0;
-  /** A level's goal has been met: the level card goes up as soon as no hand is carrying a guest. */
-  private levelDue = false;
-  /** The café's speed is easing toward this (null: it is not easing), over LEVEL.rest seconds. */
-  private easeTo: number | null = null;
+  /**
+   * One-line notes under the middle of the bar, one at a time (a level's
+   * next goal, a table that can open): each for its `seconds`, shown only
+   * in a run, with a short gap between. Not tips: they come every time.
+   */
+  readonly note = new TipCard();
+  private readonly notes: { title: string; icon: TipId; seconds: number }[] = [];
+  private noteLeft = 0;
+  private noteRest = 0;
   /** The padlock tags over the locked tables (one per table still locked), children of the café. */
   readonly tags: LockTag[] = [];
   /** The table the buy card is about (an index into the café's pieces), while it is up. */
@@ -282,6 +289,7 @@ export class GameSystem extends createSystem({}) {
     this.hold?.claims.push((point) => this.card.covers(point) || this.how.covers(point) || this.coach.covers(point));
     this.world.createTransformEntity(this.rays.group);
     this.cafe.cafe.add(this.tip.panel.mesh);
+    this.cafe.cafe.add(this.note.panel.mesh);
     // The start menu stands in the world (the café is hidden until it is opened).
     // The menu cards stand a metre away, twice as big (MENU_SPOT).
     for (const p of [this.menu.card, this.menu.sheet, this.menu.how]) p.size = MENU_SPOT.size;
@@ -320,7 +328,6 @@ export class GameSystem extends createSystem({}) {
       this.menuPlaced = false;
       // Back in the headset mid-run: the pause card is there again.
       if (this.phase === 'paused') this.showPauseCard();
-      if (this.phase === 'levelup' && this.cafe.timeScale === 0) this.showLevelCard();
       if (this.phase === 'closed') this.showFailedCard();
       if (this.phase === 'buying') this.showBuyCard();
       // How to play was up (opened from the pause card): back, so there is something to press.
@@ -363,9 +370,9 @@ export class GameSystem extends createSystem({}) {
       if (what === 'run') this.toRun();
       else this.toTutorial();
     }
-    this.easeTime(cardDelta);
     this.tendTables(cardDelta);
     this.tendTips(cardDelta);
+    this.tendNotes(cardDelta);
     this.strip.controls = this.phase === 'run' ? 'live' : this.phase === 'paused' ? 'paused' : 'off';
     if (!cafe.placed || cafe.arriving) {
       for (const hand of HANDS) this.rays.update(hand, null, null, null, cardDelta);
@@ -383,18 +390,12 @@ export class GameSystem extends createSystem({}) {
     this.unpause();
     this.closeBuy(false);
     if (this.tipShown) this.endTip();
-    // From a level card (the café put down afresh while it was up): the café moves again.
-    if (this.phase === 'levelup') {
-      this.cafe.timeScale = this.speed;
-      this.guests.handsOff = false;
-    }
+    this.clearNotes();
     this.phase = 'title';
     this.quiet();
     this.coach.show(false);
     this.card.show(false);
     this.card.dimmed = false;
-    this.easeTo = null;
-    this.levelDue = false;
     this.showLevelOnBar(this.save.level, this.save.levelServed);
     this.strip.live = false;
     this.strip.settle();
@@ -519,7 +520,7 @@ export class GameSystem extends createSystem({}) {
    */
   private awayWhilePaused(): void {
     // The buy card is not here: the café stays in view under it, the table in question among it.
-    const away = this.phase === 'paused' || this.phase === 'closed' || (this.phase === 'levelup' && this.cafe.timeScale === 0) || (this.phase === 'rules' && this.rulesFrom === 'paused');
+    const away = this.phase === 'paused' || this.phase === 'closed' || (this.phase === 'rules' && this.rulesFrom === 'paused');
     if (away === this.cafeAway) return;
     this.cafeAway = away;
     this.cafe.cafe.visible = !away;
@@ -618,11 +619,6 @@ export class GameSystem extends createSystem({}) {
    */
   toRun(again = false): void {
     this.unpause();
-    // From a level card (or still slowing for one): the café moves at full speed again.
-    if (this.phase === 'levelup' || this.easeTo !== null) {
-      this.cafe.timeScale = this.speed;
-      this.guests.handsOff = false;
-    }
     if (this.phase !== 'tutorial') this.guests.clear();
     this.phase = 'run';
     this.card.show(false);
@@ -632,8 +628,7 @@ export class GameSystem extends createSystem({}) {
     this.guests.patienceFrozen = false;
     this.clock = 0;
     this.sinceSave = 0;
-    this.easeTo = null;
-    this.levelDue = false;
+    this.clearNotes();
     // A clean café to start: tables get dirty from here on.
     this.mess.clear();
     this.mess.enabled = true;
@@ -655,9 +650,7 @@ export class GameSystem extends createSystem({}) {
   pause(): void {
     if (this.phase !== 'run') return;
     this.phase = 'paused';
-    // Still picking up speed after a level card: the speed it was heading for is the one to come back to.
-    this.speed = this.easeTo ?? this.cafe.timeScale;
-    this.easeTo = null;
+    this.speed = this.cafe.timeScale;
     this.cafe.timeScale = 0;
     this.guests.handsOff = true;
     this.keep();
@@ -747,10 +740,7 @@ export class GameSystem extends createSystem({}) {
   toClosed(): void {
     this.unpause();
     this.phase = 'closed';
-    // Still picking up speed after a level card: at the speed it was heading for.
-    if (this.easeTo !== null) this.cafe.timeScale = this.easeTo;
-    this.easeTo = null;
-    this.levelDue = false;
+    this.clearNotes();
     this.strip.live = false;
     this.quiet();
     this.save.runs++;
@@ -788,22 +778,20 @@ export class GameSystem extends createSystem({}) {
       this.toClosed();
       return;
     }
-    if (this.levelServed >= levelGoal(this.level)) this.levelDue = true;
-    // The level card waits for empty hands: a guest being carried is put down first.
-    if (this.levelDue && !this.guests.carrying) this.levelUp();
+    if (this.levelServed >= levelGoal(this.level)) this.levelUp();
   }
 
   /**
    * A level reached. It is counted and saved at once (the next level, none
-   * served yet, its bonus in the bank, the happiness full); then the café
-   * slows to a stop over LEVEL.rest and the level card goes up with
-   * confetti and a chime. Nothing flashes, and nothing is timed: the card
-   * waits for CONTINUE, which is also a rest for the arms (Meta: breaks
-   * every 10 to 15 minutes, let players go at their own pace).
+   * served yet, its bonus in the bank, the happiness full), and the café
+   * keeps going: the bar shows "LEVEL n!" and its coins for a moment with
+   * confetti and the chime, a one-line note under it gives the next goal,
+   * and no new guest comes for LEVEL.breather seconds. Nothing stops the
+   * play (a full-screen card broke the flow, and someone who took the
+   * headset off came back to a card, not the café); a real rest is one
+   * pinch away on Pause (Meta: let players go at their own pace).
    */
   private levelUp(): void {
-    this.levelDue = false;
-    // Guests served while the card waited for empty hands count toward the next level.
     const goal = levelGoal(this.level);
     this.level++;
     this.servedMark += goal;
@@ -813,45 +801,59 @@ export class GameSystem extends createSystem({}) {
     this.save.bestLevel = Math.max(this.save.bestLevel, this.level);
     this.pace();
     this.keep();
-    this.phase = 'levelup';
-    this.guests.handsOff = true;
-    this.speed = this.easeTo ?? (this.cafe.timeScale || this.speed);
-    this.easeTo = 0;
+    this.strip.showLevel(this.level, levelBonus(this.level));
+    this.guests.holdArrivals(LEVEL.breather);
+    this.addNote(`Next: serve ${levelGoal(this.level)} guests`, 'goal', NOTE.seconds);
   }
 
-  private showLevelCard(): void {
-    if (!this.menu.card.open) this.menuPlaced = false;
-    this.menu.card.dimmed = false;
-    this.menu.showLevel({ level: this.level, bonus: levelBonus(this.level), goal: levelGoal(this.level) });
+  /** Queue a one-line note under the bar (see `note`). */
+  addNote(title: string, icon: TipId, seconds: number): void {
+    this.notes.push({ title, icon, seconds });
   }
 
-  /** CONTINUE on the level card: the café shows again and picks up speed over LEVEL.rest. */
-  private levelOn(): void {
-    if (this.phase !== 'levelup') return;
-    this.phase = 'run';
-    this.menu.hideAll();
-    this.guests.handsOff = false;
-    this.easeTo = this.speed;
+  private clearNotes(): void {
+    this.notes.length = 0;
+    this.noteLeft = 0;
+    this.note.hide();
   }
 
-  /** The café's speed easing to a stop for the level card, or back up after it (real seconds, so it moves while the café is still). */
-  private easeTime(delta: number): void {
-    if (this.easeTo === null) return;
-    const cafe = this.cafe;
-    const step = (Math.max(this.speed, 0.001) / LEVEL.rest) * delta;
-    const gap = this.easeTo - cafe.timeScale;
-    if (Math.abs(gap) <= step) {
-      cafe.timeScale = this.easeTo;
-      this.easeTo = null;
-      // Stopped for a level: now the card, and the confetti from where it stands.
-      if (this.phase === 'levelup') {
-        this.showLevelCard();
-        this.placeMenu(0);
-        this.strip.celebrate(this.menuPlaced ? this.menuSpot : undefined);
-      }
+  /** The notes under the bar: the first in the queue for its seconds, then a short gap, then the next. Only in a run. */
+  private tendNotes(delta: number): void {
+    const panel = this.note.panel;
+    panel.update(delta, this.head);
+    if (this.phase !== 'run') {
+      if (panel.open) panel.show(false);
       return;
     }
-    cafe.timeScale += Math.sign(gap) * step;
+    if (this.noteLeft > 0) {
+      this.noteLeft -= delta;
+      if (this.noteLeft <= 0) {
+        this.notes.shift();
+        this.note.hide();
+        this.noteRest = NOTE.gap;
+        return;
+      }
+      if (!panel.open) panel.show(true);
+      this.placeNote();
+      return;
+    }
+    this.noteRest -= delta;
+    const next = this.notes[0];
+    if (!next || this.noteRest > 0) return;
+    this.noteLeft = next.seconds;
+    this.note.show(next.title, '', tipIcon(next.icon));
+    this.placeNote();
+    panel.faceNow();
+  }
+
+  /** Under the middle of the bar, clear of its bottom edge (café space). */
+  private placeNote(): void {
+    const bar = this.strip.panel;
+    const g = (bar.mesh.geometry as PlaneGeometry).parameters;
+    const tall = (this.note.panel.mesh.geometry as PlaneGeometry).parameters.height;
+    bar.mesh.localToWorld(this.spot.set(0, -g.height / 2 - NOTE.below - tall / 2, 0.01));
+    this.cafe.cafe.worldToLocal(this.spot);
+    this.note.panel.mesh.position.copy(this.spot);
   }
 
   /** The level's pace now: how often guests come, how many may queue, how long they wait, how many wishes (game/rules.ts LEVEL). */
@@ -898,7 +900,7 @@ export class GameSystem extends createSystem({}) {
     this.save.hires = this.shop.hires;
     this.save.janitor = this.shop.janitor;
     this.save.tables = [...this.shop.tables];
-    if (this.phase === 'run' || this.phase === 'paused' || this.phase === 'levelup' || this.phase === 'buying' || this.phase === 'closed') {
+    if (this.phase === 'run' || this.phase === 'paused' || this.phase === 'buying' || this.phase === 'closed') {
       this.save.level = this.level;
       this.save.levelServed = this.levelServed;
       this.save.happiness = this.score.happiness;
@@ -1257,8 +1259,7 @@ export class GameSystem extends createSystem({}) {
     if (this.phase !== 'run' || !this.cafe.isLocked(index)) return;
     this.phase = 'buying';
     this.buying = index;
-    this.speed = this.easeTo ?? (this.cafe.timeScale || this.speed);
-    this.easeTo = null;
+    this.speed = this.cafe.timeScale || this.speed;
     this.cafe.timeScale = 0;
     this.guests.handsOff = true;
     this.showBuyCard();
@@ -1540,9 +1541,6 @@ export class GameSystem extends createSystem({}) {
       case 'again':
         // TRY AGAIN: the level from its start.
         this.toRun(true);
-        break;
-      case 'level-continue':
-        this.levelOn();
         break;
       case 'next':
         this.next();

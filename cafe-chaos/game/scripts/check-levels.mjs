@@ -8,11 +8,13 @@
  *     one who leaves unhappy pays nothing;
  *  3. each guest served is counted on the bar and saved, so a level left
  *     part-way is carried on from there;
- *  4. the level card waits while a hand carries a guest;
- *  5. the goal met: the café slows to a stop, the level card is up, the
- *     café is hidden behind it, confetti is thrown; the next level, its
- *     bonus and a full happiness are already saved;
- *  6. CONTINUE: the café shows and moves again, at the next level's pace;
+ *  4. the goal met, even with a guest in the hand: no card, the café keeps
+ *     going; the bar shows "LEVEL 2!" and its coins with confetti, the
+ *     next goal is a one-line note under the bar, and no guest comes for
+ *     the breather; the next level, its bonus and a full happiness are
+ *     already saved; after 3 s the bar is itself again;
+ *  5. (none)
+ *  6. the café carries on at the next level's pace;
  *  7. Pause shows the level; MAIN MENU saves it; the start card offers
  *     CONTINUE at that level, and it carries on with the count it had;
  *  8. happiness at zero: the retry card; TRY AGAIN starts the level from
@@ -47,7 +49,8 @@ const state = () => page.evaluate(() => {
     gap: guests.spawnSeconds.map((v) => +v.toFixed(2)), queue: guests.queueCap, line: guests.patienceSeconds, seated: guests.seatedPatience,
     bank: score.bank, happiness: score.happiness, speed: +system.timeScale.toFixed(2), cafe: system.cafe.visible,
     card: game.menu.card.open ? game.menu.cardKind : null, buttons: game.menu.card.buttons.map((b) => b.id), handsOff: guests.handsOff,
-    confetti: strip.celebrations, saved,
+    confetti: strip.celebrations, banner: strip.banner ? [strip.banner.level, strip.banner.bonus] : null,
+    note: game.note.panel.open ? game.note.drawn.split('|')[0] : null, nextGuest: +guests.nextSpawnIn.toFixed(2), saved,
   };
 });
 /** A guest pays (as the game scores it): `share` of its line patience used, `met` of `of` wishes. */
@@ -80,8 +83,8 @@ s = await state();
 check('a guest who storms out pays nothing and the café is less happy', s.bank === bankBefore && s.happiness < 100, `bank ${bankBefore} -> ${s.bank}, happiness ${s.happiness}`);
 
 // 3. Counted and saved. (Five were paid above: that already met level 1's goal, so start the level again first.)
-await until(() => window.__cafe.game.phase === 'levelup' || window.__cafe.game.level === 2, 10000);
-await page.evaluate(() => { const { game } = window.__cafe; game.click('level-continue'); game.save.level = 1; game.save.levelServed = 0; game.toRun(true); });
+await until(() => window.__cafe.game.level === 2, 10000);
+await page.evaluate(() => { const { game } = window.__cafe; game.save.level = 1; game.save.levelServed = 0; game.toRun(true); });
 await until(() => window.__cafe.game.level === 1 && window.__cafe.game.levelServed === 0 && window.__cafe.game.phase === 'run' && window.__cafe.system.timeScale === 1);
 await pay(0.2, 1, 1);
 await pay(0.2, 1, 1);
@@ -89,36 +92,43 @@ await until(() => window.__cafe.game.levelServed === 2);
 s = await state();
 check('each guest served is counted on the bar and saved', s.served === 2 && s.bar.join() === '1,2,5' && s.saved?.level === 1 && s.saved?.levelServed === 2, JSON.stringify({ served: s.served, bar: s.bar, saved: s.saved }));
 
-// 4. The level card waits for empty hands.
-// As if a hand were carrying a guest (the real pick-up is in check-seating).
+// 4. The goal met, with a guest in the hand (as if: the real pick-up is in check-seating): the café keeps going.
 await page.evaluate(() => Object.defineProperty(window.__cafe.guests, 'carrying', { get: () => true, configurable: true }));
-await pay(0.2, 1, 1);
-await pay(0.2, 1, 1);
-await pay(0.2, 1, 1);
-await page.waitForTimeout(800);
+const before = await state();
+let paid = 0;
+for (let i = 0; i < 3; i++) paid += await pay(0.2, 1, 1);
+await until(() => window.__cafe.game.level === 2, 5000);
+await page.waitForTimeout(450);
 s = await state();
-check('the goal met with a guest in the hand: the level card waits', s.phase === 'run' && s.card === null && s.level === 1, JSON.stringify({ phase: s.phase, card: s.card, level: s.level, served: s.served }));
-const before = s;
+check('the goal met (a guest in the hand too): no card, the café keeps going; the bar shows LEVEL 2! +10 with confetti', s.phase === 'run' && s.card === null && s.speed === 1 && s.cafe && !s.handsOff && s.banner?.join() === '2,10' && s.confetti === before.confetti + 1, JSON.stringify({ phase: s.phase, card: s.card, speed: s.speed, cafe: s.cafe, handsOff: s.handsOff, banner: s.banner, confetti: [before.confetti, s.confetti] }));
+check('level 2 is reached and saved at once: its bonus in the bank, the happiness full', s.level === 2 && s.served === 0 && s.bank === before.bank + paid + 10 && s.happiness === 100 && s.saved?.level === 2 && s.saved?.levelServed === 0 && s.saved?.bank === s.bank, JSON.stringify({ level: s.level, served: s.served, bank: [before.bank, paid, s.bank], happiness: s.happiness, saved: s.saved }));
+check('the next goal, one line under the bar ("Next: serve 7 guests"), and a breather: no guest for about 5 s', s.note === 'Next: serve 7 guests' && s.nextGuest > 4, JSON.stringify({ note: s.note, nextGuest: s.nextGuest }));
+await h.screenshot('artifacts/levels-2-level-up.png');
 await page.evaluate(() => { delete window.__cafe.guests.carrying; });
-
-// 5. The level card.
-await until(() => window.__cafe.game.phase === 'levelup');
-const easing = await state();
-await until(() => window.__cafe.game.menu.card.open && window.__cafe.game.menu.cardKind === 'level', 10000);
-await page.waitForTimeout(600);
+// Measured in the page's own frames (the emulator can run slower than real time): the banner's 3 s, the note's 4 s.
+const went = await page.evaluate(() => new Promise((ok) => {
+  const { strip, game, world } = window.__cafe;
+  const info = world.renderer.info.render;
+  const f0 = info.frame;
+  let t = 0;
+  let last = performance.now();
+  const r = {};
+  const tick = () => {
+    const now = performance.now();
+    t += Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (r.banner === undefined && !strip.banner) r.banner = +t.toFixed(1);
+    if (r.note === undefined && !game.note.panel.open) r.note = +t.toFixed(1);
+    if ((r.banner !== undefined && r.note !== undefined) || t > 10) { r.frames = info.frame - f0; ok(r); return; }
+    requestAnimationFrame(tick);
+  };
+  tick();
+}));
 s = await state();
-check('the goal met: the café slows to a stop and the level card is up, the café hidden behind it', s.phase === 'levelup' && s.card === 'level' && s.speed === 0 && !s.cafe && s.handsOff && s.buttons.join() === 'level-continue', JSON.stringify({ phase: s.phase, card: s.card, speed: s.speed, cafe: s.cafe, handsOff: s.handsOff, buttons: s.buttons, speedOnTheWay: easing.speed }));
-check('level 2 is reached and saved at once: its bonus in the bank, the happiness full, confetti thrown', s.level === 2 && s.served === 0 && s.bank === before.bank + 10 && s.happiness === 100 && s.confetti === before.confetti + 1 && s.saved?.level === 2 && s.saved?.levelServed === 0 && s.saved?.bank === s.bank, JSON.stringify({ level: s.level, served: s.served, bank: [before.bank, s.bank], happiness: s.happiness, confetti: s.confetti, saved: s.saved }));
-await h.screenshot('artifacts/levels-2-level-card.png');
-// It waits: nothing is timed.
-await page.waitForTimeout(3000);
-check('the level card waits for CONTINUE (nothing is timed)', (await state()).phase === 'levelup', 'still up after 3 s');
+check('the bar is itself again after its 3 s, and the note goes after its 4 s', s.banner === null && s.note === null && went.banner <= 3.2 && went.note <= 4.2, JSON.stringify(went));
 
-// 6. CONTINUE.
-await page.evaluate(() => window.__cafe.game.click('level-continue'));
-await until(() => window.__cafe.system.timeScale === 1, 10000);
-s = await state();
-check('CONTINUE: the café shows and moves again, at level 2 (a guest about every 15 s, 29 s in the line)', s.phase === 'run' && s.cafe && s.speed === 1 && !s.handsOff && s.card === null && Math.abs((s.gap[0] + s.gap[1]) / 2 - 15) < 0.5 && s.line === 29 && s.bar.join() === '2,0,7', JSON.stringify({ phase: s.phase, cafe: s.cafe, speed: s.speed, gap: s.gap, line: s.line, bar: s.bar }));
+// 6. The next level's pace.
+check('level 2 runs at its own pace: a guest about every 15 s, 29 s in the line, the bar at 0 of 7', s.phase === 'run' && Math.abs((s.gap[0] + s.gap[1]) / 2 - 15) < 0.5 && s.line === 29 && s.bar.join() === '2,0,7', JSON.stringify({ phase: s.phase, gap: s.gap, line: s.line, bar: s.bar }));
 await h.screenshot('artifacts/levels-3-level-2.png');
 
 // 7. Pause, MAIN MENU, CONTINUE.
@@ -156,19 +166,13 @@ await until(() => window.__cafe.game.phase === 'run');
 s = await state();
 check('TRY AGAIN: level 2 from zero, the happiness full, the coins kept', s.level === 2 && s.served === 0 && s.happiness === 100 && s.bank === bank && s.cafe, JSON.stringify({ level: s.level, served: s.served, happiness: s.happiness, bank: [bank, s.bank], cafe: s.cafe }));
 
-// 9a. A guest served while the card waits for empty hands counts toward the next level; happiness carried on even with none served.
+// 9a. The happiness is carried on even with none served.
 await page.evaluate(() => { const { game } = window.__cafe; game.save.level = 1; game.save.levelServed = 0; game.toRun(true); });
 await until(() => window.__cafe.game.level === 1 && window.__cafe.game.levelServed === 0 && window.__cafe.game.phase === 'run');
-await page.evaluate(() => Object.defineProperty(window.__cafe.guests, 'carrying', { get: () => true, configurable: true }));
 for (let i = 0; i < 6; i++) await pay(0.2, 1, 1);
-await page.waitForTimeout(500);
-await page.evaluate(() => { delete window.__cafe.guests.carrying; });
-await until(() => window.__cafe.game.phase === 'levelup');
+await until(() => window.__cafe.game.level === 2 && window.__cafe.game.levelServed === 1, 10000);
 s = await state();
-check('a sixth guest served while the level card waited counts toward level 2', s.level === 2 && s.served === 1, JSON.stringify({ level: s.level, served: s.served }));
-await until(() => window.__cafe.game.menu.card.open && window.__cafe.game.menu.cardKind === 'level', 10000);
-await page.evaluate(() => window.__cafe.game.click('level-continue'));
-await until(() => window.__cafe.game.phase === 'run' && window.__cafe.system.timeScale === 1, 10000);
+check('a sixth guest served counts toward level 2', s.level === 2 && s.served === 1, JSON.stringify({ level: s.level, served: s.served }));
 await page.evaluate(() => { window.__cafe.score.happiness = 40; });
 await page.waitForTimeout(300);
 await page.evaluate(() => window.__cafe.game.click('bar-pause'));
