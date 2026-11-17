@@ -129,14 +129,28 @@ def tex_planks(n, rng, light, dark, across=4, length=1, gap=0.012, rings=10, wea
     return col, h
 
 def tex_stone(n, rng, light, dark, cells=5):
+    """Fieldstone: rounded stones of varied warm and cool greys and tans (as a Canadian river-stone chimney),
+    each domed, set in a recessed sandy mortar, with speckle and fine pits. `light`/`dark` set the overall
+    tone (the darker material is the same stone in shadow and soot)."""
     d1, d2, idm = _voronoi(n, cells, rng)
-    edge = np.clip((d2 - d1) / 0.06, 0, 1)                      # 0 at the joints
-    perstone = (np.sin(idm * 12.9898) * 43758.5453) % 1
-    f = _fbm(n, rng, base=6, octaves=4)
-    col = _mix(np.ones((n, n, 3)) * np.array(light), dark, 0.35 + 0.45 * perstone + 0.2 * f)
-    col = _mix(col, np.array(dark) * 0.55, (1 - edge) * 0.9)
-    h = edge * (0.7 + 0.3 * f) * (1 - 0.3 * d1 / (0.5 / cells))
-    return col, h
+    gap = d2 - d1
+    stone = np.clip((gap - 0.012) / 0.05, 0, 1)                     # 0 in the mortar, 1 in a stone's middle
+    r1 = (np.sin(idm * 12.9898) * 43758.5453) % 1
+    r2 = (np.sin(idm * 78.233 + 1.7) * 24634.6345) % 1
+    palette = np.array([[0.63, 0.62, 0.61], [0.57, 0.53, 0.47], [0.47, 0.49, 0.53], [0.68, 0.63, 0.55],
+                        [0.41, 0.40, 0.41], [0.59, 0.57, 0.53], [0.52, 0.47, 0.42], [0.55, 0.56, 0.58]])
+    col = palette[(r1 * len(palette)).astype(int) % len(palette)] * (0.92 + 0.16 * r2)[..., None]
+    col = col * (np.mean(light) / 0.60)
+    f = _fbm(n, rng, base=10, octaves=4)
+    speck = (rng.random((n, n)) > 0.93).astype(float) * 0.10 - (rng.random((n, n)) > 0.95).astype(float) * 0.12
+    dome = np.sqrt(stone)
+    col = col * (0.80 + 0.22 * dome + 0.10 * (f - 0.5))[..., None] + speck[..., None]
+    mortar = np.array([0.70, 0.67, 0.61]) * (np.mean(light) / 0.66) * (0.86 + 0.14 * f)[..., None]
+    in_mortar = np.clip(1 - stone / 0.25, 0, 1)
+    col = col * (1 - in_mortar[..., None]) + mortar * in_mortar[..., None]
+    col = col * (1 - 0.35 * np.clip(0.06 - gap, 0, 0.06) / 0.06)[..., None] * (1 - 0.25 * in_mortar)[..., None]   # shadow in the joints
+    h = 0.35 * dome + 0.65 * stone ** 0.5 + 0.05 * f
+    return np.clip(col, 0, 1), h
 
 def tex_ice(n, rng):
     d1, d2, idm = _voronoi(n, 6, rng)
@@ -220,8 +234,8 @@ SPEC = {
     'Cream':      (lambda n, r: tex_paint(n, r, (0.97, 0.93, 0.85), (0.86, 0.80, 0.70), lines=3, grain=0.06), 256, 0.045, 2.0),
     'Ice':        (lambda n, r: tex_ice(n, r), 512, 0.20, 2.0),
     'IceDeep':    (lambda n, r: (lambda c: (c[0] * np.array([0.72, 0.82, 0.92]), c[1]))(tex_ice(n, r)), 256, 0.14, 2.0),
-    'Stone':      (lambda n, r: tex_stone(n, r, (0.66, 0.66, 0.67), (0.42, 0.43, 0.46), cells=4), 512, 0.07, 3.0),
-    'StoneDark':  (lambda n, r: tex_stone(n, r, (0.50, 0.51, 0.54), (0.30, 0.31, 0.34), cells=3), 256, 0.06, 3.0),
+    'Stone':      (lambda n, r: tex_stone(n, r, (0.66, 0.66, 0.67), (0.42, 0.43, 0.46), cells=6), 512, 0.06, 4.0),
+    'StoneDark':  (lambda n, r: tex_stone(n, r, (0.46, 0.47, 0.50), (0.30, 0.31, 0.34), cells=4), 256, 0.05, 4.0),
     'Trunk':      (lambda n, r: tex_bark(n, r, (0.50, 0.36, 0.22), (0.28, 0.18, 0.10)), 256, 0.04, 1.5),
     'Spruce':     (lambda n, r: tex_needles(n, r, (0.14, 0.33, 0.24), (0.30, 0.52, 0.36)), 256, 0.05, 0),
     'SpruceLight':(lambda n, r: tex_needles(n, r, (0.24, 0.46, 0.32), (0.42, 0.64, 0.44)), 256, 0.05, 0),

@@ -19,7 +19,7 @@ import time as _time
 AO_RES = globals().get('AO_RES', 2048) if not os.environ.get('AO_FAST') else 256
 AO_SAMPLES = globals().get('AO_SAMPLES', 32) if not os.environ.get('AO_FAST') else 4
 AO_DIST = globals().get('AO_DIST', 0.06)
-AO_SKIP = set(globals().get('AO_SKIP', ('Glass', 'Smoke', 'Fire', 'FireCore', 'Bulb')))
+AO_SKIP = set(globals().get('AO_SKIP', ('Glass', 'Smoke', 'Fire', 'FireCore', 'Bulb', 'Ember', 'Water', 'Mountains')))   # the ranges carry their own shading
 _t0 = _time.time()
 
 _meshes = [o for o in ROOT.children_recursive if o.type == 'MESH' and o.data.polygons

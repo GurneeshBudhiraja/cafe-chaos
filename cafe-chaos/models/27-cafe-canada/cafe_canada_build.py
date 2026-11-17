@@ -68,8 +68,8 @@ mat('SpruceLight', (0.27, 0.50, 0.35), 0.9)
 mat('Trunk', (0.40, 0.27, 0.16), 0.9)
 mat('Stone', (0.57, 0.58, 0.60), 0.9)
 mat('StoneDark', (0.40, 0.41, 0.44), 0.9)
-mat('Fire', (1.0, 0.50, 0.10), 0.5, emit=(1.0, 0.42, 0.06), strength=3.5)
-mat('FireCore', (1.0, 0.88, 0.40), 0.5, emit=(1.0, 0.80, 0.30), strength=5.0)
+mat('Fire', (0.98, 0.40, 0.06), 0.5, emit=(1.0, 0.36, 0.04), strength=1.3)     # orange outer flame (not so bright it washes to yellow)
+mat('FireCore', (1.0, 0.84, 0.36), 0.5, emit=(1.0, 0.78, 0.28), strength=1.9)
 mat('Bulb', (1.0, 0.88, 0.62), 0.4, emit=(1.0, 0.82, 0.50), strength=1.6)
 mat('Wire', (0.16, 0.15, 0.14), 0.9)
 mat('Chalk', (0.13, 0.15, 0.14), 0.9)
@@ -82,7 +82,10 @@ mat('IcingMaple', (0.86, 0.52, 0.22), 0.6)
 mat('Smoke', (0.92, 0.92, 0.94), 0.9, alpha=0.55)
 mat('Mountain', (0.47, 0.55, 0.68), 0.95)          # the near range, blue with distance
 mat('MountainFar', (0.64, 0.71, 0.82), 0.95)       # the far range, paler still
-mat('Rock', (0.33, 0.37, 0.45), 0.95)              # the waterfall's outcrop, darker so the water shows on it
+mat('Mountains', (1.0, 1.0, 1.0), 0.95)            # the painted relief ranges (texture made in the backdrop block)
+mat('Ember', (0.80, 0.20, 0.04), 0.6, emit=(0.95, 0.24, 0.03), strength=0.9)
+mat('Soot', (0.055, 0.05, 0.048), 0.95)
+mat('Terracotta', (0.62, 0.32, 0.22), 0.8)
 mat('Water', (0.80, 0.92, 1.0), 0.2, emit=(0.82, 0.93, 1.0), strength=0.45)
 mat('PianoBlack', (0.08, 0.07, 0.08), 0.35)
 mat('PianoKeys', (0.97, 0.96, 0.92), 0.4)
@@ -310,38 +313,114 @@ slots.done()
 anchor('Socket-1', (wx + 0.01, FLOOR + 0.028, -0.10))
 anchor('Socket-2', (wx + 0.01, FLOOR + 0.028, 0.10))
 
-# The fireplace: a fieldstone hearth on the left wall, just in front of the window, a fire in it, a pine mantel with two mugs,
-# the chimney breast up the wall and out over it with smoke; a plaid rug in front. Seats near it are warm.
+# Fire: tongues of flame shaped like real ones (a teardrop that swells near its foot, narrows to a licking tip
+# and curls a little), an orange outer flame round a yellow core, on a bed of glowing embers. Each tongue is its
+# own object with its origin at its foot, so the Ambient clip's flicker stretches it from the bottom.
+def flame_tongue(name, material, at, h, r, lean=(0.0, 0.0), curl=0.0, phase=0.0):
+    part = Part(name, material, smooth=True)
+    g = bmesh.ops.create_uvsphere(part.bm, u_segments=9, v_segments=8, radius=1.0)
+    for v in g['verts']:
+        t = (v.co.z + 1) / 2                                   # 0 at the foot, 1 at the tip
+        ang = math.atan2(v.co.y, v.co.x)
+        prof = math.sin(math.pi * min(1.0, t ** 0.55)) * (1 - t) ** 0.45 * 1.35
+        ox = lean[0] * t * t + curl * r * math.sin(5 * t + phase) * t
+        oz = lean[1] * t * t
+        v.co = Vector((math.cos(ang) * r * prof + ox, math.sin(ang) * r * prof * 0.8 - oz, h * t))   # Blender space: z up, -y = game +z
+    ob = part.done()
+    ob.location = G(*at)
+    return ob
+
+def fire(prefix, at, scale, tongues, parent_list):
+    """A fire at `at` (game space, the top of its fuel): tongues = (dx, dz, h, r, lean_x, lean_z, curl)."""
+    for i, (dx, dz, h, r, lx, lz, cu) in enumerate(tongues):
+        p = (at[0] + dx * scale, at[1], at[2] + dz * scale)
+        parent_list.append(flame_tongue(f'{prefix}Flame-{i}', 'Fire', p, h * scale, r * scale, (lx * scale, lz * scale), cu, i * 1.3))
+        parent_list.append(flame_tongue(f'{prefix}FlameCore-{i}', 'FireCore', (p[0], p[1] - 0.0004 * scale, p[2]), h * 0.62 * scale, r * 0.55 * scale, (lx * 0.6 * scale, lz * 0.6 * scale), cu * 0.5, i * 1.3 + 0.6))
+
+# The fireplace: a river-stone hearth on the left wall, just in front of the window, where the front half
+# wall does not hide it from the player. A raised flagstone hearth; a firebox with sooty sides, cast-iron
+# andirons, two logs on a bed of embers and a fire; a stone surround with a lintel and keystone; a heavy pine
+# beam mantel on corbels with a spruce garland, berries, two mugs and two stockings; the chimney breast
+# narrowing at a shoulder into the stack, up past the wall top, a cap, a clay pot and smoke. A fire-tool stand
+# and a plaid rug in front. Seats near it are warm.
 FPX, FPZ = CAB['x0'] + 0.0072, 0.015               # the wall's inner face and the hearth's middle (between the window and table 2: in sight over the half wall)
+FO = 0.018                                          # half the firebox opening (along z)
 hearth = Part('Hearth', 'Stone')
-hearth.boxb((FPX + 0.0065, FLOOR, FPZ), (0.013, 0.062, 0.058))                       # back slab
-for dz in (-0.0235, 0.0235):
-    hearth.boxb((FPX + 0.0205, FLOOR, FPZ + dz), (0.015, 0.062, 0.011))              # the jambs
-hearth.box((FPX + 0.0205, FLOOR + 0.048, FPZ), (0.015, 0.028, 0.036))                # the lintel
-hearth.boxb((FPX + 0.024, FLOOR, FPZ), (0.034, 0.004, 0.066))                        # the hearthstone
+hearth.boxb((FPX + 0.006, FLOOR + 0.004, FPZ), (0.012, 0.042, 0.072))                     # back of the firebox
+for s_ in (-1, 1):
+    hearth.boxb((FPX + 0.011, FLOOR + 0.004, FPZ + s_ * (FO + 0.009)), (0.022, 0.034, 0.018))   # the jambs
+hearth.box((FPX + 0.011, FLOOR + 0.042, FPZ), (0.022, 0.012, 0.074))                       # over the opening
+hearth.box((FPX + 0.010, FLOOR + 0.057, FPZ), (0.020, 0.018, 0.070))                       # the breast up to the mantel
 hearth.done()
-Part('Firebox', 'StoneDark').box((FPX + 0.0135, FLOOR + 0.02, FPZ), (0.0012, 0.03, 0.036)).done()
+Part('HearthLintel', 'StoneDark').box((FPX + 0.0225, FLOOR + 0.0385, FPZ), (0.0015, 0.005, 2 * FO + 0.012)).box((FPX + 0.0228, FLOOR + 0.040, FPZ), (0.002, 0.008, 0.009)).done()
+Part('HearthSlab', 'StoneDark').boxb((FPX + 0.019, FLOOR, FPZ), (0.038, 0.004, 0.084)).done()   # the raised flagstone hearth
+soot = Part('Firebox', 'Soot')
+soot.box((FPX + 0.0122, FLOOR + 0.020, FPZ), (0.0008, 0.032, 2 * FO))                         # back
+for s_ in (-1, 1):
+    soot.box((FPX + 0.017, FLOOR + 0.020, FPZ + s_ * (FO - 0.0004)), (0.010, 0.032, 0.0008))   # the sides
+soot.box((FPX + 0.017, FLOOR + 0.0358, FPZ), (0.010, 0.0008, 2 * FO))                         # the roof
+soot.done()
+Part('EmberGlow', 'Ember', smooth=True).cyl((FPX + 0.018, FLOOR + 0.0045, FPZ), 0.011, 0.0008, seg=12).done()
+embers = Part('Embers', 'Ember', smooth=True)
+for i in range(9):
+    a = i * 2.39996
+    rr = 0.0035 + 0.0055 * ((i * 0.618) % 1)
+    embers.sphere((FPX + 0.018 + rr * math.cos(a) * 0.7, FLOOR + 0.0055, FPZ + rr * math.sin(a)), 0.0018, seg=6, rings=4, scale=(1.0, 0.6, 1.0))
+embers.done()
+andirons = Part('Andirons', 'Wire')
+for s_ in (-1, 1):
+    andirons.box((FPX + 0.018, FLOOR + 0.0065, FPZ + s_ * 0.010), (0.016, 0.0012, 0.0012))
+    andirons.boxb((FPX + 0.026, FLOOR + 0.004, FPZ + s_ * 0.010), (0.0014, 0.009, 0.0014))
+andirons.done()
 fire_logs = Part('HearthLogs', 'Trunk', smooth=True)
-fire_logs.cyl((FPX + 0.02, FLOOR + 0.007, FPZ), 0.0035, 0.03, axis='z', seg=8)
-fire_logs.cyl((FPX + 0.023, FLOOR + 0.0105, FPZ), 0.003, 0.026, axis='z', seg=8, rot_y=15)
+fire_logs.cyl((FPX + 0.016, FLOOR + 0.0095, FPZ), 0.0032, 0.030, axis='z', seg=8, rot_y=6)
+fire_logs.cyl((FPX + 0.021, FLOOR + 0.0105, FPZ + 0.002), 0.0028, 0.026, axis='z', seg=8, rot_y=-14)
 fire_logs.done()
+Part('HearthLogEnds', 'Ember', smooth=True).cyl((FPX + 0.016, FLOOR + 0.0095, FPZ + 0.0152), 0.0026, 0.0006, axis='z', seg=8).done()
 hearth_flames = []
-for i, (dz, h, r) in enumerate(((0.0, 0.020, 0.0075), (-0.008, 0.013, 0.005), (0.008, 0.012, 0.005))):
-    f = Part(f'HearthFlame-{i}', 'Fire', smooth=True).cone((0, 0, 0), r, h, seg=8).done()
-    f.location = G(FPX + 0.021, FLOOR + 0.012, FPZ + dz)
-    hearth_flames.append(f)
-hcore = Part('HearthFlameCore', 'FireCore', smooth=True).cone((0, 0, 0), 0.004, 0.012, seg=8).done()
-hcore.location = G(FPX + 0.021, FLOOR + 0.012, FPZ)
-hearth_flames.append(hcore)
-Part('Mantel', 'PineDark').box((FPX + 0.016, FLOOR + 0.064, FPZ), (0.036, 0.004, 0.07)).done()
-Part('MantelMugs', 'Mug', smooth=True).cyl((FPX + 0.02, FLOOR + 0.0705, FPZ - 0.02), 0.0042, 0.009, seg=10).cyl((FPX + 0.02, FLOOR + 0.0705, FPZ + 0.02), 0.0042, 0.009, seg=10).done()
-CH_TOP = FLOOR + H + 0.058                          # the chimney stands 5.8 cm proud of the wall
-Part('ChimneyBreast', 'Stone').boxb((FPX + 0.006, FLOOR + 0.066, FPZ), (0.024, CH_TOP - FLOOR - 0.066, 0.044)).done()
-Part('ChimneyCap', 'StoneDark').box((FPX + 0.006, CH_TOP + 0.003, FPZ), (0.03, 0.006, 0.05)).done()
-Part('ChimneySnow', 'Snow', smooth=True).box((FPX + 0.006, CH_TOP + 0.0075, FPZ), (0.028, 0.004, 0.046)).done()
-Part('HearthRug', 'Plaid').boxb((FPX + 0.05, 0.0241, FPZ), (0.032, 0.0006, 0.05)).done()
+fire('Hearth', (FPX + 0.019, FLOOR + 0.011, FPZ), 1.0,
+     ((0.0, 0.0, 0.019, 0.0060, 0.0, 0.0, 0.18), (-0.001, -0.007, 0.014, 0.0045, 0.0, -0.002, 0.25),
+      (0.001, 0.0075, 0.015, 0.0045, 0.0, 0.002, 0.22), (0.003, 0.003, 0.010, 0.0035, 0.001, 0.0, 0.3)), hearth_flames)
+# The mantel: a heavy pine beam on two corbels, a spruce garland with red berries, two mugs, two stockings.
+MY = FLOOR + 0.066
+Part('Mantel', 'PineDark').box((FPX + 0.014, MY + 0.0035, FPZ), (0.028, 0.007, 0.086)).done()
+Part('MantelCorbels', 'PineDark').box((FPX + 0.018, MY - 0.004, FPZ - 0.036), (0.012, 0.008, 0.006)).box((FPX + 0.018, MY - 0.004, FPZ + 0.036), (0.012, 0.008, 0.006)).done()
+garland = Part('MantelGarland', 'Spruce', smooth=True)
+berries = Part('MantelBerries', 'Red', smooth=True)
+for i in range(13):
+    z = FPZ - 0.038 + i * 0.0063
+    sag = 0.0035 * math.sin(math.pi * ((i % 6) / 6))
+    garland.sphere((FPX + 0.0285, MY + 0.002 - sag, z), 0.0026, seg=6, rings=4)
+    if i % 3 == 1:
+        berries.sphere((FPX + 0.0305, MY + 0.0015 - sag, z + 0.0012), 0.0010, seg=5, rings=3)
+garland.done(); berries.done()
+Part('MantelMugs', 'Mug', smooth=True).cyl((FPX + 0.012, MY + 0.0115, FPZ - 0.024), 0.0042, 0.009, seg=10).cyl((FPX + 0.012, MY + 0.0115, FPZ + 0.026), 0.0042, 0.009, seg=10).done()
+stock = Part('Stockings', 'Red', smooth=True)
+cuffs = Part('StockingCuffs', 'Cream', smooth=True)
+for z in (FPZ - 0.012, FPZ + 0.012):
+    stock.box((FPX + 0.0295, MY - 0.010, z), (0.003, 0.014, 0.0065))
+    stock.box((FPX + 0.0295, MY - 0.0175, z + 0.0035), (0.003, 0.0045, 0.010))
+    cuffs.box((FPX + 0.0298, MY - 0.0025, z), (0.0032, 0.0035, 0.0075))
+stock.done(); cuffs.done()
+# The chimney: the breast above the mantel, a sloped shoulder, the narrower stack up past the wall top.
+CH_TOP = FLOOR + H + 0.058                          # the stack stands 5.8 cm proud of the wall top
+chim = Part('ChimneyBreast', 'Stone')
+chim.boxb((FPX + 0.010, MY + 0.007, FPZ), (0.020, 0.040, 0.064))
+chim.box((FPX + 0.008, MY + 0.051, FPZ), (0.016, 0.010, 0.056), rot_z=0)
+chim.boxb((FPX + 0.006, MY + 0.055, FPZ), (0.013, CH_TOP - MY - 0.055, 0.036))
+chim.done()
+Part('ChimneyShoulder', 'StoneDark').box((FPX + 0.016, MY + 0.049, FPZ), (0.010, 0.004, 0.062), rot_z=28).done()
+Part('ChimneyCap', 'StoneDark').box((FPX + 0.006, CH_TOP + 0.003, FPZ), (0.019, 0.006, 0.044)).done()
+Part('ChimneyPot', 'Terracotta', smooth=True).cyl((FPX + 0.006, CH_TOP + 0.011, FPZ), 0.0048, 0.011, seg=10, r2=0.0042).done()
+Part('ChimneySnow', 'Snow', smooth=True).box((FPX + 0.006, CH_TOP + 0.0072, FPZ - 0.011), (0.017, 0.003, 0.016)).box((FPX + 0.006, CH_TOP + 0.0072, FPZ + 0.012), (0.017, 0.003, 0.014)).done()
+tools = Part('FireTools', 'Wire')
+tools.boxb((FPX + 0.030, FLOOR + 0.004, FPZ + 0.046), (0.0012, 0.030, 0.0012))
+tools.box((FPX + 0.030, FLOOR + 0.034, FPZ + 0.046), (0.0026, 0.0026, 0.0026))
+tools.boxb((FPX + 0.028, FLOOR + 0.004, FPZ + 0.044), (0.008, 0.0012, 0.008))
+tools.done()
+Part('HearthRug', 'Plaid').boxb((FPX + 0.055, 0.0241, FPZ), (0.030, 0.0006, 0.052)).done()
 anchor('FireplaceSpot', (FPX + 0.03, FLOOR, FPZ), rot_y=-90)
-SMOKE_AT = (FPX + 0.006, CH_TOP + 0.012, FPZ)
+SMOKE_AT = (FPX + 0.006, CH_TOP + 0.022, FPZ)
 smoke_objs = []
 for i in range(3):
     sm = Part(f'Smoke-{i}', 'Smoke', smooth=True).sphere((0, 0, 0), 0.008, seg=8, rings=6).done()
@@ -720,13 +799,15 @@ logs.cyl((FX, FLOOR + 0.011, FZ), 0.006, 0.05, axis='x', seg=8, rot_y=-40)
 logs.cyl((FX, FLOOR + 0.015, FZ), 0.005, 0.046, axis='x', seg=8, rot_y=85)
 logs.done()
 flames = []
-for i, (dx, dz, h, r) in enumerate(((0, 0, 0.042, 0.016), (-0.009, 0.006, 0.028, 0.010), (0.010, -0.004, 0.024, 0.009))):
-    f = Part(f'Flame-{i}', 'Fire', smooth=True).cone((0, 0, 0), r, h, seg=8).done()
-    f.location = G(FX + dx, FLOOR + 0.016, FZ + dz)
-    flames.append(f)
-core = Part('FlameCore', 'FireCore', smooth=True).cone((0, 0, 0), 0.009, 0.026, seg=8).done()
-core.location = G(FX, FLOOR + 0.017, FZ)
-flames.append(core)
+bembers = Part('FireEmbers', 'Ember', smooth=True)
+for i in range(14):
+    a = i * 2.39996
+    rr = 0.004 + 0.016 * ((i * 0.618) % 1)
+    bembers.sphere((FX + rr * math.cos(a), FLOOR + 0.004, FZ + rr * math.sin(a)), 0.0028, seg=6, rings=4, scale=(1.0, 0.6, 1.0))
+bembers.done()
+fire('Bonfire', (FX, FLOOR + 0.013, FZ), 1.0,
+     ((0.0, 0.0, 0.042, 0.0115, 0.0, 0.0, 0.15), (-0.009, 0.005, 0.031, 0.009, -0.002, 0.001, 0.2), (0.009, -0.004, 0.028, 0.0085, 0.002, -0.001, 0.25),
+      (0.002, 0.010, 0.023, 0.007, 0.0, 0.002, 0.3), (-0.004, -0.010, 0.021, 0.0065, -0.001, -0.002, 0.3)), flames)
 # Three chair spots round the fire (the Muskoka chairs are pieces, phase 2) and a woodpile against the cabin's front.
 for i, a in enumerate((205, 270, 335)):
     r = 0.085
@@ -782,73 +863,181 @@ spruce('SpruceBackRight', (0.415, 0.024, -0.27), 0.20)
 spruce('SpruceFrontLeft', (-0.425, 0.024, 0.275), 0.16)
 spruce('SpruceLakeside', (0.43, 0.024, 0.20), 0.12)
 # ------------------------------------------------------------------ the Rockies behind, and a waterfall
-# Two thin ranges along the plate's back edge, like a stage backdrop: the near one blue, the far one paler and
-# taller (the haze of distance), snow on every peak. Between two near peaks a rock cliff with a waterfall running
-# down it into a small pool ringed with stones and foam (the Ambient clip runs the water and the foam). All inside
-# the plate; the tallest peak is 33 cm up, under the Japanese café's cherry tree.
-BASE_Y = 0.022
-HALF_W = PLATE_W / 2 - 0.004
-def range_part(name, mat_name, cap_name, z_front, depth, peaks):
-    body = Part(name, mat_name)
-    caps = Part(cap_name, 'Snow')
-    for x, w, h in peaks:
-        def clamp(px):
-            return max(-HALF_W, min(HALF_W, px))
-        outline = [(x - w / 2, 0), (x - w * 0.30, h * 0.42), (x - w * 0.16, h * 0.64), (x - w * 0.07, h * 0.86), (x, h),
-                   (x + w * 0.09, h * 0.80), (x + w * 0.20, h * 0.66), (x + w * 0.34, h * 0.38), (x + w / 2, 0)]
-        cap = [(x - w * 0.16, h * 0.64), (x - w * 0.07, h * 0.86), (x, h), (x + w * 0.09, h * 0.80), (x + w * 0.20, h * 0.66),
-               (x + w * 0.11, h * 0.70), (x + w * 0.04, h * 0.64), (x - w * 0.03, h * 0.71), (x - w * 0.10, h * 0.62)]
-        for part, pts, z0, d in ((body, outline, z_front, depth), (caps, cap, z_front + 0.0008, depth + 0.0016)):
-            front = [part.bm.verts.new(G(clamp(px), BASE_Y + py, z0)) for px, py in pts]
-            back = [part.bm.verts.new(G(clamp(px), BASE_Y + py, z0 - d)) for px, py in pts]
-            part.bm.faces.new(front)
-            part.bm.faces.new(back[::-1])
-            for i in range(len(pts)):
-                j = (i + 1) % len(pts)
-                part.bm.faces.new((front[j], front[i], back[i], back[j]))
-    bmesh.ops.recalc_face_normals(body.bm, faces=body.bm.faces)
-    bmesh.ops.recalc_face_normals(caps.bm, faces=caps.bm.faces)
-    body.done(); caps.done()
-range_part('MountainsFar', 'MountainFar', 'MountainsFarSnow', -0.300, 0.006,
-           ((-0.33, 0.26, 0.29), (-0.11, 0.28, 0.33), (0.13, 0.26, 0.30), (0.36, 0.22, 0.27)))
-range_part('MountainsNear', 'Mountain', 'MountainsNearSnow', -0.289, 0.009,
-           ((-0.40, 0.20, 0.17), (-0.22, 0.24, 0.22), (-0.02, 0.22, 0.19), (0.31, 0.26, 0.21), (0.45, 0.12, 0.14)))
-# The cliff the water comes down: rough stone blocks between the two near peaks at x 0.09..0.18.
-WFX = 0.135
-cliff = Part('WaterfallCliff', 'Rock')
-csnow = Part('WaterfallCliffSnow', 'Snow')
-def slab(part, pts, z0, d):
-    front = [part.bm.verts.new(G(WFX + px, BASE_Y + py, z0)) for px, py in pts]
-    back = [part.bm.verts.new(G(WFX + px, BASE_Y + py, z0 - d)) for px, py in pts]
-    part.bm.faces.new(front); part.bm.faces.new(back[::-1])
-    for i in range(len(pts)):
-        j = (i + 1) % len(pts)
-        part.bm.faces.new((front[j], front[i], back[i], back[j]))
-# an outcrop with shoulders either side of a notch the water pours from
-slab(cliff, [(-0.07, 0), (-0.06, 0.07), (-0.04, 0.105), (-0.016, 0.118), (-0.008, 0.112), (0.008, 0.112), (0.018, 0.124), (0.045, 0.10), (0.065, 0.06), (0.075, 0)], -0.282, 0.012)
-slab(csnow, [(-0.04, 0.105), (-0.016, 0.118), (-0.008, 0.112), (-0.014, 0.108), (-0.03, 0.102)], -0.2812, 0.0136)
-slab(csnow, [(0.008, 0.112), (0.018, 0.124), (0.045, 0.10), (0.03, 0.104), (0.016, 0.115)], -0.2812, 0.0136)
-bmesh.ops.recalc_face_normals(cliff.bm, faces=cliff.bm.faces); bmesh.ops.recalc_face_normals(csnow.bm, faces=csnow.bm.faces)
-cliff.done(); csnow.done()
-WF_TOP, WF_BOTTOM, WF_Z = BASE_Y + 0.113, FLOOR + 0.003, -0.2805
-Part('Waterfall', 'Water').box((WFX, (WF_TOP + WF_BOTTOM) / 2, WF_Z), (0.018, WF_TOP - WF_BOTTOM, 0.0016)).done()
-# Streaks of white water sliding down it, and foam at its foot (both moved by the Ambient clip).
+# Two ranges of real relief along the plate's back edge (a deep bas-relief, as a stage backdrop: the front of
+# each range comes 1-2 cm toward the player, ridges and spurs stand out and gullies sink in, so the one sun
+# shades them like mountains). The far range is taller, thinner and hazed blue; the near range is darker with a
+# spruce forest at its foot. One painted texture (1024 px, both ranges) carries rock with strata, the snowline,
+# snow down the couloirs, bare rock on the steep faces and the forest; its normal map adds the rock's grain.
+# A waterfall springs from a cleft in the near range and falls into a pool ringed with stones; white water runs
+# down it and foam churns at its foot in the Ambient clip. All inside the plate, the tallest peak 0.35 up.
+MT_X0, MT_X1, MT_BASE, MT_HMAX = -PLATE_W / 2 + 0.003, PLATE_W / 2 - 0.003, 0.022, 0.36
+WFX = 0.150                                          # the waterfall's line
+_grids = {}
+def _vnoise2(u, v, seed):
+    g = _grids.setdefault(seed, np.random.default_rng(seed).random((257, 257)))
+    iu = np.floor(u).astype(int); iv = np.floor(v).astype(int)
+    fu = u - iu; fv = v - iv; fu = fu * fu * (3 - 2 * fu); fv = fv * fv * (3 - 2 * fv)
+    iu %= 256; iv %= 256
+    return (g[iv, iu] * (1 - fu) * (1 - fv) + g[iv, iu + 1] * fu * (1 - fv) + g[iv + 1, iu] * (1 - fu) * fv + g[iv + 1, iu + 1] * fu * fv)
+def fbm2(x, y, seed, freq, octaves=5):
+    out, amp, tot = 0.0, 1.0, 0.0
+    for o in range(octaves):
+        out = out + amp * _vnoise2(x * freq + 37.1 * o + 100, y * freq + 11.7 * o + 100, seed + o); tot += amp
+        amp *= 0.5; freq *= 2.07
+    return out / tot
+LAYERS = [
+    dict(name='MountainsNear', z_back=-0.302, depth=0.022, nx=96, ny=24, seed=37, haze=0.10, snowline=0.62, forest=True, v0=0.0,
+         peaks=[(-0.44, 0.15, 0.10), (-0.29, 0.21, 0.15), (-0.08, 0.18, 0.15), (0.16, 0.165, 0.10), (0.31, 0.20, 0.13), (0.45, 0.14, 0.09)]),
+    dict(name='MountainsFar', z_back=-0.3085, depth=0.010, nx=72, ny=16, seed=31, haze=0.42, snowline=0.50, forest=False, v0=0.5,
+         peaks=[(-0.39, 0.26, 0.15), (-0.18, 0.33, 0.19), (0.04, 0.29, 0.17), (0.23, 0.32, 0.18), (0.41, 0.27, 0.14)]),
+]
+def top_of(L, x):
+    """The ridgeline: each peak a summit with uneven shoulders (steeper on one side), and along the whole line
+    ridged noise for the sub-summits, notches and broken crests of the Rockies."""
+    h = np.full_like(x, 0.035)
+    for k, (px, ph, pw) in enumerate(L['peaks']):
+        left, right = (0.80, 1.20) if k % 2 else (1.15, 0.85)
+        w = np.where(x < px, pw * left, pw * right)
+        h = np.maximum(h, ph * np.clip(1 - np.abs(x - px) / w, 0, 1) ** 1.12)
+    hmax = max(ph for _, ph, _ in L['peaks'])
+    zero = np.zeros_like(x)
+    ridged = 1 - np.abs(2 * fbm2(x, zero + 3.0, L['seed'] + 50, 26, 5) - 1)
+    jag = (0.048 * (ridged - 0.62) + 0.012 * (fbm2(x, zero + 9.0, L['seed'] + 51, 90, 3) - 0.5)) * np.clip(h / hmax, 0.25, 1)
+    return MT_BASE + h + jag
+def gully_of(L, x, y):
+    n = fbm2(x * 1.0, y * 0.45, L['seed'] + 7, 34, 4)
+    return 1 - np.abs(2 * n - 1)                       # ridged: 1 on the ribs, 0 in the gullies
+def depth_of(L, x, y):
+    top = top_of(L, x)
+    yr = np.clip((y - MT_BASE) / (top - MT_BASE), 0, 1)
+    D = L['depth']
+    d = D * (1 - yr) ** 0.7
+    for px, ph, pw in L['peaks']:
+        d = d + 0.45 * D * np.exp(-((x - px) / (0.20 * pw)) ** 2) * (1 - yr) ** 0.45 * np.clip(yr, 0.02, 1) ** 0.25
+    d = d + 0.30 * D * (gully_of(L, x, y) - 0.5) * (1 - yr ** 3)
+    if L['forest']:                                    # the waterfall's cleft: a narrow recess down the face
+        cleft = np.exp(-((x - WFX) / 0.010) ** 2) * (y < WF_TOP + 0.004)
+        d = d - 0.55 * D * cleft
+    return np.maximum(d, 0.0005)
+WF_TOP = MT_BASE + 0.108                             # where the water springs from
+def mountain_mesh(L):
+    part = Part(L['name'], 'Mountains', smooth=True)
+    uv = part.bm.loops.layers.uv.verify()
+    xs = np.linspace(MT_X0, MT_X1, L['nx'] + 1)
+    tops = top_of(L, xs)
+    rows = []
+    for j in range(L['ny'] + 1):
+        t = j / L['ny']
+        ys = MT_BASE + (tops - MT_BASE) * t
+        zs = L['z_back'] + depth_of(L, xs, ys)
+        rows.append([part.bm.verts.new(G(float(x), float(y), float(z))) for x, y, z in zip(xs, ys, zs)])
+    for j in range(L['ny']):
+        for i in range(L['nx']):
+            f = part.bm.faces.new((rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]))
+            for l in f.loops:
+                gx, gy = l.vert.co.x, l.vert.co.z
+                l[uv].uv = ((gx - MT_X0) / (MT_X1 - MT_X0), L['v0'] + 0.5 * (gy - MT_BASE) / MT_HMAX)
+    bmesh.ops.recalc_face_normals(part.bm, faces=part.bm.faces)
+    for f in part.bm.faces:                            # face the player (+Z game = -Y Blender)
+        if f.normal.y > 0:
+            f.normal_flip()
+    return part.done()
+def mountain_texture(n=1024):
+    col = np.zeros((n, n, 3)); hgt = np.zeros((n, n))
+    for L in LAYERS:
+        rows = np.arange(n // 2)
+        v = (rows + 0.5) / n + L['v0']
+        y = MT_BASE + (v - L['v0']) * 2 * MT_HMAX
+        u = (np.arange(n) + 0.5) / n
+        x = MT_X0 + u * (MT_X1 - MT_X0)
+        X, Y = np.meshgrid(x, y)
+        top = top_of(L, X)
+        yr = np.clip((Y - MT_BASE) / (top - MT_BASE), 0, 1)
+        g = gully_of(L, X, Y)
+        s = L['seed']
+        rock = _mix(np.ones(X.shape + (3,)) * np.array([0.33, 0.32, 0.33]), (0.50, 0.47, 0.43), fbm2(X, Y, s + 1, 70))
+        rock = rock * (1 + 0.045 * np.sin(Y * 700 + 9 * fbm2(X, Y, s + 2, 14)) * fbm2(X, Y, s + 10, 30))[..., None]   # faint, broken strata
+        rock = rock * (0.78 + 0.32 * g)[..., None]                                              # darker in the gullies
+        # Snow: above a ragged snowline; down the gullies (couloirs) below it; thinned off the rock ribs that run
+        # downhill through it; wind-scoured off the highest crests.
+        sl = L['snowline'] + 0.18 * (fbm2(X, np.zeros_like(X), s + 3, 9, 3) - 0.5)
+        n3 = fbm2(X, Y, s + 4, 45)
+        snow = np.clip((yr - sl + 0.16 * (n3 - 0.5)) / 0.10, 0, 1)
+        gully = np.clip((0.86 - g) / 0.30, 0, 1)
+        couloir = gully * np.clip((yr - (sl - 0.38)) / 0.12, 0, 1)
+        snow = np.maximum(snow * (0.55 + 0.45 * gully), 0.9 * couloir)
+        rib = fbm2(X * 1.0, Y * 0.16, s + 5, 75)
+        snow = snow * (1 - 0.92 * np.clip((rib - 0.54) / 0.07, 0, 1) * (1 - gully))
+        snow = snow * (1 - 0.6 * np.clip((yr - 0.88) / 0.12, 0, 1) * (1 - gully))
+        snowcol = _mix(np.ones(X.shape + (3,)) * np.array([0.95, 0.97, 1.0]), (0.76, 0.84, 0.95), np.clip(0.75 - g, 0, 1) * 0.8)
+        c = rock
+        c = c * (1 - snow[..., None]) + snowcol * snow[..., None]
+        if L['forest']:
+            fl = 0.22 + 0.07 * (fbm2(X, np.zeros_like(X), s + 6, 11, 3) - 0.5)
+            forest = np.clip((fl - yr + 0.05 * (fbm2(X, Y, s + 7, 50) - 0.5)) / 0.03, 0, 1)
+            trees = fbm2(X, Y, s + 8, 420, 3)
+            fcol = _mix(np.ones(X.shape + (3,)) * np.array([0.08, 0.18, 0.13]), (0.17, 0.31, 0.22), trees)
+            fcol = _mix(fcol, (0.86, 0.90, 0.94), np.clip((trees - 0.66) / 0.08, 0, 1) * 0.8)     # snow on the trees
+            c = c * (1 - forest[..., None]) + fcol * forest[..., None]
+            if True:                                                                           # the wet dark rock by the waterfall
+                wet = np.exp(-((X - WFX) / 0.016) ** 2) * (Y < WF_TOP + 0.006)
+                c = c * (1 - 0.35 * wet)[..., None]
+        # The sun's side: shade from the relief's own slopes (the game's sun is high, front right), so the shallow
+        # backdrop reads as deep mountains; faces turned from the sun go cool and dark.
+        e = 0.0015
+        fx = (depth_of(L, X + e, Y) - depth_of(L, X - e, Y)) / (2 * e)
+        fy = (depth_of(L, X, Y + e) - depth_of(L, X, Y - e)) / (2 * e)
+        lam = np.clip((-0.6 * fx - 1.2 * fy + 0.8) / np.sqrt(fx * fx + fy * fy + 1) / 1.56, 0, 1)
+        lam = (lam - lam.mean()) * 2.2
+        c = c * (1 + 0.30 * np.clip(lam, -1, 1))[..., None]
+        c = _mix(c, (0.52, 0.60, 0.74), np.clip(-lam, 0, 1) * 0.25)
+        haze = L['haze'] * (1 + 0.4 * (1 - yr))
+        c = _mix(c, (0.74, 0.82, 0.92), np.clip(haze, 0, 0.8))
+        r0 = int(L['v0'] * n)
+        col[r0:r0 + n // 2] = c
+        hgt[r0:r0 + n // 2] = 0.6 * g + 0.4 * fbm2(X, Y, s + 9, 160, 3)
+    return np.clip(col, 0, 1), hgt
+mt_col, mt_h = mountain_texture()
+_mm = MATS['Mountains']; _nt = _mm.node_tree; _bsdf = _nt.nodes['Principled BSDF']
+_tn = _nt.nodes.new('ShaderNodeTexImage'); _tn.image = _image('tex-Mountains', mt_col); _nt.links.new(_tn.outputs['Color'], _bsdf.inputs['Base Color'])
+_tnn = _nt.nodes.new('ShaderNodeTexImage'); _tnn.image = _image('nrm-Mountains', _normal_from_height(mt_h, 2.5), srgb=False)
+_nm = _nt.nodes.new('ShaderNodeNormalMap'); _nt.links.new(_tnn.outputs['Color'], _nm.inputs['Color']); _nt.links.new(_nm.outputs['Normal'], _bsdf.inputs['Normal'])
+for L in LAYERS:
+    mountain_mesh(L)
+# The waterfall: a ribbon down the cleft, following the rock, wider at its foot.
+NEAR = LAYERS[0]
+wf = Part('Waterfall', 'Water', smooth=True)
+wf_rows = []
+WF_N = 14
+for j in range(WF_N + 1):
+    y = WF_TOP - (WF_TOP - (FLOOR + 0.002)) * j / WF_N
+    z = float(NEAR['z_back'] + depth_of(NEAR, np.array([WFX]), np.array([y]))[0]) + 0.0016 + 0.004 * (j / WF_N) ** 3
+    w = 0.006 + 0.006 * (j / WF_N)
+    wf_rows.append((y, z, w))
+    a = wf.bm.verts.new(G(WFX - w, y, z)); b = wf.bm.verts.new(G(WFX + w, y, z))
+    if j:
+        wf.bm.faces.new((prev[0], prev[1], b, a))
+    prev = (a, b)
+wf.done()
+# Streaks of white water sliding down it (keys along the ribbon), and foam at its foot (both in the Ambient clip).
 streaks = []
-for i, dx in enumerate((-0.006, 0.002, 0.007, -0.002)):
-    ob = Part(f'WaterStreak-{i}', 'Snow').box((0, 0, 0), (0.0022, 0.022, 0.0012)).done()
-    streaks.append({'ob': ob, 'top': (WFX + dx, WF_TOP - 0.012, WF_Z + 0.0012), 'bottom': (WFX + dx, WF_BOTTOM + 0.012, WF_Z + 0.0012)})
-    ob.location = G(*streaks[-1]['top'])
-flat_ellipse('WaterfallPool', 'Water', (WFX, 0.0244, -0.262), 0.036, 0.018, 0.0008, seg=20)
+for i, dx in enumerate((-0.003, 0.002, 0.004, -0.001)):
+    ob = Part(f'WaterStreak-{i}', 'Snow').box((0, 0, 0), (0.0018, 0.016, 0.0008)).done()
+    path = [(WFX + dx * (0.6 + 0.4 * k / 5), wf_rows[int(k * WF_N / 5)][0], wf_rows[int(k * WF_N / 5)][1] + 0.0008) for k in range(6)]
+    streaks.append({'ob': ob, 'path': path})
+    ob.location = G(*path[0])
+flat_ellipse('WaterfallPool', 'Water', (WFX, 0.0244, -0.266), 0.034, 0.016, 0.0008, seg=20)
 pool_stones = Part('PoolStones', 'Stone', smooth=True)
-for i in range(9):
-    a = math.radians(-10 + i * 25)
-    pool_stones.sphere((WFX + 0.039 * math.cos(a), FLOOR + 0.003, -0.262 + 0.021 * math.sin(a)), 0.006, seg=7, rings=5, scale=(1.0, 0.7, 0.9))
+for i in range(10):
+    a = math.radians(-15 + i * 23)
+    pool_stones.sphere((WFX + 0.037 * math.cos(a), FLOOR + 0.003, -0.266 + 0.019 * math.sin(a)), 0.0055 + 0.0015 * (i % 3) / 2, seg=7, rings=5, scale=(1.0, 0.65, 0.9))
 pool_stones.done()
 foam = []
-for i, (dx, dz, r) in enumerate(((0.0, 0.006, 0.008), (-0.009, 0.010, 0.006), (0.009, 0.009, 0.006))):
+for i, (dx, dz, r) in enumerate(((0.0, 0.006, 0.007), (-0.008, 0.009, 0.005), (0.008, 0.008, 0.005))):
     ob = Part(f'WaterFoam-{i}', 'Snow', smooth=True).sphere((0, 0, 0), r, seg=8, rings=5, scale=(1.0, 0.5, 0.8)).done()
-    ob.location = G(WFX + dx, FLOOR + 0.004, WF_Z + dz)
+    ob.location = G(WFX + dx, FLOOR + 0.004, wf_rows[-1][1] + dz)
     foam.append(ob)
+
 # Two fence posts at the stage's back right are all that is left of the back fence (the pool took its place).
 fence = Part('BackFence', 'PineDark')
 fsnow = Part('BackFenceSnow', 'Snow')
@@ -905,9 +1094,8 @@ for i, f in enumerate(flames + hearth_flames):
 # One action named Ambient on the root is what the game plays; the glTF exporter gathers every object's action into
 # one animation per action name, so name them all Ambient.
 for i, st in enumerate(streaks):
-    top, bottom = G(*st['top']), G(*st['bottom'])
-    for frame, at, sc_ in ((1, top, 0.2), (7, top + (bottom - top) * 0.12, 1.0), (43, top + (bottom - top) * 0.88, 1.0), (49, bottom, 0.2)):
-        st['ob'].location = at; st['ob'].scale = (1, 1, sc_)
+    for frame, pt, sc_ in zip((1, 10, 20, 30, 40, 49), st['path'], (0.2, 1.0, 1.0, 1.0, 1.0, 0.2)):
+        st['ob'].location = G(*pt); st['ob'].scale = (1, 1, sc_)
         st['ob'].keyframe_insert('location', frame=frame); st['ob'].keyframe_insert('scale', frame=frame)
     for fc in fcurves_of(st['ob']):
         for kp in fc.keyframe_points:
@@ -937,7 +1125,8 @@ def select_tree(root):
 select_tree(ROOT)
 bpy.context.view_layer.objects.active = ROOT
 glb = os.path.join(OUT, 'cafe-canada.glb')
-bpy.ops.export_scene.gltf(filepath=glb, export_format='GLB', use_selection=True, export_yup=True, export_extras=True, export_animations=True, export_apply=True, export_animation_mode='SCENE')
+bpy.ops.export_scene.gltf(filepath=glb, export_format='GLB', use_selection=True, export_yup=True, export_extras=True, export_animations=True, export_apply=True, export_animation_mode='SCENE',
+                          export_image_format='JPEG', export_image_quality=90)   # JPEG textures: a third of the PNGs' download, no visible loss at this size
 tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in ROOT.children_recursive if o.type == 'MESH')
 heavy = sorted(((sum(len(p.vertices) - 2 for p in o.data.polygons), o.name) for o in ROOT.children_recursive if o.type == 'MESH'), reverse=True)[:12]
 print('HEAVIEST', heavy)

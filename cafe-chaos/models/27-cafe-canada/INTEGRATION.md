@@ -1,7 +1,8 @@
 # cafe-canada — the Canadian winter café (Hoser's · Coffee & Donuts)
 
-**File:** `cafe-canada.glb` — about 22,700 triangles, 190 meshes, 37 materials, 6.7 MB (most of it
-textures: 18 tiling colour maps, 14 normal maps, one 2048 px occlusion atlas), one 2 s `Ambient`
+**File:** `cafe-canada.glb` — about 33,000 triangles (8,000 of them the two mountain ranges, 3,000 the
+flames), 211 meshes, 40 materials, 4.0 MB (JPEG textures: 19 colour maps, 15 normal maps, one 2048 px
+occlusion atlas), one 2 s `Ambient`
 clip (the chimney's smoke puffs rise, the bonfire's and the hearth's flames flicker, white water runs
 down the waterfall and foams at its foot). Built by `cafe_canada_build.py`
 in a background Blender (nothing lives in a .blend); run it again to change anything, then
@@ -16,7 +17,7 @@ scripts after their palettes) turns the palette into textured materials and give
 - **Colour maps** are generated with numpy, tileable, 256–1024 px, one per material: log wood
   with grain and knots (`Pine`, `PineDark`), plank floor and weathered deck (`PlankFloor`, `Deck`),
   soft blue-shaded snow with sparkle (`Snow`, `SnowShade`), cracked lake ice (`Ice`, `IceDeep`),
-  cobbles (`Stone`, `StoneDark`), bark, spruce needles with snow, worn red and cream paint (the
+  fieldstone (`Stone`, `StoneDark`: varied warm and cool stones, domed, in recessed sandy mortar), bark, spruce needles with snow, worn red and cream paint (the
   cream has clapboard lines), chalkboard, plaid, cushion weave, brushed steel, the plate's edge.
 - **Normal maps** from the same height fields for the woods, planks, stone, snow, ice, bark and
   the clapboard (none for flat paint, fabric, needles).
@@ -36,8 +37,9 @@ scripts after their palettes) turns the palette into textured materials and give
   `FireCore`, `Bulb`) are left flat and get no occlusion.
 - Review it the way the Quest shades it: `previews/` has Blender renders; the glbs were also
   checked in a plain three.js page with the same Lambert swap and one sun (`viewer.html`, serve the folder and open `?m=<file>.glb`; screenshots `previews/threejs-*.jpg`, the ones in the
-  phase 3b message). Textures here are PNG; if download size matters later, KTX2/Basis them in
-  the game's pipeline rather than here.
+  phase 3b message). The shell exports its textures as JPEG (quality 90): a third of the PNGs'
+  download with no visible loss at this size; KTX2/Basis in the game's pipeline would cut GPU memory
+  further.
 
 ## What it is
 
@@ -60,9 +62,15 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
   sockets inside (`Socket-1` under the window at z −0.10, `Socket-2` at z 0.10). No roof over the
   tables: the room is open to the hand from above.
 - **Fireplace** (inside, the left wall at z 0.015, between the window and the second window table,
-  where the front half wall does not hide it from the player): a fieldstone hearth with a fire
-  (flickering), a pine mantel with two mugs, the chimney breast up the wall and 5.8 cm out over it
-  with smoke, a plaid rug. `FireplaceSpot`. The tables either side are the warm seats.
+  where the front half wall does not hide it from the player): a river-stone surround (the fieldstone
+  texture: varied warm and cool stones, domed, in recessed sandy mortar) with a dark lintel and
+  keystone over the opening; a raised flagstone hearth; a sooty firebox with cast-iron andirons, two
+  logs with glowing ends on a bed of embers, and a fire of shaped flame tongues (an orange flame round
+  a yellow core, swelling at the foot, licking to a curled tip; they flicker in the `Ambient` clip);
+  a heavy pine beam mantel on two corbels with a spruce garland and red berries, two mugs and two
+  hung stockings; the chimney breast narrowing at a shoulder into the stack, which stands 5.8 cm over
+  the wall top with a cap, a clay pot, snow and smoke; a fire-tool stand; a plaid rug.
+  `FireplaceSpot`. The tables either side are the warm seats.
 - **Counter** (the baristas' zone, as in the Japanese café): red front with cream panels, cream top
   at y 0.085, from x −0.355 to 0.03, front face z −0.16, leaving a **4.8 cm way out at its left end**
   (x −0.413 … −0.365) for the baristas (it used to run wall to wall, which would have shut them in);
@@ -95,15 +103,24 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
 - **Lake:** ice x 0.12 … 0.46, z 0.20 … 0.31 at y 0.022 with a deeper skating patch and cracks; the
   dock out from the deck (x 0.22 … 0.30, z 0.18 … 0.29, top y 0.030) on four posts; the red canoe
   beside it (0.385, 0.245) with snow and two paddles; a tiny hockey net, stick and puck.
-- **Bonfire:** a ring of eleven stones at (−0.27, 0.245), logs, three flame cones and a core; a
-  woodpile against the cabin's front; dark stepping slabs from the door round to the fire.
+- **Bonfire:** a ring of eleven river stones at (−0.27, 0.245), logs, a bed of glowing embers and
+  five shaped flame tongues (as the fireplace's, larger); a woodpile against the cabin's front; dark
+  stepping slabs from the door round to the fire.
 - **Gate:** the arch at x 0.42, z −0.02 … 0.13, snow on its beam, the sign hanging in it (readable
   from both sides); the red mailbox by it; snowbanks along the plate's back edge.
-- **The Rockies:** two thin ranges along the plate's back edge like a stage backdrop (z −0.289 …
-  −0.306): the near one blue, the far one paler and taller, snow on every peak; the tallest peak is
-  0.35 up. Between two near peaks a dark rock outcrop with a **waterfall** down a notch in it
-  (white streaks run down it and foam churns at its foot in the `Ambient` clip) into a small pool
-  ringed with stones, behind the stage.
+- **The Rockies:** two ranges of real relief along the plate's back edge (a deep bas-relief, z
+  −0.309 … −0.280): each is a grid mesh whose ridgeline has uneven shoulders, sub-summits and broken
+  crests, whose face comes 1–2 cm toward the player with spurs down from each summit and gullies
+  between, so the sun shades it as mountains. One painted 1024 px texture (`Mountains`, both ranges,
+  with a normal map for the rock's grain) carries grey rock with faint broken strata, a ragged
+  snowline, snow lying in the couloirs below it, rock ribs running downhill through the snow,
+  wind-scoured summits, a spruce forest with snow on it at the near range's foot, blue haze on the
+  far range, and sun-side shading baked from the relief's own slopes (so the shallow backdrop reads
+  deep under the game's one sun at no cost). The tallest peak is about 0.37 up (under the Japanese
+  cherry tree's 0.405). A **waterfall** springs from a cleft in the near range (x 0.15), runs down it
+  as a ribbon following the rock, wider at its foot (white streaks slide down it and foam churns at
+  its foot in the `Ambient` clip), into a pool ringed with stones behind the stage. The ranges skip
+  the occlusion bake (they carry their own shading).
 
 ## Numbers the game needs
 
@@ -113,9 +130,9 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
 | glTF extras on the root | `cafe_model: true`, `cafe_style: "canada"`, `front_edge_z_m: 0.16`, `back_edge_z_m: -0.27`, `floor_top_y_m: 0.024`, `window_side: "-x"`, `entrance_side: "+x"`, `upper_floor_top_y_m: 0.1548`, `stair_steps: 15`, `stair_rise_m: 0.00872`, `stair_run_m: 0.009` |
 | Plate footprint | 0.92 × 0.62 m; the trees stay inside it |
 | Floor / snow / deck top | y = 0.024; dock 0.030; stage 0.035; duckboard 0.036 (all under the walk grid's 1.35 cm step); **upper deck 0.1548** |
-| Tallest point | the far range's highest peak, y ≈ 0.352; the rooftop sign's snow 0.257 (all under the Japanese cherry tree's 0.405) |
+| Tallest point | the far range's highest peak, y ≈ 0.37; the rooftop sign's snow 0.257 (all under the Japanese cherry tree's 0.405) |
 | Transparent materials | `Glass` (window, donut case), `Smoke` |
-| Emissive | `Fire`, `FireCore`, `Bulb` (the heater's glow shares `Bulb`), `Water` (faintly, so the waterfall reads) |
+| Emissive | `Fire`, `FireCore`, `Ember`, `Bulb` (the heater's glow shares `Bulb`), `Water` (faintly, so the waterfall reads); kept low so flames show orange round a yellow core rather than washing to white |
 
 **Axes:** +Y up, the player toward +Z, the entrance on +X, as `cafe-shell`. An anchor's facing is
 its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −90°).

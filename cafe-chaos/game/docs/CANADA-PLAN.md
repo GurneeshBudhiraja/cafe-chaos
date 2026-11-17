@@ -53,6 +53,7 @@ The Japanese shell is 35 k triangles and 28 materials, batched to a few dozen dr
 
 1. The shell (this document's layout), with previews from the seat. Review against the notes and Meta's MR guidance (grounding shadows, nothing too close, nothing above the gaze band).
 2. The furniture pieces: cabin tables and chairs, patio tables, the dock bench, the fire chairs, the musician's stand; the violinist.
+3d. Realism pass (built, after review): relief mountains with a painted rock-and-snow texture, haze and baked sun-side shading; the waterfall down a cleft; a river-stone fireplace with andirons, embers, shaped flames, a beam mantel, garland and stockings; the same flames and embers on the bonfire; a fieldstone texture for every stone; JPEG textures for a smaller download.
 3c. The missing pieces from the notes (built): the upper deck with stairs and its seats, the rooftop piano and the pianist, the fireplace, the Rockies and the waterfall; stair clips for every character (guests `StairsUp`/`StairsDown`, staff `ClimbUp`/`ClimbDown`/`CarryUp`/`CarryDown`).
 3. The characters (built): three Canadian guest species with winter accessories; three baristas; two janitors; the musician. Scripts `staff_canada_build.py`, `guests_canada_build.py`; names fixed by `fix_names.py`.
 4. Game side (later): the café picker, the new wishes, the takeaway flow, the musician purchase, no dimming.
