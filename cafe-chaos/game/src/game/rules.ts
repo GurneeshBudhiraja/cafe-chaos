@@ -199,13 +199,20 @@ export function pairChance(level: number): number {
  * over them, and the player points at one and pinches to buy it. Which
  * one is the player's choice (a near table is served sooner, a window or
  * door table meets more wishes); the price depends only on how many have
- * been bought: `TABLE_PRICES[n]` is the n-th table bought. The jump grows
- * by 5 each time (source: a growing step suits a small fixed set of
- * unlocks; doubling would reach tens of thousands). The last four are the
- * extension's, offered once the main room is all open. (estimate)
+ * been bought: `TABLE_PRICES[n]` is the n-th table bought. The step grows
+ * each time (source: a growing step suits a small fixed set of unlocks;
+ * doubling would reach tens of thousands). The café's floor never grows:
+ * only its own ten tables unlock (the owner's call).
+ *
+ * The prices are 1.4 times the first plan's: the level simulation
+ * (scripts/sim-levels.mjs) had near-perfect players earning 9 to 10 coins a
+ * guest, not the 6.5 estimated, buying everything by about minute 30; the
+ * research asks each unlock to cost one to two levels' earnings. 1.4, not
+ * more, because real players earn less than the bots. (estimate; check by
+ * playtest)
  */
 export const START_TABLES = [2, 8];
-export const TABLE_PRICES = [10, 20, 35, 55, 80, 110, 145, 185, 230, 280, 335, 395, 460, 530];
+export const TABLE_PRICES = [14, 28, 50, 75, 110, 155, 205, 260, 320, 390];
 
 /** What the next table costs once `bought` have been bought (the last price holds). */
 export function tablePrice(bought: number): number {
@@ -234,7 +241,7 @@ export const CLEAN = { seconds: 3, near: 0.3, vanish: 0.4, home: { x: 0.17, z: -
  * minimal, never crowding a table). The mess model is `size` across.
  */
 export const MESS = { size: 0.032, fit: 0.65, tops: { 'table-2': 0.046, 'table-4': 0.04, 'bar-2': 0.026, 'quiet-corner': 0.024 } as Record<string, number> };
-export const JANITOR_PRICE = 120;
+export const JANITOR_PRICE = 170;
 
 /**
  * The staff. The café opens with `STARTING_STAFF` server; each further
@@ -245,5 +252,5 @@ export const JANITOR_PRICE = 120;
  * never feels crowded and there is room to pick guests up between them.
  */
 export const STARTING_STAFF = 1;
-export const HIRE_PRICES = [50, 150];
+export const HIRE_PRICES = [70, 210];
 export const MAX_STAFF = STARTING_STAFF + HIRE_PRICES.length;

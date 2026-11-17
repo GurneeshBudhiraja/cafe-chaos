@@ -329,6 +329,7 @@ export class BaristaSystem extends createSystem({}) {
   }
 
   private work(member: Staff): void {
+    if (member.role === 'janitor') setCleaning(member.barista, false);
     member.state = 'working';
     member.t = 0;
     // The janitor stands still at its spot (no bar to fidget at) until a table needs it.

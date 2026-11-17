@@ -98,7 +98,7 @@ await page.waitForTimeout(3000);
 let s = await state();
 const waiting = await page.evaluate(() => ({ waiting: window.__cafe.system.waiting, visible: window.__cafe.system.cafe.visible }));
 check('the start card shows at the table; the café waits hidden, no scoreboard, nobody comes', s.phase === 'title' && s.card && !s.board && waiting.waiting && !waiting.visible && s.arrived === 0, `phase ${s.phase}, card ${s.card}, board ${s.board}, ${JSON.stringify(waiting)}, arrived ${s.arrived}`);
-check('the café has one server', s.staff === 1 && s.hires === 0 && s.price === 50, `staff ${s.staff}, next costs ${s.price}`);
+check('the café has one server', s.staff === 1 && s.hires === 0 && s.price === 70, `staff ${s.staff}, next costs ${s.price}`);
 await h.screenshot('artifacts/game-title.png');
 
 // 2. A fingertip on "Open the café".
@@ -210,7 +210,7 @@ await page.evaluate(() => window.__cafe.game.click('hire'));
 await until(() => window.__cafe.baristas.staff.length === 2, null, 60000);
 s = await state();
 const savedHire = await page.evaluate(() => JSON.parse(localStorage.getItem('cafe-chaos/save/v3') ?? 'null'));
-check('with the money a server is hired, the price taken, and it is saved', s.staff === 2 && s.bank === 50 && s.price === 150 && savedHire?.hires === 1 && savedHire.bank === 50, `staff ${s.staff}, bank ${s.bank}, next ${s.price}, saved ${JSON.stringify(savedHire)}`);
+check('with the money a server is hired, the price taken, and it is saved', s.staff === 2 && s.bank === 30 && s.price === 210 && savedHire?.hires === 1 && savedHire.bank === 30, `staff ${s.staff}, bank ${s.bank}, next ${s.price}, saved ${JSON.stringify(savedHire)}`);
 await h.screenshot('artifacts/game-hired.png');
 
 // 8. Pause (the bar's Pause; check-bar.mjs presses it with the hand ray) and Resume.

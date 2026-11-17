@@ -28,6 +28,8 @@ export class TipCard {
     this.panel.frame = false;
     this.panel.onTop = true;
     this.panel.turn = 3;
+    // Over the café, under the menu cards (drawn at 30 and up): the buy card covers a tip.
+    this.panel.mesh.renderOrder = 28;
   }
 
   /** Show `title` (bold, the keyword) and `text` beside a small `icon` picture. */

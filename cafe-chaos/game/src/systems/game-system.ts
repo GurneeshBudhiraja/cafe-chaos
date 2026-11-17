@@ -175,8 +175,6 @@ export class GameSystem extends createSystem({}) {
   /** Counts when the tip went up, to tell when the player has done it. */
   private tipMark = 0;
   /** The extension: asked for once the main room is all open; its tables are locked and tagged once it has risen. */
-  private wantAnnex = false;
-  private annexTablesTagged = false;
   readonly save: Save = loadSave();
   readonly card = new Panel('GameCard', CARD.width, CARD.height);
   readonly coach = new Panel('CoachCard', COACH.width, COACH.height);
@@ -385,6 +383,7 @@ export class GameSystem extends createSystem({}) {
   toTitle(): void {
     this.unpause();
     this.closeBuy(false);
+    if (this.tipShown) this.endTip();
     // From a level card (the café put down afresh while it was up): the café moves again.
     if (this.phase === 'levelup') {
       this.cafe.timeScale = this.speed;
@@ -583,7 +582,6 @@ export class GameSystem extends createSystem({}) {
     writeSave(this.save);
     this.shop.restore(0, START_TABLES, false);
     // The extension, if up, waits locked and untagged until the main room is open again.
-    this.annexTablesTagged = false;
     this.applyLocks();
     this.score.bank = 0;
     this.closeSheet();
@@ -1028,7 +1026,7 @@ export class GameSystem extends createSystem({}) {
       // The ray: a free hand away from every card in reach points at the menu cards (out of
       // reach, in front) and, away from the café, at the bar.
       const toBar = this.strip.controls !== 'off' && !hold.nearCafe(pinch.point, RAY.awayFromCafe);
-      const aimed = !busy && !done && !near ? this.aimRay(hand, toBar) : null;
+      const aimed = !busy && !done && !near ? this.aimRay(hand, toBar, !hold.nearCafe(pinch.point, RAY.awayFromCafe)) : null;
       this.aim[hand] = aimed ? (aimed.button?.id ?? '') : null;
       this.rays.update(hand, aimed ? this.rayFrom : null, aimed ? this.rayHit : null, aimed ? this.barNormal : null, delta);
       if (!aimed?.button) continue;
@@ -1091,11 +1089,7 @@ export class GameSystem extends createSystem({}) {
     this.tags.splice(this.tags.indexOf(tag), 1);
   }
 
-  /**
-   * Each frame: the tags show in a run (and under the buy card) and say
-   * the price now; the extension comes once the main room is all open,
-   * and its tables are locked and tagged once it has risen.
-   */
+  /** Each frame: the tags show in a run (and under the buy card) and say the price now. */
   private tendTables(delta: number): void {
     const show = (this.phase === 'run' || this.phase === 'buying') && this.cafe.placed && !this.cafe.arriving;
     for (const tag of this.tags) {
@@ -1103,18 +1097,7 @@ export class GameSystem extends createSystem({}) {
       tag.set(this.shop.tablePrice, this.shop.tableAffordable);
       tag.panel.update(delta, this.head);
     }
-    const cafe = this.cafe;
-    const mainOpen = this.mainRoomOpen();
-    if (mainOpen && !cafe.annex && this.phase !== 'title' && this.phase !== 'waiting') this.wantAnnex = true;
-    // The extension rises locked (grey from the first frame), its tags added once it is up and its seats are in.
-    if (this.wantAnnex && !cafe.annex && cafe.openAnnex()) {
-      for (const i of cafe.tables) if (i >= MAIN_PIECES) cafe.setTableLocked(i, !this.shop.tables.includes(i));
-      this.guests.setLockedTables(cafe.lockedTables);
-    }
-    if (cafe.annexOpen && mainOpen && !this.annexTablesTagged && this.guests.seats.some((s) => s.table >= MAIN_PIECES)) {
-      this.annexTablesTagged = true;
-      this.applyLocks();
-    }
+    // The café's floor never grows (the owner's call): no extension, only its own tables unlock.
   }
 
   // ------------------------------------------------------------------ tips
@@ -1138,6 +1121,8 @@ export class GameSystem extends createSystem({}) {
         return;
       }
       if (this.phase !== 'run') return;
+      // Back in a run after a pause or a level card: the tip that was up shows again.
+      if (!tip.panel.open) tip.panel.show(true);
       this.placeTip();
       // Reading the tip costs a hurried guest nothing: its clock waits.
       if (this.tipShown === 'hurry' && this.tipAt.guest) {
@@ -1154,6 +1139,8 @@ export class GameSystem extends createSystem({}) {
       this.startTip(id);
       return;
     }
+    // Nothing due: look again in a quarter of a second, not every frame.
+    this.tipRest = TIP_GAP - 0.25;
   }
 
   /** Is this tip's moment here (and is there something to put it next to)? */
@@ -1176,6 +1163,7 @@ export class GameSystem extends createSystem({}) {
         return !!tag;
       }
       case 'dirty': {
+        if (!this.mess.dirtyCount) return false;
         const table = this.mess.dirtyTables()[0];
         this.tipAt = table !== undefined ? { table } : {};
         return table !== undefined;
@@ -1196,7 +1184,8 @@ export class GameSystem extends createSystem({}) {
       case 'hurry':
       case 'pair': {
         const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
-        return !g || g.state === 'seated' || g.state === 'leaving';
+        // Picked up is enough: the player has it in hand (the card would hang over the hand).
+        return !g || g.state === 'seated' || g.state === 'leaving' || g.state === 'held' || g.state === 'hop';
       }
       case 'dirty':
         return this.tipAt.table === undefined || !this.mess.isDirty(this.tipAt.table);
@@ -1234,7 +1223,8 @@ export class GameSystem extends createSystem({}) {
       mesh.position.y += g.actor.bubbleAnchor.position.y + TIP.above;
     } else if (at.table !== undefined) {
       if (!this.cafe.tableTop(at.table, this.spot)) return;
-      mesh.position.set(this.spot.x, this.spot.y + TIP.above + 0.03, this.spot.z);
+      // Clear of a padlock tag whatever the café's size (the tag keeps its real size; the café's space scales).
+      mesh.position.set(this.spot.x, this.spot.y + (TIP.above + 0.03) / Math.max(0.5, this.cafe.cafe.scale.x), this.spot.z);
     } else if (at.shop) {
       const bar = this.strip.panel;
       const b = bar.buttons.find((x) => x.id === 'bar-shop');
@@ -1303,12 +1293,13 @@ export class GameSystem extends createSystem({}) {
    * card and the button under it (null between buttons). Sets rayFrom (at
    * the hand), rayHit and barNormal (the face it meets, for the cursor).
    */
-  private aimRay(hand: Hand, toBar: boolean): { panel: Panel; button: Button | null } | null {
+  private aimRay(hand: Hand, toBar: boolean, awayFromCafe = toBar): { panel: Panel; button: Button | null } | null {
     const m = this.menu;
     const targets = [m.sheet, m.how, m.card].filter((p) => p.open && !p.dimmed);
     if (toBar && this.strip.panel.open && !this.cafeAway) targets.push(this.strip.panel);
-    // The first run's coach card stands over the back of the café, beyond a seated reach: its Next and Skip take the ray.
-    if (this.coach.open) targets.push(this.coach);
+    // The first run's coach card stands over the back of the café, beyond a seated reach: its Next and Skip take the
+    // ray, from a hand away from the café (a hand reaching for a guest never presses Skip).
+    if (this.coach.open && awayFromCafe) targets.push(this.coach);
     // The padlock tags over the locked tables, in a run (pointed at from anywhere: they stand in the café).
     if (this.phase === 'run') for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
     if (!targets.length) return null;

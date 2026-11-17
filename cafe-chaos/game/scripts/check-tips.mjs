@@ -75,7 +75,7 @@ await page.evaluate(() => { const { guests } = window.__cafe; guests.arrivals = 
 await page.waitForTimeout(3000);
 let t = await tip();
 check('nothing at the start of a run', t.shown === null && t.count === 0, JSON.stringify(t));
-await page.evaluate(() => { window.__cafe.score.bank = 12; });
+await page.evaluate(() => { window.__cafe.score.bank = 16; });
 await until(() => window.__cafe.game.tipShown === 'table', 10000);
 t = await tip();
 const pops = await page.evaluate(() => window.__cafe.sound.tips);
@@ -93,6 +93,15 @@ await page.waitForTimeout(1500);
 const p2 = await page.evaluate((id) => window.__cafe.guests.guests.find((g) => g.id === id).patience, hurried);
 check('the first hurried guest: "In a hurry!" over it, its clock waiting while the tip is up', Math.abs(p2 - p1) < 0.15, `patience ${p1.toFixed(2)} -> ${p2.toFixed(2)}`);
 await h.screenshot('artifacts/tips-2-hurry.png');
+// Paused with the tip up, then back: the tip shows again (it was used up unseen before).
+await page.evaluate(() => window.__cafe.game.click('bar-pause'));
+await until(() => window.__cafe.game.phase === 'paused');
+const hiddenWhilePaused = await page.evaluate(() => !window.__cafe.game.tip.panel.open);
+await page.evaluate(() => window.__cafe.game.click('resume'));
+await until(() => window.__cafe.game.phase === 'run');
+await frames(4);
+const backAfter = await page.evaluate(() => ({ shown: window.__cafe.game.tipShown, open: window.__cafe.game.tip.panel.open }));
+check('paused with a tip up it hides, and back in the run it shows again', hiddenWhilePaused && backAfter.shown === 'hurry' && backAfter.open, JSON.stringify({ hiddenWhilePaused, ...backAfter }));
 await page.evaluate((id) => { const { guests } = window.__cafe; const s = guests.seats.find((x) => x.occupant === 0 && !x.locked && !x.dirty); guests.seatGuest(id, s.index); }, hurried);
 await until(() => window.__cafe.game.tipShown === null, 10000);
 check('seated, the hurry tip goes', (await tip()).shown === null, 'gone');
@@ -107,7 +116,7 @@ await page.evaluate(() => window.__cafe.mess.soil(window.__cafe.shop.tables.find
 await until(() => window.__cafe.game.tipShown === 'dirty', 20000);
 check('the first dirty table: "Dirty table"', (await tip()).shown === 'dirty', 'shown');
 await until(() => window.__cafe.game.tipShown === null, 20000);
-await page.evaluate(() => { window.__cafe.score.bank = 60; });
+await page.evaluate(() => { window.__cafe.score.bank = 80; });
 await until(() => window.__cafe.game.tipShown === 'shop', 20000);
 check('the bank able to pay for a barista: "More hands" under the Shop button', (await tip()).shown === 'shop', 'shown');
 await h.screenshot('artifacts/tips-3-shop.png');

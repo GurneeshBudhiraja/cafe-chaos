@@ -84,7 +84,8 @@ export class Barista {
   /** Play a clip: looping, or once through and held on its last frame. */
   play(name: BaristaClip, once = false): void {
     if (this.clip === name && this.action && !once) return;
-    const clip = this.clips.get(name);
+    // A model from before the Wipe clip (a cached copy) wipes with Work.
+    const clip = this.clips.get(name) ?? (name === 'Wipe' ? this.clips.get('Work') : undefined);
     if (!clip) return;
     this.mixer.stopAllAction();
     this.clip = name;

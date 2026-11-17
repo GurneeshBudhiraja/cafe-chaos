@@ -35,14 +35,14 @@ const staff = () => page.evaluate(() => ({ staff: window.__cafe.baristas.staff.l
 
 await ready(h);
 let s = await staff();
-check('a fresh café has one barista', s.staff === 1 && s.hires === 0 && s.price === 50, JSON.stringify(s));
+check('a fresh café has one barista', s.staff === 1 && s.hires === 0 && s.price === 70, JSON.stringify(s));
 await page.evaluate(() => { const { game, score } = window.__cafe; game.click('open'); game.click('skip'); score.bank = 100; game.click('hire'); });
 await page.waitForFunction(() => window.__cafe.baristas.staff.length === 2, null, { timeout: 60000 }).catch(() => {});
 s = await staff();
 check('a hire is saved', s.staff === 2 && s.saved?.hires === 1, JSON.stringify(s));
 await reload();
 s = await staff();
-check('after a reload the café comes back with two baristas, never more', s.staff === 2 && s.most === 2 && s.hires === 1 && s.price === 150, JSON.stringify(s));
+check('after a reload the café comes back with two baristas, never more', s.staff === 2 && s.most === 2 && s.hires === 1 && s.price === 210, JSON.stringify(s));
 await page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ bank: 50, hires: 5, tutorialDone: true, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, runs: 1 })), KEY);
 await reload();
 s = await staff();

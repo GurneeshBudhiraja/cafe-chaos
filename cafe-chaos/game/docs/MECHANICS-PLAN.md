@@ -125,3 +125,8 @@ Only what the player can act on stays on, the rest is brief (S: research on trac
 - padlock tags small at rest (a padlock, a gold coin when affordable), the full price tag when the ray points at one;
 - the waiting guests' timer dots stay.
 
+## Prices and the floor (owner, after the level simulation)
+
+- The café's floor never grows: the 4-table extension is dropped (the owner's call: the model stays as it is; only its own tables unlock). 10 tables, 23 seats.
+- Prices 1.4× the first plan's: tables 14, 28, 50, 75, 110, 155, 205, 260, 320, 390; barista 2 = 70, janitor = 170, barista 3 = 210. The simulation (scripts/sim-levels.mjs) had near-perfect players earning 9–10 coins a guest, not the 6.5 estimated, with everything bought by about minute 30; the research asks 1–2 levels' earnings per unlock. 1.4 rather than more because real players earn less than the bots: check by playtest.
+
