@@ -124,6 +124,10 @@ const lengthOf = (path: Vector3[]): number => path.reduce((sum, p, i) => (i ? su
 const URGENT_HEAD_START = 16;
 const atBar = (member: Staff): boolean => member.state === 'working' || member.state === 'shuffling' || member.state === 'backBar' || member.state === 'waving';
 const cleaningUp = (member: Staff): boolean => member.state === 'toClean' || member.state === 'cleaning';
+/** A table no way was found to is tried again after this long (seconds). */
+const UNREACHABLE_RETRY_S = 4;
+/** Off the walkable squares (standing hard by a table), a way is looked for from the nearest walkable spot within this (metres, café space). */
+const UNSTICK_REACH_M = 0.2;
 
 export class BaristaSystem extends createSystem({}) {
   readonly staff: Staff[] = [];
@@ -227,7 +231,8 @@ export class BaristaSystem extends createSystem({}) {
       this.takeOrders();
       this.sinceplan += delta;
       const waiting = this.orders.some((order) => !order.served && !order.server);
-      const chores = !!this.mess && this.mess.dirtyCount > this.mess.coming.size && this.staff.some((m) => m.state === 'working' && m.chore < 0);
+      // Someone free for a dirty table: a member at its post, or the janitor on its way back to it.
+      const chores = !!this.mess && this.mess.dirtyCount > this.mess.coming.size && this.staff.some((m) => m.chore < 0 && (m.state === 'working' || (m.role === 'janitor' && m.state === 'back')));
       if (this.serving && (this.dirty || ((waiting || chores) && this.sinceplan >= REPLAN_SECONDS))) this.plan();
     }
     for (const member of this.staff) {
@@ -533,13 +538,18 @@ export class BaristaSystem extends createSystem({}) {
     const claimed = new Set(this.staff.filter((m) => m.chore >= 0).map((m) => m.chore));
     const open = mess.dirtyTables().filter((t) => !claimed.has(t));
     if (open.length === 0) return;
-    // The janitor: the longest dirty first (`open` is in that order).
+    // The janitor: at its post, the longest dirty first (`open` is in that order); on its way back to it, the
+    // nearest (a table dirtied as it walks back turns it round). If no way is found to one, the next.
     const janitor = this.janitor;
-    if (janitor && janitor.state === 'working') {
-      const table = open[0];
-      if (this.goClean(janitor, table)) {
+    if (janitor && janitor.chore < 0 && (janitor.state === 'working' || janitor.state === 'back')) {
+      const near = janitor.state === 'back' ? this.nearestTable(janitor, open, Infinity) : null;
+      const order = near !== null ? [near, ...open.filter((t) => t !== near)] : open;
+      for (const table of order) {
+        if (this.isUnreachable(table)) continue;
+        if (!this.goClean(janitor, table)) continue;
         claimed.add(table);
         open.splice(open.indexOf(table), 1);
+        break;
       }
     }
     // 5. Baristas with nothing to serve: the nearest dirty table each.
@@ -563,7 +573,7 @@ export class BaristaSystem extends createSystem({}) {
     let bestLength = within;
     const from = member.barista.root.position;
     for (const table of tables) {
-      if (this.unreachable.has(table)) continue;
+      if (this.isUnreachable(table)) continue;
       const point = this.servePoints.find((p) => p.table === table);
       if (!point) continue;
       const length = Math.hypot(point.stand.x - from.x, point.stand.z - from.z);
@@ -574,16 +584,38 @@ export class BaristaSystem extends createSystem({}) {
     }
     return best;
   }
-  /** Tables no way was found to (for this café as placed): not tried again. */
-  private readonly unreachable = new Set<number>();
+  /**
+   * Tables no way was found to, and when (the café's clock): not tried
+   * again for UNREACHABLE_RETRY_S. Not for good: a way is looked for from
+   * where the member stands, and from a spot hard by a table there may be
+   * none that time when there is one a moment later; a table left out for
+   * good was never cleaned again (the owner's playtest: the janitor stayed
+   * at its post until a guest left).
+   */
+  private readonly unreachable = new Map<number, number>();
+
+  private isUnreachable(table: number): boolean {
+    const at = this.unreachable.get(table);
+    if (at === undefined) return false;
+    if (this.clock - at < UNREACHABLE_RETRY_S) return true;
+    this.unreachable.delete(table);
+    return false;
+  }
 
   /** Send a member of staff to clean a table: empty-handed, to where a server stands at it. */
   private goClean(member: Staff, table: number): boolean {
     const point = this.servePoints.find((p) => p.table === table);
     if (!point) return false;
-    const way = this.cafeSystem.nav.findPath(member.barista.root.position, point.stand);
+    const nav = this.cafeSystem.nav;
+    // From where it stands; or, standing hard by a table (off the walkable squares), from the nearest walkable spot.
+    let way = nav.findPath(member.barista.root.position, point.stand);
     if (!way) {
-      this.unreachable.add(table);
+      const from = nav.nearest(member.barista.root.position.x, member.barista.root.position.z, UNSTICK_REACH_M);
+      way = from ? nav.findPath(from, point.stand) : null;
+      if (way) way.unshift(member.barista.root.position.clone());
+    }
+    if (!way) {
+      this.unreachable.set(table, this.clock);
       return false;
     }
     member.barista.hold(null);

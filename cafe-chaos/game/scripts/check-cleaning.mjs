@@ -10,6 +10,8 @@
  *  4. on its way back from serving, a dirty table near by is cleaned first;
  *  5. the shop offers the janitor at 80, once: HIRE puts it by the counter's
  *     end; it cleans the longest dirty table first and never serves;
+ *     it goes table to table, turns round for a table dirtied as it walks
+ *     home, and a table it found no way to for a moment is tried again;
  *  6. the janitor is saved and comes back after a reload; the messes do not
  *     (a clean café); pause freezes a cleaner;
  *  7. a guest who storms off without eating leaves no mess; a dirty table
@@ -252,6 +254,42 @@ await until(() => window.__cafe.game.phase === 'shopping');
 await page.evaluate(() => window.__cafe.game.click('hire-janitor'));
 await page.evaluate(() => window.__cafe.game.click('shop-close'));
 await until(() => window.__cafe.baristas.janitor !== null, 60000);
+
+// 5b. The janitor goes table to table, turns round for a table dirtied on its way home, and never gives a table up for good.
+await page.evaluate(() => { const b = window.__cafe.baristas; b.__keep = b.nearestTable; b.nearestTable = function (m, t, w) { return m.role === 'janitor' ? b.__keep.call(b, m, t, w) : null; }; });
+await until(() => window.__cafe.mess.dirtyCount === 0 && window.__cafe.baristas.janitor.state === 'working', 90000);
+await page.evaluate(() => { const { mess } = window.__cafe; mess.soil(1); });
+await until(() => window.__cafe.baristas.janitor.state === 'cleaning', 60000);
+// Cleaning table 1 done, on its way home: table 10 dirtied then.
+await until(() => window.__cafe.baristas.janitor.state === 'back', 60000);
+await page.evaluate(() => window.__cafe.mess.soil(10));
+const turned = await until(() => { const j = window.__cafe.baristas.janitor; return j.state === 'toClean' && j.chore === 10; }, 3000);
+const turnedFrom = await page.evaluate(() => { const { baristas } = window.__cafe; const j = baristas.janitor; return { state: j.state, chore: j.chore, fromHome: +j.barista.root.position.distanceTo(j.home).toFixed(2) }; });
+check('the janitor on its way home turns round for a table dirtied then (it does not walk home first)', turned && turnedFrom.fromHome > 0.03, JSON.stringify(turnedFrom));
+await until(() => window.__cafe.mess.dirtyCount === 0, 60000);
+// No way found to a table once (as from a spot hard by another table): it takes another, and comes back for that one.
+await until(() => window.__cafe.baristas.janitor.state === 'working', 60000);
+const retried = await page.evaluate(async () => {
+  const { baristas, mess, system } = window.__cafe;
+  const nav = system.nav;
+  const find = nav.findPath.bind(nav);
+  const point = baristas.servePoints.find((p) => p.table === 12);
+  let failed = 0;
+  // The way to table 12 fails for the next 2 s (every lookup).
+  const until = performance.now() + 2000;
+  nav.findPath = (a, b, r) => (b === point.stand && performance.now() < until ? (failed++, null) : find(a, b, r));
+  mess.soil(12);
+  mess.soil(3);
+  await new Promise((ok) => setTimeout(ok, 1500));
+  const first = { chore: baristas.janitor.chore, failed };
+  await new Promise((ok) => setTimeout(ok, 30000));
+  nav.findPath = find;
+  return { first, dirtyAfter: mess.dirtyTables() };
+});
+await until(() => window.__cafe.mess.dirtyCount === 0, 60000);
+const cleanAll = await page.evaluate(() => window.__cafe.mess.dirtyCount);
+check('no way found to a table for a moment: the janitor takes the other one first, then comes back and cleans it', retried.first.chore === 3 && retried.first.failed > 0 && cleanAll === 0, JSON.stringify({ ...retried, cleanAll }));
+await page.evaluate(() => { const b = window.__cafe.baristas; b.nearestTable = b.__keep; });
 
 // 6. Pause freezes a cleaner; the janitor is saved, the messes are not.
 await page.evaluate(() => window.__cafe.mess.soil(7));
