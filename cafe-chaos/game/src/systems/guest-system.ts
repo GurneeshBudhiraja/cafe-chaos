@@ -40,7 +40,7 @@
  * with it.
  */
 
-import { createSystem, Sprite, SpriteMaterial, Vector3 } from '@iwsdk/core';
+import { createSystem, Vector3, type Sprite } from '@iwsdk/core';
 import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/actor.js';
 import { Blobs } from '../guests/blobs.js';
 import { randomLook, type Look } from '../guests/cast.js';
@@ -48,12 +48,12 @@ import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
-  PATIENCE_SECONDS, PATIENCE_SPREAD, DROP_MARGIN_M, HOVER_EXIT_RADII, HOVER_SWITCH, PICK_MEMORY_S, PICK_RADIUS_M, SIGHT, WISH_TAG, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
+  PATIENCE_SECONDS, PATIENCE_SPREAD, DROP_MARGIN_M, HOVER_EXIT_RADII, HOVER_SWITCH, PICK_MEMORY_S, PICK_RADIUS_M, SIGHT, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
-import { wishTexture } from '../guests/wish-art.js';
-import { grants, pickName, pickWish, tablesOf, type Sitter, type WishId } from '../guests/wishes.js';
+import { grants, pickName, pickWishes, tablesOf, type Sitter, type WishId } from '../guests/wishes.js';
+import { wishCount } from '../game/rules.js';
 import { WishCards } from '../ui/wish-card.js';
 import { Popups } from '../guests/popups.js';
 import { SeatGlow } from '../guests/seat-glow.js';
@@ -126,14 +126,12 @@ export interface Guest {
   fuming: number;
   /** The vein mark over its head while it fumes. */
   anger: Sprite | null;
-  /** Its own name; what it wishes for (null: happy anywhere); and whether it sings while it sits. */
+  /** Its own name; what it wishes for (1 to 3 wishes); and whether it sings while it sits. */
   name: string;
-  wish: WishId | null;
+  wishes: WishId[];
   sings: boolean;
-  /** Seated: its wish granted (true) or not (false) as things stand; null before it sits, or with no wish. */
-  wishMet: boolean | null;
-  /** The picture of its wish over its head while it waits (null with no wish). */
-  tag: Sprite | null;
+  /** Each wish met (true) or not (false), judged once as it sat down (its seat is final); null before it sits. */
+  wishMet: boolean[] | null;
   /** Vanishing: how long it has been fading (seconds). */
   vanishing: number;
   hop: Hop | null;
@@ -169,8 +167,8 @@ export interface Outcome {
   guest: number;
   share: number;
   at: Vector3;
-  /** Its wish as it left: granted, not, or it had none. */
-  wish: 'met' | 'unmet' | null;
+  /** Its wishes as it left: how many were met, of how many (`of` 0 if it never sat). */
+  wishes: { met: number; of: number };
 }
 
 export class GuestSystem extends createSystem({}) {
@@ -187,8 +185,9 @@ export class GuestSystem extends createSystem({}) {
   /** Where the last newcomer appeared (café space), and how much further out than the usual spot that was (metres): the real table's edge. */
   readonly arrival = ARRIVAL_POINT.clone();
   fromEdge = 0;
-  /** The share of new guests who come with a wish, and with a song (the game sets them: game/rules.ts WISH). 0: none. */
-  wishChance = 0;
+  /** How long the café has been open (seconds): the more, the more wishes a new guest may have (game/rules.ts WISH). The game sets it. */
+  evening = 0;
+  /** The share of new guests who sing (the game sets it). */
   singerChance = 0;
   /** The cards beside the hands: who the lit or carried guest is and what it wants. */
   cards!: WishCards;
@@ -197,7 +196,7 @@ export class GuestSystem extends createSystem({}) {
   private quietCorner = -1;
   private readonly sitters: Sitter[] = [];
   private readonly granting = new Set<Seat>();
-  private lastWish: WishId | null = null;
+  private lastWishes: WishId[] = [];
   private readonly cardAt = new Vector3();
   private readonly headLocal = new Vector3();
   /** Pinch what you see (guests/rules.ts SIGHT). Off: only a pinch right at a guest, or a guest held right over a seat, counts. */
@@ -332,42 +331,46 @@ export class GuestSystem extends createSystem({}) {
     for (const guest of this.guests) if (guest.state === 'seated' && guest.seat && guest.fuming < 0) this.sitters.push({ id: guest.id, seat: guest.seat, sings: guest.sings });
   }
 
-  /** Would this seat grant this guest's wish, as things stand? True for a guest with no wish. */
+  /** Would this seat meet each of this guest's wishes, as things stand? */
+  grantsEach(guest: Guest, seat: Seat): boolean[] {
+    return guest.wishes.map((wish) => grants(wish, seat, guest.id, this.sitters, this.tables, this.quietCorner));
+  }
+
+  /** Would this seat meet every one of this guest's wishes? */
   wouldGrant(guest: Guest, seat: Seat): boolean {
-    return guest.wish === null || grants(guest.wish, seat, guest.id, this.sitters, this.tables, this.quietCorner);
+    return this.grantsEach(guest, seat).every(Boolean);
   }
 
   /**
-   * A seated guest's wish, judged as things stand: a heart the moment it
-   * is granted, a shrug the moment it is not (when it sits down, and again
-   * if the company at its table or the music near it changes). A singer
-   * sends up a note now and then.
+   * A guest has just sat down: its wishes are judged now, once (it cannot
+   * be moved after this), and the result pops up over its head.
    */
-  private judge(guest: Guest, delta: number): void {
+  private judge(guest: Guest): void {
     const seat = guest.seat;
-    if (!seat) return;
+    if (!seat || guest.wishes.length === 0) return;
+    guest.wishMet = this.grantsEach(guest, seat);
     const over = this.at.copy(guest.actor.root.position);
     over.y += guest.actor.bubbleAnchor.position.y + DIAL.above + 0.02;
-    if (guest.wish !== null) {
-      const met = this.wouldGrant(guest, seat);
-      if (met !== guest.wishMet) {
-        guest.wishMet = met;
-        this.popups.show(met ? 'heart' : 'shrug', over.clone());
-        this.wishesJudged++;
-      }
-    }
-    if (guest.sings && Math.floor(guest.seatedFor / 1.6) !== Math.floor((guest.seatedFor - delta) / 1.6)) {
-      over.x += (Math.random() - 0.5) * 0.02;
-      this.popups.show('note', over.clone());
-    }
+    this.popups.result(guest.wishMet.filter(Boolean).length, guest.wishes.length, over.clone());
+    this.wishesJudged++;
+  }
+
+  /** A singer sends up a note now and then while it sits. */
+  private sing(guest: Guest, delta: number): void {
+    if (!guest.sings || Math.floor(guest.seatedFor / 1.6) === Math.floor((guest.seatedFor - delta) / 1.6)) return;
+    const over = this.at.copy(guest.actor.root.position);
+    over.y += guest.actor.bubbleAnchor.position.y + DIAL.above + 0.02;
+    over.x += (Math.random() - 0.5) * 0.02;
+    this.popups.show('note', over.clone());
   }
   /** Wishes judged so far, granted or not (for the checks). */
   wishesJudged = 0;
 
   /**
-   * The cards beside the hands (the guest lit under each hand, or carried
-   * by it), and the seats that would grant a carried guest's wish, for the
-   * seat glow.
+   * The request cards beside the hands (the guest lit under each hand, or
+   * carried by it: its wishes and its patience; carried over a seat, which
+   * wishes that seat meets), and the seats that would meet every wish of a
+   * carried guest, for the seat glow.
    */
   private wishesShown(delta: number): void {
     const cafe = this.cafeSystem.cafe;
@@ -383,11 +386,17 @@ export class GuestSystem extends createSystem({}) {
         at = this.cardAt.copy(guest.actor.root.position);
         at.y += guest.actor.bubbleAnchor.position.y;
       }
-      this.cards.update(i, guest ? { id: guest.id, name: guest.name, wish: guest.wish, sings: guest.sings, met: guest.state === 'seated' ? guest.wishMet : null } : null, at, this.eye, this.headLocal, scale, Math.min(0.1, delta));
-      if (carried && carried.wish !== null) {
-        const own = carried.home && 'seat' in carried.home ? carried.home.seat : null;
-        for (const seat of this.seats) if ((seat.occupant === 0 || seat === own) && this.wouldGrant(carried, seat)) this.granting.add(seat);
-      }
+      const preview = carried && carried.target ? this.grantsEach(carried, carried.target) : null;
+      this.cards.update(
+        i,
+        guest ? { id: guest.id, name: guest.name, wishes: guest.wishes, sings: guest.sings, left: guest.patience / guest.patienceFull, seconds: guest.patience, preview } : null,
+        at,
+        this.eye,
+        this.headLocal,
+        scale,
+        Math.min(0.1, delta),
+      );
+      if (carried) for (const seat of this.seats) if (seat.occupant === 0 && this.wouldGrant(carried, seat)) this.granting.add(seat);
     });
   }
 
@@ -406,7 +415,6 @@ export class GuestSystem extends createSystem({}) {
   /** Take every guest away (a new session, or the café placed afresh). */
   clear(): void {
     for (const guest of this.guests) {
-      guest.tag?.material.dispose();
       guest.dial.dispose();
       guest.actor.dispose();
     }
@@ -459,20 +467,13 @@ export class GuestSystem extends createSystem({}) {
     const dial = new PatienceDial();
     dial.sprite.position.set(0, actor.bubbleAnchor.position.y + DIAL.above, 0);
     actor.root.add(dial.sprite);
-    // Its name, and perhaps a wish or a song.
+    // Its name, its wishes, and perhaps a song.
     const taken = new Set(this.guests.map((g) => g.name));
     const singerAbout = this.guests.some((g) => g.sings);
     const sings = !singerAbout && Math.random() < this.singerChance;
-    const wish = sings ? 'company' : pickWish(this.wishChance, singerAbout, this.lastWish);
-    if (wish) this.lastWish = wish;
-    let tag: Sprite | null = null;
-    if (wish || sings) {
-      tag = new Sprite(new SpriteMaterial({ map: wishTexture(sings ? 'singer' : wish!), transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
-      tag.scale.setScalar(WISH_TAG.size);
-      tag.position.set(0, actor.bubbleAnchor.position.y + DIAL.above + WISH_TAG.above, 0);
-      tag.renderOrder = 21;
-      actor.root.add(tag);
-    }
+    // 1 to 3 wishes, more as the evening goes on; a singer wants company (an audience).
+    const wishes: WishId[] = sings ? ['company'] : pickWishes(wishCount(this.evening), singerAbout, this.lastWishes);
+    this.lastWishes = wishes;
     const guest: Guest = {
       id: this.arrived,
       actor,
@@ -500,10 +501,9 @@ export class GuestSystem extends createSystem({}) {
       fuming: -1,
       anger: null,
       name: pickName(taken),
-      wish,
+      wishes,
       sings,
       wishMet: null,
-      tag,
       vanishing: 0,
       hop: null,
       act: null,
@@ -675,9 +675,9 @@ export class GuestSystem extends createSystem({}) {
     return Math.max(PICK_RADIUS_WORLD_MIN_M, PICK_RADIUS_M * this.cafeSystem.cafe.scale.x);
   }
 
-  /** Can this guest be picked up (in the line, walking up, or seated; fully faded in)? */
+  /** Can this guest be picked up (in the line or walking up to it, fully faded in)? A seated guest stays where it was put. */
   private pickable(guest: Guest): boolean {
-    return (guest.state === 'queued' || guest.state === 'arriving' || guest.state === 'seated') && guest.actor.opacity >= 0.99;
+    return (guest.state === 'queued' || guest.state === 'arriving') && guest.actor.opacity >= 0.99;
   }
 
   /**
@@ -712,8 +712,8 @@ export class GuestSystem extends createSystem({}) {
   private tell(kind: Outcome['kind'], guest: Guest): void {
     const at = guest.actor.root.position.clone();
     at.y += guest.actor.bubbleAnchor.position.y + DIAL.above + 0.012;
-    const wish = guest.wish === null || guest.wishMet === null ? null : guest.wishMet ? 'met' : 'unmet';
-    for (const listen of this.outcomes) listen({ kind, guest: guest.id, share: guest.seatShare, at, wish });
+    const wishes = guest.wishMet ? { met: guest.wishMet.filter(Boolean).length, of: guest.wishMet.length } : { met: 0, of: 0 };
+    for (const listen of this.outcomes) listen({ kind, guest: guest.id, share: guest.seatShare, at, wishes });
   }
 
   /**
@@ -967,6 +967,7 @@ export class GuestSystem extends createSystem({}) {
       guest.seatShare = Math.min(1, Math.max(0, 1 - guest.patience / guest.patienceFull));
       guest.patience = Math.min(SERVICE_MAX_SECONDS, Math.max(0, guest.patience) + SERVICE_TOPUP_SECONDS);
       this.seated++;
+      this.judge(guest);
     }
     guest.actor.play(fresh ? 'SitHappy' : 'SitIdle');
   }
@@ -992,7 +993,7 @@ export class GuestSystem extends createSystem({}) {
     }
     guest.seatedFor += delta;
     if (guest.served) guest.eaten += delta;
-    this.judge(guest, delta);
+    this.sing(guest, delta);
     // It leaves once its time is up and it has had a fair while to eat (served late, it stays to finish).
     const stayed = guest.seatedFor >= this.seatedSeconds && guest.eaten >= Math.min(EAT_SECONDS, this.seatedSeconds * 0.25);
     if (guest.served && (stayed || guest.eaten >= this.mealSeconds)) {
@@ -1130,16 +1131,11 @@ export class GuestSystem extends createSystem({}) {
     guest.highlight += (want - guest.highlight) * (1 - Math.exp(-(want ? 18 : 8) * delta));
     guest.actor.setHighlight(guest.highlight < 0.01 ? 0 : guest.highlight);
     guest.actor.update(delta);
-    // The dial shows for as long as the guest is waiting to be seated: in the line, and in the player's hand
-    // (or the air) on its way from the line, where its patience is still running.
-    const waiting =
-      guest.state === 'queued' || guest.state === 'vanishing' || ((guest.state === 'held' || guest.state === 'hop') && fromLine(guest)) || this.waitingForFood(guest);
-    guest.dial.update(guest.patience / guest.patienceFull, waiting, opacity, delta);
-    // The picture of its wish shows until it has sat down (then the heart or the shrug says how it went).
-    if (guest.tag) {
-      guest.tag.visible = guest.state !== 'seated' && guest.state !== 'leaving' && opacity > 0.02;
-      guest.tag.material.opacity = opacity;
-    }
+    // The dot shows for as long as the guest is waiting to be seated: in the line, and in the player's hand
+    // (or the air) on its way from the line, where its patience is still running. Once seated, its seat is
+    // final and there is nothing to do about its wait: no dot (its face shows if its food is slow).
+    const waiting = guest.state === 'queued' || guest.state === 'vanishing' || ((guest.state === 'held' || guest.state === 'hop') && fromLine(guest));
+    guest.dial.update(guest.patience / guest.patienceFull, guest.patience, guest.wishes.length, waiting, opacity, delta, this.hovered.includes(guest) || guest.state === 'held');
     // A blob under everyone on their feet (not the seated, nor the carried).
     const p = guest.actor.root.position;
     if (guest.state !== 'seated' && guest.state !== 'held' && guest.state !== 'vanishing') this.blobs.add(p.x, guest.ground, p.z, opacity);
@@ -1148,7 +1144,6 @@ export class GuestSystem extends createSystem({}) {
   private remove(guest: Guest): void {
     if (guest.anger) this.popups.release(guest.anger);
     for (const seat of this.seats) if (seat.occupant === guest.id) seat.occupant = 0;
-    guest.tag?.material.dispose();
     guest.dial.dispose();
     guest.actor.dispose();
     const i = this.guests.indexOf(guest);
