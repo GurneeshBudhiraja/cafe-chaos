@@ -252,14 +252,24 @@ knee bends, the body leans back a touch).
 | `guest-snowbit.glb` | `snowbit` | round donut hole, golden with a pale seam and sugar | `Snowcap` (powdered sugar on the crown) | 3.9 × 5.8 × 3.5 cm | 4,136 |
 | `guest-beavertail.glb` | `beavertail` | tall flat oval of fried dough, cinnamon-sugar | `MapleLeaf` (red leaf with a stem, lying over the crown) | 4.3 × 7.0 × 2.4 cm | 4,016 |
 | `guest-nanaimo.glb` | `nanaimo` | square bar: chocolate top, custard, coconut crumb | `Curl` (two chocolate curls) | 4.0 × 5.6 × 3.4 cm | 3,884 |
+| `guest-doubledouble.glb` | `doubledouble` | takeaway coffee cup: cream paper, a red ribbed sleeve with a cream maple leaf low down, the face above it, a white lid with a lip as the top of the head | `Steam` (a sip hole on the lid and a curl of steam rising from it) | 4.7 × 6.5 × 4.1 cm | 4,272 |
+| `guest-buttertart.glb` | `buttertart` | squat shortcrust shell crimped into 14 flutes (smooth across the face), browned on the ridges and rim | `Pecan` (the glossy caramel filling level with the rim and a pecan half on it) | 4.8 × 4.4 × 4.2 cm | 4,092 |
+
+The two newest (built on a lathe, `body_revolve` in the script) were chosen for pinch-and-carry: the
+cup's lid is a natural handle and reads clearly from above; the tart is wide and low with a dark
+caramel top that is easy to spot on a table. `Grip` sits at 4.3 cm (cup) and 3.5 cm (tart) over the
+root. Every clip carries all three channels of every part it poses (the export keeps held poses and
+drops only repeated keys), so a part one clip leaves still is not left where the previous clip put it;
+the guest files are 300–384 KB.
 
 **Colours:** unlike the Japanese guests these ship in their real colours (the three layers of the
 nanaimo cannot be a tint). Give them a white tint, or at most a very light pastel (≥ 0.9 per
 channel), or skip tinting for Canadian species. Everything else is as `../11-guest/INTEGRATION.md`
 (materials `GuestSkin-<species>` plus the flat face materials; new flat materials `GuestSugar`,
-`GuestMapleLeaf`, `GuestChoc`).
+`GuestMapleLeaf`, `GuestChoc`, `GuestSteam`, `GuestCaramel`, `GuestPecan`). The game needs the two new
+`guest_type` values `doubledouble` and `buttertart` registered (and their files loaded) to use them.
 
-### Wardrobe (`accessories-canada.glb`, 12 items, 273 KB, one 258 px atlas `GuestAccessoryAtlasCanada`)
+### Wardrobe (`accessories-canada.glb`, 20 items, 384 KB, one 258 px atlas `GuestAccessoryAtlasCanada`)
 
 Each item's origin is its attach point and its `attach` extra names it, exactly as `accessories.glb`,
 so `actor.ts`'s `dress()` works on it unchanged once it loads this file for Canadian guests.
@@ -271,14 +281,14 @@ so `actor.ts`'s `dress()` works on it unchanged once it loads this file for Cana
 | `Scarf-<species>` | `Neck` | red knit scarf wound round the neck, a tail with a cream fringe down the front |
 | `Parka-<species>` | `Chest` | cream quilted parka to just under the mouth, fur collar, red zip, two red pockets |
 
-Suggested wardrobe (cast.ts): HeadTop `Toque-{s}` / `Earmuffs-{s}` (chance 0.6), Neck `Scarf-{s}`
+Suggested wardrobe (cast.ts), for all five species: HeadTop `Toque-{s}` / `Earmuffs-{s}` (chance 0.6), Neck `Scarf-{s}`
 (0.35), Chest `Parka-{s}` (0.4), still at most two items each. Toque + Scarf and Earmuffs + Parka
 are the combinations in the previews. The Japanese items (ChefHat, Beret, Glasses, Bow) fit these
 bodies too if ever wanted; the per-species ones (Hachimaki, Apron, Vest) do not exist for them.
 
 ## Still to come (see the plan)
 
-Phase 4 (game): the café picker, registering these files in `assets.ts`, the Canadian layout
+Phase 4 (game): the café picker, the five guest species (snowbit, beavertail, nanaimo, doubledouble, buttertart), registering these files in `assets.ts`, the Canadian layout
 (`canada-layout.ts`: 25 seats on two floors, with `TableSpot-4/5`), the upper floor's walk grid and the stair walk (above),
 the new wishes (`socket`, `outside`, `takeaway`, `lake`, `patio`, `bonfire`, `warm`, `upstairs`),
 the two musician purchases (the fiddler at `MusicianSpot`, the pianist at `PianoSpot`), the second
