@@ -10,7 +10,7 @@
  *  4. BUY with too little in the bank is refused (the card says how many
  *     more); with enough, the table opens: its ghost and tag go, its seats
  *     are offered, the price is taken, the next price is 20, and it is saved;
- *  5. the price list runs 10, 20, 35 ... 280; the player's choice of table
+ *  5. the price list runs 8, 14, 22 ... 190; the player's choice of table
  *     makes no difference to it;
  *  6. with the main room all open there is nothing more to buy: the café's
  *     floor never grows;
@@ -55,7 +55,7 @@ await page.waitForTimeout(1000);
 
 // 1. The opening café.
 let s = await state();
-check('a fresh game: the two centre tables open (four seats), ten places locked with a tag each at 14', s.tables.join() === '2,8' && s.locked.join() === '1,3,4,5,6,7,9,10,11,12' && s.tags.join() === s.locked.join() && s.tagsOpen === 10 && s.seatsOpen === 4 && s.price === 14, JSON.stringify({ tables: s.tables, locked: s.locked, tagsOpen: s.tagsOpen, seatsOpen: s.seatsOpen, price: s.price }));
+check('a fresh game: the two centre tables open (four seats), ten places locked with a tag each at 8', s.tables.join() === '2,8' && s.locked.join() === '1,3,4,5,6,7,9,10,11,12' && s.tags.join() === s.locked.join() && s.tagsOpen === 10 && s.seatsOpen === 4 && s.price === 8, JSON.stringify({ tables: s.tables, locked: s.locked, tagsOpen: s.tagsOpen, seatsOpen: s.seatsOpen, price: s.price }));
 const ghost = await page.evaluate(() => {
   const { system } = window.__cafe;
   const look = (i) => { let m = null; system.pieces[i].traverse((n) => { if (!m && n.isMesh && n.visible) m = n.material; }); return m ? { name: m.name, opacity: m.opacity, transparent: !!m.transparent } : null; };
@@ -119,7 +119,7 @@ await page.waitForTimeout(400);
 s = await state();
 check('a pinch opens the buy card: the café still and in view, the card naming the table and its seats (BUY pale: the bank is empty)', s.phase === 'buying' && s.speed === 0 && s.cafe && s.card === 'buy' && s.buttons.map((b) => b.id).join() === 'buy-yes,buy-no' && s.buttons[0].off, JSON.stringify({ phase: s.phase, speed: s.speed, cafe: s.cafe, card: s.card, buttons: s.buttons }));
 const named = await page.evaluate(() => window.__cafe.game.menu.card.buttons.find((b) => b.id === 'buy-yes')?.label);
-check('the card asks BUY 14', named === 'BUY 14', `${named}`);
+check('the card asks BUY 8', named === 'BUY 8', `${named}`);
 await send('set_transform', { device: 'hand-right', position: { x: -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
 await h.screenshot('artifacts/tables-3-buy.png');
 
@@ -142,12 +142,12 @@ check('BUY with an empty bank is refused: the card stays, the shop says no', s.p
 await page.evaluate(() => { window.__cafe.score.bank = 16; window.__cafe.game.click('buy-no'); window.__cafe.game.click('table-6'); });
 await until(() => window.__cafe.game.phase === 'buying', 10000);
 const before = await state();
-check('with 16 in the bank the card offers BUY 14 (moss)', before.card === 'buy' && !before.buttons[0].off, JSON.stringify(before.buttons));
+check('with 16 in the bank the card offers BUY 8 (moss)', before.card === 'buy' && !before.buttons[0].off, JSON.stringify(before.buttons));
 await page.evaluate(() => window.__cafe.game.click('buy-yes'));
 await until(() => window.__cafe.game.phase === 'run', 10000);
 await frames(3);
 s = await state();
-check('BUY: the table opens, its tag goes, its seats are offered, 14 taken, the next costs 28, and it is saved', s.phase === 'run' && s.tables.join() === '2,6,8' && !s.locked.includes(6) && !s.tags.includes(6) && s.seatsOpen === 6 && s.bank === 2 && s.price === 28 && s.bought === 1 && s.saved?.join() === '2,6,8' && s.speed === 1, JSON.stringify({ tables: s.tables, locked: s.locked, tags: s.tags, seatsOpen: s.seatsOpen, bank: s.bank, price: s.price, saved: s.saved }));
+check('BUY: the table opens, its tag goes, its seats are offered, 8 taken, the next costs 14, and it is saved', s.phase === 'run' && s.tables.join() === '2,6,8' && !s.locked.includes(6) && !s.tags.includes(6) && s.seatsOpen === 6 && s.bank === 8 && s.price === 14 && s.bought === 1 && s.saved?.join() === '2,6,8' && s.speed === 1, JSON.stringify({ tables: s.tables, locked: s.locked, tags: s.tags, seatsOpen: s.seatsOpen, bank: s.bank, price: s.price, saved: s.saved }));
 // Its meshes have their own materials back and are folded into the room's batch (hidden under `batched`).
 const opened = await page.evaluate(() => { const r = { materials: [], batched: 0, meshes: 0 }; window.__cafe.system.pieces[6].traverse((n) => { if (!n.isMesh) return; r.meshes++; if (n.userData.batched) r.batched++; r.materials.push(n.material.name); }); return r; });
 check('the opened table is drawn in its own materials again, folded into the room\'s batch', opened.meshes > 0 && opened.materials.every((m) => !m.startsWith('Ghost')) && opened.batched === opened.meshes, JSON.stringify(opened));
@@ -164,7 +164,7 @@ for (const table of [12, 1, 11, 9, 3, 10, 4, 7, 5]) {
   await until(() => window.__cafe.game.phase === 'run', 10000);
 }
 s = await state();
-check('the prices run 28, 50, 75 ... 390 whichever table is chosen; the room is then all open', prices.join() === '28,50,75,110,155,205,260,320,390' && s.tables.length === 12 && s.locked.length === 0, JSON.stringify({ prices, tables: s.tables, locked: s.locked }));
+check('the prices run 14, 22, 32 ... 190 whichever table is chosen; the room is then all open', prices.join() === '14,22,32,45,62,85,115,150,190' && s.tables.length === 12 && s.locked.length === 0, JSON.stringify({ prices, tables: s.tables, locked: s.locked }));
 
 // 6. Nothing more to buy: the floor never grows.
 await page.waitForTimeout(2500);
@@ -184,7 +184,7 @@ await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); 
 await until(() => window.__cafe.game.phase === 'run');
 await page.waitForTimeout(600);
 s = await state();
-check('after a reload the saved tables are open and the rest locked and tagged', s.tables.join() === '2,6,8,12' && s.locked.join() === '1,3,4,5,7,9,10,11' && s.tagsOpen === 8 && s.price === 50, JSON.stringify({ tables: s.tables, locked: s.locked, tagsOpen: s.tagsOpen, price: s.price }));
+check('after a reload the saved tables are open and the rest locked and tagged', s.tables.join() === '2,6,8,12' && s.locked.join() === '1,3,4,5,7,9,10,11' && s.tagsOpen === 8 && s.price === 22, JSON.stringify({ tables: s.tables, locked: s.locked, tagsOpen: s.tagsOpen, price: s.price }));
 
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');

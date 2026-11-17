@@ -206,15 +206,17 @@ export function pairChance(level: number): number {
  * doubling would reach tens of thousands). The café's floor never grows:
  * only its own ten tables unlock (the owner's call).
  *
- * The prices are 1.4 times the first plan's: the level simulation
- * (scripts/sim-levels.mjs) had near-perfect players earning 9 to 10 coins a
- * guest, not the 6.5 estimated, buying everything by about minute 30; the
- * research asks each unlock to cost one to two levels' earnings. 1.4, not
- * more, because real players earn less than the bots. (estimate; check by
- * playtest)
+ * The prices were set for the simulation's bots (7 to 10 coins a guest)
+ * and the first playtest found them hard: a new player earns far less,
+ * and could open hardly a table and no barista early on. So the early
+ * steps are cheap, a few tables and a second barista within the first
+ * three levels (about 22 guests, some 110 to 150 coins), and the rest
+ * grows from there; the challenge is meant to come from the guests (the
+ * pace, the wishes, the hurried and the pairs), not the prices.
+ * (playtest; the simulation's table is in docs/MECHANICS-PLAN.md)
  */
 export const START_TABLES = [2, 8];
-export const TABLE_PRICES = [14, 28, 50, 75, 110, 155, 205, 260, 320, 390];
+export const TABLE_PRICES = [8, 14, 22, 32, 45, 62, 85, 115, 150, 190];
 
 /** What the next table costs once `bought` have been bought (the last price holds). */
 export function tablePrice(bought: number): number {
@@ -243,7 +245,7 @@ export const CLEAN = { seconds: 3, near: 0.3, vanish: 0.4, home: { x: 0.17, z: -
  * minimal, never crowding a table). The mess model is `size` across.
  */
 export const MESS = { size: 0.032, fit: 0.65, tops: { 'table-2': 0.046, 'table-4': 0.04, 'bar-2': 0.026, 'quiet-corner': 0.024 } as Record<string, number> };
-export const JANITOR_PRICE = 170;
+export const JANITOR_PRICE = 80;
 
 /**
  * The staff. The café opens with `STARTING_STAFF` server; each further
@@ -254,5 +256,5 @@ export const JANITOR_PRICE = 170;
  * never feels crowded and there is room to pick guests up between them.
  */
 export const STARTING_STAFF = 1;
-export const HIRE_PRICES = [70, 210];
+export const HIRE_PRICES = [40, 120];
 export const MAX_STAFF = STARTING_STAFF + HIRE_PRICES.length;

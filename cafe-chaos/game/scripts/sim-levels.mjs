@@ -87,7 +87,7 @@ for (const player of players) {
       const shop = c.shop;
       if (g.level >= 2 && shop.staff < 2 && shop.affordable && shop.hire()) buy('barista2');
       else if (g.level >= 6 && shop.staff < 3 && shop.staff >= 2 && shop.affordable && shop.hire()) buy('barista3');
-      else if (!shop.janitor && c.mess.dirtyCount >= 2 && c.score.bank >= 120 && shop.hireJanitor()) buy('janitor');
+      else if (!shop.janitor && c.mess.dirtyCount >= 2 && shop.hireJanitor()) buy('janitor');
       else if (shop.tableAffordable) {
         // The cheapest way to more seats: the locked table nearest the counter's middle.
         const locked = [...c.system.lockedTables].filter((t) => t < 13 || c.system.annexOpen);

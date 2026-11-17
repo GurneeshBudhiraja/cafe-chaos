@@ -148,3 +148,20 @@ The rules' yardstick: a complete, satisfying moment in a short ride, a fast star
 - Level 1 (and 2) arrivals every 15 s, not 20: the first minute no longer waits on an empty gate. Level 2's 18 s would have been a step back after level 1's end (15 × 0.85), so it holds at 15 too; from level 3 the gaps are as they were. The simulation table above was run at 20 s: level 1 is now about a quarter shorter.
 - The first run's coach card has three steps (pinch, seat, the tea comes), not four: "Pause and shop" is taught by the "More hands" tip the moment it matters, and the How to play card keeps the full list (Meta: teach when relevant, next to the thing).
 - A "Serve 5 guests · That finishes the level" tip under the bar's count at the start of level 1, once a save, gone when the first guest is served (or after 8 s). Level 1 only: from level 2 the level card names the next target.
+
+## Playtest round 1 (owner and a friend, on the Quest)
+
+What the playtest found, and what changed (each grounded in Meta's and other spatial-design guidance; details in the code's comments):
+
+- **A level reached no longer stops the café.** The bar shows "LEVEL n! +coins" for 3 s with confetti, a one-line note under it gives the next goal, and no guest comes for a 5 s breather. The full-screen card broke the flow, and a player who took the headset off came back to a card, not the café. Pause is one pinch away for a real rest.
+- **The shop is a drawer under the bar**, not a card that hid the café: the café stands still and stays in view; the bar rises while the drawer is open so it covers none of the café. The bar is 64 cm wide (was 72), its text unchanged.
+- **Prices lowered**: tables 8, 14, 22, 32, 45, 62, 85, 115, 150, 190 (were 14 … 390); second barista 40 (was 70), third 120 (was 210); janitor 80 (was 170). The 1.4× raise was made for the bots' 7–10 coins a guest and the plan said to check it by playtest: a new player earns far less and could open hardly a table and no barista early on. The challenge is meant to come from the guests (pace, wishes, the hurried, pairs), not the prices.
+
+Simulation at these prices (scripts/sim-levels.mjs, 5 levels; the bots seat as fast as they are allowed, so they are the quick end):
+
+| Player (a seat every) | 2 tables | 4 tables | 2nd barista | Janitor | Coins a guest | Lost, levels 1–5 |
+|---|---|---|---|---|---|---|
+| slow, 8 s | 1.4 min | 3.2 min | 4.4 min | 7.0 min | 9.9 | 3 |
+| average, 5 s | 1.3 min | 2.8 min | 3.9 min | 9.7 min | 10.2 | 3 |
+
+A new player earning half the bots' coins still opens two or three tables and hires the second barista within the first three levels (about 7 minutes).

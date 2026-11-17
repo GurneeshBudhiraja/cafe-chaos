@@ -7,7 +7,7 @@
  *  3. an order always comes first: a barista off cleaning breaks off when a
  *     guest is seated and nobody is at the bar, serves, and cleans after;
  *  4. on its way back from serving, a dirty table near by is cleaned first;
- *  5. the shop offers the janitor at 120, once: HIRE puts it by the counter's
+ *  5. the shop offers the janitor at 80, once: HIRE puts it by the counter's
  *     end; it cleans the longest dirty table first and never serves;
  *  6. the janitor is saved and comes back after a reload; the messes do not
  *     (a clean café); pause freezes a cleaner;
@@ -147,18 +147,18 @@ await page.waitForTimeout(2500);
 await until(() => window.__cafe.mess.dirtyTables().length === 0 && window.__cafe.baristas.staff[0].state === 'working', 90000);
 
 // 5. The janitor in the shop.
-await page.evaluate(() => { window.__cafe.score.bank = 150; window.__cafe.game.click('bar-shop'); });
+await page.evaluate(() => { window.__cafe.score.bank = 70; window.__cafe.game.click('bar-shop'); });
 await until(() => window.__cafe.game.phase === 'shopping');
 s = await state();
-check('the shop offers the janitor at 170 (pale with 150 in the bank)', s.card === 'shop' && s.janitorPrice === 170 && !s.buttons.includes('hire-janitor') && s.buttons.includes('hire-janitor-later'), JSON.stringify({ buttons: s.buttons, janitorPrice: s.janitorPrice }));
-await page.evaluate(() => { window.__cafe.score.bank = 180; window.__cafe.game.click('shop-close'); window.__cafe.game.click('bar-shop'); });
+check('the shop offers the janitor at 80 (pale with 70 in the bank)', s.card === 'shop' && s.janitorPrice === 80 && !s.buttons.includes('hire-janitor') && s.buttons.includes('hire-janitor-later'), JSON.stringify({ buttons: s.buttons, janitorPrice: s.janitorPrice }));
+await page.evaluate(() => { window.__cafe.score.bank = 90; window.__cafe.game.click('shop-close'); window.__cafe.game.click('bar-shop'); });
 await until(() => window.__cafe.game.phase === 'shopping' && window.__cafe.strip.drawer.panel.buttons.some((b) => b.id === 'hire-janitor'));
 await h.screenshot('artifacts/cleaning-2-shop.png');
 await page.evaluate(() => window.__cafe.game.click('hire-janitor'));
 await until(() => window.__cafe.baristas.janitor !== null, 60000);
 s = await state();
 const jan = s.staff.find((m) => m.role === 'janitor');
-check('HIRE: the janitor is hired for 170, once, and stands by the counter\'s end', s.janitor && s.janitorPrice === null && s.bank === 10 && !!jan && jan.at[0] > 0.05 && jan.at[2] < -0.1 && s.saved?.janitor === true, JSON.stringify({ janitor: s.janitor, price: s.janitorPrice, bank: s.bank, at: jan?.at, saved: s.saved?.janitor }));
+check('HIRE: the janitor is hired for 80, once, and stands by the counter\'s end', s.janitor && s.janitorPrice === null && s.bank === 10 && !!jan && jan.at[0] > 0.05 && jan.at[2] < -0.1 && s.saved?.janitor === true, JSON.stringify({ janitor: s.janitor, price: s.janitorPrice, bank: s.bank, at: jan?.at, saved: s.saved?.janitor }));
 await page.evaluate(() => window.__cafe.game.click('shop-close'));
 await until(() => window.__cafe.game.phase === 'run');
 // Two tables dirty, the older first; a guest seated at the same time: the barista serves, the janitor cleans.
@@ -241,7 +241,7 @@ await until(() => window.__cafe.baristas.janitor !== null && window.__cafe.baris
 await page.evaluate(() => window.__cafe.game.startFresh());
 await page.waitForTimeout(800);
 const fresh = await page.evaluate(() => ({ staff: window.__cafe.baristas.staff.map((m) => m.role), janitor: window.__cafe.shop.janitor, price: window.__cafe.shop.janitorPrice }));
-check('DELETE AND START lets the janitor and the hired baristas go; the janitor is for hire again', fresh.staff.join() === 'barista' && !fresh.janitor && fresh.price === 170, JSON.stringify(fresh));
+check('DELETE AND START lets the janitor and the hired baristas go; the janitor is for hire again', fresh.staff.join() === 'barista' && !fresh.janitor && fresh.price === 80, JSON.stringify(fresh));
 await until(() => window.__cafe.game.phase === 'run' || window.__cafe.game.phase === 'tutorial', 30000);
 await page.evaluate(() => { const { game } = window.__cafe; if (game.phase === 'tutorial') game.click('skip'); });
 await until(() => window.__cafe.game.phase === 'run', 30000);

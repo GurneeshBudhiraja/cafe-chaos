@@ -120,7 +120,7 @@ await aimAt('hire', null, 'window.__cafe.strip.drawer.panel');
 await tap();
 s = await state();
 dr = await drawer();
-check('HIRE (pointed at and pinched) hires the next barista, the price taken; the drawer shows the next price', s.hires === 1 && s.bank === 5 && s.phase === 'shopping' && dr.buttons.includes('hire-later'), JSON.stringify({ hires: s.hires, bank: s.bank, buttons: dr.buttons }));
+check('HIRE (pointed at and pinched) hires the next barista, the price taken; the drawer shows the next price', s.hires === 1 && s.bank === 35 && s.phase === 'shopping' && dr.buttons.includes('hire-later'), JSON.stringify({ hires: s.hires, bank: s.bank, buttons: dr.buttons }));
 await aimAt('shop-close', null, 'window.__cafe.strip.drawer.panel');
 await tap();
 const closed = await until(() => window.__cafe.game.phase === 'run' && !window.__cafe.strip.drawer.panel.open && window.__cafe.system.timeScale === 1, null, 15000);
