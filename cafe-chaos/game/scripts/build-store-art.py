@@ -1,12 +1,13 @@
 """
 Store art: builds the logo, the one icon and the covers from the generated
-pictures in art/source (see docs/STORE-ART.md).
+pictures in assets/source (see docs/STORE-ART.md).
 
-- art/source/wordmark-magenta.jpg: the "CAFÉ CHAOS" lettering on flat
+- assets/source/wordmark-magenta.jpg: the "CAFÉ CHAOS" lettering on flat
   magenta. The magenta is keyed out to make the transparent logo.
-- art/source/cover-lockup.jpg: the cast on one chair (16:9, cream paper).
+- assets/source/cover-lockup.jpg: the cast on one chair (16:9, cream paper).
 
-Output in art/store (Meta Horizon Store sizes, 24-bit PNG except the logo)
+Output in assets/meta-store (Meta Horizon Store sizes, 24-bit PNG except the
+logo), assets/devpost and assets/social,
 and the app icons in public/icons (the same icon as the store).
 
 Usage: python3 scripts/build-store-art.py
@@ -18,8 +19,10 @@ import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / 'art' / 'source'
-OUT = ROOT / 'art' / 'store'
+SRC = ROOT / 'assets' / 'source'
+OUT = ROOT / 'assets' / 'meta-store'
+DEVPOST = ROOT / 'assets' / 'devpost'
+SOCIAL = ROOT / 'assets' / 'social'
 ICONS = ROOT / 'public' / 'icons'
 
 MOSS = (61, 97, 54)
@@ -132,7 +135,8 @@ def place(canvas: Image.Image, logo: Image.Image, cx: float, cy: float, width: f
 
 
 def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
+    for d in (OUT, DEVPOST, SOCIAL):
+        d.mkdir(parents=True, exist_ok=True)
     ICONS.mkdir(parents=True, exist_ok=True)
     logo = key_magenta(SRC / 'wordmark-magenta.jpg')
     pad = 24
@@ -145,7 +149,7 @@ def main() -> None:
     # The store, the library and plain shortcuts are not masked: the name a little larger.
     # A round shortcut mask may cut to the centre 80%: the maskable copy keeps it all inside that.
     master = icon(cafe, chaos, 2048, safe=0.9).resize((512, 512), Image.LANCZOS)
-    master.save(OUT / 'icon-512.png')
+    master.save(OUT / 'icon-512x512.png')
     master.save(ICONS / 'icon-512.png')
     icon(cafe, chaos, 2048).resize((512, 512), Image.LANCZOS).save(ICONS / 'icon-maskable-512.png')
     icon(cafe, chaos, 1024, safe=0.9).resize((192, 192), Image.LANCZOS).save(ICONS / 'icon-192.png')
@@ -153,13 +157,12 @@ def main() -> None:
     # Too small for the name: the C of the logo, on the same moss.
     c_letter = first_letter(cafe)
     small_icon(c_letter, 256).resize((32, 32), Image.LANCZOS).save(ICONS / 'favicon-32.png')
-    small_icon(c_letter, 256).resize((48, 48), Image.LANCZOS).save(OUT / 'favicon-48.png')
 
     # Covers from the lockup (the cast on one chair; group at about x 490-1840, y 260-1100 of 2000×1116).
     art = Image.open(SRC / 'cover-lockup.jpg').convert('RGB')
     sq = paper_canvas(art, 1440, 1440, (400, -300, 1940, 1240))
     place(sq, logo, 720, 270, 1180)
-    sq.save(OUT / 'cover-square-1440.png')
+    sq.save(OUT / 'cover-square-1440x1440.png')
 
     land = paper_canvas(art, 2560, 1440, (-60, -40, 2060, 1153))
     place(land, logo, 2560 * 0.33, 1440 * 0.21, 2560 * 0.5)
@@ -167,7 +170,7 @@ def main() -> None:
 
     dev = paper_canvas(art, 1500, 1000, (240, -20, 2000, 1153))
     place(dev, logo, 1500 * 0.33, 1000 * 0.19, 1500 * 0.56)
-    dev.save(OUT / 'devpost-1500x1000.png')
+    dev.save(DEVPOST / 'thumbnail-1500x1000.png')
 
     # Until The Pinch, the tower and the table come in: the same picture, the title centred (Meta: the hero's title centred).
     hero = paper_canvas(art, 3000, 900, (-1093, -215, 3424, 1140))
@@ -185,9 +188,9 @@ def main() -> None:
     # Other places: a link preview (Open Graph), a video thumbnail.
     share = paper_canvas(art, 1200, 630, (-100, -40, 2100, 1115))
     place(share, logo, 1200 * 0.33, 630 * 0.21, 1200 * 0.5)
-    share.save(OUT / 'share-1200x630.png')
-    land.resize((1280, 720), Image.LANCZOS).save(OUT / 'video-thumbnail-1280x720.png')
-    print('done:', ', '.join(sorted(p.name for p in OUT.iterdir())))
+    share.save(SOCIAL / 'link-preview-1200x630.png')
+    land.resize((1280, 720), Image.LANCZOS).save(SOCIAL / 'video-thumbnail-1280x720.png')
+    print('done:', ', '.join(sorted(str(p.relative_to(ROOT / 'assets')) for d in (OUT, DEVPOST, SOCIAL) for p in d.iterdir())))
 
 
 if __name__ == '__main__':

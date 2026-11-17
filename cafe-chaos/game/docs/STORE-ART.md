@@ -57,20 +57,21 @@ every size (consistent, crisp, and Meta needs the logo as its own file).
 
 ## Built so far (scripts/build-store-art.py)
 
-Sources in art/source, output in art/store; the app icons in public/icons
+Sources in assets/source, output in assets/meta-store, assets/devpost and
+assets/social (see assets/README.md); the app icons in public/icons
 are the same icon. Run `python3 scripts/build-store-art.py` after replacing
 a source.
 
 - logo.png: the wordmark, magenta keyed out (transparent).
-- icon-512.png: the one icon (also public/icons; a maskable copy keeps the
-  name inside the centre 80%). favicon-32/48: the C.
-- cover-square-1440.png, cover-landscape-2560x1440.png,
-  devpost-1500x1000.png: from the cast-on-a-chair picture.
+- icon-512x512.png: the one icon (also public/icons; a maskable copy keeps the
+  name inside the centre 80%). favicon-32: the C.
+- cover-square-1440x1440.png, cover-landscape-2560x1440.png,
+  devpost/thumbnail-1500x1000.png: from the cast-on-a-chair picture.
 - hero-3000x900.png, cover-portrait-1008x1440.png,
   mini-landscape-1080x360.png: interim, from the same picture (the title
   centred on the hero and the mini). Replace with The Pinch (hero), the
   tower (portrait) and the table (mini) when they come in.
-- share-1200x630.png (link preview), video-thumbnail-1280x720.png.
+- social/link-preview-1200x630.png, social/video-thumbnail-1280x720.png.
 - Still needed for the store: 5 screenshots, 2560×1440, real captures.
 
 ## Prompts (Nano Banana)
