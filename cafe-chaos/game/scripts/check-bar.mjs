@@ -133,6 +133,13 @@ s = await state();
 await tap();
 const after = await state();
 check('a hand over the café has no ray; its pinch does not pause', s.aim === null && !s.ray && after.phase === 'run', JSON.stringify({ aim: s.aim, ray: s.ray, phase: after.phase }));
+// High over the roof (lifting a guest, reaching over to the back), pointing straight at Pause: still over the café, no ray.
+const overRoof = await page.evaluate(() => { const { system, hold } = window.__cafe; const V = system.cafe.position.constructor; const p = system.cafe.localToWorld(new V(0, hold.bounds.max.y + 0.2, 0)); return p.toArray(); });
+await aimAt('bar-pause', overRoof);
+s = await state();
+await tap();
+const afterHigh = await state();
+check('a hand 20 cm over the café\'s roof, pointed at Pause: no ray, its pinch does not pause (a guest pinch never presses the bar)', s.aim === null && !s.ray && afterHigh.phase === 'run', JSON.stringify({ aim: s.aim, ray: s.ray, phase: afterHigh.phase }));
 
 // 6. A raised hand pointing at nothing yet: the short beam, no cursor (so the ray is there to be found).
 {

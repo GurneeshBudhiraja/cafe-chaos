@@ -83,6 +83,7 @@ const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as cons
  * edge (share of its height) still counts as on it, so a shaky hand does
  * not flicker off.
  */
+/** The hand ray: a hand within `awayFromCafe` of the café's footprint, up to well over its roof, is working over it and has no ray (HoldSystem.overCafe); `reach` metres at most; `edge` of a card's height round it still hits. */
 const RAY = { awayFromCafe: 0.04, reach: 4, edge: 0.15 };
 /**
  * A pinch counts the target the ray was on `before` seconds earlier if it
@@ -1083,12 +1084,12 @@ export class GameSystem extends createSystem({}) {
       }
       // The ray: a free hand away from every card in reach points at the menu cards (out of
       // reach, in front) and, away from the café, at the bar.
-      const toBar = this.strip.controls !== 'off' && !hold.nearCafe(pinch.point, RAY.awayFromCafe);
-      const aimed = !busy && !done && !near ? this.aimRay(hand, toBar, !hold.nearCafe(pinch.point, RAY.awayFromCafe)) : null;
+      const toBar = this.strip.controls !== 'off' && !hold.overCafe(pinch.point, RAY.awayFromCafe);
+      const aimed = !busy && !done && !near ? this.aimRay(hand, toBar, !hold.overCafe(pinch.point, RAY.awayFromCafe)) : null;
       this.aim[hand] = aimed ? (aimed.button?.id ?? '') : null;
       // Pointing at nothing yet: the short beam, so the ray can be found (BEAM).
       let idle: Vector3 | null = null;
-      if (!aimed && !busy && !done && !near && pinch.gap !== Infinity && !hold.nearCafe(pinch.point, RAY.awayFromCafe) && pinch.point.y > this.head.y - BEAM.below) {
+      if (!aimed && !busy && !done && !near && pinch.gap !== Infinity && !hold.overCafe(pinch.point, RAY.awayFromCafe) && pinch.point.y > this.head.y - BEAM.below) {
         this.castRay(hand);
         if (this.rayDir.y > -BEAM.down) idle = this.rayDir;
       }
