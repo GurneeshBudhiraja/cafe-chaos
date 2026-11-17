@@ -55,6 +55,21 @@ in grayscale. Sources at the end.
 Generate art without the title, then add the title from one logo file in
 every size (consistent, crisp, and Meta needs the logo as its own file).
 
+## Built so far (scripts/build-store-art.py)
+
+Sources in art/source, output in art/store; the app icons in public/icons
+are the same icon. Run `python3 scripts/build-store-art.py` after replacing
+a source.
+
+- logo.png: the wordmark, magenta keyed out (transparent).
+- icon-512.png: the one icon (also public/icons; a maskable copy keeps the
+  name inside the centre 80%). favicon-32/48: the C.
+- cover-square-1440.png, cover-landscape-2560x1440.png,
+  devpost-1500x1000.png: from the cast-on-a-chair picture.
+- Still to come: Hero 3000×900 and Mini 1080×360 (The Pinch, the table),
+  Portrait 1008×1440 (the tower). The landscape cover moves to The Pinch
+  when it arrives, if it reads better.
+
 ## Prompts (Nano Banana)
 
 Upload the Flow collage and the chosen Pinch image as references with each. Replace [START] and [STYLE] with the shared lines below.
@@ -169,7 +184,7 @@ file (the same lettering), not drawn again, so the two always match.
   Keep the words inside the centre 80% circle, so the shortcut's round
   mask does not cut them.
 - Small sizes (favicon, 48 px and less): the name does not read there, so
-  use only the cup-É from the same logo on the same moss field.
+  use only the C from the same logo on the same moss field.
 
 If you generate the icon instead of building it from the logo, upload the
 chosen wordmark as the reference and use:
@@ -187,7 +202,7 @@ chosen wordmark as the reference and use:
     lettering inside the centre 80% of the square. 1:1.
 
 Exports from the one master: 512 (store, shortcut), 192 (shortcut),
-180 (Apple touch), 48 and 32 (favicon, cup only).
+180 (Apple touch), 48 and 32 (favicon, the C only).
 
 Characters belong to the covers, as a cast. No single guest is the
 mascot; the pinched guest in The Pinch is one of the guests, not a brand.
