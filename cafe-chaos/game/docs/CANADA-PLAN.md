@@ -52,6 +52,16 @@ The Japanese shell is 35 k triangles and 28 materials, batched to a few dozen dr
 3. The characters (built): three Canadian guest species with winter accessories; three baristas; two janitors; the musician. Scripts `staff_canada_build.py`, `guests_canada_build.py`; names fixed by `fix_names.py`.
 4. Game side (later): the café picker, the new wishes, the takeaway flow, the musician purchase, no dimming.
 
+## Textures and baked lighting (phase 3b)
+
+Meta's guidance for Quest favours baked lighting and lightmaps over real-time effects, as few
+material/texture state changes as possible, and treats texture size as a memory (not GPU-time)
+question; third-party WebXR guides add KTX2 compression and under ~100 draw calls as targets. So
+the realism pass bakes rather than computes: tiling colour + normal maps generated per material
+(one image per material, no new materials), and one ambient-occlusion atlas per file on a second
+UV set, which the game's matte (Lambert) materials already keep. No roughness/metal maps (the
+Lambert swap drops them), no real-time shadows added. See `models/27-cafe-canada/INTEGRATION.md`.
+
 ## Sources
 
 - Tim Hortons Seongsu flagship (Banff cabin theme, red canoe, lake, cabin booths): The Korea Herald, blogTO, Herald Business, 2026.
@@ -59,3 +69,8 @@ The Japanese shell is 35 k triangles and 28 materials, batched to a few dozen dr
 - Meta MR design (shadows to ground objects, lighting consistency with the room, passthrough): developers.meta.com/horizon/design/mr-design-scene, horizon-os-passthrough.
 - Meta performance (Quest 3 comparison, WebXR draw-call guidance): developers.meta.com/horizon/resources/device-optimization-comparison, documentation/web/webxr-perf-workflow.
 - Stylized snow: facing-up faces white, caps as separate shapes (Packt Unity shaders cookbook; low-poly snow shader write-ups).
+- Meta, Unity mobile performance intro (baked lightmaps and light probes over dynamic light, keep draw calls down): https://developers.meta.com/horizon/documentation/unity/unity-mobile-performance-intro/
+- Meta, WebXR performance best practices (bake lighting for static scenes; shadow maps count against the budget): https://developers.meta.com/vr/documentation/web/webxr-perf-bp/
+- Meta, draw call cost analysis (state changes are the cost; texture size/compression did not change GPU draw cost; atlas and sort): https://developers.meta.com/horizon/documentation/unity/po-draw-call-analysis/
+- Meta, "Down the Rabbit Hole" developer best practices (atlasing, fewer state changes): https://developers.meta.com/horizon/blog/down-the-rabbit-hole-w-oculus-quest-developer-best-practices-the-store/
+- Needle Engine, VR performance (under ~100 draw calls, 200–300k triangles, KTX2 textures; third-party targets): https://engine.needle.tools/docs/how-to-guides/xr/vr-performance

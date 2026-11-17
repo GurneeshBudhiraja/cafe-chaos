@@ -17,6 +17,9 @@ front of each seat (2.8 cm up), `TableTop` at the top's centre. The same sizes a
 import sys, os
 HERE = os.path.dirname(os.path.abspath(__file__))
 exec(open(os.path.join(HERE, 'kit.py')).read())
+TEX_MAX = 256
+TILE_SCALE = 0.75
+exec(open(os.path.join(HERE, 'textures.py')).read())   # textures + UVs onto the palette
 
 args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 OUT = args[0] if args else os.path.join(HERE, 'out')
@@ -198,10 +201,24 @@ anchor('TableTop', (2.9 * CM, 2.25 * CM, 0.6 * CM), FC)
 # ------------------------------------------------------------------ export each, then one preview of them all
 roots = [T2, T4, PT, DB, FC]
 sizes = {}
+AO_RES, AO_SAMPLES, AO_DIST = 512, 32, 0.03
 for r in roots:
     x = r.location.x
     r.location = (0, 0, 0)
     bpy.context.view_layer.update()
+    # each piece gets its own copies of the materials it uses (its AO atlas is its own), then a bake
+    copies = {}
+    for o in r.children_recursive:
+        if o.type != 'MESH':
+            continue
+        for i, m in enumerate(o.data.materials):
+            if m is None:
+                continue
+            if m.name not in copies:
+                copies[m.name] = m.copy()
+            o.data.materials[i] = copies[m.name]
+    ROOT = r
+    exec(open(os.path.join(HERE, 'bake_ao.py')).read())
     export_glb(r, os.path.join(OUT, r.name + '.glb'))
     xs, ys, zs = [], [], []
     for o in r.children_recursive:

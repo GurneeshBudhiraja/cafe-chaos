@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Café viewer</title>
+<style>html,body{margin:0;height:100%;background:#cfdbe8;overflow:hidden}canvas{display:block}#hud{position:fixed;left:8px;top:8px;font:12px system-ui;color:#123;background:#fff9;padding:4px 8px;border-radius:6px}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.170.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.170.0/examples/jsm/"}}</script>
+</head><body><div id="hud">loading</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+const q = new URLSearchParams(location.search);
+const file = q.get('m') || 'cafe-canada.glb';
+const pbr = q.get('look') === 'pbr';
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.NoToneMapping;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xcfdbe8);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.01, 20);
+const eye = (q.get('eye') || '0,0.55,0.95').split(',').map(Number); const tgt = (q.get('at') || '0,0.06,-0.02').split(',').map(Number);
+camera.position.set(...eye);
+const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(...tgt); controls.update();
+// the game's light rig, roughly: one warm sun, a cool sky/ground hemisphere
+const sun = new THREE.DirectionalLight(0xfff2e0, 2.4); sun.position.set(0.6, 1.2, 0.8); scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xbfd4ee, 0xe8e2d8, 1.1));
+scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+new GLTFLoader().load(file, (g) => {
+  let tris = 0, draws = 0, mats = new Set();
+  g.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    draws++; tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+    const m = o.material; mats.add(m.uuid);
+    if (!pbr && m.isMeshStandardMaterial) {
+      o.material = new THREE.MeshLambertMaterial({ name: m.name, color: m.color, map: m.map, emissive: m.emissive, emissiveMap: m.emissiveMap,
+        emissiveIntensity: m.emissiveIntensity, normalMap: m.normalMap, normalScale: m.normalScale, aoMap: m.aoMap, aoMapIntensity: m.aoMapIntensity,
+        transparent: m.transparent, opacity: m.opacity, side: m.side, alphaTest: m.alphaTest, depthWrite: m.depthWrite });
+    }
+  });
+  scene.add(g.scene);
+  if (g.animations.length) { const mixer = new THREE.AnimationMixer(g.scene); g.animations.forEach((c) => mixer.clipAction(c).play()); window.mixer = mixer; }
+  document.getElementById('hud').textContent = `${file}  meshes ${draws}  tris ${Math.round(tris)}  materials ${mats.size}  ${pbr ? 'pbr' : 'lambert'}`;
+  window.ready = true;
+}, undefined, (e) => { document.getElementById('hud').textContent = 'error ' + e; });
+const clock = new THREE.Clock();
+function frame() { requestAnimationFrame(frame); if (window.mixer) window.mixer.update(clock.getDelta()); controls.update(); renderer.render(scene, camera); }
+frame();
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+</script></body></html>

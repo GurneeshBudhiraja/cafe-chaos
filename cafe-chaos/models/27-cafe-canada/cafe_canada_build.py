@@ -153,6 +153,8 @@ class Part:
     def done(self, parent=ROOT):
         return new_obj(self.name, self.bm, self.material, parent, self.smooth)
 
+exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'textures.py')).read())   # textures + UVs onto the palette
+
 def anchor(name, at, rot_y=0.0, parent=ROOT):
     e = bpy.data.objects.new(name, None)
     e.empty_display_size = 0.01
@@ -670,7 +672,9 @@ for i, f in enumerate(flames):
 for ob in smoke_objs + flames:
     ob.animation_data.action.name = 'Ambient'
 
-# ------------------------------------------------------------------ export
+# ------------------------------------------------------------------ baked occlusion, then export
+exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bake_ao.py')).read())
+
 def select_tree(root):
     bpy.ops.object.select_all(action='DESELECT')
     root.select_set(True)

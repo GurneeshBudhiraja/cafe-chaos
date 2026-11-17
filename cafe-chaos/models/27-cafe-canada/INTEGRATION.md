@@ -1,11 +1,42 @@
 # cafe-canada — the Canadian winter café (Hoser's · Coffee & Donuts)
 
-**File:** `cafe-canada.glb` — about 19,600 triangles, 135 meshes, 28 flat materials (no textures),
-one 2 s `Ambient` clip (the chimney's smoke puffs rise, the bonfire's flames flicker), 0.7 MB.
-Built by `cafe_canada_build.py` in a background Blender (nothing lives in a .blend); run it again to
-change anything, then `node merge_anims.mjs cafe-canada.glb` (Blender exports a clip per animated
-object; the game plays one named `Ambient`). The plan and the notes it answers:
-`../../game/docs/CANADA-PLAN.md`.
+**File:** `cafe-canada.glb` — about 19,600 triangles, 135 meshes, 29 materials, 6.5 MB (5 MB of
+it textures: 18 tiling colour maps, 14 normal maps, one 2048 px occlusion atlas), one 2 s `Ambient`
+clip (the chimney's smoke puffs rise, the bonfire's flames flicker). Built by `cafe_canada_build.py`
+in a background Blender (nothing lives in a .blend); run it again to change anything, then
+`node merge_anims.mjs cafe-canada.glb` (Blender exports a clip per animated object; the game plays
+one named `Ambient`). The plan and the notes it answers: `../../game/docs/CANADA-PLAN.md`.
+
+## Textures and baked occlusion (the realism pass)
+
+Everything is still built from flat-colour parts; `textures.py` (exec'd by the shell and furniture
+scripts after their palettes) turns the palette into textured materials and gives every part UVs:
+
+- **Colour maps** are generated with numpy, tileable, 256–1024 px, one per material: log wood
+  with grain and knots (`Pine`, `PineDark`), plank floor and weathered deck (`PlankFloor`, `Deck`),
+  soft blue-shaded snow with sparkle (`Snow`, `SnowShade`), cracked lake ice (`Ice`, `IceDeep`),
+  cobbles (`Stone`, `StoneDark`), bark, spruce needles with snow, worn red and cream paint (the
+  cream has clapboard lines), chalkboard, plaid, cushion weave, brushed steel, the plate's edge.
+- **Normal maps** from the same height fields for the woods, planks, stone, snow, ice, bark and
+  the clapboard (none for flat paint, fabric, needles).
+- **UVs** are a world-space box projection in metres over the material's tile size (`u` always a
+  horizontal axis, so grain runs along the logs and planks), so no part needed unwrapping.
+- **Occlusion:** `bake_ao.py` gives every mesh a second UV set (`Lightmap`, smart-projected and
+  packed together), bakes Cycles ambient occlusion (ray distance 6 cm, 32 samples) into one
+  2048 px atlas, and wires it as the glTF `occlusionTexture` on `texCoord 1`. three.js puts that on
+  `aoMap`, which the game's Lambert swap keeps, so the log joins, the underside of the eave and
+  the counter, the stones and the tree bases get contact shading with no run-time cost beyond one
+  texture read. Each furniture file carries its own 512 px atlas the same way (`AO_RES` in
+  `pieces_build.py`); their textures are capped at 256 px (`TEX_MAX`) because every file carries
+  its own copies.
+- What reaches the headset: colour + normal + occlusion on matte materials (the Lambert twin in
+  `light/cheap-materials.ts` keeps `map`, `normalMap`, `aoMap`); roughness/metal maps would be
+  dropped, so none are made. Transparent and emissive materials (`Glass`, `Smoke`, `Fire`,
+  `FireCore`, `Bulb`) are left flat and get no occlusion.
+- Review it the way the Quest shades it: `previews/` has Blender renders; the glbs were also
+  checked in a plain three.js page with the same Lambert swap and one sun (`viewer.html`, serve the folder and open `?m=<file>.glb`; screenshots `previews/threejs-*.jpg`, the ones in the
+  phase 3b message). Textures here are PNG; if download size matters later, KTX2/Basis them in
+  the game's pipeline rather than here.
 
 ## What it is
 
@@ -83,7 +114,7 @@ below the snow, so the grid's nearest-walkable logic treats it as floor.
 Five pieces, each its own glb (the game places them by the layout, `game/src/cafe/canada-layout.ts`),
 with the Japanese pieces' conventions: origin at the bottom centre, the front toward +Z, `Seat-N` at
 the seat top (1.6 cm) with its +Z toward the table, `Meal-N` on the table top (2.8 cm), `TableTop`.
-Flat materials from `kit.py`; 250–510 triangles each.
+Materials from `kit.py`, textured by `textures.py` with a 512 px occlusion atlas each; 250–510 triangles, 0.4–0.8 MB each.
 
 | File | What | Size (w × h × d, cm) | Seats | Where it stands |
 |---|---|---|---|---|
