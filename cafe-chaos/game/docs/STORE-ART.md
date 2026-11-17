@@ -57,7 +57,7 @@ every size (consistent, crisp, and Meta needs the logo as its own file).
 
 ## Prompts (Nano Banana)
 
-Upload the Flow collage and the mochi icon as references with each. Replace [START] and [STYLE] with the shared lines below.
+Upload the Flow collage and the chosen Pinch image as references with each. Replace [START] and [STYLE] with the shared lines below.
 
 Shared lines (start and end of every prompt):
 
@@ -152,11 +152,45 @@ Shared lines (start and end of every prompt):
     Ensure the text appears once and is perfectly legible. Nothing else in
     the image. 4:1.
 
-### Store icon (no text) and the name-first shortcut icon
+### One icon everywhere (store, Quest library, browser shortcut)
 
-Store icon: the mochi icon already made (mochi with arms up, a cup tipping,
-mustard circle on moss) fits Meta's rules as it is. The name-first shortcut
-icon (browser and home screen) is a separate file: see the chat of Nov 17.
+The face of the game is the name, not a character. One icon is used in
+every place: the Meta store icon, the Quest library tile, the browser and
+home screen shortcut. Meta exempts the icon from the title rule but does
+not forbid text in it, so the name can be on it. It is built from the logo
+file (the same lettering), not drawn again, so the two always match.
+
+- Layout: "CAFÉ" over "CHAOS", stacked, filling about 70% of the width;
+  the tipping cup is the accent on the É; three motion ticks and a small
+  splash beside the cup. No characters.
+- Field: moss green #3d6136, with one soft mustard gold #f0c987 disc
+  behind the words.
+- Rules: square corners, solid, no transparency, 512×512 24-bit PNG.
+  Keep the words inside the centre 80% circle, so the shortcut's round
+  mask does not cut them.
+- Small sizes (favicon, 48 px and less): the name does not read there, so
+  use only the cup-É from the same logo on the same moss field.
+
+If you generate the icon instead of building it from the logo, upload the
+chosen wordmark as the reference and use:
+
+    Use the "CAFÉ CHAOS" lettering from the reference image exactly as
+    drawn. A square game icon: the words stacked, "CAFÉ" on the top line
+    and "CHAOS" below, big and centred, filling about 70% of the width.
+    Chunky hand-lettered capitals, cream fill, heavy black ink outline, koi
+    red offset shadow. A tiny steaming teacup tips over as the accent on
+    the É, with three short motion ticks and a small splash beside it.
+    Behind the words, one soft mustard gold #f0c987 disc on a flat moss
+    green #3d6136 field, edge to edge. Hand-drawn sketch-pen style, flat
+    marker fills, subtle paper grain. No characters, no faces, no other
+    text. Ensure the text appears once and is perfectly legible. Keep all
+    lettering inside the centre 80% of the square. 1:1.
+
+Exports from the one master: 512 (store, shortcut), 192 (shortcut),
+180 (Apple touch), 48 and 32 (favicon, cup only).
+
+Characters belong to the covers, as a cast. No single guest is the
+mascot; the pinched guest in The Pinch is one of the guests, not a brand.
 
 ## Sources
 
