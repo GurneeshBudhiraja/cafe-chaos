@@ -78,9 +78,23 @@ cabin's front corner to the bonfire (the stepping slabs); from the deck onto the
 is at walking height: a guest who crosses it is no harm (cute, even), but a path over it is 2 mm
 below the snow, so the grid's nearest-walkable logic treats it as floor.
 
+## The furniture (phase 2): `pieces_build.py`
+
+Five pieces, each its own glb (the game places them by the layout, `game/src/cafe/canada-layout.ts`),
+with the Japanese pieces' conventions: origin at the bottom centre, the front toward +Z, `Seat-N` at
+the seat top (1.6 cm) with its +Z toward the table, `Meal-N` on the table top (2.8 cm), `TableTop`.
+Flat materials from `kit.py`; 250–510 triangles each.
+
+| File | What | Size (w × h × d, cm) | Seats | Where it stands |
+|---|---|---|---|---|
+| `table-ca-2.glb` | square maple table on a pedestal, two slat-back chairs with red cushions, a napkin holder | 9.3 × 3.9 × 4.2 | 1–2 (chairs at x ±3.3) | the cabin's window wall, `TableSpot-1/2` (under the sockets) |
+| `table-ca-4.glb` | long maple table, a plaid-cushioned bench either side, a candle | 7.0 × 3.8 × 10.3 | 1–2 front bench, 3–4 back | the cabin's middle, `TableSpot-3`, turned 90° |
+| `patio-table.glb` | red steel bistro table with snow on it, two red bistro chairs | 9.0 × 3.7 × 4.4 | 1–2 | the deck, `PatioSpot-1/2` |
+| `dock-bench.glb` | pine bench for two facing +Z (the lake and the player), plaid cushion, snow on its back, a mug shelf on each arm (the meal spots) | 8.7 × 4.0 × 2.6 | 1–2 | the dock, `DockSpot` (y 0.030) |
+| `fire-chair.glb` | red Muskoka chair with a log stump beside it (the meal spot), snow on both | 5.7 × 4.7 × 3.5 | 1 | round the fire, `FireSpot-1/2/3`, each turned to face it |
+
 ## Still to come (see the plan)
 
-Phase 2: the furniture pieces (`table-ca-2`, `table-ca-4`, `patio-table`, `dock-bench`,
-`fire-chair`) and the musician's stand. Phase 3: the Canadian guests, baristas, janitors and the
+Phase 3: the Canadian guests, baristas, janitors and the
 violinist. Phase 4 (game): the café picker, the new wishes (`socket`, `outside`, `takeaway`, `lake`,
 `patio`, `bonfire`), the musician purchase, no passthrough dimming here.
