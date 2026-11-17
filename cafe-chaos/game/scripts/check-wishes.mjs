@@ -3,12 +3,12 @@
  * 1. every guest in the line has a name of its own and 1 to 3 wishes that
  *    can all be met together, and a dot over its head (its seconds, its
  *    timer ring, a pip for each wish);
- * 2. early in the evening guests have 1 wish; late, a mix of 1, 2 and 3;
+ * 2. at level 1 guests have 1 wish; at a high level, a mix of 1, 2 and 3;
  * 3. a hand over a guest brings up its request card beside the hand;
  * 4. carried over a seat, the card marks each wish that seat meets, and
  *    the seats that meet every wish are lit;
  * 5. let go there, its wishes are judged as the card said, once, and the
- *    result pops up over its head; it has no dot once seated;
+ *    result pops up over its head; its dot now counts its food wait down;
  * 6. a seated guest stays where it was put: a pinch on it picks nothing up;
  * 7. judged once: someone sitting at a loner's table later does not
  *    change the loner's result;
@@ -62,11 +62,11 @@ const hold = () => page.evaluate(() => { const g = window.__cafe.guests; g.spawn
 const pacer = setInterval(() => hold().catch(() => {}), 150);
 await hold();
 
-// 2. How many wishes, early and late in the evening (new guests made directly, then cleared away).
+// 2. How many wishes, at level 1 and at a high level (new guests made directly, then cleared away).
 const counts = await page.evaluate(() => {
   const g = window.__cafe.guests;
-  const sample = (evening) => {
-    g.evening = evening;
+  const sample = (level) => {
+    g.level = level;
     const out = [];
     for (let i = 0; i < 30; i++) {
       const guest = g.spawn();
@@ -75,18 +75,20 @@ const counts = await page.evaluate(() => {
     g.clear();
     return out;
   };
-  return { early: sample(10), late: sample(400) };
+  return { early: sample(1), late: sample(10) };
 });
 const lateSet = new Set(counts.late);
 check('early guests have 1 wish; late ones a mix of 1, 2 and 3', counts.early.every((n) => n === 1) && counts.late.every((n) => n >= 1 && n <= 3) && lateSet.has(2) && lateSet.has(3), `early ${counts.early.join('')}, late ${counts.late.join('')}`);
 
-// 1. The line, late in the evening.
-await page.evaluate(() => { window.__cafe.game.clock = 400; window.__cafe.guests.clear(); });
+// 1. The line, at a high level (a mix of wishes).
+// Every table open (the wishes need window and door seats), a high level, room in the line.
+await page.evaluate(() => { const { game, shop, system } = window.__cafe; shop.restore(shop.hires, system.tables); game.applyLocks(); game.level = 10; window.__cafe.guests.level = 10; window.__cafe.guests.queueCap = 5; window.__cafe.guests.clear(); });
 await until(() => window.__cafe.guests.line.length >= 4 && window.__cafe.guests.line.slice(0, 4).every((g) => g.state === 'queued' && !g.walk));
 await page.evaluate(() => (window.__cafe.guests.arrivals = false));
 await frames(4);
-const CLASH = [['window', 'door'], ['window', 'counter'], ['door', 'counter'], ['alone', 'company'], ['quiet', 'music'], ['quiet', 'company']];
-const line = await page.evaluate(() => window.__cafe.guests.line.map((g) => ({ id: g.id, name: g.name, wishes: g.wishes, dot: g.dial.sprite.visible })));
+const CLASH = [['window', 'door'], ['window', 'counter'], ['door', 'counter'], ['alone', 'company'], ['quiet', 'music'], ['quiet', 'company'], ['friend', 'alone'], ['friend', 'company']];
+// The guests standing in the line (a pair comes as two at once, so one more may still be walking up).
+const line = await page.evaluate(() => window.__cafe.guests.line.filter((g) => g.state === 'queued' && !g.walk).map((g) => ({ id: g.id, name: g.name, wishes: g.wishes, dot: g.dial.sprite.visible })));
 const names = new Set(line.map((g) => g.name));
 const fine = line.every((g) => g.wishes.length >= 1 && g.wishes.length <= 3 && new Set(g.wishes).size === g.wishes.length && CLASH.every(([a, b]) => !(g.wishes.includes(a) && g.wishes.includes(b))));
 check('every guest in line has its own name, 1-3 wishes that can all be met, and a dot', names.size === line.length && fine && line.every((g) => g.dot), JSON.stringify(line));
@@ -126,7 +128,7 @@ const carried = await page.evaluate(() => {
   const g = guests.carriedBy('right');
   if (!g || !g.target) return null;
   const each = guests.grantsEach(g, g.target);
-  const all = guests.seats.filter((s) => s.occupant === 0 && guests.wouldGrant(g, s)).map((s) => s.index).sort((a, b) => a - b);
+  const all = guests.seats.filter((s) => s.occupant === 0 && !s.locked && guests.wouldGrant(g, s)).map((s) => s.index).sort((a, b) => a - b);
   return { id: g.id, target: g.target.index, each, lit: [...guests.granting].map((s) => s.index).sort((a, b) => a - b), all, cardKey: guests.cards.shown[0] };
 });
 check('carried over a seat, the card marks each wish it meets, and the seats that meet them all are lit',
@@ -140,7 +142,7 @@ await pinch(0);
 await until((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.state === 'seated', first.id, 30000);
 await h.screenshot('artifacts/wishes-4-result.png');
 const seated = await page.evaluate((id) => { const { guests } = window.__cafe; const g = guests.guests.find((x) => x.id === id); return { seat: g.seat?.index, met: g.wishMet, results: guests.popups.shown.result ?? 0, dot: g.dial.sprite.visible }; }, first.id);
-check('let go, its wishes are judged as the card said, the result pops up, and it has no dot', seated.seat === carried?.target && JSON.stringify(seated.met) === JSON.stringify(carried?.each) && seated.results === before + 1 && !seated.dot, JSON.stringify(seated));
+check('let go, its wishes are judged as the card said, the result pops up, and its dot counts the food wait down', seated.seat === carried?.target && JSON.stringify(seated.met) === JSON.stringify(carried?.each) && seated.results === before + 1 && seated.dot, JSON.stringify(seated));
 
 // 6. A seated guest stays put: a pinch on it picks nothing up.
 const picked = await page.evaluate(() => window.__cafe.guests.pickedUp);
@@ -181,13 +183,9 @@ check('judged once: the loner keeps its result when someone joins its table; the
 await page.evaluate(() => (window.__cafe.guests.mealSeconds = 3));
 await until(() => window.__cafe.score.log.filter((e) => e.kind === 'paid').length >= 3, null, 400000);
 const log = await page.evaluate(() => window.__cafe.score.log.filter((e) => e.kind === 'paid'));
-const TIERS = { quick: 12, fair: 8, late: 5 };
-const right = log.every((e) => {
-  const { met, of } = e.wishes;
-  const bonus = of >= 2 && met === of ? 4 : 0;
-  return e.coins === TIERS[e.tier] + met * 4 + bonus;
-});
-check('each guest pays its tier, 4 a wish met, 4 more for all of two or more', log.length >= 3 && right, JSON.stringify(log.map((e) => ({ tier: e.tier, wishes: e.wishes, coins: e.coins }))));
+const pay = (share, met, of) => Math.round(1 + 9 * (0.4 * (1 - Math.min(1, Math.max(0, share))) + 0.6 * (of > 0 ? met / of : 1)));
+const right = log.every((e) => e.coins === pay(e.share, e.wishes.met, e.wishes.of) && e.coins >= 1 && e.coins <= 10);
+check('each guest pays once, 1 to 10 coins: by how quickly it was seated and the share of its wishes met', log.length >= 3 && right, JSON.stringify(log.map((e) => ({ share: +e.share.toFixed(2), wishes: e.wishes, coins: e.coins }))));
 
 clearInterval(pacer);
 const errors = await h.finish();

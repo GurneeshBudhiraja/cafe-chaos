@@ -76,32 +76,57 @@ export interface StartState {
   kind: 'first' | 'returning';
   coins: number;
   staff: number;
-  /** Best time as m:ss, or null. */
-  best: string | null;
+  /** The level the save is on. */
+  level: number;
 }
 export interface SettingsState {
   music: number;
   sounds: number;
 }
-/** The pause card: the time open, and the best time (m:ss, or null). */
+/** The pause card: the level, and guests served in it of the number that passes it. */
 export interface PauseState {
-  time: string;
-  best: string | null;
+  level: number;
+  served: number;
+  goal: number;
 }
-/** The shop: the bank, and each barista in hiring order. */
-export interface ShopState {
+/** The buy card: the table pointed at (its name, its picture and seats), what it costs, and the bank. */
+export interface BuyState {
+  name: string;
+  /** Its picture in the icon set (ICONS). */
+  icon: number;
+  seats: number;
+  price: number;
   coins: number;
-  rows: {
-    name: string;
-    /** 'working': hired (or the first). 'hire': next, and the bank can pay. 'short': next, and it cannot. 'later': after the next. */
-    status: 'working' | 'hire' | 'short' | 'later';
-    price?: number;
-  }[];
+}
+/** The card when the café's happiness ran out: the level, and how far it got. */
+export interface FailState {
+  level: number;
+  served: number;
+  goal: number;
+  /** Guests who left unhappy in the level: why the happiness ran out. */
+  left: number;
 }
 export interface WarnState {
   coins: number;
   staff: number;
-  best: string | null;
+  level: number;
+}
+
+/**
+ * The icon set (public/models/unlock-icons.png, rendered in Blender from
+ * the real models in the café's materials): 4 x 2 tiles of 256 px. The
+ * staff and the tables are shown by their pictures, not drawings.
+ */
+export const ICONS = { barista: 0, table2: 1, table4: 2, bar: 3, quiet: 4, janitor: -1 } as const;
+let icons: HTMLImageElement | null = null;
+const iconListeners: (() => void)[] = [];
+if (typeof Image !== 'undefined') {
+  const img = new Image();
+  img.onload = () => {
+    icons = img;
+    for (const f of iconListeners) f();
+  };
+  img.src = `${import.meta.env.BASE_URL}models/unlock-icons.png`;
 }
 
 let cover: HTMLImageElement | null = null;
@@ -144,12 +169,12 @@ export class StartMenu {
   /** What the sheet shows ('none' when it is closed). */
   sheetKind: 'none' | 'settings' | 'warn' | 'quit' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card or the shop. */
-  cardKind: 'start' | 'pause' | 'shop' = 'start';
+  cardKind: 'start' | 'pause' | 'failed' | 'buy' = 'start';
   private seed = 1;
   private clock = 0;
-  private start: StartState = { kind: 'first', coins: 0, staff: 1, best: null };
+  private start: StartState = { kind: 'first', coins: 0, staff: 1, level: 1 };
   private settings: SettingsState = { music: 2, sounds: 3 };
-  private warn: WarnState = { coins: 0, staff: 1, best: null };
+  private warn: WarnState = { coins: 0, staff: 1, level: 1 };
   private readonly k: number;
   /** How to play's scale (metres per design unit). */
   private readonly kh: number;
@@ -163,6 +188,7 @@ export class StartMenu {
     this.k = this.sheet.width / W;
     this.kh = this.how.width / HW;
     coverListeners.push(() => this.card.paint());
+    iconListeners.push(() => this.card.paint());
   }
 
   /** How to play, in front of the eyes where the start card stands (the game hides the card behind), from `index`. */
@@ -270,13 +296,23 @@ export class StartMenu {
     this.card.show(true);
   }
 
-  /** The shop (in a run, paused). Shown again after each hire. */
-  showShop(state: ShopState): void {
-    this.cardKind = 'shop';
+  /** A locked table pointed at and pinched: buy it, or not now. Shown again if the bank changes. */
+  showBuy(state: BuyState): void {
+    this.cardKind = 'buy';
     this.card.resize(START_SIZE.width, START_SIZE.height);
-    this.layoutShop(state);
+    this.layoutBuy(state);
     this.card.show(true);
   }
+
+  /** The café's happiness ran out: the level starts again (TRY AGAIN), or back to the menu. */
+  showFailed(state: FailState): void {
+    this.cardKind = 'failed';
+    this.card.resize(START_SIZE.width, START_SIZE.height);
+    this.layoutFailed(state);
+    this.card.show(true);
+  }
+
+
 
   openSettings(state: SettingsState): void {
     this.settings = state;
@@ -405,7 +441,7 @@ export class StartMenu {
     if (returning) {
       const newY = bottom - TOUCH_GAP - 96;
       const contY = newY - TOUCH_GAP - 140;
-      buttons.push(this.button(this.card, 'continue', cx, contY, cw, 140, 'primary', 'CONTINUE', `${s.coins.toLocaleString('en')} coins · ${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`));
+      buttons.push(this.button(this.card, 'continue', cx, contY, cw, 140, 'primary', 'CONTINUE', `Level ${s.level} · ${s.coins.toLocaleString('en')} coins`));
       buttons.push(this.button(this.card, 'new', cx, newY, cw, 96, 'secondary', 'NEW GAME'));
     } else {
       const h = 200;
@@ -445,18 +481,19 @@ export class StartMenu {
       rc.rectangle(ax, ay, aw, ah, this.o({ strokeWidth: 3, seed: this.seed + 3 }));
       text(ctx, 'CAFÉ', ax + aw / 2, ay + ah - 150, 74, '#f2ebdd');
       text(ctx, 'CHAOS', ax + aw / 2, ay + ah - 72, 74, '#f2ebdd');
-      // Your best time: a lantern-coloured badge, only once there is one.
-      if (returning && s.best) {
+      // The level the save is on: a lantern-coloured badge.
+      if (returning) {
+        const word = `${s.level}`;
         ctx.font = font(30);
-        const lw = ctx.measureText('BEST').width;
+        const lw = ctx.measureText('LEVEL').width;
         ctx.font = font(44);
-        const tw = ctx.measureText(s.best).width;
+        const tw = ctx.measureText(word).width;
         const bx = ax + 18;
         const by = ay + 18;
         const bw = 24 + lw + 18 + tw + 24;
         rc.rectangle(bx, by, bw, 84, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, seed: this.seed + 50 }));
-        text(ctx, 'BEST', bx + 24, by + 44, 30, SKETCH.ink, 'left');
-        text(ctx, s.best, bx + bw - 22, by + 44, 44, SKETCH.ink, 'right');
+        text(ctx, 'LEVEL', bx + 24, by + 44, 30, SKETCH.ink, 'left');
+        text(ctx, word, bx + bw - 22, by + 44, 44, SKETCH.ink, 'right');
       }
       ctx.restore();
     }, buttons);
@@ -606,7 +643,7 @@ export class StartMenu {
   private layoutWarn(): void {
     const s = this.warn;
     const H = Math.round(this.sheet.height / this.k);
-    const lost = [`${s.coins.toLocaleString('en')} coins`, `${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`].concat(s.best ? [`best time (${s.best})`] : []);
+    const lost = [`${s.coins.toLocaleString('en')} coins`, `${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`].concat(s.level > 1 ? [`level ${s.level}`] : []);
     const sentence = `This deletes your ${lost.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
     const buttons: Button[] = [
       this.button(this.sheet, 'fresh', PAD, 300, W - PAD * 2, 120, 'danger', 'DELETE AND START'),
@@ -687,8 +724,8 @@ export class StartMenu {
 
   /**
    * The pause card, wide like the start card: Paused, the time open and the
-   * best on the left; RESUME, How to play and Settings, and END THE
-   * EVENING on the right.
+   * guests served on the left; RESUME, How to play and Settings, and MAIN
+   * MENU (the level is saved as it stands) on the right.
    */
   private layoutPause(s: PauseState): void {
     const SW = Math.round(this.card.width / this.k);
@@ -705,7 +742,7 @@ export class StartMenu {
       this.button(this.card, 'resume', cx, yResume, cw, 150, 'primary', 'RESUME'),
       this.button(this.card, 'how', cx, yRow, half, 96, 'secondary', '? How to play', undefined, false, 30),
       this.button(this.card, 'settings', cx + half + TOUCH_GAP, yRow, half, 96, 'secondary', '⚙ Settings', undefined, false, 30),
-      this.button(this.card, 'end', cx, yEnd, cw, 96, 'danger', 'END THE EVENING'),
+      this.button(this.card, 'end', cx, yEnd, cw, 96, 'secondary', 'MAIN MENU'),
     ];
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
@@ -714,71 +751,107 @@ export class StartMenu {
       this.paper(ctx, pen(this.card.canvas), 0, H, SW);
       const mid = lx + lw / 2;
       text(ctx, 'Paused', mid, H / 2 - 90, 68, SKETCH.ink);
-      text(ctx, s.time, mid, H / 2 + 6, 64, SKETCH.ink);
-      if (s.best) text(ctx, `BEST ${s.best}`, mid, H / 2 + 88, 34, SKETCH.soft, 'center', false);
+      text(ctx, `Level ${s.level}`, mid, H / 2 + 6, 64, SKETCH.ink);
+      text(ctx, `${s.served} of ${s.goal} guests served`, mid, H / 2 + 88, 34, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
   }
 
-  /** A barista's place in the shop: a round frame with a steaming cup in their colour. */
-  private portrait(rc: RoughCanvas, x: number, y: number, d: number, tint: string, seed: number): void {
-    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
-    rc.rectangle(x - d * 0.2, y - d * 0.08, d * 0.4, d * 0.3, this.o({ seed: seed + 1, strokeWidth: 2.5, fill: tint, fillStyle: 'solid' }));
-    rc.arc(x + d * 0.21, y + d * 0.06, d * 0.16, d * 0.16, -Math.PI / 2, Math.PI / 2, false, this.o({ seed: seed + 2, strokeWidth: 2.5 }));
-    for (const side of [-1, 0, 1]) {
-      const sx = x + side * d * 0.1;
-      rc.curve([[sx, y - d * 0.16], [sx + d * 0.04, y - d * 0.24], [sx, y - d * 0.32]], this.o({ seed: seed + 4 + side, strokeWidth: 2, stroke: SKETCH.soft }));
-    }
+  /**
+   * The café's happiness ran out: the level starts again. The coins and
+   * the staff are kept, and the card says so; TRY AGAIN is the main
+   * button.
+   */
+  private layoutFailed(s: FailState): void {
+    const SW = Math.round(this.card.width / this.k);
+    const H = Math.round(this.card.height / this.k);
+    const lx = PAD;
+    const lw = 360;
+    const cx = lx + lw + 30;
+    const cw = SW - PAD - cx;
+    const yMenu = H - PAD - 96;
+    const buttons: Button[] = [
+      this.button(this.card, 'again', cx, yMenu - TOUCH_GAP - 150, cw, 150, 'primary', 'TRY AGAIN'),
+      this.button(this.card, 'menu', cx, yMenu, cw, 96, 'secondary', 'MAIN MENU'),
+    ];
+    this.card.set((ctx) => {
+      ctx.clearRect(0, 0, this.card.width, this.card.height);
+      ctx.save();
+      ctx.scale(this.k, this.k);
+      this.paper(ctx, pen(this.card.canvas), 0, H, SW);
+      const mid = lx + lw / 2;
+      text(ctx, 'A rough evening', mid, H / 2 - 110, 46, SKETCH.ink);
+      text(ctx, `Level ${s.level}`, mid, H / 2 - 20, 64, SKETCH.ink);
+      text(ctx, `${s.served} of ${s.goal} guests served`, mid, H / 2 + 50, 34, SKETCH.soft, 'center', false);
+      text(ctx, `${s.left} ${s.left === 1 ? 'guest' : 'guests'} left unhappy`, mid, H / 2 + 98, 30, SKETCH.koi, 'center', false);
+      text(ctx, 'Your coins and staff are kept.', mid, H / 2 + 146, 30, SKETCH.soft, 'center', false);
+      ctx.restore();
+    }, buttons);
   }
 
   /**
-   * The shop, wide like the start card: the title and the bank across the
-   * top with CLOSE at the right (as Quit on the start card), then a row for
-   * each barista: their portrait and name, and HIRE with the price (or
-   * "Works for you").
+   * The buy card, wide like the start card: on the left a padlock seal
+   * and what the table is; on the right the price beside the bank, BUY
+   * (moss when the bank can pay; pale, and refused, when it cannot: the
+   * card says how many more coins) and NOT NOW.
    */
-  private layoutShop(s: ShopState): void {
+  private layoutBuy(s: BuyState): void {
     const SW = Math.round(this.card.width / this.k);
     const H = Math.round(this.card.height / this.k);
-    const HEAD = 84;
-    const ROW_GAP = 16;
-    const y0 = PAD + HEAD + 20;
-    const ROW = Math.min(124, Math.floor((H - PAD - y0 - ROW_GAP * (s.rows.length - 1)) / Math.max(1, s.rows.length)));
-    const buttons: Button[] = [];
-    const bw = 290;
-    const bh = Math.min(100, ROW - 16);
-    let y = y0;
-    s.rows.forEach((r) => {
-      if (r.status !== 'working' && r.price !== undefined) {
-        buttons.push(this.priceButton(this.card, r.status === 'hire' ? 'hire' : 'hire-later', SW - PAD - bw, y + (ROW - bh) / 2, bw, bh, r.status === 'hire' ? 'primary' : 'off', 'HIRE', r.price));
-      }
-      y += ROW + ROW_GAP;
-    });
-    const qw = 170;
-    buttons.push(this.button(this.card, 'shop-close', SW - PAD - qw, PAD, qw, HEAD, 'secondary', 'CLOSE'));
-    const tints = ['#7a9a6e', '#d48a8a', '#8aa3c9'];
+    const lx = PAD;
+    const lw = 360;
+    const cx = lx + lw + 30;
+    const cw = SW - PAD - cx;
+    const can = s.coins >= s.price;
+    const yNo = H - PAD - 96;
+    const buttons: Button[] = [
+      this.priceButton(this.card, 'buy-yes', cx, yNo - TOUCH_GAP - 150, cw, 150, can ? 'primary' : 'off', 'BUY', s.price),
+      this.button(this.card, 'buy-no', cx, yNo, cw, 96, 'secondary', 'NOT NOW'),
+    ];
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
       ctx.scale(this.k, this.k);
       const rc = pen(this.card.canvas);
       this.paper(ctx, rc, 0, H, SW);
-      text(ctx, 'Hire baristas', PAD + 4, PAD + HEAD / 2, 52, SKETCH.ink, 'left');
-      const coins = `${s.coins.toLocaleString('en')} coins`;
-      ctx.font = font(36);
-      const cw = ctx.measureText(coins).width;
-      const coinX = SW - PAD - qw - 40 - cw;
-      sketchCoin(rc, coinX - 26, PAD + HEAD / 2, 38, this.seed + 3, 2.5);
-      text(ctx, coins, coinX, PAD + HEAD / 2 + 2, 36, SKETCH.ink, 'left');
-      let ry = y0;
-      s.rows.forEach((r, i) => {
-        const d = Math.min(100, ROW - 10);
-        this.portrait(rc, PAD + d / 2 + 8, ry + ROW / 2, d, tints[i % tints.length], this.seed + 100 + i * 10);
-        text(ctx, r.name, PAD + d + 40, ry + ROW / 2 + 2, 44, SKETCH.ink, 'left');
-        if (r.status === 'working') text(ctx, 'Works for you', SW - PAD - 14, ry + ROW / 2 + 2, 32, SKETCH.moss, 'right');
-        ry += ROW + ROW_GAP;
-      });
+      const mid = lx + lw / 2;
+      // The table's picture (the real model's render), a small padlock on its frame.
+      const sy = H / 2 - 40;
+      this.iconPortrait(ctx, rc, s.icon, mid, sy, 260, this.seed + 80);
+      const lx2 = mid + 92;
+      const ly2 = sy + 88;
+      rc.circle(lx2, ly2, 64, this.o({ fill: SKETCH.paper, fillStyle: 'solid', stroke: SKETCH.timber, strokeWidth: 3, seed: this.seed + 84 }));
+      rc.rectangle(lx2 - 15, ly2 - 4, 30, 24, this.o({ fill: SKETCH.ink, fillStyle: 'solid', stroke: SKETCH.ink, seed: this.seed + 81 }));
+      rc.arc(lx2, ly2 - 4, 22, 28, Math.PI, Math.PI * 2, false, this.o({ strokeWidth: 4, seed: this.seed + 82 }));
+      text(ctx, s.name, mid, sy + 182, 44, SKETCH.ink);
+      text(ctx, `Seats ${s.seats}`, mid, sy + 230, 32, SKETCH.soft, 'center', false);
+      const tx = cx + cw / 2;
+      text(ctx, 'Open this table?', tx, PAD + 60, 50, SKETCH.ink);
+      const coinsY = PAD + 150;
+      ctx.font = font(38);
+      const word = `You have ${s.coins.toLocaleString('en')}`;
+      const ww = ctx.measureText(word).width;
+      rc.circle(tx - ww / 2 - 30, coinsY, 40, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, seed: this.seed + 83 }));
+      text(ctx, word, tx + 18, coinsY, 38, SKETCH.ink);
+      if (!can) text(ctx, `Need ${(s.price - s.coins).toLocaleString('en')} more`, tx, coinsY + 56, 30, SKETCH.koi, 'center', false);
       ctx.restore();
     }, buttons);
+  }
+
+  /** A model's picture from the icon set in a round paper frame (a blank disc until the set has loaded). */
+  private iconPortrait(ctx: CanvasRenderingContext2D, rc: RoughCanvas, tile: number, x: number, y: number, d: number, seed: number): void {
+    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
+    if (!icons || tile < 0) return;
+    const tw = icons.width / 4;
+    const th = icons.height / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, d / 2 - 4, 0, Math.PI * 2);
+    ctx.clip();
+    // The renders have room round them: the middle of the tile, larger, fills the frame.
+    const crop = 0.18;
+    const s = d * 0.98;
+    ctx.drawImage(icons, (tile % 4) * tw + tw * crop, Math.floor(tile / 4) * th + th * crop * 0.6, tw * (1 - crop * 2), th * (1 - crop * 2), x - s / 2, y - s / 2, s, s);
+    ctx.restore();
   }
 }

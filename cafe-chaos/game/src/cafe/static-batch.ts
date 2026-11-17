@@ -9,7 +9,9 @@
  * carry the anchors the game reads (seats, meal spots), and they give
  * the café its bounds. Anything that will move or be swapped on its own
  * (a guest, a dirty table) is marked `userData.dynamic = true` on its
- * root before batching and is left alone.
+ * root before batching and is left alone. `unbatchStatic` undoes it, so a
+ * room whose furniture changed (a table opened: its grey ghost turned
+ * solid) can be folded again.
  */
 
 import { Group, Matrix4, Mesh, type BufferGeometry, type Material, type Object3D } from '@iwsdk/core';
@@ -62,6 +64,8 @@ export function batchStatic(cafe: Group): BatchReport {
 
   const batch = new Group();
   batch.name = 'StaticBatch';
+  const sources: Mesh[] = [];
+  batch.userData.sources = sources;
   const report: BatchReport = { merged: 0, batches: 0 };
   const local = new Matrix4();
   for (const { material, meshes } of groups.values()) {
@@ -80,10 +84,23 @@ export function batchStatic(cafe: Group): BatchReport {
     for (const source of meshes) {
       source.visible = false;
       source.userData.batched = true;
+      sources.push(source);
     }
     report.merged += meshes.length;
     report.batches++;
   }
   cafe.add(batch);
   return report;
+}
+
+/** Undo `batchStatic(cafe)`: the batches go (their geometry freed), the folded meshes show again. */
+export function unbatchStatic(cafe: Group): void {
+  const batch = cafe.children.find((c) => c.name === 'StaticBatch');
+  if (!batch) return;
+  for (const source of (batch.userData.sources as Mesh[] | undefined) ?? []) {
+    source.visible = true;
+    delete source.userData.batched;
+  }
+  for (const mesh of batch.children) (mesh as Mesh).geometry?.dispose();
+  cafe.remove(batch);
 }

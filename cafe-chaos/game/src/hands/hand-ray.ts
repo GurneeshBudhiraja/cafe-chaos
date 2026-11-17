@@ -1,12 +1,17 @@
 /**
- * The hand ray's look: a faint cream line from the hand to the bar, and a
- * small cursor where it meets the bar (a mint dot in a cream ring). Meta:
- * for distant targets "the cursor on the target surface is the primary
- * visual", so the line is kept faint and thin and the cursor clear.
+ * The hand ray's look: a faint cream line from the hand to what it points
+ * at (the bar, a card, a padlock), and a small cursor where it meets it (a
+ * mint dot in a cream ring). Meta: for distant targets "the cursor on the
+ * target surface is the primary visual", so the line is kept faint and
+ * thin and the cursor clear.
  *
- * Each hand has its own; they show only while that hand points at the bar
- * (GameSystem decides), fade in and out quickly, and are drawn over
- * everything so the café never hides them.
+ * A raised hand pointing at nothing yet shows a short beam (`idle`: 25 cm,
+ * as the headset's own hand ray, and no cursor), so the ray is there to be
+ * found: the first playtest's friend never knew the bar could be pointed
+ * at, because the ray only appeared once it was already on a button.
+ *
+ * Each hand has its own; GameSystem decides when; they fade in and out
+ * quickly, and are drawn over everything so the café never hides them.
  */
 
 import { CircleGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, Quaternion, Vector3 } from '@iwsdk/core';
@@ -21,6 +26,8 @@ export const RAY_LOOK = {
   fade: 14,
   /** The cursor stands this far in front of the bar's face (metres), so it is never inside it. */
   lift: 0.002,
+  /** The beam of a raised hand pointing at nothing: its length (metres; Meta's hand beam is 25 cm) and opacity. */
+  idle: { length: 0.25, opacity: 0.22 },
 };
 
 interface Ray {
@@ -30,6 +37,8 @@ interface Ray {
   dot: MeshBasicMaterial;
   /** 0 hidden to 1 shown, eased. */
   shown: number;
+  /** Showing the short beam of a hand pointing at nothing (no cursor). */
+  idle: boolean;
 }
 
 export class HandRays {
@@ -64,25 +73,35 @@ export class HandRays {
     }
     line.visible = false;
     cursor.visible = false;
-    return { line, cursor, ring, dot, shown: 0 };
+    return { line, cursor, ring, dot, shown: 0, idle: false };
   }
 
   /**
    * Show a hand's ray from `from` to `to` (world), the cursor facing along
-   * `normal` (the bar's face, toward the player); or, with `to` null, fade
-   * it out.
+   * `normal` (the bar's face, toward the player); with `to` null but an
+   * `idle` direction, the short beam from `from` that way and no cursor;
+   * with neither, fade it out.
    */
-  update(hand: Hand, from: Vector3 | null, to: Vector3 | null, normal: Vector3 | null, delta: number): void {
+  update(hand: Hand, from: Vector3 | null, to: Vector3 | null, normal: Vector3 | null, delta: number, idle: Vector3 | null = null): void {
     const ray = this.rays[hand];
     const on = !!(from && to && normal);
-    ray.shown += ((on ? 1 : 0) - ray.shown) * Math.min(1, RAY_LOOK.fade * delta);
-    if (!on && ray.shown < 0.02) ray.shown = 0;
+    const beam = !on && !!(from && idle);
+    ray.shown += ((on || beam ? 1 : 0) - ray.shown) * Math.min(1, RAY_LOOK.fade * delta);
+    if (!on && !beam && ray.shown < 0.02) ray.shown = 0;
     const visible = ray.shown > 0;
-    ray.line.visible = ray.cursor.visible = visible;
+    if (on || beam) ray.idle = beam;
+    ray.line.visible = visible;
+    ray.cursor.visible = visible && !ray.idle;
     if (!visible) return;
-    ray.line.material.opacity = RAY_LOOK.line.opacity * ray.shown;
+    ray.line.material.opacity = (ray.idle ? RAY_LOOK.idle.opacity : RAY_LOOK.line.opacity) * ray.shown;
     ray.ring.opacity = 0.85 * ray.shown;
     ray.dot.opacity = ray.shown;
+    if (beam) {
+      ray.line.position.copy(from!);
+      ray.line.quaternion.setFromUnitVectors(this.up, this.dir.copy(idle!).normalize());
+      ray.line.scale.set(1, RAY_LOOK.idle.length, 1);
+      return;
+    }
     if (!on) return;
     this.dir.copy(to!).sub(from!);
     const length = this.dir.length();
@@ -97,5 +116,10 @@ export class HandRays {
   /** Is a hand's ray showing (at all)? */
   showing(hand: Hand): boolean {
     return this.rays[hand].shown > 0;
+  }
+
+  /** Is it the short beam of a hand pointing at nothing (no cursor)? */
+  idleBeam(hand: Hand): boolean {
+    return this.rays[hand].shown > 0 && this.rays[hand].idle;
   }
 }

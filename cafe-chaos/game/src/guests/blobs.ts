@@ -6,10 +6,11 @@
  * blobs are one instanced mesh: one draw call however many guests.
  */
 
+import { laidOn } from '../lib/decal.js';
 import { CanvasTexture, InstancedMesh, Matrix4, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3 } from '@iwsdk/core';
 
-/** The blob's diameter under a guest of full size (metres), and its darkness. */
-const BLOB = { size: 0.046, opacity: 0.3 };
+/** The blob's diameter under a guest of full size (metres), its darkness, and how far it is lifted off the floor. */
+const BLOB = { size: 0.046, opacity: 0.3, lift: 0.002 };
 
 function blobTexture(): CanvasTexture {
   const size = 64;
@@ -33,7 +34,8 @@ export class Blobs {
   private readonly place = new Vector3();
 
   constructor(count: number) {
-    const material = new MeshBasicMaterial({ color: 0x120a06, alphaMap: blobTexture(), transparent: true, opacity: BLOB.opacity, depthWrite: false, toneMapped: false });
+    // Laid on the floor: lifted BLOB.lift and counted nearer (lib/decal.ts), so it never flickers against the floor.
+    const material = laidOn(new MeshBasicMaterial({ color: 0x120a06, alphaMap: blobTexture(), transparent: true, opacity: BLOB.opacity, depthWrite: false, toneMapped: false }));
     this.mesh = new InstancedMesh(new PlaneGeometry(1, 1), material, count);
     this.mesh.name = 'GuestBlobs';
     this.mesh.userData.dynamic = true;
@@ -51,7 +53,7 @@ export class Blobs {
   add(x: number, y: number, z: number, strength: number): void {
     if (strength <= 0.02 || this.mesh.count >= this.mesh.instanceMatrix.count) return;
     this.scale.setScalar(BLOB.size * (0.6 + 0.4 * strength));
-    this.matrix.compose(this.place.set(x, y + 0.0007, z), this.flat, this.scale);
+    this.matrix.compose(this.place.set(x, y + BLOB.lift, z), this.flat, this.scale);
     this.mesh.setMatrixAt(this.mesh.count++, this.matrix);
   }
 

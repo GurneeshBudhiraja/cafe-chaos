@@ -93,7 +93,7 @@ await frames(3);
 await poke('w-hire');
 await page.waitForFunction(() => window.__cafe.baristas.staff.length >= 2, null, { timeout: 60000 }).catch(() => {});
 s = await state();
-check('the right fingertip on Hire hires a server', s.staff === 2 && s.bank === 40, JSON.stringify(s));
+check('the right fingertip on Hire hires a server', s.staff === 2 && s.bank === 60, JSON.stringify(s));
 await h.screenshot('artifacts/wrist-2-hired.png');
 // 4. Pause, then resume.
 await poke('w-pause');

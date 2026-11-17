@@ -33,7 +33,7 @@ for (const player of players) {
   await page.evaluate((scale) => {
     const c = window.__cafe;
     localStorage.clear();
-    c.game.save.bank = 0; c.game.save.hires = 0; c.game.save.bestSeconds = 0; c.score.bank = 0; c.shop.restore(0);
+    c.game.save.bank = 0; c.game.save.hires = 0; c.score.bank = 0; c.shop.restore(0);
     c.system.placed = true;
     c.system.timeScale = scale;
   }, SCALE);

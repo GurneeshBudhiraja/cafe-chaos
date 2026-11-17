@@ -12,7 +12,10 @@
  *   no singer near;
  * - `alone`: a table to itself;
  * - `company`: a table shared with another guest;
- * - `music`: near a guest who sings.
+ * - `music`: near a guest who sings;
+ * - `friend`: at the same table as the friend it came with (a pair).
+ *   Before the friend is seated a seat counts if its table has a free seat
+ *   left for the friend; once both sit it counts if they share a table.
  *
  * Now and then a guest is a singer: notes float up from it while it
  * sits. It wants company (an audience); music lovers want to be near it,
@@ -31,7 +34,7 @@
 import type { Vector3 } from '@iwsdk/core';
 import type { Seat } from './seats.js';
 
-export type WishId = 'window' | 'door' | 'counter' | 'quiet' | 'alone' | 'company' | 'music';
+export type WishId = 'window' | 'door' | 'counter' | 'quiet' | 'alone' | 'company' | 'music' | 'friend';
 
 export interface WishInfo {
   id: WishId;
@@ -49,6 +52,7 @@ export const WISHES: Record<WishId, WishInfo> = {
   alone: { id: 'alone', wants: 'a table to itself', says: 'Just me today, please.' },
   company: { id: 'company', wants: 'some company', says: "Don't sit me on my own!" },
   music: { id: 'music', wants: 'to sit near the singer', says: 'I love a good tune.' },
+  friend: { id: 'friend', wants: 'to sit with its friend', says: 'We came together!' },
 };
 
 /** Each wish in a few words, for the request card's rows (ui/wish-card.ts). */
@@ -60,6 +64,7 @@ export const WISH_SHORT: Record<WishId, string> = {
   alone: 'Table to itself',
   company: 'Some company',
   music: 'Near the singer',
+  friend: 'With my friend',
 };
 
 /** The wishes a guest may be given when nobody on stage sings (`music` needs a singer). */
@@ -90,6 +95,17 @@ export interface Sitter {
   sings: boolean;
 }
 
+/**
+ * For the `friend` wish: the friend's id, and the seats free now (open,
+ * clean, nobody on them), to tell whether a table still has room for it.
+ */
+export interface Friendship {
+  friend: number;
+  free: readonly Seat[];
+  /** The friend is still to be seated (in the line or a hand). False once it has gone (it can no longer join). */
+  waiting: boolean;
+}
+
 /** Which table each seat is at: the index of the nearest table, bar or corner piece (seats at one table share it). */
 export function tablesOf(seats: Seat[], pieces: { name: string; position: Vector3 }[]): Map<number, number> {
   const tables = pieces.map((piece, index) => ({ piece, index })).filter(({ piece }) => /table|bar|quiet|booth|bench/i.test(piece.name));
@@ -114,7 +130,7 @@ export function tablesOf(seats: Seat[], pieces: { name: string; position: Vector
  * they are? `tables` is from `tablesOf`; `quietCorner` is the table index
  * of the quiet corner (-1 if the café has none).
  */
-export function grants(wish: WishId, seat: Seat, self: number, sitters: Sitter[], tables: Map<number, number>, quietCorner: number): boolean {
+export function grants(wish: WishId, seat: Seat, self: number, sitters: Sitter[], tables: Map<number, number>, quietCorner: number, friendship: Friendship | null = null): boolean {
   const table = tables.get(seat.index) ?? -1;
   const mates = sitters.filter((s) => s.id !== self && (tables.get(s.seat.index) ?? -2) === table).length;
   const singerNear = sitters.some((s) => s.id !== self && s.sings && Math.hypot(s.seat.position.x - seat.position.x, s.seat.position.z - seat.position.z) <= PLACES.earshot);
@@ -133,7 +149,30 @@ export function grants(wish: WishId, seat: Seat, self: number, sitters: Sitter[]
       return mates > 0;
     case 'music':
       return singerNear;
+    case 'friend': {
+      if (!friendship) return false;
+      const friend = sitters.find((s) => s.id === friendship.friend);
+      if (friend) return (tables.get(friend.seat.index) ?? -2) === table;
+      // The friend is not seated yet: this table must have another free seat for it. Gone (or fuming): never.
+      if (!friendship.waiting) return false;
+      return friendship.free.some((s) => s !== seat && (tables.get(s.index) ?? -2) === table);
+    }
   }
+}
+
+/**
+ * The wishes some open seat could meet, given the seats that are open
+ * (not on a locked table): a place wish only if a seat is in that place;
+ * company and alone always (every table seats two or more, or stands
+ * alone); quiet always (an empty table is quiet). With only the two
+ * starting tables open, nobody wishes for the window.
+ */
+export function openWishes(open: readonly Seat[], quietCorner: number): WishId[] {
+  const out: WishId[] = ['quiet', 'alone', 'company'];
+  if (open.some((s) => s.position.x < PLACES.windowX)) out.push('window');
+  if (open.some((s) => s.position.x > PLACES.doorX)) out.push('door');
+  if (open.some((s) => s.position.z < PLACES.counterZ && s.table !== quietCorner)) out.push('counter');
+  return out;
 }
 
 /** A name not in use on stage. */
@@ -155,6 +194,9 @@ const CLASHES: [WishId, WishId][] = [
   ['alone', 'company'],
   ['quiet', 'music'],
   ['quiet', 'company'],
+  ['friend', 'alone'],
+  ['friend', 'company'],
+  ['friend', 'quiet'],
 ];
 
 /** Can these wishes all be met together? */
@@ -169,8 +211,8 @@ export function compatible(wishes: WishId[]): boolean {
  * met by some seat in the café: at most one place wish, and the rest about
  * company and quiet, which any table can grant.
  */
-export function pickWishes(count: number, singerAbout: boolean, last: WishId[], random: () => number = Math.random): WishId[] {
-  const pool = singerAbout ? [...ALWAYS, 'music' as const] : [...ALWAYS];
+export function pickWishes(count: number, singerAbout: boolean, last: WishId[], random: () => number = Math.random, open: readonly WishId[] = ALWAYS): WishId[] {
+  const pool: WishId[] = singerAbout ? [...open, 'music' as const] : [...open];
   const want = Math.max(1, Math.min(3, Math.round(count)));
   for (let attempt = 0; attempt < 24; attempt++) {
     const picked: WishId[] = [];

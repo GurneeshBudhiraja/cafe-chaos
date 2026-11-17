@@ -14,20 +14,22 @@ import { foldParts } from '../lib/fold-parts.js';
 
 export const BARISTA_NAMES = ['sora', 'momo', 'yuki'] as const;
 export type BaristaName = (typeof BARISTA_NAMES)[number];
-export type BaristaClip = 'Idle' | 'Work' | 'Wave' | 'Bow' | 'Walk' | 'Carry' | 'Serve';
+export type BaristaClip = 'Idle' | 'Work' | 'Wave' | 'Bow' | 'Walk' | 'Carry' | 'Serve' | 'Wipe';
+/** The looks on the rig: the baristas, and the janitor (models/18-barista/staff_build.py). */
+export type StaffLook = BaristaName | 'janitor';
 
 /** A little light of their own, through their skin, so the pixel art stays crisp in the lamp light. */
 const GLOW = 0.22;
 
-export const baristaModel = (name: BaristaName): `barista-${BaristaName}` => `barista-${name}`;
+export const baristaModel = (name: StaffLook): `barista-${StaffLook}` => `barista-${name}`;
 
 /** True once this barista's model has loaded. */
-export function baristaLoaded(name: BaristaName): boolean {
+export function baristaLoaded(name: StaffLook): boolean {
   return !!AssetManager.getGLTF(baristaModel(name), { shared: true });
 }
 
 export class Barista {
-  readonly name: BaristaName;
+  readonly name: StaffLook;
   readonly root: Object3D;
   /** In front of the body at hand height: a tray is parented here. */
   readonly trayAnchor: Object3D;
@@ -38,7 +40,7 @@ export class Barista {
   private readonly clips = new Map<string, AnimationClip>();
   private action: AnimationAction | null = null;
 
-  constructor(name: BaristaName) {
+  constructor(name: StaffLook) {
     this.name = name;
     const gltf = AssetManager.getGLTF(baristaModel(name));
     if (!gltf) throw new Error(`[Barista] Model ${baristaModel(name)} is not loaded.`);
@@ -82,7 +84,8 @@ export class Barista {
   /** Play a clip: looping, or once through and held on its last frame. */
   play(name: BaristaClip, once = false): void {
     if (this.clip === name && this.action && !once) return;
-    const clip = this.clips.get(name);
+    // A model from before the Wipe clip (a cached copy) wipes with Work.
+    const clip = this.clips.get(name) ?? (name === 'Wipe' ? this.clips.get('Work') : undefined);
     if (!clip) return;
     this.mixer.stopAllAction();
     this.clip = name;

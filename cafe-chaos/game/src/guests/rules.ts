@@ -19,6 +19,8 @@ export const SPAWN_SECONDS: [number, number] = [3.5, 6.5];
 export const SPAWN_STRETCH = 1.6;
 /** The first guest arrives this long after the café is placed. */
 export const FIRST_SPAWN_SECONDS = 1.5;
+/** A pair's second guest walks up this long behind the first (so the two are never in one spot at once). */
+export const PAIR_FOLLOW_SECONDS = 1.1;
 
 /**
  * How long a guest waits in the line before giving up (seconds).
@@ -107,6 +109,17 @@ export const PICK_STICKY_RADII = 1.8;
  * flickering open no longer drops it in the wrong place.
  */
 export const RELEASE_HOLD_S = 0.12;
+
+/**
+ * A hand lost to the tracking while it carries a guest (a fast move or a
+ * hand out of the cameras' view loses it for a few frames on the Quest):
+ * the guest waits where it is this long (seconds) for the hand to come
+ * back; back and still pinching, it is carried on; else it is let go. It
+ * used to be dropped the same frame, which felt unstable on quick moves
+ * (the owner's playtest). (estimate: a few frames to a third of a second
+ * of loss is common; Meta: interactions forgiving and reversible)
+ */
+export const TRACKING_GRACE_S = 0.4;
 /** A pinch within this many pick radii of a guest belongs to the guests: it never moves the café. */
 export const CLAIM_RADII = 1.7;
 /** A carried guest hangs from the pinch by its grip, this far up its body (café space, from the model). */
@@ -142,6 +155,16 @@ export const HOVER_SWITCH = 0.7;
  * it came from.
  */
 export const DROP_MARGIN_M = 0.08;
+/**
+ * A carried guest lands on the free seat nearest where the player points
+ * only if that seat is within this (metres, café space) of the spot;
+ * pointed anywhere else it goes back to its place in the line, with no
+ * penalty (Apple: an item dropped where it cannot go moves back to its
+ * source; Meta: forgiving and reversible). A little over half the gap
+ * between tables (0.13 m), so anywhere over a table reaches its seats and
+ * a table away does not.
+ */
+export const AIM_SNAP_M = 0.09;
 /** Hops: onto a seat, back to the line, and off a seat (seconds and height in metres). */
 export const HOP = { sit: { seconds: 0.28, height: 0.012 }, back: { seconds: 0.45, height: 0.03 }, off: { seconds: 0.42, height: 0.028 } };
 

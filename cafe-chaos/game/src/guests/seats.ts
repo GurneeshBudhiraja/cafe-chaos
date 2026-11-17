@@ -15,6 +15,10 @@ export interface Seat {
   yaw: number;
   /** The id of the guest sitting there or on its way there (0: free). */
   occupant: number;
+  /** True while its table is locked (not bought yet): nobody is offered it. */
+  locked: boolean;
+  /** True while its table is dirty (its last guest gone, not yet cleaned): nobody is offered it either. */
+  dirty: boolean;
   /** Which piece of the café (an index into its pieces) the seat belongs to: its table. -1 if none. */
   table: number;
   /** Where this seat's order is set down on the table (café space): the table's `Meal-N` anchor for `Seat-N`. Null if the table has none. */
@@ -46,9 +50,29 @@ export function collectSeats(cafe: Group, anchors: Object3D[], nav: NavGrid, pie
     while (piece && !pieces.includes(piece)) piece = piece.parent;
     const spot = piece?.getObjectByName(anchor.name.replace('Seat', 'Meal')) ?? piece?.getObjectByName('Meal-1');
     const meal = spot ? cafe.worldToLocal(spot.getWorldPosition(new Vector3())) : null;
-    seats.push({ index: seats.length, position, yaw: Math.atan2(ahead.x, ahead.z), occupant: 0, table: piece ? pieces.indexOf(piece) : -1, meal });
+    seats.push({ index: seats.length, position, yaw: Math.atan2(ahead.x, ahead.z), occupant: 0, locked: false, dirty: false, table: piece ? pieces.indexOf(piece) : -1, meal });
   }
   return seats;
+}
+
+/**
+ * The seat nearest under a point (café space), whatever its state (taken,
+ * locked or dirty), within `reach` across and the same height window as
+ * `seatUnder`; null if none. For saying why a guest will not sit there.
+ */
+export function seatNear(seats: Seat[], point: Vector3, reach: number): Seat | null {
+  let best: Seat | null = null;
+  let bestDistance = reach;
+  for (const seat of seats) {
+    const up = point.y - seat.position.y;
+    if (up < -0.03 || up > 0.2) continue;
+    const across = Math.hypot(point.x - seat.position.x, point.z - seat.position.z);
+    if (across < bestDistance) {
+      bestDistance = across;
+      best = seat;
+    }
+  }
+  return best;
 }
 
 /**
@@ -61,7 +85,8 @@ export function seatUnder(seats: Seat[], point: Vector3, reach: number, own: Sea
   let best: Seat | null = null;
   let bestDistance = reach;
   for (const seat of seats) {
-    if ((seat.occupant !== 0 && seat !== own) || seat === spoken) continue;
+    // A dirty seat can be aimed at (it glows amber and refuses the guest), so the player sees why it will not sit there.
+    if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked) continue;
     const up = point.y - seat.position.y;
     if (up < -0.03 || up > 0.2) continue;
     const across = Math.hypot(point.x - seat.position.x, point.z - seat.position.z);

@@ -50,7 +50,7 @@ export const HOW_TO_PLAY: readonly HowToStep[] = [
   {
     id: 'happy',
     title: 'Keep guests happy',
-    text: 'Seat guests quickly. The bar above the café shows how happy the guests are.',
+    text: 'Seat guests quickly. Give them the seats they wish for: they pay more. Serve enough guests to finish the level.',
     video: 'howto/happy.mp4',
     poster: 'ui/howto-happy.jpg',
   },
@@ -60,5 +60,24 @@ export const HOW_TO_PLAY: readonly HowToStep[] = [
     text: 'Point your hand at the bar and pinch. Pause is at the left end. Shop is at the right end.',
     video: 'howto/bar.mp4',
     poster: 'ui/howto-pause.jpg',
+  },
+  {
+    id: 'tables',
+    title: 'Open more tables',
+    text: 'Point at Shop on the bar and pinch. Pinch OPEN: the nearest grey table opens. More tables seat more guests.',
+    poster: 'ui/howto-pause.jpg',
+  },
+  {
+    id: 'clean',
+    title: 'Dirty tables',
+    text: 'Guests leave a mess. Nobody sits at a dirty table. Your baristas clean it. A janitor from the Shop cleans faster.',
+    video: 'howto/clean.mp4',
+    poster: 'ui/howto-clean.jpg',
+  },
+  {
+    id: 'guests',
+    title: 'Special guests',
+    text: 'An hourglass: the guest is in a hurry. Seat it soon: it pays more. Hearts: two friends. Seat them at one table.',
+    poster: 'ui/howto-guests.jpg',
   },
 ];

@@ -35,6 +35,7 @@ import { GameSystem } from './systems/game-system.js';
 import { GuestSystem } from './systems/guest-system.js';
 import { HandleSystem } from './systems/handle-system.js';
 import { HoldSystem } from './systems/hold-system.js';
+import { MessSystem } from './systems/mess-system.js';
 import { MoodSystem } from './systems/mood-system.js';
 import { RenderBudgetSystem } from './systems/render-budget-system.js';
 import { ScoreSystem } from './systems/score-system.js';
@@ -46,7 +47,7 @@ import { ShopSystem } from './systems/shop-system.js';
 // Matte surfaces on every model (see light/cheap-materials.ts): before anything is loaded.
 useCheapMaterials();
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(AnchorSystem).registerSystem(GuestSystem).registerSystem(BaristaSystem).registerSystem(ScoreSystem).registerSystem(ShopSystem).registerSystem(StripSystem).registerSystem(GameSystem).registerSystem(WristMenuSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
+  world.registerSystem(CafeSystem).registerSystem(HoldSystem).registerSystem(HandleSystem).registerSystem(AnchorSystem).registerSystem(GuestSystem).registerSystem(MessSystem).registerSystem(BaristaSystem).registerSystem(ScoreSystem).registerSystem(ShopSystem).registerSystem(StripSystem).registerSystem(GameSystem).registerSystem(WristMenuSystem).registerSystem(AmbienceSystem).registerSystem(MoodSystem).registerSystem(SoundSystem).registerSystem(RenderBudgetSystem);
   const system = world.getSystem(CafeSystem)!;
   // Draw the headset's view at 85% resolution (`?res=1` for full): leaning in, the café fills the view and the
   // cost of every pixel is what pulls the frame rate down. Set before any session starts.
@@ -64,6 +65,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   const budget = world.getSystem(RenderBudgetSystem)!;
   const guests = world.getSystem(GuestSystem)!;
   const baristas = world.getSystem(BaristaSystem)!;
+  const mess = world.getSystem(MessSystem)!;
   const ambience = world.getSystem(AmbienceSystem)!;
   const shop = world.getSystem(ShopSystem)!;
   const wrist = world.getSystem(WristMenuSystem)!;
@@ -78,5 +80,5 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   sound.theme = theme;
 
   // Dev only: lets the check and recording scripts find the world, the café, its lights, the mood, the hold, the handles and the surface finder.
-  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, anchor, lights, mood, hold, handles, budget, guests, baristas, shop, wrist, strip, sound, ambience, theme, game, score, findSurfaceSpot };
+  if (import.meta.env.DEV) (window as unknown as { __cafe: unknown }).__cafe = { world, system, anchor, lights, mood, hold, handles, budget, guests, baristas, mess, shop, wrist, strip, sound, ambience, theme, game, score, findSurfaceSpot };
 });

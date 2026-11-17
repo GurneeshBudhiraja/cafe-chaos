@@ -14,13 +14,16 @@
  * - a column: a faint shaft of light rising from the seat, which is
  *   what shows when the seat is seen from the side or is behind a table.
  * While a guest is carried, the seat it would land on says whether it
- * meets the guest's wishes: mint if it meets them all, red if it does
- * not (so a seat that would let the guest down is plain before letting
- * go). The other free seats keep their small dots: mint for the seats
+ * meets the guest's wishes: mint if it meets them all, violet if some, red
+ * if none (the guest will not sit there: let go, it goes back, and a tag
+ * says what it wants; the owner, after the first playtest: seating guests
+ * anywhere made the game no challenge); amber if it is dirty (it will not
+ * sit there either). The dirty table's sign says so too. The other free seats keep their small dots: mint for the seats
  * that would meet every wish, violet for the rest.
  * One set per hand; the dots are one instanced mesh.
  */
 
+import { laidOn } from '../lib/decal.js';
 import {
   CanvasTexture, Color, CustomBlending, CylinderGeometry, DoubleSide, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, OneFactor, PlaneGeometry, Quaternion, SrcAlphaFactor, Vector3, ZeroFactor,
 } from '@iwsdk/core';
@@ -32,6 +35,8 @@ export const GLOW = { color: 0x9a86ff, pad: 0.034, halo: 0.07, column: { radius:
 export const GRANT = { color: 0x58e39a, dot: 1.7 };
 /** The landing seat when it would not meet every wish of the carried guest: a warm red. */
 export const DENY = { color: 0xff4a3a };
+/** A seat on a dirty table, while a guest is carried: an amber dot (not for sitting until it is cleaned). */
+export const DIRTY = { color: 0xf2a95b, dot: 0.8 };
 /** The landing glow breathes between these, this many times a second: slow, like the lanterns. */
 const PULSE = { low: 0.72, high: 1, rate: 0.9 };
 /** How strong each layer is (0 to 1): enough to find at a glance, no more. */
@@ -69,15 +74,15 @@ function rising(): CanvasTexture {
 
 /** Added to what is behind (colour only, see light/spill.ts): for light. */
 function light(map: CanvasTexture, opacity: number): MeshBasicMaterial {
-  return new MeshBasicMaterial({
+  return laidOn(new MeshBasicMaterial({
     color: new Color(GLOW.color), map, transparent: true, opacity, depthWrite: false, toneMapped: false, side: DoubleSide,
     blending: CustomBlending, blendSrc: SrcAlphaFactor, blendDst: OneFactor, blendSrcAlpha: ZeroFactor, blendDstAlpha: OneFactor,
-  });
+  }));
 }
 
 /** Painted over what is behind: for the violet of the pad and the dots. */
 function paint(map: CanvasTexture, opacity: number): MeshBasicMaterial {
-  return new MeshBasicMaterial({ color: new Color(GLOW.color), map, transparent: true, opacity, depthWrite: false, toneMapped: false });
+  return laidOn(new MeshBasicMaterial({ color: new Color(GLOW.color), map, transparent: true, opacity, depthWrite: false, toneMapped: false }));
 }
 
 /** One landing glow: pad, halo and column, with its origin on the seat top. */
@@ -101,6 +106,7 @@ export class SeatGlow {
   private readonly violet = new Color(GLOW.color);
   private readonly mint = new Color(GRANT.color);
   private readonly red = new Color(DENY.color);
+  private readonly amber = new Color(DIRTY.color);
   private readonly place = new Vector3();
 
   constructor(cafe: Group, seatCount: number) {
@@ -147,9 +153,10 @@ export class SeatGlow {
    * seat); the dots show on the other free seats while anything is
    * carried. `granting` is the seats that would meet every wish of the
    * carried guest: their dots show mint, and larger; the landing seat is
-   * mint if it is one of them, red if not.
+   * mint if it is one of them, red if it is one of `refusing` (it meets
+   * none of the wishes: the guest will not sit there), violet otherwise.
    */
-  show(seats: Seat[], targets: (Seat | null)[], carrying: boolean, delta: number, granting: ReadonlySet<Seat> | null = null): void {
+  show(seats: Seat[], targets: (Seat | null)[], carrying: boolean, delta: number, granting: ReadonlySet<Seat> | null = null, refusing: ReadonlySet<Seat> | null = null): void {
     this.time += delta;
     const pulse = PULSE.low + (PULSE.high - PULSE.low) * (0.5 + 0.5 * Math.sin(this.time * PULSE.rate * Math.PI * 2));
     for (let i = 0; i < this.landing.length; i++) {
@@ -159,7 +166,7 @@ export class SeatGlow {
       glow.group.visible = !!seat;
       if (!seat) continue;
       glow.group.position.set(seat.position.x, seat.position.y + GLOW.lift, seat.position.z);
-      const tint = granting ? (granting.has(seat) ? this.mint : this.red) : this.violet;
+      const tint = seat.dirty ? this.amber : granting?.has(seat) ? this.mint : refusing?.has(seat) ? this.red : this.violet;
       glow.pad.color.copy(tint);
       glow.halo.color.copy(tint);
       glow.column.color.copy(tint);
@@ -170,11 +177,11 @@ export class SeatGlow {
     let count = 0;
     if (carrying) {
       for (const seat of seats) {
-        if (seat.occupant !== 0 || targets.includes(seat)) continue;
-        const grant = granting?.has(seat) ?? false;
-        this.scale.setScalar(GLOW.dot * (grant ? GRANT.dot : 1));
+        if (seat.occupant !== 0 || seat.locked || targets.includes(seat)) continue;
+        const grant = !seat.dirty && (granting?.has(seat) ?? false);
+        this.scale.setScalar(GLOW.dot * (seat.dirty ? DIRTY.dot : grant ? GRANT.dot : 1));
         this.matrix.compose(this.place.set(seat.position.x, seat.position.y + GLOW.lift, seat.position.z), this.flat, this.scale);
-        this.dots.setColorAt(count, grant ? this.mint : this.violet);
+        this.dots.setColorAt(count, seat.dirty ? this.amber : grant ? this.mint : this.violet);
         this.dots.setMatrixAt(count++, this.matrix);
       }
       this.dots.instanceMatrix.needsUpdate = true;

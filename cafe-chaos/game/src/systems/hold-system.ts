@@ -238,6 +238,26 @@ export class HoldSystem extends createSystem({}) {
     return this.v.x > b.min.x - m && this.v.x < b.max.x + m && this.v.z > b.min.z - m && this.v.z < b.max.z + m && this.v.y > b.min.y - m && this.v.y < b.max.y + m;
   }
 
+  /**
+   * Is a hand working over the café: anywhere in the column over its
+   * footprint (with `margin` round it), from under its floor up to `above`
+   * metres over its roof? Such a hand is reaching for guests, not pointing:
+   * its ray presses nothing (GameSystem). The café's own box alone left a
+   * hand held high over the roof, lifting a guest or reaching over to the
+   * back, free to press the bar's Pause or Shop with the pinch meant for a
+   * guest (the owner's playtest: the ray "clicking on random things").
+   */
+  overCafe(point: Vector3, margin = HOLD_MARGIN_M, above = 0.3): boolean {
+    if (!this.cafe) return false;
+    const cafe = this.cafe.cafe;
+    this.v.copy(point);
+    cafe.worldToLocal(this.v);
+    const k = cafe.scale.x || 1;
+    const m = margin / k;
+    const b = this.bounds;
+    return this.v.x > b.min.x - m && this.v.x < b.max.x + m && this.v.z > b.min.z - m && this.v.z < b.max.z + m && this.v.y > b.min.y - m && this.v.y < b.max.y + above / k;
+  }
+
   /** Hands that let go (or were lost) stop holding; a remaining hand carries on alone. */
   private release(): void {
     for (let i = this.holding.length - 1; i >= 0; i--) {
