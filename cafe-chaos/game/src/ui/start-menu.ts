@@ -531,9 +531,10 @@ export class StartMenu {
     const buttons: Button[] = [];
     // The top row: How to play, Settings and Quit (Quit asks first).
     const topH = 72;
-    const qw = 120;
-    const gw = 190;
-    const hw = 230;
+    // Sized to their words (28 units) with room either side, so the title has the left of the row to itself.
+    const qw = 110;
+    const gw = 170;
+    const hw = 200;
     const qx = SW - PAD - qw;
     const gx = qx - TOUCH_GAP - gw;
     const hx = gx - TOUCH_GAP - hw;
@@ -566,7 +567,10 @@ export class StartMenu {
       ctx.scale(this.k, this.k);
       const rc = pen(this.card.canvas);
       this.paper(ctx, rc, 0, H, SW);
-      text(ctx, 'Café Chaos', PAD + 6, PAD + topH / 2 + 2, 48, SKETCH.ink, 'left');
+      // The title: as large as fits before the first button (at least a touch gap clear of it), 44 at most.
+      ctx.font = font(44);
+      const titleSize = Math.min(44, (44 * (hx - TOUCH_GAP - PAD - 6)) / ctx.measureText('Café Chaos').width);
+      text(ctx, 'Café Chaos', PAD + 6, PAD + topH / 2 + 2, titleSize, SKETCH.ink, 'left');
       tiles.forEach(({ t, x, status }, i) => {
         // The picture, cropped to fill its frame (never stretched).
         ctx.save();

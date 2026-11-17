@@ -41,6 +41,9 @@ export const CAFE_NAV: NavOptions = {
 export const CANADA_NAV: NavOptions = {
   ...CAFE_NAV,
   barriers: [],
+  // The duckboard behind the counter is a 3 cm strip (the counter top reaches back over it): a character keeps 1.2 cm
+  // clear of anything, not 1.4, so the strip is walked to the way out at the counter's left end.
+  radius: 0.012,
   // The shell's `FloorTop` is the plate's middle; a little toward the player, clear of the cabin's middle table.
   seed: { x: -0.05, z: 0.06 },
 };

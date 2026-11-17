@@ -8,9 +8,9 @@
  * two along the window wall, each under a wall socket (the second one by
  * the fireplace), and a table for four in the middle. On the deck (the
  * patio): two bistro tables. On the dock: a bench for two facing the lake.
- * Round the bonfire: three Muskoka chairs facing the fire. Upstairs, on the
+ * Round the bonfire: two Muskoka chairs facing the fire. Upstairs, on the
  * upper deck over the counter (reached by the stairs outside the cabin's
- * right wall): two bistro tables beside the rooftop piano. Twenty-one seats
+ * right wall): two bistro tables beside the rooftop piano. Twenty seats
  * in all; the game opens them table by table as the Japanese café's (the
  * first two inside tables at the start).
  *
@@ -37,13 +37,15 @@ export const CANADA_LAYOUT: Placement[] = [
   { model: 'patio-table' as const, x: 0.31, z: 0.06 },
   // 6. The dock: the bench, its sitters facing the lake (and the player).
   { model: 'dock-bench' as const, x: 0.26, z: 0.25, y: 0.030 },
-  // 7-9. The bonfire: three chairs round the ring at (-0.27, 0.245), each turned to face it.
-  ...[205, 270, 335].map((a) => {
+  // 7-8. The bonfire: two chairs either side of the ring at (-0.27, 0.245), each turned to face it. The shell's third
+  // spot (FireSpot-2, in front of the ring at z 0.33) is past the plate's front edge (0.31): a chair there would hang
+  // over the player's real table, and behind the ring the cabin's front wall and the way out leave no room.
+  ...[180, 0].map((a) => {
     const r = 0.085;
     const rad = (a * Math.PI) / 180;
     return { model: 'fire-chair' as const, x: -0.27 + r * Math.cos(rad), z: 0.245 - r * Math.sin(rad), yawDeg: a - 90 };
   }),
-  // 10-11. Upstairs: two bistro tables on the upper deck (the shell's UpperSpot-1/2), beside the piano.
+  // 9-10. Upstairs: two bistro tables on the upper deck (the shell's UpperSpot-1/2), beside the piano.
   { model: 'patio-table' as const, x: -0.27, z: -0.2125, y: CANADA_UPPER_TOP_M },
   { model: 'patio-table' as const, x: -0.11, z: -0.2125, y: CANADA_UPPER_TOP_M },
 ];
@@ -62,12 +64,12 @@ export const CANADA_PLACES = {
   /** By the fireplace inside (the `warm` wish): the second window table, nearest the hearth. */
   warmTables: [1, 2],
   /** Everything not inside the cabin (the upper deck is outside too: it is open to the sky). */
-  outsideTables: [4, 5, 6, 7, 8, 9, 10, 11],
+  outsideTables: [4, 5, 6, 7, 8, 9, 10],
   patioTables: [4, 5],
   lakeTables: [6],
-  bonfireTables: [7, 8, 9],
+  bonfireTables: [7, 8],
   /** Upstairs (the `upstairs` wish: a view over the café). */
-  upperTables: [10, 11],
+  upperTables: [9, 10],
   /** Where a takeaway guest stands (the shell's `TakeawaySpot`). */
   takeaway: { x: 0.0, z: -0.125 },
   /** The two musicians, each bought in the shop; seats within `earshot` of one meet `music` once it plays. `yawDeg` is three.js's (rotation.y). */

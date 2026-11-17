@@ -216,8 +216,8 @@ export class StripSystem extends createSystem({}) {
   }
 
   /** A level reached in a run: the bar says so with its coins for a moment, with confetti and the chime; the café keeps going. */
-  showLevel(level: number, bonus: number): void {
-    this.banner = { title: `LEVEL ${level}!`, amount: bonus, plus: true, left: LEVEL_BANNER.seconds };
+  showLevel(level: number, bonus: number, title = `LEVEL ${level}!`): void {
+    this.banner = { title, amount: bonus, plus: true, left: LEVEL_BANNER.seconds };
     this.celebrate();
   }
 

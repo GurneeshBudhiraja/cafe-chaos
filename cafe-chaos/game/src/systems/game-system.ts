@@ -1014,16 +1014,18 @@ export class GameSystem extends createSystem({}) {
     this.save.bestLevel = Math.max(this.save.bestLevel, this.level);
     this.pace();
     this.keep();
-    this.strip.showLevel(this.level, levelBonus(this.level));
     this.guests.holdArrivals(LEVEL.breather);
-    // The trial's levels played: the café goes on, and the bar and a note say it can be bought.
+    // The trial's levels played: the café goes on, and the bar and a note say it can be bought. "TRIAL DONE!" once,
+    // then no more level numbers (the bar reads "Trial done" until the café is bought).
     if (this.trial && this.level > TRIAL_LEVELS) {
       if (this.score.trial !== 'done') {
         this.score.trial = 'done';
+        this.strip.showLevel(this.level, levelBonus(this.level), 'TRIAL DONE!');
         this.addNote('Trial done', 'shop', NOTE.seconds * 1.5, 'Buy the café in the Shop to keep it.');
       }
       return;
     }
+    this.strip.showLevel(this.level, levelBonus(this.level));
     this.addNote(`Next: serve ${levelGoal(this.level)} guests`, 'goal', NOTE.seconds);
   }
 
