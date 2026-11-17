@@ -6,7 +6,7 @@
  * and painted with.
  */
 
-import { Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, Object3D, PointLight, SpotLight, type Material, type Sprite } from '@iwsdk/core';
+import { Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, Object3D, PointLight, SpotLight, type HemisphereLight, type Material, type Sprite } from '@iwsdk/core';
 import { makeHalo } from './halo.js';
 import { GLOW, HALOS, HOUSE, LAMPS, MOON } from './mood.js';
 import { makeSpill } from './spill.js';
@@ -21,6 +21,8 @@ export interface CafeLights {
   /** The warm house light over the counter: the one that casts shadows. */
   house: SpotLight;
   spill: Mesh;
+  /** The sky fill (lighting.ts sets it): brighter in the Canadian café's day. */
+  fill?: HemisphereLight;
 }
 
 /** Add the lights to the café group (call once the café is built). */

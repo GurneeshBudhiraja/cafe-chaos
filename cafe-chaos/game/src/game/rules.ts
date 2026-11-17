@@ -14,6 +14,8 @@
  * reasons are in docs/MECHANICS-PLAN.md.
  */
 
+import { current, type CafeId } from '../cafe/style.js';
+
 /**
  * The café's happiness: a meter from 0 to `max`. It starts each run
  * full; happy guests top it up, and guests who give up in the line or
@@ -216,6 +218,12 @@ export function pairChance(level: number): number {
  * (playtest; the simulation's table is in docs/MECHANICS-PLAN.md)
  */
 export const START_TABLES = [2, 8];
+/** The Canadian café's two window tables (cafe/canada-layout.ts). */
+export const CANADA_START_TABLES = [1, 2];
+/** The tables a café opens with. */
+export function startTables(id: CafeId = current.id): number[] {
+  return id === 'canada' ? CANADA_START_TABLES : START_TABLES;
+}
 export const TABLE_PRICES = [8, 14, 22, 32, 45, 62, 85, 115, 150, 190];
 
 /** What the next table costs once `bought` have been bought (the last price holds). */
@@ -247,8 +255,17 @@ export const CLEAN = { seconds: 3, near: 0.3, vanish: 0.4, home: { x: 0.17, z: -
  * (a table left by a full party still looks tidy). The mess model is
  * `size` across.
  */
-export const MESS = { size: 0.032, fit: 0.65, place: 0.6, tops: { 'table-2': 0.046, 'table-4': 0.04, 'bar-2': 0.026, 'quiet-corner': 0.024 } as Record<string, number> };
+export const MESS = { size: 0.032, fit: 0.65, place: 0.6, tops: { 'table-2': 0.046, 'table-4': 0.04, 'bar-2': 0.026, 'quiet-corner': 0.024, 'table-ca-2': 0.042, 'table-ca-4': 0.04, 'patio-table': 0.034, 'dock-bench': 0.02, 'fire-chair': 0.022 } as Record<string, number> };
 export const JANITOR_PRICE = 80;
+/** Where the Canadian café's janitors wait (café space): on the deck by the cabin door, clear of the stairs and the heater. */
+export const CANADA_CLEAN_HOMES = [
+  { x: 0.15, z: -0.08, reach: 0.08 },
+  { x: 0.2, z: -0.13, reach: 0.08 },
+];
+/** The Canadian café's second janitor (barista-cedar). */
+export const JANITOR2_PRICE = 150;
+/** The Canadian café's musicians, bought one after the other: the fiddler on the patio stage, then the pianist on the upper deck. */
+export const MUSICIAN_PRICES = [60, 140];
 
 /**
  * The staff. The café opens with `STARTING_STAFF` server; each further

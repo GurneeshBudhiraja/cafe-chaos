@@ -13,6 +13,7 @@
  * pinch instead.
  */
 
+import { MUTED_HERE } from './muted.js';
 import type { World } from '@iwsdk/core';
 
 /** How loud the theme plays (0 to 1): 5 %, barely there, a room tone more than a song. */
@@ -47,6 +48,8 @@ export class Theme {
 
   /** Start (or resume) the theme, fading in. */
   play(): void {
+    // Testing on this computer: no music (audio/muted.ts).
+    if (MUTED_HERE) return;
     this.asked++;
     this.stopped = false;
     this.target = THEME_VOLUME * this.level * (this.ducked ? DUCK : 1);

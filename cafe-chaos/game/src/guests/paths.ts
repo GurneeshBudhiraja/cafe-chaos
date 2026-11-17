@@ -137,3 +137,17 @@ export const ANNEX_EXIT_LANES: { x: number; z: number }[] = [
 export const OUTSIDE_X = -0.345;
 /** With the annex open, they march once through its exit. */
 export const ANNEX_OUTSIDE_X = -0.645;
+
+/**
+ * The Canadian café's way out: from the cabin door round its front corner,
+ * along the stepping slabs past the bonfire, and off the plate's left edge
+ * between the cabin's front wall and the fire chairs, where leavers fade.
+ * (models/27-cafe-canada/INTEGRATION.md, "Walkways".)
+ */
+export const CANADA_EXIT_LANES: { x: number; z: number }[] = [
+  { x: -0.452, z: 0.19 },
+  { x: -0.456, z: 0.205 },
+  { x: -0.452, z: 0.22 },
+];
+/** Leavers march once they are past the cabin's front-left corner (x below this, café space). */
+export const CANADA_OUTSIDE_X = -0.4;

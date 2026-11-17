@@ -140,3 +140,16 @@ export const SPILL_RADIUS = 0.85;
  * so it has no edge of its own: the feather below is only a safety bound.
  */
 export const SPILL = { color: 0xffdcb4, strength: 0.62 };
+
+/**
+ * The Canadian café's day (docs/CANADA-PLAN.md: "bright sunny day, snow,
+ * not dark, no dimming"): no passthrough dimming, the lamps and the house
+ * light off, the moon turned into a warm white sun high over the back
+ * right, the sky fill and the environment up. The shell's own baked
+ * occlusion does the rest.
+ */
+export const DAY = {
+  sun: { color: 0xfff4e2, intensity: 2.3, position: [0.5, 1.4, 0.7] as const },
+  fill: { sky: 0xdfeaff, ground: 0xb9b2a6, intensity: 1.25 },
+  environment: 1.0,
+};

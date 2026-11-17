@@ -192,7 +192,7 @@ export class StripSystem extends createSystem({}) {
     }
     const low = this.live && s.happiness / HAPPINESS.max <= 0.3 && s.happiness > 0;
     const shopNow = this.shop.price === null ? 'full' : this.shop.affordable ? 'can' : 'not';
-    const now = `${Math.round(s.happiness)}|${s.bank}|${s.level}|${s.levelServed}|${s.levelGoal}|${this.live}|${this.controls}|${shopNow}|${this.banner ? this.banner.title : ''}`;
+    const now = `${Math.round(s.happiness)}|${s.bank}|${s.level}|${s.levelServed}|${s.levelGoal}|${this.live}|${this.controls}|${shopNow}|${this.banner ? this.banner.title : ''}|${s.trial}`;
     if (moving || low || now !== this.shown) {
       this.shown = now;
       this.panel.paint();
@@ -216,8 +216,8 @@ export class StripSystem extends createSystem({}) {
   }
 
   /** A level reached in a run: the bar says so with its coins for a moment, with confetti and the chime; the café keeps going. */
-  showLevel(level: number, bonus: number): void {
-    this.banner = { title: `LEVEL ${level}!`, amount: bonus, plus: true, left: LEVEL_BANNER.seconds };
+  showLevel(level: number, bonus: number, title = `LEVEL ${level}!`): void {
+    this.banner = { title, amount: bonus, plus: true, left: LEVEL_BANNER.seconds };
     this.celebrate();
   }
 
@@ -296,7 +296,9 @@ export class StripSystem extends createSystem({}) {
     this.spot.y = this.height;
     cafe.worldToLocal(this.spot);
     // With the drawer open, low enough for the drawer under it to clear the café's top as well (eased: it rises, it
-    // does not jump).
+    // does not jump). Only its first line is made room for: a second line hangs over the back of the café, which
+    // stands still while the Shop is open, so the bar never climbs above the eyes (Meta: UI slightly below the
+    // line of sight).
     this.drawerRoom += ((this.drawer.panel.open ? 1 : 0) - this.drawerRoom) * (1 - Math.exp(-DRAWER_RISE * delta));
     const room = (DRAWER.gap + DRAWER.height + DRAWER.clear - STRIP.clear) * this.drawerRoom;
     const lowest = STRIP.top + (STRIP.clear + STRIP.height / 2 + room) / scale;
@@ -309,7 +311,7 @@ export class StripSystem extends createSystem({}) {
     d.size = this.panel.size;
     const scale = this.cafe.cafe.scale.x || 1;
     d.mesh.position.copy(this.panel.mesh.position);
-    d.mesh.position.y -= ((STRIP.height / 2 + DRAWER.gap + DRAWER.height / 2) * this.panel.size) / scale;
+    d.mesh.position.y -= ((STRIP.height / 2 + DRAWER.gap + this.drawer.heightM / 2) * this.panel.size) / scale;
     if (d.update(delta, this.head)) d.mesh.quaternion.copy(this.panel.mesh.quaternion);
   }
 
@@ -333,7 +335,10 @@ export class StripSystem extends createSystem({}) {
     ctx.font = hand(h * 0.3, 700);
     const levelW = ctx.measureText('LEVEL 10').width;
     ctx.font = hand(h * 0.2, 700);
-    const timeW = Math.max(levelW, ctx.measureText('60/60 served').width);
+    // The trial's lines (the Canadian café): one line smaller, as wide as it is.
+    const trialTop = s.trial === 'on' ? `Trial · Level ${s.level} of ${s.trialLevels}` : s.trial === 'done' ? 'Trial done' : '';
+    const trialSub = s.trial === 'done' ? 'Buy it in the Shop' : '';
+    const timeW = Math.max(levelW, ctx.measureText('60/60 served').width, s.trial !== 'off' ? Math.max(ctx.measureText(trialTop).width * 1.1, ctx.measureText(trialSub).width) : 0);
     ctx.font = hand(bankSize, 700);
     const bankW = ctx.measureText(`${s.bank}`.padStart(2, '0')).width;
     // Pause at the left end: the level starts after it and a divider.
@@ -342,8 +347,10 @@ export class StripSystem extends createSystem({}) {
     rc.line(x, h * 0.17, x + 2, h * 0.83, line(20, lw * 0.8));
     x += around;
     // The level, and under it the guests served in it of the number that passes it.
-    scrawl(ctx, `LEVEL ${s.level}`, x, h * 0.36, h * 0.3);
-    scrawl(ctx, `${Math.min(s.levelServed, s.levelGoal)}/${s.levelGoal} served`, x, h * 0.76, h * 0.2, { color: SKETCH.soft });
+    if (s.trial === 'off') scrawl(ctx, `LEVEL ${s.level}`, x, h * 0.36, h * 0.3);
+    else scrawl(ctx, trialTop, x, h * 0.36, h * 0.22);
+    if (s.trial === 'done') scrawl(ctx, trialSub, x, h * 0.76, h * 0.2, { color: SKETCH.soft });
+    else scrawl(ctx, `${Math.min(s.levelServed, s.levelGoal)}/${s.levelGoal} served`, x, h * 0.76, h * 0.2, { color: SKETCH.soft });
     x += timeW + around;
     rc.line(x, h * 0.17, x + 2, h * 0.83, line(21, lw * 0.8));
     x += around;

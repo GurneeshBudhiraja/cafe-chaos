@@ -40,7 +40,10 @@ export async function startHeadset({ size = { width: 1032, height: 800 }, fovDeg
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(APP_URL, { waitUntil: 'load' });
+  // On localhost the game is silent (src/audio/muted.ts); a recording keeps its sound (`sound` in the address).
+  const url = new URL(APP_URL);
+  if (record) url.searchParams.set('sound', '');
+  await page.goto(url.toString(), { waitUntil: 'load' });
   await page.waitForFunction(() => window.__cafe?.world && window.IWER_DEVICE, null, { timeout: 30000 });
   await page.evaluate(installHelpers);
   await page.evaluate((f) => window.__h.setup(f), fovDeg);

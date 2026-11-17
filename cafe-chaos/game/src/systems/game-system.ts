@@ -35,9 +35,10 @@
 
 import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 import { HandRays } from '../hands/hand-ray.js';
-import { arrivalGap, HAPPINESS, HURRY, hurryChance, JANITOR_PRICE, pairChance, PAIRS, LEVEL, levelBonus, levelGoal, linePatience, MAX_STAFF, MEAL_SECONDS, queueCap, START_TABLES } from '../game/rules.js';
+import { arrivalGap, HAPPINESS, HURRY, hurryChance, JANITOR2_PRICE, JANITOR_PRICE, pairChance, PAIRS, LEVEL, levelBonus, levelGoal, linePatience, MAX_STAFF, MEAL_SECONDS, queueCap, startTables } from '../game/rules.js';
+import { CAFE_NAMES, CANADA_PRICE, current, TRIAL_LEVELS, type CafeId } from '../cafe/style.js';
 import { HOW_TO_PLAY } from '../game/how-to-play.js';
-import { loadSave, TEST_MODE, writeSave, type Save } from '../game/save.js';
+import { freshProgress, SaveBook, TEST_MODE, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS, SPAWN_SECONDS } from '../guests/rules.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
 import { coin, INK, moodFace, Panel, paragraph, roundRect, write, type Button } from '../ui/panel.js';
@@ -48,7 +49,8 @@ import { BaristaSystem } from './barista-system.js';
 import { sketchFontReady } from '../ui/sketch.js';
 import { StripSystem } from './strip-system.js';
 import { SoundSystem } from './sound-system.js';
-import { ICONS, LEVELS, MENU_SIZE, StartMenu } from '../ui/start-menu.js';
+import { ICONS, LEVELS, MENU_SIZE, StartMenu, type CafeTile } from '../ui/start-menu.js';
+import type { DrawerRow } from '../ui/shop-drawer.js';
 import { TipCard, TIP } from '../ui/tip-card.js';
 import { TIP_GAP, TIP_ORDER, TIPS, tipIcon, type TipId } from '../game/tips.js';
 import { CafeSystem } from './cafe-system.js';
@@ -203,8 +205,21 @@ export class GameSystem extends createSystem({}) {
   private tipAt: { guest?: number; table?: number; shop?: boolean; bar?: boolean } = {};
   /** Counts when the tip went up, to tell when the player has done it. */
   private tipMark = 0;
-  /** The extension: asked for once the main room is all open; its tables are locked and tagged once it has risen. */
-  readonly save: Save = loadSave();
+  /** Every café's save and the shared part (game/save.ts). */
+  readonly book = new SaveBook();
+  /** The café up now: its save, with the shared part (written back by `persist`). */
+  save: Save = this.book.load('japan');
+  /**
+   * The Canadian café's free trial is on: TRIAL_LEVELS levels, its progress
+   * not saved (only the shared part is), unless the café is bought during it.
+   */
+  trial = false;
+  /** A café chosen on the start card whose models are still loading: it opens once they are in. */
+  private pending: { id: CafeId; how: 'continue' | 'fresh' | 'trial' } | null = null;
+  /** Where the Buy question was asked from: the start card, or the Shop (a run goes on after it). */
+  private buyFrom: 'title' | 'shop' = 'title';
+  /** The café the New game question is about. */
+  private newFor: CafeId = 'japan';
   readonly card = new Panel('GameCard', CARD.width, CARD.height);
   readonly coach = new Panel('CoachCard', COACH.width, COACH.height);
   /** The MOVES pictures, once loaded. */
@@ -338,9 +353,7 @@ export class GameSystem extends createSystem({}) {
       return;
     }
     // The café as it was left: its bank and its staff.
-    this.score.bank = this.save.bank;
-    this.shop.restore(this.save.hires, this.save.tables, this.save.janitor);
-    this.applyLocks();
+    this.restoreCafe();
     this.guests.mealSeconds = MEAL_SECONDS;
     this.quiet();
     // The headset taken off, or another app in front: pause and save.
@@ -395,6 +408,12 @@ export class GameSystem extends createSystem({}) {
     this.menu.card.update(cardDelta, this.head);
     this.menu.sheet.update(cardDelta, this.head);
     this.turnSheet();
+    // A café chosen while its models were loading: open it once they are in.
+    if (this.pending && this.phase === 'title' && this.cafe.cafeLoaded(this.pending.id)) {
+      const { id, how } = this.pending;
+      this.pending = null;
+      this.startCafe(id, how);
+    }
     if (this.opening && cafe.placed && !cafe.waiting && !cafe.arriving) {
       const what = this.opening;
       this.opening = null;
@@ -439,18 +458,84 @@ export class GameSystem extends createSystem({}) {
     this.menu.closeSheet();
     this.menu.card.dimmed = false;
     this.menuPlaced = false;
-    this.menu.showStart({
-      kind: this.returning ? 'returning' : 'first',
-      coins: this.save.bank,
-      staff: 1 + this.save.hires,
-      level: this.save.level,
+    // Back from a trial: its progress goes (it was never saved); the café played last stays first.
+    if (this.trial) this.endTrial();
+    this.showPicker();
+  }
+
+  /**
+   * The start card: the cafés side by side, the one played last first
+   * (ui/start-menu.ts). One press plays: Start, Continue, or the Canadian
+   * café's Try free.
+   */
+  private showPicker(): void {
+    const last = this.book.last;
+    const ids: CafeId[] = last === 'canada' ? ['canada', 'japan'] : ['japan', 'canada'];
+    const tiles: CafeTile[] = ids.map((id) => {
+      const p = this.book.load(id);
+      return {
+        id,
+        name: CAFE_NAMES[id].name,
+        line: CAFE_NAMES[id].line,
+        owned: this.book.owns(id),
+        started: this.book.started(id),
+        level: p.level,
+        coins: p.bank,
+        loading: this.pending?.id === id,
+      };
     });
+    this.menu.showStart({ tiles, price: CANADA_PRICE, lesson: !this.save.tutorialDone });
   }
 
   /** A save worth continuing: the first run done, or anything earned. */
   private get returning(): boolean {
+    return this.book.started(current.id);
+  }
+
+  /** Write the café up now: the shared part always, its progress only outside the trial. */
+  private persist(): void {
+    this.book.write(this.save, current.id, !this.trial);
+  }
+
+  /** Put the café's own bank, staff, tables, musicians and level into play (after loading or a fresh start). */
+  private restoreCafe(): void {
     const s = this.save;
-    return s.tutorialDone || s.runs > 0 || s.bank > 0 || s.hires > 0 || s.level > 1 || s.levelServed > 0;
+    this.score.bank = s.bank;
+    this.shop.restore(s.hires, s.tables, s.janitor, s.janitor2, s.musicians);
+    this.tableJitter.clear();
+    this.readyAt = -1;
+    this.applyLocks();
+    this.score.trial = this.trial ? (s.level > TRIAL_LEVELS ? 'done' : 'on') : 'off';
+    this.score.trialLevels = TRIAL_LEVELS;
+  }
+
+  /**
+   * Open a café from the start card. `how`: 'continue' (its save),
+   * 'fresh' (its progress dropped: a new game, or just bought), 'trial'
+   * (the Canadian café, not owned: a fresh start never saved). Its models
+   * still loading, it waits (the tile says so) and opens once they are in.
+   */
+  private startCafe(id: CafeId, how: 'continue' | 'fresh' | 'trial'): void {
+    this.closeSheet();
+    if (!this.cafe.setCafe(id)) {
+      this.pending = { id, how };
+      this.showPicker();
+      return;
+    }
+    this.pending = null;
+    this.trial = how === 'trial';
+    if (how === 'fresh') this.book.reset(id);
+    this.book.setLast(id);
+    this.save = this.book.load(id);
+    if (this.trial) Object.assign(this.save, freshProgress(id));
+    this.restoreCafe();
+    this.openCafe(this.save.tutorialDone ? 'run' : 'tutorial');
+  }
+
+  /** The trial is over (left, or back to the start card): nothing of it is kept. */
+  private endTrial(): void {
+    this.trial = false;
+    this.score.trial = 'off';
   }
 
   /** CONTINUE or NEW GAME: the menu goes, the café rises (the outline, then the rise), then `what` starts. */
@@ -555,7 +640,10 @@ export class GameSystem extends createSystem({}) {
   private awayWhilePaused(): void {
     // The buy card is not here: the café stays in view under it, the table in question among it. Waiting for the
     // start card (put away, or not yet opened) it is hidden too; rising, its arrival shows it when it is time.
-    const away = this.phase === 'paused' || this.phase === 'closed' || (this.phase === 'rules' && this.rulesFrom === 'paused') || this.cafe.waiting;
+    // The Buy question asked from the Shop stands a metre away like the pause card, so the café, between it and the
+    // eyes, goes away under it too.
+    const buying = this.phase === 'shopping' && this.menu.sheetKind === 'buy';
+    const away = this.phase === 'paused' || this.phase === 'closed' || (this.phase === 'rules' && this.rulesFrom === 'paused') || this.cafe.waiting || buying;
     if (away === this.cafeAway) return;
     this.cafeAway = away;
     if (away) this.cafe.cafe.visible = false;
@@ -607,21 +695,73 @@ export class GameSystem extends createSystem({}) {
     else if (id.startsWith('sounds')) s.sounds = Math.max(0, Math.min(LEVELS, s.sounds + (up ? 1 : -1)));
     else s.size = Math.max(SIZE.min, Math.min(SIZE.max, s.size + (up ? SIZE.step : -SIZE.step)));
     this.applySettings();
-    writeSave(s);
+    this.persist();
     this.menu.updateSettings(this.settingsState());
   }
 
-  /** DELETE AND START: everything earned goes (the settings stay), and a fresh evening opens. */
+  /** DELETE AND START: everything earned in that café goes (the settings stay), and a fresh evening opens there. */
   private startFresh(): void {
-    const keep = { music: this.save.music, sounds: this.save.sounds, size: this.save.size, tutorialDone: this.save.tutorialDone };
-    Object.assign(this.save, { bank: 0, tables: [...START_TABLES], hires: 0, janitor: false, level: 1, levelServed: 0, happiness: HAPPINESS.start, bestLevel: 1, metHurry: false, metPair: false, runs: 0 }, keep);
-    writeSave(this.save);
-    this.shop.restore(0, START_TABLES, false);
-    // The extension, if up, waits locked and untagged until the main room is open again.
-    this.applyLocks();
-    this.score.bank = 0;
+    this.startCafe(this.newFor, 'fresh');
+  }
+
+  // ------------------------------------------------------------ buying
+
+  /** The Canadian café's Buy question: what it costs, and what the Japanese café has left after. */
+  private askBuy(from: 'title' | 'shop'): void {
+    this.buyFrom = from;
+    const coins = current.id === 'japan' && !this.trial && this.phase !== 'title' ? this.score.bank : this.book.bank('japan');
+    if (from === 'title') this.menu.card.dimmed = true;
+    else this.strip.drawer.hide();
+    this.menu.openBuy({ price: CANADA_PRICE, coins, trial: this.trial, fromJapan: current.id === 'japan' && from === 'shop' });
+  }
+
+  /**
+   * Buy the Canadian café with the Japanese café's coins. From the start
+   * card it opens fresh at once; in its trial the trial's progress is kept
+   * and saved from now on; from the Japanese café's Shop the run goes on,
+   * and a note says where to find it.
+   */
+  private buyCanada(): void {
+    const inJapan = current.id === 'japan' && this.phase !== 'title';
+    const coins = inJapan ? this.score.bank : this.book.bank('japan');
+    if (coins < CANADA_PRICE || this.book.owns('canada')) {
+      this.shop.refused++;
+      return;
+    }
+    if (inJapan) {
+      this.score.spend(CANADA_PRICE);
+      this.keep();
+    } else this.book.change('japan', (p) => (p.bank -= CANADA_PRICE));
+    this.book.setOwned('canada');
+    this.shop.purchases++;
     this.closeSheet();
-    this.openCafe(this.save.tutorialDone ? 'run' : 'tutorial');
+    if (this.buyFrom === 'title') {
+      this.startCafe('canada', 'fresh');
+      return;
+    }
+    if (this.trial) {
+      // Bought in the trial: what was played is the café's own now, and saved from here on.
+      this.trial = false;
+      this.score.trial = 'off';
+      this.persist();
+      this.addNote('The Canadian café is yours', 'shop', NOTE.seconds, 'Your progress is saved.');
+    } else {
+      this.book.reset('canada');
+      this.addNote('You bought the Canadian café', 'shop', NOTE.seconds, 'Play it from the main menu.');
+    }
+    this.backToShop();
+  }
+
+  /** Leaving the trial asks first: its progress is not saved. */
+  private askLeave(): void {
+    this.menu.card.dimmed = true;
+    this.menu.openLeave();
+  }
+
+  /** From the Buy question back to the Shop drawer (the run still stopped under it). */
+  private backToShop(): void {
+    this.closeSheet();
+    if (this.phase === 'shopping') this.showShop();
   }
 
   /** How to play: the steps one at a time, each a looping video and a line (game/how-to-play.ts). */
@@ -745,10 +885,36 @@ export class GameSystem extends createSystem({}) {
     const left = this.cafe.lockedTables.size;
     this.strip.drawer.show([
       { kind: 'barista', name: 'Barista', hired: this.shop.staff, most: MAX_STAFF, price, canPay: price !== null && this.score.bank >= price, id: 'hire', word: 'HIRE' },
-      { kind: 'janitor', name: 'Janitor', hired: this.shop.janitor ? 1 : 0, most: 1, price: this.shop.janitor ? null : JANITOR_PRICE, canPay: this.score.bank >= JANITOR_PRICE, id: 'hire-janitor', word: 'HIRE' },
+      this.janitorRow(),
       // The tables: OPEN opens the next (nearest the front first); how many are left beside its name.
       { kind: 'table', name: 'Table', hired: 0, most: 0, price: left > 0 ? table : null, canPay: left > 0 && this.score.bank >= table, id: 'open-table', word: 'OPEN', note: left > 0 ? `${left} left` : undefined },
+      ...this.canadaRows(),
     ]);
+  }
+
+  /** The janitor: one in the Japanese café; in the Canadian café a second (barista-cedar) after the first. */
+  private janitorRow(): DrawerRow {
+    const shop = this.shop;
+    if (current.id !== 'canada') return { kind: 'janitor', name: 'Janitor', hired: shop.janitor ? 1 : 0, most: 1, price: shop.janitor ? null : JANITOR_PRICE, canPay: this.score.bank >= JANITOR_PRICE, id: 'hire-janitor', word: 'HIRE' };
+    const price = !shop.janitor ? JANITOR_PRICE : !shop.janitor2 ? JANITOR2_PRICE : null;
+    return { kind: 'janitor', name: 'Janitor', hired: (shop.janitor ? 1 : 0) + (shop.janitor2 ? 1 : 0), most: 2, price, canPay: price !== null && this.score.bank >= price, id: shop.janitor ? 'hire-janitor2' : 'hire-janitor', word: 'HIRE', picture: 'ui/shop-birch.jpg' };
+  }
+
+  /** The Canadian café's rows: its musicians; and the café itself while it is for sale (its trial, or the Japanese café once it can be bought). */
+  private canadaRows(): DrawerRow[] {
+    const rows: DrawerRow[] = [];
+    const shop = this.shop;
+    if (current.id === 'canada') {
+      const price = shop.musicianPrice;
+      rows.push({ kind: 'musician', name: 'Musician', hired: shop.musicians, most: 2, price, canPay: price !== null && this.score.bank >= price, id: 'buy-musician', word: 'BUY', picture: shop.musicians === 0 ? 'ui/shop-fiddler.jpg' : 'ui/shop-pianist.jpg', done: price === null ? 'Both play now' : undefined });
+    }
+    const forSale = !this.book.owns('canada') && (this.trial || (current.id === 'japan' && (this.save.forSaleSeen || this.score.bank >= CANADA_PRICE)));
+    if (forSale) {
+      const coins = current.id === 'japan' ? this.score.bank : this.book.bank('japan');
+      const can = coins >= CANADA_PRICE;
+      rows.push({ kind: 'cafe', name: 'Canadian café', hired: 0, most: 0, price: can || current.id === 'japan' ? CANADA_PRICE : null, canPay: can, id: 'buy-cafe', word: 'BUY', picture: 'ui/canada-cover.jpg', note: can ? undefined : `${coins} / ${CANADA_PRICE}`, done: 'Earn it in the Japanese café' });
+    }
+    return rows;
   }
 
   private closeShop(): void {
@@ -821,6 +987,12 @@ export class GameSystem extends createSystem({}) {
       return;
     }
     if (this.levelServed >= levelGoal(this.level)) this.levelUp();
+    // Once, in the Japanese café: its coins can buy the Canadian café now.
+    if (current.id === 'japan' && !this.save.forSaleSeen && !this.book.owns('canada') && this.score.bank >= CANADA_PRICE) {
+      this.save.forSaleSeen = true;
+      this.persist();
+      this.addNote('The Canadian café is for sale', 'shop', NOTE.seconds * 1.5, `Buy it in the Shop for ${CANADA_PRICE} coins.`);
+    }
   }
 
   /**
@@ -843,8 +1015,18 @@ export class GameSystem extends createSystem({}) {
     this.save.bestLevel = Math.max(this.save.bestLevel, this.level);
     this.pace();
     this.keep();
-    this.strip.showLevel(this.level, levelBonus(this.level));
     this.guests.holdArrivals(LEVEL.breather);
+    // The trial's levels played: the café goes on, and the bar and a note say it can be bought. "TRIAL DONE!" once,
+    // then no more level numbers (the bar reads "Trial done" until the café is bought).
+    if (this.trial && this.level > TRIAL_LEVELS) {
+      if (this.score.trial !== 'done') {
+        this.score.trial = 'done';
+        this.strip.showLevel(this.level, levelBonus(this.level), 'TRIAL DONE!');
+        this.addNote('Trial done', 'shop', NOTE.seconds * 1.5, 'Buy the café in the Shop to keep it.');
+      }
+      return;
+    }
+    this.strip.showLevel(this.level, levelBonus(this.level));
     this.addNote(`Next: serve ${levelGoal(this.level)} guests`, 'goal', NOTE.seconds);
   }
 
@@ -949,6 +1131,8 @@ export class GameSystem extends createSystem({}) {
     this.save.bank = this.score.bank;
     this.save.hires = this.shop.hires;
     this.save.janitor = this.shop.janitor;
+    this.save.janitor2 = this.shop.janitor2;
+    this.save.musicians = this.shop.musicians;
     this.save.tables = [...this.shop.tables];
     if (this.phase === 'run' || this.phase === 'paused' || this.phase === 'shopping' || this.phase === 'closed') {
       this.save.level = this.level;
@@ -956,7 +1140,7 @@ export class GameSystem extends createSystem({}) {
       this.save.happiness = this.score.happiness;
       this.savedHappiness = this.score.happiness;
     }
-    writeSave(this.save);
+    this.persist();
   }
 
   /** Let the café move again after a pause (a no-op when it is not paused). */
@@ -1038,7 +1222,7 @@ export class GameSystem extends createSystem({}) {
     // The ray to a padlock has been learned here: the one-time "Open a table" tip is not needed.
     if (this.shop.tablesBought > this.mark.tables && !this.save.tips.includes('table')) this.save.tips.push('table');
     this.save.tutorialDone = true;
-    writeSave(this.save);
+    this.persist();
     this.toRun();
   }
 
@@ -1469,11 +1653,59 @@ export class GameSystem extends createSystem({}) {
       case 'continue':
         this.openCafe('run');
         break;
-      case 'new':
-        if (this.returning) {
-          this.menu.card.dimmed = true;
-          this.menu.openWarn({ coins: this.save.bank, staff: 1 + this.save.hires, level: this.save.level });
-        } else this.openCafe('tutorial');
+      case 'play-japan':
+      case 'play-canada': {
+        // One press plays: the café's save (Continue), its first evening (Start), or the Canadian café's trial.
+        const cafeId = id_(id);
+        this.startCafe(cafeId, this.book.owns(cafeId) ? 'continue' : 'trial');
+        break;
+      }
+      case 'new-japan':
+      case 'new-canada': {
+        // A new game asks first, naming the café and what goes.
+        this.newFor = id_(id);
+        const p = this.book.load(this.newFor);
+        this.menu.card.dimmed = true;
+        this.menu.openWarn({ cafe: CAFE_NAMES[this.newFor].name, coins: p.bank, staff: 1 + p.hires, level: p.level });
+        break;
+      }
+      case 'buy-canada':
+        this.askBuy('title');
+        break;
+      case 'buy-cafe':
+        this.askBuy('shop');
+        break;
+      case 'buy-cafe-later':
+        // Not enough coins yet: the question says how many more.
+        this.askBuy('shop');
+        break;
+      case 'buy-yes':
+        this.buyCanada();
+        break;
+      case 'buy-no':
+        if (this.buyFrom === 'shop') this.backToShop();
+        else this.closeSheet();
+        break;
+      case 'leave-yes':
+        // Out of the trial: nothing of it is kept.
+        this.closeSheet();
+        this.endTrial();
+        this.toTitle();
+        break;
+      case 'leave-no':
+        this.closeSheet();
+        break;
+      case 'hire-janitor2':
+        this.shop.hireJanitor2();
+        if (this.phase === 'shopping') this.showShop();
+        break;
+      case 'buy-musician':
+        this.shop.buyMusician();
+        if (this.phase === 'shopping') this.showShop();
+        break;
+      case 'hire-janitor2-later':
+      case 'buy-musician-later':
+        this.shop.refused++;
         break;
       case 'keep':
         this.closeSheet();
@@ -1543,7 +1775,8 @@ export class GameSystem extends createSystem({}) {
         } else this.toTitle();
         break;
       case 'menu':
-        this.toTitle();
+        if (this.trial) this.askLeave();
+        else this.toTitle();
         break;
       case 'how':
         // From the pause card, Settings or the wrist menu: pause first (in a run), then How to play; Got it comes back.
@@ -1586,7 +1819,7 @@ export class GameSystem extends createSystem({}) {
         if (this.opening) {
           this.opening = 'run';
           this.save.tutorialDone = true;
-          writeSave(this.save);
+          this.persist();
         } else this.finishTutorial();
         break;
       case 'pause':
@@ -1597,7 +1830,8 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'end':
         // MAIN MENU from the pause card: the level is saved as it stands; CONTINUE carries it on.
-        if (this.phase === 'paused') {
+        if (this.phase === 'paused' && this.trial) this.askLeave();
+        else if (this.phase === 'paused') {
           this.keep();
           this.toTitle();
         }
@@ -1613,6 +1847,11 @@ export class GameSystem extends createSystem({}) {
         break;
     }
   }
+}
+
+/** The café a button is about, from its id ('play-canada' and so on). */
+function id_(button: string): CafeId {
+  return button.endsWith('canada') ? 'canada' : 'japan';
 }
 
 /**
