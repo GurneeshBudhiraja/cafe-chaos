@@ -5,7 +5,7 @@
  * 2. the background plays by itself: the kettle, the pond, cups at the
  *    tables, and the door's chime as guests arrive;
  * 3. seating a guest plays the seated thump and chime and its "mm";
- * 4. buying a table plays the padlock's click and bells;
+ * 4. opening a table plays the unlock's click and bells;
  * 5. no console errors.
  * It does not listen: it checks what was played, and when.
  *
@@ -70,7 +70,7 @@ check('seating a guest plays its thump, chime and "mm"', (sat.played.seated ?? 0
 await page.evaluate(() => { const { shop, system, score } = window.__cafe; score.bank = 900; shop.buyTable(system.tables.find((t) => !shop.tables.includes(t))); });
 await page.waitForFunction(() => (window.__cafe.sound.played.unlock ?? 0) >= 1, null, { timeout: 60000 }).catch(() => {});
 const un = await sound();
-check('buying a table plays the padlock and the bells', (un.played.unlock ?? 0) === 1, `unlock ${un.played.unlock ?? 0}`);
+check('opening a table plays the unlock and the bells', (un.played.unlock ?? 0) === 1, `unlock ${un.played.unlock ?? 0}`);
 
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');

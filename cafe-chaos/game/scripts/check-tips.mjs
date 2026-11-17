@@ -4,7 +4,7 @@
  *     seated reach, is pressed with a point and a pinch);
  *  2. at the start of level 1, "Serve 5 guests" under the bar's count, gone
  *     once a guest is served; then with the bank able to pay for a table,
- *     "Open a table" next to a padlock, with a pop; buying one sends it away;
+ *     no tip for a table the bank can pay for (the bar's TABLE READY says so);
  *  3. the first guest in a hurry: "In a hurry!" over it, and its clock
  *     waits while the tip is up; seated, the tip goes;
  *  4. the first pair: "Two friends"; the first dirty table: "Dirty table";
@@ -83,14 +83,11 @@ await page.evaluate(() => { window.__cafe.game.levelServed = 1; });
 await until(() => window.__cafe.game.tipShown === null, 10000);
 check('a guest served sends the goal tip away', (await tip()).shown === null, 'gone');
 await page.evaluate(() => { window.__cafe.game.levelServed = 0; window.__cafe.score.bank = 16; });
-await until(() => window.__cafe.game.tipShown === 'table', 10000);
+// The bank able to pay for a table: no tip (tables are opened in the Shop; "TABLE READY" on the bar says so, check-tables).
+await page.waitForTimeout(3000);
 t = await tip();
 const pops = await page.evaluate(() => window.__cafe.sound.tips);
-check('the bank able to pay for a table: "Open a table" next to a padlock, with a pop; saved as seen', t.shown === 'table' && t.open && pops === 2 && t.saved.includes('table'), JSON.stringify({ ...t, pops }));
-await h.screenshot('artifacts/tips-1-table.png');
-await page.evaluate(() => { const { game } = window.__cafe; const tag = game.tags[0]; game.click(`table-${tag.table}`); game.click('buy-yes'); });
-await until(() => window.__cafe.game.tipShown === null, 10000);
-check('buying a table sends the tip away', (await tip()).shown === null, 'gone');
+check('the bank able to pay for a table brings no tip (the bar says TABLE READY instead)', t.shown === null && pops === 1 && !t.saved.includes('table'), JSON.stringify({ ...t, pops }));
 // The bank emptied: the guests seated next pay a little, never the 40 a barista costs, so "More hands" waits for its step.
 await page.evaluate(() => { window.__cafe.score.bank = 0; });
 
@@ -136,7 +133,7 @@ await page.evaluate(() => window.__cafe.game.click('shop-close'));
 
 // 5. Once a save.
 t = await tip();
-check('each tip was shown once, one at a time, and saved', t.count === 6 && ['goal', 'table', 'hurry', 'pair', 'dirty', 'shop'].every((x) => t.saved.includes(x)), JSON.stringify(t));
+check('each tip was shown once, one at a time, and saved', t.count === 5 && ['goal', 'hurry', 'pair', 'dirty', 'shop'].every((x) => t.saved.includes(x)), JSON.stringify(t));
 await page.evaluate(() => window.__cafe.game.click('bar-pause'));
 await until(() => window.__cafe.game.phase === 'paused');
 await h.reload();

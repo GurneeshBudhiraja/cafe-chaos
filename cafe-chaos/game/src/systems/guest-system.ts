@@ -834,7 +834,8 @@ export class GuestSystem extends createSystem({}) {
       if (carried) {
         // The hand lost to the tracking: the guest waits where it is a moment (TRACKING_GRACE_S), then is let go.
         if (pinch.gap === Infinity) {
-          this.lostFor[hand] += delta;
+          // A frame counts for 0.1 s at most: one slow frame (a hitch) never uses the whole grace at once.
+          this.lostFor[hand] += Math.min(0.1, delta);
           if (this.lostFor[hand] >= TRACKING_GRACE_S) this.letGo(carried);
           else this.targets[i] = carried.target;
           return;

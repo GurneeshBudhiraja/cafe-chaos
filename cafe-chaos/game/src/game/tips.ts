@@ -39,7 +39,7 @@ export const TIPS: Record<TipId, TipText> = {
 };
 
 /** The order tips are offered in when more than one is due (the one players act on first). */
-export const TIP_ORDER: TipId[] = ['goal', 'hurry', 'pair', 'table', 'dirty', 'shop'];
+export const TIP_ORDER: TipId[] = ['goal', 'hurry', 'pair', 'dirty', 'shop'];
 
 /** Seconds between one tip going and the next appearing. */
 export const TIP_GAP = 2;

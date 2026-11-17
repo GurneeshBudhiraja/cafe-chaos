@@ -1,24 +1,21 @@
 /**
- * Locked tables check, in the real game from the seat (docs/MECHANICS-PLAN.md §6):
+ * Locked tables check, in the real game from the seat (docs/MECHANICS-PLAN.md;
+ * the tables are bought in the Shop since the first playtest):
  *  1. a fresh game opens with the two centre tables (four seats); the other
- *     ten places stand locked, grey, with a padlock tag over each saying 10;
- *     no seat of theirs is offered, and no new guest wishes for the window
- *     or the door (no open seat is there);
- *  2. the hand ray on a tag lights it; a pinch opens the buy card: the café
- *     still and in view, the card naming the table and its seats;
- *  3. NOT NOW: the café moves again; padlocks keep their angular size,
- *     faded while the bank is short; the bank reaching the price makes
- *     them bigger, higher and in colour, with "A table can open" under the
- *     bar (once a price) and a pop; a ray just past a far one still lights it;
- *  4. BUY with too little in the bank is refused (the card says how many
- *     more); with enough, the table opens: its ghost and tag go, its seats
- *     are offered, the price is taken, the next price is 20, and it is saved;
- *  5. the price list runs 8, 14, 22 ... 190; the player's choice of table
- *     makes no difference to it;
- *  6. with the main room all open there is nothing more to buy: the café's
- *     floor never grows;
- *  7. the tags are hidden while paused; after a reload the same tables are
- *     open; no console errors.
+ *     ten places stand locked, grey and see-through, with no padlock or tag
+ *     over them; no seat of theirs is offered, and no new guest wishes for
+ *     the window or the door (no open seat is there);
+ *  2. the Shop drawer has a Table column: OPEN 8, pale with the bank short
+ *     (a press refused); with enough, OPEN opens the locked table nearest
+ *     the café's front, in its own materials, folded into the room's batch;
+ *     its seats are offered, the price is taken, the next is 14, it is saved,
+ *     and confetti flies from it;
+ *  3. OPEN again and again: the prices run 14, 22 ... 190, the tables open
+ *     front to back; then the column says All open; the floor never grows;
+ *  4. the bank first reaching the next table's price: "TABLE READY" and the
+ *     price on the bar for a moment, with a pop; once a price;
+ *  5. after a reload the saved tables are open and the rest locked; no
+ *     console errors.
  * Usage: dev server running, then `node scripts/check-tables.mjs`.
  * Output: PASS/FAIL lines; artifacts/tables-*.png.
  */
@@ -39,26 +36,28 @@ const { page } = h;
 const results = [];
 const check = (name, pass, detail) => { results.push(pass); console.log(`${pass ? 'PASS' : 'FAIL'} ${name}: ${detail}`); };
 const until = (fn, timeout = 60000) => page.waitForFunction(fn, null, { timeout, polling: 100 }).then(() => true, () => false);
-const send = (m, p) => page.evaluate(([m, p]) => window.IWER_DEVICE.remote.dispatch(m, p), [m, p]);
 const frames = (n) => page.evaluate((n) => new Promise((resolve) => { const info = window.__cafe.world.renderer.info.render; const target = info.frame + n; const t = setInterval(() => { if (info.frame >= target) { clearInterval(t); resolve(); } }, 8); }), n);
 const state = () => page.evaluate(() => {
-  const { game, guests, score, system, shop } = window.__cafe;
+  const { game, guests, score, system, shop, strip } = window.__cafe;
   const saved = JSON.parse(localStorage.getItem('cafe-chaos/save/v3') ?? 'null');
+  const drawer = strip.drawer.panel;
   return {
-    phase: game.phase, locked: [...system.lockedTables].sort((a, b) => a - b), tables: [...shop.tables].sort((a, b) => a - b), tags: game.tags.map((t) => t.table).sort((a, b) => a - b),
-    tagsOpen: game.tags.filter((t) => t.panel.open).length, seatsOpen: guests.seats.filter((s) => !s.locked).length, seats: guests.seats.length,
-    price: shop.tablePrice, bank: score.bank, speed: +system.timeScale.toFixed(2), cafe: system.cafe.visible, card: game.menu.card.open ? game.menu.cardKind : null,
-    buttons: game.menu.card.buttons.map((b) => ({ id: b.id, off: !!b.off })), refused: shop.refused, bought: shop.tablesBought, annex: system.annexOpen, saved: saved?.tables?.sort((a, b) => a - b) ?? null,
+    phase: game.phase, locked: [...system.lockedTables].sort((a, b) => a - b), tables: [...shop.tables].sort((a, b) => a - b),
+    seatsOpen: guests.seats.filter((s) => !s.locked).length, seats: guests.seats.length,
+    price: shop.tablePrice, bank: score.bank, speed: +system.timeScale.toFixed(2), refused: shop.refused, bought: shop.tablesBought, annex: system.annexOpen,
+    drawer: drawer.open, buttons: drawer.buttons.map((b) => b.id), tableLabel: drawer.buttons.find((b) => b.id.startsWith('open-table'))?.label ?? null,
+    saved: saved?.tables?.sort((a, b) => a - b) ?? null, banner: strip.banner ? [strip.banner.title, strip.banner.amount] : null,
   };
 });
-for (const k of ['left', 'right']) await send('set_transform', { device: `hand-${k}`, position: { x: k === 'left' ? -1.4 : -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
-await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); game.click('skip'); });
+for (const k of ['left', 'right']) await page.evaluate((k) => window.IWER_DEVICE.remote.dispatch('set_transform', { device: `hand-${k}`, position: { x: k === 'left' ? -1.4 : -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } }), k);
+await page.evaluate(() => { const { game } = window.__cafe; game.save.tips = ['goal']; game.click('open'); game.click('skip'); });
 await until(() => window.__cafe.game.phase === 'run');
 await page.waitForTimeout(1000);
 
 // 1. The opening café.
 let s = await state();
-check('a fresh game: the two centre tables open (four seats), ten places locked with a tag each at 8', s.tables.join() === '2,8' && s.locked.join() === '1,3,4,5,6,7,9,10,11,12' && s.tags.join() === s.locked.join() && s.tagsOpen === 10 && s.seatsOpen === 4 && s.price === 8, JSON.stringify({ tables: s.tables, locked: s.locked, tagsOpen: s.tagsOpen, seatsOpen: s.seatsOpen, price: s.price }));
+const tagged = await page.evaluate(() => { let n = 0; window.__cafe.system.cafe.traverse((o) => { if (/^LockTag/.test(o.name)) n++; }); return n; });
+check('a fresh game: the two centre tables open (four seats), ten places locked, no padlock over any', s.tables.join() === '2,8' && s.locked.join() === '1,3,4,5,6,7,9,10,11,12' && s.seatsOpen === 4 && s.price === 8 && tagged === 0, JSON.stringify({ tables: s.tables, locked: s.locked, seatsOpen: s.seatsOpen, price: s.price, tags: tagged }));
 const ghost = await page.evaluate(() => {
   const { system } = window.__cafe;
   const look = (i) => { let m = null; system.pieces[i].traverse((n) => { if (!m && n.isMesh && n.visible) m = n.material; }); return m ? { name: m.name, opacity: m.opacity, transparent: !!m.transparent } : null; };
@@ -71,7 +70,7 @@ const offered = await page.evaluate(() => {
   const locked = guests.seats.find((x) => x.locked);
   const over = new V(locked.position.x, locked.position.y + 0.05, locked.position.z);
   const aimed = guests.seatAimed(over, over, null, null);
-  return { aimed: aimed ? { locked: aimed.locked, table: aimed.table } : null, lockedTable: locked.table };
+  return { aimed: aimed ? { locked: aimed.locked, table: aimed.table } : null };
 });
 check('a guest held over a locked table is offered no seat there', offered.aimed === null || !offered.aimed.locked, JSON.stringify(offered));
 const wishes = await page.evaluate(() => {
@@ -86,169 +85,78 @@ const wishes = await page.evaluate(() => {
 check('with only the centre tables open nobody wishes for the window or the door', !wishes.includes('window') && !wishes.includes('door') && wishes.length > 0, wishes.join());
 await h.screenshot('artifacts/tables-1-locked.png');
 
-// 2. The ray on a tag, and a pinch.
-const REST = [SEAT.x - 0.25, SEAT.y - 0.35, SEAT.z - 0.15];
-const aimAtTag = async (table) => {
-  const target = await page.evaluate((table) => {
-    const t = window.__cafe.game.tags.find((x) => x.table === table);
-    const V = t.panel.mesh.position.constructor;
-    t.panel.mesh.updateWorldMatrix(true, false);
-    return t.panel.mesh.localToWorld(new V(0, 0, 0)).toArray();
-  }, table);
-  const d = target.map((v, i) => v - REST[i]);
-  const len = Math.hypot(...d);
-  const n = d.map((v) => v / len);
-  const ax = [0, 0, -1];
-  const dot = ax[0] * n[0] + ax[1] * n[1] + ax[2] * n[2];
-  const cr = [ax[1] * n[2] - ax[2] * n[1], ax[2] * n[0] - ax[0] * n[2], ax[0] * n[1] - ax[1] * n[0]];
-  const w = 1 + dot;
-  const ql = Math.hypot(cr[0], cr[1], cr[2], w);
-  await send('set_transform', { device: 'hand-right', position: { x: REST[0], y: REST[1], z: REST[2] }, orientation: { x: cr[0] / ql, y: cr[1] / ql, z: cr[2] / ql, w: w / ql } });
-  await frames(6);
-  return page.evaluate(() => ({ aim: window.__cafe.game.aim.right, hover: window.__cafe.game.tags.map((t) => t.panel.hover).filter(Boolean) }));
-};
-const tap = async () => {
-  await send('set_select_value', { device: 'hand-right', value: 1 });
-  await frames(4);
-  await send('set_select_value', { device: 'hand-right', value: 0 });
-  await frames(4);
-};
-const lit = await aimAtTag(6);
-check('the hand ray on a padlock tag lights it', lit.aim === 'table-6' && lit.hover.join() === 'table-6', JSON.stringify(lit));
-await h.screenshot('artifacts/tables-2-aimed.png');
-await tap();
-await until(() => window.__cafe.game.phase === 'buying', 10000);
-await page.waitForTimeout(400);
+// 2. The Shop's Table column.
+await page.evaluate(() => window.__cafe.game.click('bar-shop'));
+await until(() => window.__cafe.game.phase === 'shopping');
 s = await state();
-check('a pinch opens the buy card: the café still and in view, the card naming the table and its seats (BUY pale: the bank is empty)', s.phase === 'buying' && s.speed === 0 && s.cafe && s.card === 'buy' && s.buttons.map((b) => b.id).join() === 'buy-yes,buy-no' && s.buttons[0].off, JSON.stringify({ phase: s.phase, speed: s.speed, cafe: s.cafe, card: s.card, buttons: s.buttons }));
-const named = await page.evaluate(() => window.__cafe.game.menu.card.buttons.find((b) => b.id === 'buy-yes')?.label);
-check('the card asks BUY 8', named === 'BUY 8', `${named}`);
-await send('set_transform', { device: 'hand-right', position: { x: -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
-await h.screenshot('artifacts/tables-3-buy.png');
-
-const calls = await page.evaluate(() => window.__cafe.world.renderer.info.render.calls);
-check('the tags and the per-table batches keep the draw calls modest (under 400)', calls > 0 && calls < 400, `${calls} draw calls with the buy card up`);
-
-// 3. NOT NOW.
-await page.evaluate(() => window.__cafe.game.click('buy-no'));
-await frames(3);
+check('the Shop drawer has a Table column: OPEN 8, pale with the bank short', s.drawer && s.buttons.includes('open-table-later') && s.tableLabel === 'OPEN 8', JSON.stringify({ buttons: s.buttons, label: s.tableLabel }));
+await page.evaluate(() => window.__cafe.game.click('open-table-later'));
 s = await state();
-check('NOT NOW: the café moves again, nothing bought', s.phase === 'run' && s.speed === 1 && s.card === null && s.tables.join() === '2,8', JSON.stringify({ phase: s.phase, speed: s.speed, card: s.card, tables: s.tables }));
-
-// 3b. Which tables can open, at a glance, and the ray's help with them.
-const look = () => page.evaluate(() => {
-  const { game, strip, sound } = window.__cafe;
-  const V = game.head.constructor;
-  return {
-    tags: game.tags.map((t) => ({ table: t.table, can: t.canBuy, dimmed: t.panel.dimmed, size: +t.panel.size.toFixed(2), y: +t.panel.mesh.position.y.toFixed(3), far: +t.panel.mesh.getWorldPosition(new V()).distanceTo(game.head).toFixed(2) })),
-    note: game.note.panel.open ? game.note.drawn.split('|') : null, notes: game.notesShown, pops: sound.played.note ?? 0,
-  };
+check('OPEN with the bank short is refused, nothing opened', s.refused === 1 && s.tables.join() === '2,8', JSON.stringify({ refused: s.refused, tables: s.tables }));
+await page.evaluate(() => { window.__cafe.score.bank = 16; window.__cafe.game.click('shop-close'); window.__cafe.game.click('bar-shop'); });
+await until(() => window.__cafe.game.phase === 'shopping' && window.__cafe.strip.drawer.panel.buttons.some((b) => b.id === 'open-table'));
+await h.screenshot('artifacts/tables-2-shop.png');
+// Which table should open: the locked one nearest the café's front middle.
+const expected = await page.evaluate(() => window.__cafe.game.nextTable());
+const nearest = await page.evaluate(() => {
+  const { system } = window.__cafe;
+  const V = system.cafe.position.constructor;
+  const front = system.cafe.worldToLocal(system.frontEdge(new V()));
+  const p = new V();
+  return [...system.lockedTables].map((t) => { system.tableTop(t, p); return [t, Math.hypot(p.x - front.x, p.z - front.z)]; }).sort((a, b) => a[1] - b[1])[0];
 });
-let l = await look();
-const near = l.tags.reduce((a, b) => (a.far < b.far ? a : b));
-const farthest = l.tags.reduce((a, b) => (a.far > b.far ? a : b));
-check('with the bank short every padlock is faded and as made; the farther ones grown to keep their angular size', l.tags.every((t) => !t.can && t.dimmed) && farthest.size > near.size && Math.abs(farthest.size / near.size - Math.min(1.8, farthest.far / 0.8) / Math.max(1, near.far / 0.8)) < 0.08, JSON.stringify({ near, farthest }));
-// The "Open a table" tip seen already: the bank reaching the price brings the note, a pop, and the padlocks swell.
-// (The level's goal tip, if still up under the bar, goes first: the note waits for it.)
-await page.evaluate(() => { const { game, score } = window.__cafe; for (const id of ['goal', 'table']) if (!game.save.tips.includes(id)) game.save.tips.push(id); if (game.tipShown) game.endTip(); score.bank = 20; });
-await until(() => window.__cafe.game.note.panel.open, 10000);
-await frames(3);
-l = await look();
-const big = l.tags.find((t) => t.table === near.table);
-check('the bank able to pay: those padlocks bigger (x1.4), higher and in full colour; "A table can open" under the bar, with a pop', l.tags.every((t) => t.can && !t.dimmed) && big.size >= near.size * 1.4 - 0.05 && big.y > near.y + 0.015 && l.note?.[0] === 'A table can open' && l.note?.[1] === 'Point at a padlock and pinch.' && l.pops >= 1, JSON.stringify({ before: near, after: big, note: l.note, pops: l.pops }));
-await h.screenshot('artifacts/tables-2b-ready.png');
-// Once a price: no second note for the same price.
-const notesNow = l.notes;
-await page.evaluate(() => { window.__cafe.score.bank = 2; });
-await frames(4);
-await page.evaluate(() => { window.__cafe.score.bank = 20; });
-await page.waitForTimeout(1500);
-check('the note comes once a price (not again when the bank dips and comes back)', (await look()).notes === notesNow, `${(await look()).notes} notes`);
-// A ray just past a far padlock's hit area still lights it (the near miss: TAG_RAY.assist).
-// The tag and side to miss on: the one whose near miss passes furthest (seen from the hand) from every other tag.
-const missBy = await page.evaluate((rest) => {
-  const { game } = window.__cafe;
-  const V = game.head.constructor;
-  const from = new V(...rest);
-  const centres = game.tags.map((t) => { t.panel.mesh.updateWorldMatrix(true, false); return t.panel.mesh.getWorldPosition(new V()); });
-  let best = null;
-  game.tags.forEach((t, i) => {
-    const m = t.panel.mesh;
-    const tall = m.geometry.parameters.height * m.getWorldScale(new V()).y;
-    const q = m.getWorldQuaternion(m.quaternion.clone());
-    for (const dir of [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0]]) {
-      // Just beyond the hit area: half its height and half again past the drawing, plus 1 cm.
-      const p = centres[i].clone().addScaledVector(new V(...dir).applyQuaternion(q), tall * 1.0 + 0.01);
-      const ray = p.clone().sub(from).normalize();
-      const clear = Math.min(...centres.filter((_, k) => k !== i).map((c) => c.clone().sub(from).angleTo(ray)));
-      if (!best || clear > best.clear) best = { table: t.table, point: p.toArray(), clear };
-    }
-  });
-  return best;
-}, REST);
-{
-  const d = missBy.point.map((v, i) => v - REST[i]);
-  const len = Math.hypot(...d);
-  const n = d.map((v) => v / len);
-  const ax = [0, 0, -1];
-  const dot = ax[0] * n[0] + ax[1] * n[1] + ax[2] * n[2];
-  const cr = [ax[1] * n[2] - ax[2] * n[1], ax[2] * n[0] - ax[0] * n[2], ax[0] * n[1] - ax[1] * n[0]];
-  const w = 1 + dot;
-  const ql = Math.hypot(cr[0], cr[1], cr[2], w);
-  await send('set_transform', { device: 'hand-right', position: { x: REST[0], y: REST[1], z: REST[2] }, orientation: { x: cr[0] / ql, y: cr[1] / ql, z: cr[2] / ql, w: w / ql } });
-  await frames(6);
-}
-const assisted = await page.evaluate(() => window.__cafe.game.aim.right);
-check('a ray just past an affordable padlock\'s hit area still lights it (the near-miss help)', assisted === `table-${missBy.table}`, `aim ${assisted}, meant table-${missBy.table}, ${(missBy.clear * 180 / Math.PI).toFixed(1)} degrees from any other tag`);
-await send('set_transform', { device: 'hand-right', position: { x: -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
-await page.evaluate(() => { window.__cafe.score.bank = 0; });
-await frames(3);
-
-// 4. BUY, short and then with enough.
-await page.evaluate(() => window.__cafe.game.click('table-6'));
-await until(() => window.__cafe.game.phase === 'buying', 10000);
-await page.evaluate(() => window.__cafe.game.click('buy-yes'));
+const burstsBefore = await page.evaluate(() => window.__cafe.strip.confettiAge);
+await page.evaluate(() => window.__cafe.game.click('open-table'));
 await frames(3);
 s = await state();
-check('BUY with an empty bank is refused: the card stays, the shop says no', s.phase === 'buying' && s.refused === 1 && s.tables.join() === '2,8', JSON.stringify({ phase: s.phase, refused: s.refused, tables: s.tables }));
-await page.evaluate(() => { window.__cafe.score.bank = 16; window.__cafe.game.click('buy-no'); window.__cafe.game.click('table-6'); });
-await until(() => window.__cafe.game.phase === 'buying', 10000);
-const before = await state();
-check('with 16 in the bank the card offers BUY 8 (moss)', before.card === 'buy' && !before.buttons[0].off, JSON.stringify(before.buttons));
-await page.evaluate(() => window.__cafe.game.click('buy-yes'));
-await until(() => window.__cafe.game.phase === 'run', 10000);
-await frames(3);
-s = await state();
-check('BUY: the table opens, its tag goes, its seats are offered, 8 taken, the next costs 14, and it is saved', s.phase === 'run' && s.tables.join() === '2,6,8' && !s.locked.includes(6) && !s.tags.includes(6) && s.seatsOpen === 6 && s.bank === 8 && s.price === 14 && s.bought === 1 && s.saved?.join() === '2,6,8' && s.speed === 1, JSON.stringify({ tables: s.tables, locked: s.locked, tags: s.tags, seatsOpen: s.seatsOpen, bank: s.bank, price: s.price, saved: s.saved }));
-// Its meshes have their own materials back and are folded into the room's batch (hidden under `batched`).
-const opened = await page.evaluate(() => { const r = { materials: [], batched: 0, meshes: 0 }; window.__cafe.system.pieces[6].traverse((n) => { if (!n.isMesh) return; r.meshes++; if (n.userData.batched) r.batched++; r.materials.push(n.material.name); }); return r; });
+const flew = await page.evaluate(() => window.__cafe.strip.confettiAge < 1);
+check('OPEN opens the locked table nearest the café\'s front, its seats offered, 8 taken, the next 14, saved, confetti from it', s.tables.includes(expected) && Math.abs(nearest[1] - (await page.evaluate((t) => { const { system } = window.__cafe; const V = system.cafe.position.constructor; const front = system.cafe.worldToLocal(system.frontEdge(new V())); const p = new V(); system.tableTop(t, p); return Math.hypot(p.x - front.x, p.z - front.z); }, expected))) < 0.011 && s.seatsOpen === 6 && s.bank === 8 && s.price === 14 && s.bought === 1 && s.saved?.includes(expected) && flew && s.tableLabel === 'OPEN 14', JSON.stringify({ opened: expected, nearest, seatsOpen: s.seatsOpen, bank: s.bank, price: s.price, saved: s.saved, flew, label: s.tableLabel, burstsBefore }));
+const opened = await page.evaluate((t) => { const r = { materials: [], batched: 0, meshes: 0 }; window.__cafe.system.pieces[t].traverse((n) => { if (!n.isMesh) return; r.meshes++; if (n.userData.batched) r.batched++; r.materials.push(n.material.name); }); return r; }, expected);
 check('the opened table is drawn in its own materials again, folded into the room\'s batch', opened.meshes > 0 && opened.materials.every((m) => !m.startsWith('Ghost')) && opened.batched === opened.meshes, JSON.stringify(opened));
 await page.waitForTimeout(500);
-await h.screenshot('artifacts/tables-4-opened.png');
+await h.screenshot('artifacts/tables-3-opened.png');
 
-// 5. The price list, whichever table.
+// 3. The rest, in order, at the listed prices.
 const prices = [];
-for (const table of [12, 1, 11, 9, 3, 10, 4, 7, 5]) {
-  await page.evaluate((table) => { window.__cafe.score.bank = 1000; window.__cafe.game.click(`table-${table}`); }, table);
-  await until(() => window.__cafe.game.phase === 'buying', 10000);
-  prices.push(await page.evaluate(() => window.__cafe.shop.tablePrice));
-  await page.evaluate(() => window.__cafe.game.click('buy-yes'));
-  await until(() => window.__cafe.game.phase === 'run', 10000);
+const order = [expected];
+for (let i = 0; i < 9; i++) {
+  const next = await page.evaluate(() => { window.__cafe.score.bank = 1000; return { table: window.__cafe.game.nextTable(), price: window.__cafe.shop.tablePrice }; });
+  prices.push(next.price);
+  order.push(next.table);
+  await page.evaluate(() => window.__cafe.game.click('open-table'));
+  await frames(2);
 }
+const dist = await page.evaluate((order) => { const { system } = window.__cafe; const V = system.cafe.position.constructor; const front = system.cafe.worldToLocal(system.frontEdge(new V())); const p = new V(); return order.map((t) => { system.tableTop(t, p); return +Math.hypot(p.x - front.x, p.z - front.z).toFixed(3); }); }, order);
 s = await state();
-check('the prices run 14, 22, 32 ... 190 whichever table is chosen; the room is then all open', prices.join() === '14,22,32,45,62,85,115,150,190' && s.tables.length === 12 && s.locked.length === 0, JSON.stringify({ prices, tables: s.tables, locked: s.locked }));
+check('OPEN again and again: the prices run 14, 22 ... 190 and the tables open front to back', prices.join() === '14,22,32,45,62,85,115,150,190' && dist.every((d, i) => i === 0 || d >= dist[i - 1] - 0.011), JSON.stringify({ prices, order, dist }));
+check('everything open: the Table column says All open, every seat is open, the floor never grew', s.locked.length === 0 && s.tableLabel === null && s.seatsOpen === s.seats && s.seats === 23 && !s.annex, JSON.stringify({ locked: s.locked, label: s.tableLabel, seats: s.seats, seatsOpen: s.seatsOpen }));
+await page.evaluate(() => window.__cafe.game.click('shop-close'));
+await until(() => window.__cafe.game.phase === 'run');
 
-// 6. Nothing more to buy: the floor never grows.
-await page.waitForTimeout(2500);
+// 4. TABLE READY on the bar when the bank first reaches the next price: a fresh café.
+await page.evaluate(() => { const { game, score } = window.__cafe; score.bank = 0; game.startFresh(); });
+await until(() => window.__cafe.game.phase === 'run' || window.__cafe.game.phase === 'tutorial', 30000);
+await page.evaluate(() => { const { game } = window.__cafe; if (game.phase === 'tutorial') game.click('skip'); });
+await until(() => window.__cafe.game.phase === 'run', 30000);
+await page.waitForTimeout(1000);
+const popsBefore = await page.evaluate(() => window.__cafe.sound.played.note ?? 0);
+await page.evaluate(() => { window.__cafe.score.bank = 9; });
+const banner = await until(() => window.__cafe.strip.banner?.title === 'TABLE READY', 5000);
 s = await state();
-check('the room all open: no extension rises, no tag is left, every seat is open', !s.annex && s.tags.length === 0 && s.locked.length === 0 && s.seatsOpen === s.seats && s.seats === 23, JSON.stringify({ annex: s.annex, tags: s.tags, seats: s.seats, seatsOpen: s.seatsOpen }));
+const pops = await page.evaluate(() => window.__cafe.sound.played.note ?? 0);
+check('the bank reaching the next table\'s price: "TABLE READY" and the price on the bar, with a pop', banner && s.banner?.join() === 'TABLE READY,8' && pops > popsBefore, JSON.stringify({ banner: s.banner, pops: [popsBefore, pops] }));
+await h.screenshot('artifacts/tables-4-ready.png');
+// The banner's 3 s (in the page's frames, which the emulator runs slower than real time), then the bank dips and comes back.
+await until(() => window.__cafe.strip.banner === null, 20000);
+await page.evaluate(() => { window.__cafe.score.bank = 2; });
+await frames(4);
+await page.evaluate(() => { window.__cafe.score.bank = 9; });
+await page.waitForTimeout(800);
+check('once a price (not again when the bank dips and comes back)', (await state()).banner === null, JSON.stringify((await state()).banner));
 
-// 7. Hidden while paused; kept over a reload (paused first: the game saves as the page hides, so the planted save must come after).
+// 5. Kept over a reload (paused first: the game saves as the page hides, so the planted save must come after).
 await page.evaluate(() => window.__cafe.game.click('bar-pause'));
 await until(() => window.__cafe.game.phase === 'paused');
-await page.waitForTimeout(400);
-s = await state();
-check('paused, the tags are hidden with the café', s.phase === 'paused' && s.tagsOpen === 0, JSON.stringify({ phase: s.phase, tagsOpen: s.tagsOpen }));
 await page.evaluate(() => { localStorage.setItem('cafe-chaos/save/v3', JSON.stringify({ ...JSON.parse(localStorage.getItem('cafe-chaos/save/v3')), tables: [2, 8, 6, 12] })); });
 await h.reload();
 await ready(h);
@@ -256,7 +164,7 @@ await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); 
 await until(() => window.__cafe.game.phase === 'run');
 await page.waitForTimeout(600);
 s = await state();
-check('after a reload the saved tables are open and the rest locked and tagged', s.tables.join() === '2,6,8,12' && s.locked.join() === '1,3,4,5,7,9,10,11' && s.tagsOpen === 8 && s.price === 22, JSON.stringify({ tables: s.tables, locked: s.locked, tagsOpen: s.tagsOpen, price: s.price }));
+check('after a reload the saved tables are open and the rest locked', s.tables.join() === '2,6,8,12' && s.locked.join() === '1,3,4,5,7,9,10,11' && s.price === 22, JSON.stringify({ tables: s.tables, locked: s.locked, price: s.price }));
 
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');

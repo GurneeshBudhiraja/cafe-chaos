@@ -101,11 +101,17 @@ export class StripSystem extends createSystem({}) {
   /** Times a new level was celebrated (the sound system plays the chime). */
   celebrations = 0;
   /** The shop, as a drawer under the bar (GameSystem fills and opens it); while it is open the bar rises so it covers none of the café. */
-  readonly drawer = new ShopDrawer(STRIP.width);
+  readonly drawer = new ShopDrawer();
   /** How far the drawer's room is made (0 to 1, eased): the bar's lowest height rises with it. */
   private drawerRoom = 0;
-  /** A level just reached: the bar shows it, and its coins, for LEVEL_BANNER.seconds (null: the bar as usual). */
-  banner: { level: number; bonus: number; left: number } | null = null;
+  /**
+   * A moment on the bar (null: the bar as usual): a level just reached
+   * ("LEVEL n!" and the coins it brought) or a table the bank can now open
+   * ("TABLE READY" and its price), for LEVEL_BANNER.seconds. One at a time:
+   * one that comes while another shows waits for it.
+   */
+  banner: { title: string; amount: number; plus: boolean; left: number } | null = null;
+  private readonly banners: { title: string; amount: number; plus: boolean }[] = [];
   /** The confetti: a burst of paper scraps, once, when a level is reached. */
   private readonly confetti = new InstancedMesh(new PlaneGeometry(0.009, 0.005), new MeshBasicMaterial({ side: DoubleSide, toneMapped: false, transparent: true }), CONFETTI.count);
   private readonly bits = Array.from({ length: CONFETTI.count }, () => ({ p: new Vector3(), v: new Vector3(), r: new Euler(), spin: new Vector3() }));
@@ -160,7 +166,10 @@ export class StripSystem extends createSystem({}) {
     this.showTag(delta);
     if (this.banner) {
       this.banner.left -= delta;
-      if (this.banner.left <= 0) this.banner = null;
+      if (this.banner.left <= 0) {
+        const next = this.banners.shift();
+        this.banner = next ? { ...next, left: LEVEL_BANNER.seconds } : null;
+      }
     }
     if (!up) return;
     this.time += delta;
@@ -183,7 +192,7 @@ export class StripSystem extends createSystem({}) {
     }
     const low = this.live && s.happiness / HAPPINESS.max <= 0.3 && s.happiness > 0;
     const shopNow = this.shop.price === null ? 'full' : this.shop.affordable ? 'can' : 'not';
-    const now = `${Math.round(s.happiness)}|${s.bank}|${s.level}|${s.levelServed}|${s.levelGoal}|${this.live}|${this.controls}|${shopNow}|${this.banner ? this.banner.level : 0}`;
+    const now = `${Math.round(s.happiness)}|${s.bank}|${s.level}|${s.levelServed}|${s.levelGoal}|${this.live}|${this.controls}|${shopNow}|${this.banner ? this.banner.title : ''}`;
     if (moving || low || now !== this.shown) {
       this.shown = now;
       this.panel.paint();
@@ -208,8 +217,23 @@ export class StripSystem extends createSystem({}) {
 
   /** A level reached in a run: the bar says so with its coins for a moment, with confetti and the chime; the café keeps going. */
   showLevel(level: number, bonus: number): void {
-    this.banner = { level, bonus, left: LEVEL_BANNER.seconds };
+    this.banner = { title: `LEVEL ${level}!`, amount: bonus, plus: true, left: LEVEL_BANNER.seconds };
     this.celebrate();
+  }
+
+  /** The bank can open a table now: "TABLE READY" and its price on the bar for a moment (after a level banner, if one shows). */
+  showTableReady(price: number): void {
+    const next = { title: 'TABLE READY', amount: price, plus: false };
+    if (this.banner) this.banners.push(next);
+    else this.banner = { ...next, left: LEVEL_BANNER.seconds };
+    this.notices++;
+  }
+  /** Banners shown that were not levels (the sound system pops for each). */
+  notices = 0;
+
+  /** Confetti from a point (world) without the level's chime: a table just opened. */
+  sparkle(at: Vector3): void {
+    this.burst(at);
   }
 
   private burst(at?: Vector3): void {
@@ -291,7 +315,7 @@ export class StripSystem extends createSystem({}) {
 
   private draw(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     if (this.banner) {
-      this.drawBanner(ctx, w, h, this.banner.level, this.banner.bonus);
+      this.drawBanner(ctx, w, h, this.banner.title, this.banner.amount, this.banner.plus);
       return;
     }
     const rc = pen(this.panel.canvas);
@@ -363,10 +387,11 @@ export class StripSystem extends createSystem({}) {
   }
 
   /**
-   * The level banner: the bar in a warmer paper, Pause and Shop where
-   * they always are, and between them "LEVEL n!" and the coins it brought.
+   * A banner: the bar in a warmer paper, Pause and Shop where they always
+   * are, and between them its words and a coin with its amount ("+10" for
+   * a level's coins, "8" for a table's price).
    */
-  private drawBanner(ctx: CanvasRenderingContext2D, w: number, h: number, level: number, bonus: number): void {
+  private drawBanner(ctx: CanvasRenderingContext2D, w: number, h: number, words: string, amount: number, plus: boolean): void {
     const rc = pen(this.panel.canvas);
     const lw = Math.max(2, h * 0.016);
     rc.rectangle(lw * 2, lw * 2, w - lw * 4, h - lw * 4, line(11, lw * 1.2, { fill: LEVEL_BANNER.paper, fillStyle: 'solid', roughness: 1.3 }));
@@ -376,19 +401,19 @@ export class StripSystem extends createSystem({}) {
     const right = w - h * BAR_BUTTON.pad - btn - around;
     rc.line(left, h * 0.17, left + 2, h * 0.83, line(20, lw * 0.8));
     rc.line(right, h * 0.17, right - 2, h * 0.83, line(23, lw * 0.8));
-    const title = `LEVEL ${level}!`;
-    const plus = `+${bonus}`;
+    const title = words;
+    const figure = plus ? `+${amount}` : `${amount}`;
     ctx.font = hand(h * 0.46, 700);
     const tw = ctx.measureText(title).width;
     ctx.font = hand(h * 0.34, 700);
-    const pw = ctx.measureText(plus).width;
+    const pw = ctx.measureText(figure).width;
     const coin = h * 0.36;
     let x = (left + right) / 2 - (tw + h * 0.4 + coin + h * 0.1 + pw) / 2;
     scrawl(ctx, title, x, h * 0.55, h * 0.46);
     x += tw + h * 0.4;
     sketchCoin(rc, x + coin / 2, h * 0.5, coin, 41, lw);
     x += coin + h * 0.1;
-    scrawl(ctx, plus, x, h * 0.54, h * 0.34, { color: SKETCH.mossDeep });
+    scrawl(ctx, figure, x, h * 0.54, h * 0.34, { color: plus ? SKETCH.mossDeep : SKETCH.ink });
   }
 
   /** The tag over the lit button: its word, where it stands (over that button), shown while the button is lit. */

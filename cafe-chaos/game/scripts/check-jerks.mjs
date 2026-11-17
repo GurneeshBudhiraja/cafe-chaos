@@ -1,6 +1,6 @@
 /**
  * Quick jerks check: with everything around the café on show at once (the
- * bar, a note under it, the padlock tags, a guest carried with its wishes
+ * bar, a note under it, a guest carried with its wishes
  * card and a seat tag, then the shop drawer), the head and the hand are
  * thrown about the way a player's are, and every frame each of those is
  * measured in the page:
@@ -14,7 +14,7 @@
  *  2. the carrying hand thrown 30 cm a frame back and forth: the guest
  *     stays in the hand and follows;
  *  3. the hand lost to the tracking for a moment (0.25 s): the guest waits
- *     and is carried on; lost for longer (1 s): it is let go, gently;
+ *     and is carried on; lost for longer than its grace: it is let go, gently;
  *  4. the shop drawer through the same head jerks: it stays with the bar;
  *  5. no console errors.
  * It records artifacts/jerks.mp4 to look at.
@@ -71,7 +71,6 @@ await page.evaluate(() => {
   const V = c.game.head.constructor;
   const named = () => {
     const out = [['bar', c.strip.panel], ['note', c.game.note.panel], ['drawer', c.strip.drawer.panel]];
-    c.game.tags.forEach((t) => out.push([`tag-${t.table}`, t.panel]));
     c.guests.seatTags.forEach((t, i) => out.push([`seatTag-${i}`, t.card.panel]));
     c.guests.cards.cards.forEach((card, i) => out.push([`wishCard-${i}`, { mesh: card.mesh, open: card.mesh.visible }]));
     return out;
@@ -134,8 +133,8 @@ const over = add(scene.dirty, [0, 0.042 * scene.scale + 0.035, 0]);
 const high = add(first.grip, [0, 0.1, 0]);
 for (let i = 1; i <= 8; i++) { await pinchTo(add(high, add(add(over, [0, 0.06, 0]), high, -1), i / 8)); await frames(1); }
 await pinchTo(over); await frames(8);
-const ready = await page.evaluate(() => ({ held: window.__cafe.guests.guests.some((g) => g.state === 'held'), tag: window.__cafe.guests.seatTags.some((t) => t.card.panel.open), note: window.__cafe.game.note.panel.open, tags: window.__cafe.game.tags.filter((t) => t.panel.open).length }));
-check('everything up at once: a guest held over a dirty seat (its tag), the note under the bar, the padlocks', ready.held && ready.tag && ready.note && ready.tags > 0, JSON.stringify(ready));
+const ready = await page.evaluate(() => ({ held: window.__cafe.guests.guests.some((g) => g.state === 'held'), tag: window.__cafe.guests.seatTags.some((t) => t.card.panel.open), note: window.__cafe.game.note.panel.open}));
+check('everything up at once: a guest held over a dirty seat (its tag), the note under the bar', ready.held && ready.tag && ready.note, JSON.stringify(ready));
 
 /** Head jerks: fast turns, pitches and lurches, then still. Returns the stats over the jerks and the facing half a second after. */
 const LOOKS = (() => {
@@ -188,7 +187,8 @@ await frames(6);
 const short = await take();
 check('the hand lost for a moment (0.25 s) and back pinching: still carrying the guest', short.holding !== null, `holding ${short.holding}`);
 await send('set_connected', { device: 'hand-right', connected: false });
-await page.waitForTimeout(1000);
+// Lost for longer than its grace (0.4 s of the page's frames, which the emulator runs slower than real time): let go.
+await until(() => !window.__cafe.guests.guests.some((g) => g.state === 'held'), 15000);
 const long = await take();
 await send('set_connected', { device: 'hand-right', connected: true });
 const where = await page.evaluate((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.state, short.holding);

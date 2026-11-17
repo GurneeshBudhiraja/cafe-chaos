@@ -143,19 +143,18 @@ check('picking the guest up and seating it move the coach card on', step1 === 1 
 const lesson = await until(() => window.__cafe.game.step === 3, null, 240000);
 const atLesson = await page.evaluate(() => {
   const { game, shop, score } = window.__cafe;
-  return { title: game.steps[game.step].title, coach: game.coach.open, tags: game.tags.filter((t) => t.panel.open).length, ready: game.tags.filter((t) => t.canBuy).length, bank: score.bank, price: shop.tablePrice, phase: game.phase };
+  return { title: game.steps[game.step].title, coach: game.coach.open, bank: score.bank, price: shop.tablePrice, phase: game.phase };
 });
-check('after the tea, the last step teaches the ray on a padlock: "Open a table", the padlocks up and affordable (the house tops the coins up if short)', lesson && atLesson.title === 'Open a table' && atLesson.coach && atLesson.phase === 'tutorial' && atLesson.tags > 0 && atLesson.ready === atLesson.tags && atLesson.bank >= atLesson.price, JSON.stringify(atLesson));
+check('after the tea, the last step teaches the ray on the bar: "Open a table" from the Shop (the house tops the coins up if short)', lesson && atLesson.title === 'Open a table' && atLesson.coach && atLesson.phase === 'tutorial' && atLesson.bank >= atLesson.price, JSON.stringify(atLesson));
 await h.screenshot('artifacts/game-lesson.png');
-// The padlock pinched (check-tables points the ray at one): the buy card, the coach card stepping aside; BUY.
-const lessonTable = await page.evaluate(() => window.__cafe.game.tags[0].table);
-await page.evaluate((t) => window.__cafe.game.click(`table-${t}`), lessonTable);
-const buying = await page.evaluate(() => ({ phase: window.__cafe.game.phase, coach: window.__cafe.game.coach.open }));
-await page.evaluate(() => window.__cafe.game.click('buy-yes'));
+// Shop on the bar (check-bar points the ray at it): the drawer, the coach card stepping aside; OPEN.
+await page.evaluate(() => window.__cafe.game.click('bar-shop'));
+const shopping = await page.evaluate(() => ({ phase: window.__cafe.game.phase, coach: window.__cafe.game.coach.open, drawer: window.__cafe.strip.drawer.panel.open, open: window.__cafe.strip.drawer.panel.buttons.some((b) => b.id === 'open-table') }));
+await page.evaluate(() => window.__cafe.game.click('open-table'));
 const opened = await until(() => window.__cafe.game.phase === 'run', null, 20000);
 s = await state();
-const after = await page.evaluate(() => ({ tables: window.__cafe.shop.tablesBought, tips: window.__cafe.game.save.tips }));
-check('BUY opens the table and ends the first run: the run starts, the clock near 0:00, the coach card away, the one-time table tip not needed', buying.phase === 'buying' && !buying.coach && opened && s.phase === 'run' && !s.coach && s.live && s.clock < 20 && after.tables === 1 && after.tips.includes('table'), JSON.stringify({ buying, phase: s.phase, coach: s.coach, clock: +s.clock.toFixed(1), ...after }));
+const after = await page.evaluate(() => ({ tables: window.__cafe.shop.tablesBought, drawer: window.__cafe.strip.drawer.panel.open }));
+check('OPEN opens a table and ends the first run: the drawer away, the run starts, the clock near 0:00, the coach card away', shopping.phase === 'shopping' && !shopping.coach && shopping.drawer && shopping.open && opened && s.phase === 'run' && !s.coach && s.live && s.clock < 20 && after.tables === 1 && !after.drawer, JSON.stringify({ shopping, phase: s.phase, coach: s.coach, clock: +s.clock.toFixed(1), ...after }));
 await page.evaluate(() => {
   // From here guests eat quickly and nobody in the line gives up, so each outcome below is the one asked for.
   window.__cafe.guests.mealSeconds = 4;

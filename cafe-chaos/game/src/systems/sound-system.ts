@@ -61,6 +61,7 @@ export class SoundSystem extends createSystem({}) {
   /** Notes under the bar shown (GameSystem): each gets the same soft pop as a tip. */
   notes = 0;
   private notesHeard = 0;
+  private bannersHeard = 0;
   /** The theme (index.ts hands it over), ducked while the game is paused. */
   theme: Theme | null = null;
   master: GainNode | null = null;
@@ -261,6 +262,10 @@ export class SoundSystem extends createSystem({}) {
     this.tipsHeard = this.tips;
     if (this.notes > this.notesHeard) this.emit('note', PLACES.room, SOUND.hands * 0.7, 0.2, pop);
     this.notesHeard = this.notes;
+    // A banner on the bar that is not a level (TABLE READY): the same pop.
+    const banners = this.strip?.notices ?? 0;
+    if (banners > this.bannersHeard) this.emit('note', PLACES.room, SOUND.hands * 0.7, 0.2, pop);
+    this.bannersHeard = banners;
     // A table left dirty: a soft clink of crockery from it.
     const mess = this.mess;
     if (mess && mess.dirtied > seen.dirtied) this.emit('clink', PLACES.room, SOUND.bar * 0.6, 0.4, clink);

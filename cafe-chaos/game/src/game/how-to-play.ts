@@ -64,9 +64,8 @@ export const HOW_TO_PLAY: readonly HowToStep[] = [
   {
     id: 'tables',
     title: 'Open more tables',
-    text: 'Point your hand at a padlock and pinch. Pinch BUY. More tables seat more guests.',
-    video: 'howto/tables.mp4',
-    poster: 'ui/howto-tables.jpg',
+    text: 'Point at Shop on the bar and pinch. Pinch OPEN: the nearest grey table opens. More tables seat more guests.',
+    poster: 'ui/howto-pause.jpg',
   },
   {
     id: 'clean',

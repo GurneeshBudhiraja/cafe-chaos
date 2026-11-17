@@ -49,7 +49,6 @@ import { sketchFontReady } from '../ui/sketch.js';
 import { StripSystem } from './strip-system.js';
 import { SoundSystem } from './sound-system.js';
 import { ICONS, LEVELS, MENU_SIZE, StartMenu } from '../ui/start-menu.js';
-import { LockTag, LOCK_TAG } from '../ui/lock-tag.js';
 import { TipCard, TIP } from '../ui/tip-card.js';
 import { TIP_GAP, TIP_ORDER, TIPS, tipIcon, type TipId } from '../game/tips.js';
 import { CafeSystem } from './cafe-system.js';
@@ -63,11 +62,10 @@ import { MessSystem } from './mess-system.js';
 /**
  * A level reached is not a phase: the bar shows it for a moment and the
  * café keeps going (`levelUp`). 'shopping': the shop drawer is down under
- * the bar, the café still and in view. 'buying': a locked table was pinched;
- * the café is still (and in view) under the buy card. 'closed': the café's happiness ran
+ * the bar (staff and tables are bought there), the café still and in view. 'closed': the café's happiness ran
  * out; the card offers the level again.
  */
-export type GamePhase = 'waiting' | 'title' | 'opening' | 'rules' | 'tutorial' | 'run' | 'paused' | 'buying' | 'shopping' | 'closed' | 'test';
+export type GamePhase = 'waiting' | 'title' | 'opening' | 'rules' | 'tutorial' | 'run' | 'paused' | 'shopping' | 'closed' | 'test';
 
 /**
  * The cards: the big one (title, pause, closing), How to play, and the
@@ -87,20 +85,13 @@ const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as cons
  */
 const RAY = { awayFromCafe: 0.04, reach: 4, edge: 0.15 };
 /**
- * The hand ray's help with the padlock tags, the furthest and smallest
- * things it points at (the back tables are 77 to 88 cm from a seated
- * player's shoulder). A tag the bank can pay for takes the ray `edge` of
- * its height beyond its drawing (Meta: the hit target, not the visual);
- * the tag already lit holds it out to `stick` (so tracking jitter does not
- * flicker it); a ray missing every target but passing within `assist`
- * degrees of an affordable tag takes the nearest (the bubble cursor idea:
- * Baloup et al. 2018, about 90 % fewer errors on small far targets; few,
- * spread targets here, so no jumping between them). A pinch counts the
- * target the ray was on `before` seconds earlier if it changed just as the
- * fingers closed: a pinch nudges the hand, and a ray magnifies it (the
- * Heisenberg effect, Wolf et al. CHI 2020).
+ * A pinch counts the target the ray was on `before` seconds earlier if it
+ * changed just as the fingers closed: a pinch nudges the hand, and a ray
+ * magnifies it (the Heisenberg effect, Wolf et al. CHI 2020).
  */
-const TAG_RAY = { edge: 0.5, stick: 0.9, assist: 2, before: 0.12 };
+const PINCH_NUDGE = { before: 0.12 };
+/** Tables the same distance from the front are put in order by a random amount up to this (metres, café space), fixed per café. */
+const TABLE_ORDER = { jitter: 0.01 };
 /**
  * A free hand raised and pointing shows the short beam (hands/hand-ray.ts)
  * even before the ray is on anything, so pointing is discoverable: a hand
@@ -150,7 +141,7 @@ const MOVES = [
   { picture: 'howto-pinch.jpg', title: 'Pinch a guest', text: 'Put your fingers above a guest at the gate. When the guest glows, pinch.' },
   { picture: 'howto-seat.jpg', title: 'Seat the guest', text: 'Move the guest above the café. Open your fingers. The guest goes to the seat that glows.' },
   { picture: 'howto-happy.jpg', title: 'Keep guests happy', text: 'Seat guests quickly. The bar above the café shows how happy the guests are.' },
-  { picture: 'howto-tables.jpg', title: 'Open a table', text: 'Point at a glowing padlock and pinch, then BUY.' },
+  { picture: 'howto-pause.jpg', title: 'Open a table', text: 'Point at Shop on the bar and pinch, then OPEN.' },
 ];
 /** The pieces of the main room (cafe/layout.ts): the shell and the twelve places to sit; the extension's come after. */
 const MAIN_PIECES = 13;
@@ -159,7 +150,7 @@ const AUTOSAVE_SECONDS = 20;
 
 /** The first run: what each step says, and what moves it on (besides Next). */
 interface Step {
-  /** The table lesson: the padlocks show and take the ray (see GameSystem.tableLesson). */
+  /** The table lesson: the Shop can be opened from the first run, to open a table (see GameSystem.tableLesson). */
   lesson?: boolean;
   title: string;
   text: string;
@@ -191,14 +182,14 @@ export class GameSystem extends createSystem({}) {
    */
   readonly note = new TipCard();
   private readonly notes: { title: string; icon: TipId; seconds: number; text: string }[] = [];
-  /** The table price the "A table can open" note was last given for (it comes once a price). */
+  /** The table price "TABLE READY" was last shown on the bar for (it comes once a price). */
   private readyAt = -1;
   /** Notes shown (the sound system pops for each). */
   notesShown = 0;
   private noteLeft = 0;
   private noteRest = 0;
-  /** The padlock tags over the locked tables (one per table still locked), children of the café. */
-  readonly tags: LockTag[] = [];
+  /** Each table's place in the opening order for this café (nearer the front first; `tableOrder`). */
+  private tableJitter = new Map<number, number>();
   /** The table the buy card is about (an index into the café's pieces), while it is up. */
   buying = -1;
   /** The tip card (game/tips.ts), the tip it shows (null: none), how long it has been up, and how long since the last went. */
@@ -238,7 +229,8 @@ export class GameSystem extends createSystem({}) {
   /** Where Settings was opened from. */
   private settingsFrom: 'title' | 'pause' = 'title';
   /** Where the shop was opened from: CLOSE goes back there (a run carries on). */
-  private shopFrom: 'run' | 'paused' = 'run';
+  private shopFrom: 'run' | 'paused' | 'tutorial' = 'run';
+  private readonly at = new Vector3();
   private sound: SoundSystem | null = null;
   private readonly edge = new Vector3();
   private readonly menuSpot = new Vector3();
@@ -273,10 +265,8 @@ export class GameSystem extends createSystem({}) {
   private readonly head = new Vector3();
   /** Counts when the step began (to tell when the player has done it). */
   mark = { pickedUp: 0, seated: 0, served: 0, wristOpens: 0, tables: 0 };
-  /** The first run's last step is up: open a table with the hand ray (the padlocks show and take the ray in the tutorial). */
+  /** The first run's last step is up: open a table from the Shop with the hand ray (the Shop opens in the tutorial). */
   private tableLesson = false;
-  /** Where the buy card goes back to: the run, or the first run's table lesson. */
-  private buyFrom: 'run' | 'tutorial' = 'run';
   /** The first run's guest is still to come (its model may still be loading). */
   private needGuest = false;
   private placement = -1;
@@ -325,8 +315,8 @@ export class GameSystem extends createSystem({}) {
     this.world.createTransformEntity(this.rays.group);
     this.cafe.cafe.add(this.tip.panel.mesh);
     this.cafe.cafe.add(this.note.panel.mesh);
-    // A carried guest held over a locked table's seat: the tag there says what it costs to open.
-    this.guests.lockedNote = () => `Open it for ${this.shop.tablePrice} coins`;
+    // A carried guest held over a locked table's seat: the tag there says where tables are opened.
+    this.guests.lockedNote = () => 'Open tables in the Shop';
     // The start menu stands in the world (the café is hidden until it is opened).
     // The menu cards stand a metre away, twice as big (MENU_SPOT).
     for (const p of [this.menu.card, this.menu.sheet, this.menu.how]) p.size = MENU_SPOT.size;
@@ -369,7 +359,6 @@ export class GameSystem extends createSystem({}) {
       // Back in the headset mid-run: the pause card is there again.
       if (this.phase === 'paused') this.showPauseCard();
       if (this.phase === 'closed') this.showFailedCard();
-      if (this.phase === 'buying') this.showBuyCard();
       // How to play was up (opened from the pause card): back, so there is something to press.
       if (this.phase === 'rules') this.menu.showHow(HOW_TO_PLAY, this.menu.howIndex);
     });
@@ -410,7 +399,7 @@ export class GameSystem extends createSystem({}) {
       if (what === 'run') this.toRun();
       else this.toTutorial();
     }
-    this.tendTables(cardDelta);
+    this.tendTables();
     this.tendTips(cardDelta);
     this.tendNotes(cardDelta);
     this.strip.controls = this.phase === 'run' || this.phase === 'shopping' ? 'live' : this.phase === 'paused' ? 'paused' : 'off';
@@ -428,7 +417,6 @@ export class GameSystem extends createSystem({}) {
   /** The title card. */
   toTitle(): void {
     this.unpause();
-    this.closeBuy(false);
     if (this.tipShown) this.endTip();
     this.clearNotes();
     this.strip.drawer.hide();
@@ -732,11 +720,13 @@ export class GameSystem extends createSystem({}) {
       this.closeShop();
       return;
     }
-    if (this.phase === 'run') {
-      this.shopFrom = 'run';
+    if (this.phase === 'run' || (this.phase === 'tutorial' && this.tableLesson)) {
+      this.shopFrom = this.phase === 'run' ? 'run' : 'tutorial';
       this.speed = this.cafe.timeScale || this.speed;
       this.cafe.timeScale = 0;
       this.guests.handsOff = true;
+      // The coach card steps aside while the drawer is down.
+      if (this.shopFrom === 'tutorial') this.coach.show(false);
     } else if (this.phase === 'paused') {
       this.shopFrom = 'paused';
       this.closeSheet();
@@ -749,19 +739,24 @@ export class GameSystem extends createSystem({}) {
   /** The drawer's hires as they stand: the next barista at its price (one row however many), and the janitor. */
   private showShop(): void {
     const price = this.shop.price;
+    const table = this.shop.tablePrice;
+    const left = this.cafe.lockedTables.size;
     this.strip.drawer.show([
-      { kind: 'barista', name: 'Barista', hired: this.shop.staff, most: MAX_STAFF, price, canPay: price !== null && this.score.bank >= price, id: 'hire' },
-      { kind: 'janitor', name: 'Janitor', hired: this.shop.janitor ? 1 : 0, most: 1, price: this.shop.janitor ? null : JANITOR_PRICE, canPay: this.score.bank >= JANITOR_PRICE, id: 'hire-janitor' },
+      { kind: 'barista', name: 'Barista', hired: this.shop.staff, most: MAX_STAFF, price, canPay: price !== null && this.score.bank >= price, id: 'hire', word: 'HIRE' },
+      { kind: 'janitor', name: 'Janitor', hired: this.shop.janitor ? 1 : 0, most: 1, price: this.shop.janitor ? null : JANITOR_PRICE, canPay: this.score.bank >= JANITOR_PRICE, id: 'hire-janitor', word: 'HIRE' },
+      // The tables: OPEN opens the next (nearest the front first); how many are left beside its name.
+      { kind: 'table', name: 'Table', hired: 0, most: 0, price: left > 0 ? table : null, canPay: left > 0 && this.score.bank >= table, id: 'open-table', word: 'OPEN', note: left > 0 ? `${left} left` : undefined },
     ]);
   }
 
   private closeShop(): void {
     if (this.phase !== 'shopping') return;
     this.strip.drawer.hide();
-    if (this.shopFrom === 'run') {
-      this.phase = 'run';
+    if (this.shopFrom === 'run' || this.shopFrom === 'tutorial') {
+      this.phase = this.shopFrom;
       this.cafe.timeScale = this.speed;
       this.guests.handsOff = false;
+      if (this.phase === 'tutorial') this.coach.show(true);
     } else {
       this.phase = 'paused';
       this.showPauseCard();
@@ -953,7 +948,7 @@ export class GameSystem extends createSystem({}) {
     this.save.hires = this.shop.hires;
     this.save.janitor = this.shop.janitor;
     this.save.tables = [...this.shop.tables];
-    if (this.phase === 'run' || this.phase === 'paused' || this.phase === 'buying' || this.phase === 'shopping' || this.phase === 'closed') {
+    if (this.phase === 'run' || this.phase === 'paused' || this.phase === 'shopping' || this.phase === 'closed') {
       this.save.level = this.level;
       this.save.levelServed = this.levelServed;
       this.save.happiness = this.score.happiness;
@@ -990,13 +985,12 @@ export class GameSystem extends createSystem({}) {
   private goToStep(index: number): void {
     this.step = index;
     this.mark = { pickedUp: this.guests.pickedUp, seated: this.guests.seated, served: this.baristas.servedCount, wristOpens: this.wristOpens, tables: this.shop.tablesBought };
-    // The table lesson: the padlocks come up and take the ray; if the first guest's coins fall short of a table, the
-    // house makes up the rest, so the lesson always ends in a table opened (a reward, not a chore).
+    // The table lesson: the Shop opens from the first run; if the first guest's coins fall short of a table, the house
+    // makes up the rest, so the lesson always ends in a table opened (a reward, not a chore).
     this.tableLesson = !!this.steps[index].lesson;
     if (this.tableLesson) {
       const short = this.shop.tablePrice - this.score.bank;
       if (short > 0) this.score.award(short);
-      for (const tag of this.tags) tag.pulse();
     }
     const step = this.steps[index];
     const last = index === this.steps.length - 1;
@@ -1072,8 +1066,7 @@ export class GameSystem extends createSystem({}) {
         const panel = panels[i];
         // The fingertip: every card keeps track of it, so a press needs a push through this card's own face.
         // A card dimmed behind another, or the bar hidden with the café while paused, takes no press.
-        // The tags are the ray's only: a pinch or a fingertip among the tables is for the guests.
-        const off = busy || panel.dimmed || (this.cafeAway && panel === this.strip.panel) || this.tagOf(panel) !== null;
+        const off = busy || panel.dimmed || (this.cafeAway && panel === this.strip.panel);
         const touch = panel.touch(hand, off || !tip.tracked ? null : tip.point);
         if (off || done) continue;
         if (tip.tracked && panel.covers(tip.point)) near = true;
@@ -1100,7 +1093,7 @@ export class GameSystem extends createSystem({}) {
         if (this.rayDir.y > -BEAM.down) idle = this.rayDir;
       }
       this.rays.update(hand, aimed || idle ? this.rayFrom : null, aimed ? this.rayHit : null, aimed ? this.barNormal : null, delta, idle);
-      // What the ray is on, and what it was on before (for a pinch that nudged it: TAG_RAY.before).
+      // What the ray is on, and what it was on before (for a pinch that nudged it: PINCH_NUDGE).
       const now = performance.now();
       const was = this.aimNow[hand];
       const on = aimed?.button ? { panel: aimed.panel, button: aimed.button } : null;
@@ -1108,7 +1101,7 @@ export class GameSystem extends createSystem({}) {
         if (was) this.aimBefore[hand] = { panel: was.panel, button: was.button };
         this.aimNow[hand] = on ? { ...on, since: now } : null;
       }
-      const nudged = fresh && this.aimBefore[hand] && now - (this.aimNow[hand]?.since ?? 0) < TAG_RAY.before * 1000 ? this.aimBefore[hand] : null;
+      const nudged = fresh && this.aimBefore[hand] && now - (this.aimNow[hand]?.since ?? 0) < PINCH_NUDGE.before * 1000 ? this.aimBefore[hand] : null;
       const target = nudged ?? on;
       if (!target) continue;
       if (on) this.hovers[panels.indexOf(on.panel)] = on.button.id;
@@ -1118,16 +1111,10 @@ export class GameSystem extends createSystem({}) {
       }
     }
     for (let i = 0; i < panels.length; i++) panels[i]?.setHover(this.hovers[i] ?? null);
-    // The locked table under the lit tag brightens with it.
-    for (const tag of this.tags) this.cafe.setTableLit(tag.table, this.hovers[panels.indexOf(tag.panel)] ? 1 : 0);
-  }
-
-  private tagOf(panel: Panel): LockTag | null {
-    return this.tags.find((t) => t.panel === panel) ?? null;
   }
 
   private rebuildPanels(): void {
-    this.panels = [this.card, this.how, this.coach, this.menu.card, this.menu.sheet, this.strip.panel, this.strip.drawer.panel, ...this.tags.map((t) => t.panel)];
+    this.panels = [this.card, this.how, this.coach, this.menu.card, this.menu.sheet, this.strip.panel, this.strip.drawer.panel];
     this.hovers.length = this.panels.length;
     this.hovers.fill(null);
   }
@@ -1135,9 +1122,8 @@ export class GameSystem extends createSystem({}) {
   // ---------------------------------------------------------------- tables
 
   /**
-   * Lock every table the player has not bought (grey, a padlock tag over
-   * it), open the rest, and tell the guests which seats are off. The
-   * extension's tables are taken in once it has risen (`tendTables`).
+   * Lock every table the player has not bought (a grey, see-through ghost),
+   * open the rest, and tell the guests which seats are off.
    */
   private applyLocks(): void {
     const cafe = this.cafe;
@@ -1146,59 +1132,59 @@ export class GameSystem extends createSystem({}) {
     // The open tables are folded into the room's batch; the locked ones stand apart as ghosts.
     if (changed) cafe.rebatch();
     this.guests.setLockedTables(cafe.lockedTables);
-    // The extension's tables are offered only once the main room is all open (and after they have risen).
-    const mainOpen = this.mainRoomOpen();
-    for (const tag of this.tags) if (!cafe.isLocked(tag.table) || (tag.table >= MAIN_PIECES && !mainOpen)) this.dropTag(tag);
-    for (const index of cafe.lockedTables) if ((index < MAIN_PIECES || (mainOpen && cafe.annexOpen)) && !this.tags.some((t) => t.table === index)) this.addTag(index);
     this.rebuildPanels();
   }
 
-  private mainRoomOpen(): boolean {
-    return this.cafe.tables.filter((i) => i < MAIN_PIECES).every((i) => this.shop.tables.includes(i));
-  }
-
-  private addTag(index: number): void {
-    const top = this.cafe.tableTop(index, this.spot);
-    if (!top) return;
-    const tag = new LockTag(index);
-    tag.top = top.y;
-    tag.panel.mesh.position.set(top.x, top.y + LOCK_TAG.above, top.z);
-    this.cafe.cafe.add(tag.panel.mesh);
-    tag.set(this.shop.tablePrice, this.shop.tableAffordable);
-    this.tags.push(tag);
-  }
-
-  private dropTag(tag: LockTag): void {
-    tag.panel.show(false);
-    tag.panel.mesh.removeFromParent();
-    this.tags.splice(this.tags.indexOf(tag), 1);
+  /**
+   * The tables are bought in the Shop, the nearest to the player first
+   * (the owner, after the first playtest: pointing at padlocks over far
+   * tables missed and caught stray pinches; and a near table is the one
+   * easiest to seat guests at). When the bank first reaches the next
+   * table's price (once a price: buying one raises it), "TABLE READY" and
+   * the price show on the bar for a moment, as a level does: mid-rush
+   * nobody looks anywhere else.
+   */
+  private tendTables(): void {
+    if (this.phase !== 'run' || !this.cafe.placed || this.cafe.arriving) return;
+    const price = this.shop.tablePrice;
+    if (!this.shop.tableAffordable || price === this.readyAt || this.nextTable() === null) return;
+    this.readyAt = price;
+    this.strip.showTableReady(price);
   }
 
   /**
-   * Each frame: the tags show in a run (and under the buy card), say the
-   * price now, and keep their angular size (LOCK_TAG), the ones the bank
-   * can pay for bigger. When the bank first reaches the next table's price
-   * (once a price: buying one raises it), those tags pulse and, once the
-   * "Open a table" tip has been seen, a note under the bar says so with a
-   * pop: mid-rush nobody looks at the padlocks (the owner's playtest).
+   * The locked tables in the order they open: nearest the café's front
+   * middle (the player's side) first. Tables the same distance (a pair, left
+   * and right) are ordered by a small random amount fixed for this café, so
+   * which of the pair comes first differs from one new game to the next.
    */
-  private tendTables(delta: number): void {
-    const show = (this.phase === 'run' || this.phase === 'buying' || (this.phase === 'tutorial' && this.tableLesson)) && this.cafe.placed && !this.cafe.arriving;
-    const price = this.shop.tablePrice;
-    const can = this.shop.tableAffordable;
-    const ready = show && this.phase === 'run' && can && price !== this.readyAt && this.tags.length > 0;
-    if (ready) {
-      this.readyAt = price;
-      for (const tag of this.tags) tag.pulse();
-      if (this.save.tips.includes('table')) this.addNote('A table can open', 'table', NOTE.seconds, 'Point at a padlock and pinch.');
-    }
-    for (const tag of this.tags) {
-      if (tag.panel.open !== show) tag.panel.show(show);
-      tag.set(price, can);
-      tag.fit(tag.panel.mesh.getWorldPosition(this.spot).distanceTo(this.head), delta);
-      tag.panel.update(delta, this.head);
-    }
-    // The café's floor never grows (the owner's call): no extension, only its own tables unlock.
+  private tableOrder(): number[] {
+    const cafe = this.cafe;
+    const front = cafe.frontEdge(this.spot);
+    cafe.cafe.worldToLocal(front);
+    const away = (t: number): number => {
+      if (!cafe.tableTop(t, this.at)) return Infinity;
+      if (!this.tableJitter.has(t)) this.tableJitter.set(t, Math.random() * TABLE_ORDER.jitter);
+      return Math.hypot(this.at.x - front.x, this.at.z - front.z) + this.tableJitter.get(t)!;
+    };
+    return [...cafe.lockedTables].sort((a, b) => away(a) - away(b));
+  }
+
+  /** The table OPEN in the Shop opens next (null: all open). */
+  nextTable(): number | null {
+    return this.tableOrder()[0] ?? null;
+  }
+
+  /** OPEN in the Shop: the next table opens (paid for), confetti from it; refused (an "uh-uh") if the bank is short. */
+  private openTable(): void {
+    const index = this.nextTable();
+    if (index === null || !this.shop.buyTable(index)) return;
+    this.applyLocks();
+    if (this.cafe.tableTop(index, this.at)) this.strip.sparkle(this.cafe.cafe.localToWorld(this.at.clone()));
+    this.keep();
+    if (this.phase === 'shopping') this.showShop();
+    // The first run's lesson is done: back to it, and on to the café.
+    if (this.shopFrom === 'tutorial') this.closeShop();
   }
 
   // ------------------------------------------------------------------ tips
@@ -1216,7 +1202,7 @@ export class GameSystem extends createSystem({}) {
       this.tipAge += delta;
       const done = this.tipDone(this.tipShown);
       const t = TIPS[this.tipShown];
-      if (done || this.tipAge >= t.seconds || this.phase !== 'run' && this.phase !== 'buying') {
+      if (done || this.tipAge >= t.seconds || this.phase !== 'run') {
         if (this.phase === 'run' || done) this.endTip();
         else tip.hide();
         return;
@@ -1259,11 +1245,9 @@ export class GameSystem extends createSystem({}) {
         this.tipAt = g ? { guest: g.id } : {};
         return !!g;
       }
-      case 'table': {
-        const tag = this.shop.tableAffordable ? this.tags.find((t) => t.panel.open) : undefined;
-        this.tipAt = tag ? { table: tag.table } : {};
-        return !!tag;
-      }
+      case 'table':
+        // Tables are opened in the Shop now; "TABLE READY" on the bar says when (tendTables).
+        return false;
       case 'dirty': {
         if (!this.mess.dirtyCount) return false;
         const table = this.mess.dirtyTables()[0];
@@ -1353,60 +1337,6 @@ export class GameSystem extends createSystem({}) {
     }
   }
 
-  /** A padlock tag pinched: the café stands still (in view) and the buy card asks. */
-  private openBuy(index: number): void {
-    const from = this.phase === 'run' ? 'run' : this.phase === 'tutorial' && this.tableLesson ? 'tutorial' : null;
-    if (!from || !this.cafe.isLocked(index)) return;
-    this.buyFrom = from;
-    // The coach card steps aside while the buy card asks.
-    if (from === 'tutorial') this.coach.show(false);
-    this.phase = 'buying';
-    this.buying = index;
-    this.speed = this.cafe.timeScale || this.speed;
-    this.cafe.timeScale = 0;
-    this.guests.handsOff = true;
-    this.showBuyCard();
-  }
-
-  private showBuyCard(): void {
-    const index = this.buying;
-    if (index < 0) return;
-    if (!this.menu.card.open) this.menuPlaced = false;
-    this.menu.card.dimmed = false;
-    // The café stays in view under the buy card, and may stand between the eyes and it: the card draws on top.
-    this.menu.card.onTop = true;
-    const model = this.cafe.pieces[index]?.name ?? '';
-    const name = model === 'bar-2' ? 'The bar' : model === 'quiet-corner' ? 'The quiet corner' : model === 'table-4' ? 'A four-seat table' : 'A two-seat table';
-    const icon = model === 'bar-2' ? ICONS.bar : model === 'quiet-corner' ? ICONS.quiet : model === 'table-4' ? ICONS.table4 : ICONS.table2;
-    const seats = this.guests.seats.filter((s) => s.table === index).length;
-    this.menu.showBuy({ name, icon, seats, price: this.shop.tablePrice, coins: this.score.bank });
-  }
-
-  /** BUY: the table opens (its padlock goes, its seats are offered), the price is taken and saved. Refused if the bank cannot pay. */
-  private buyTable(): void {
-    const index = this.buying;
-    if (this.phase !== 'buying' || index < 0) return;
-    if (!this.shop.buyTable(index)) {
-      this.showBuyCard();
-      return;
-    }
-    this.applyLocks();
-    this.keep();
-    this.closeBuy(true);
-  }
-
-  /** The buy card goes and the café moves again (`resume`: back to the run; else the caller sets the phase). */
-  private closeBuy(resume: boolean): void {
-    if (this.phase !== 'buying') return;
-    this.buying = -1;
-    this.menu.hideAll();
-    this.menu.card.onTop = false;
-    this.cafe.timeScale = this.speed;
-    this.guests.handsOff = false;
-    if (resume) this.phase = this.buyFrom;
-    if (this.phase === 'tutorial') this.coach.show(true);
-  }
-
   /**
    * What a hand's ray points at: the nearest of the menu cards that take
    * presses (the sheet, How to play, the menu card; not one dimmed behind
@@ -1422,52 +1352,24 @@ export class GameSystem extends createSystem({}) {
     // ray, from a hand away from the café (a hand reaching for a guest never presses Skip).
     if (this.coach.open && awayFromCafe) targets.push(this.coach);
     // The padlock tags over the locked tables, in a run (pointed at from anywhere: they stand in the café).
-    if (this.phase === 'run' || (this.phase === 'tutorial' && this.tableLesson)) for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
     if (this.phase === 'shopping' && this.strip.drawer.panel.open) targets.push(this.strip.drawer.panel);
     if (!targets.length) return null;
     this.castRay(hand);
     let best: { panel: Panel; button: Button | null; t: number } | null = null;
-    const lit = this.litTag[hand];
     for (const panel of targets) {
-      // A tag the bank can pay for has a wider hit area; the one already lit holds the ray wider still (TAG_RAY).
-      const tag = this.tagOf(panel);
-      const edge = tag === null ? RAY.edge : panel === lit ? TAG_RAY.stick : tag.canBuy ? TAG_RAY.edge : RAY.edge;
-      const hit = this.rayAt(panel, edge);
+      const hit = this.rayAt(panel);
       if (hit && (!best || hit.t < best.t)) {
-        // A tag is one button: its whole hit area (wider than its drawing) presses it.
-        best = { panel, button: hit.button ?? (tag ? (panel.buttons[0] ?? null) : null), t: hit.t };
+        best = { panel, button: hit.button, t: hit.t };
         this.bestHit.copy(this.rayHit);
         this.bestNormal.copy(this.barNormal);
       }
     }
-    // A near miss: the affordable tag nearest the ray, within TAG_RAY.assist degrees outside its hit area (measured
-    // from the edge of that area: its half height plus TAG_RAY.edge of its height, as seen from the hand).
-    if (!best && (this.phase === 'run' || this.tableLesson)) {
-      let angle = (TAG_RAY.assist * Math.PI) / 180;
-      for (const tag of this.tags) {
-        if (!tag.canBuy || !tag.panel.open) continue;
-        const mesh = tag.panel.mesh;
-        const to = mesh.getWorldPosition(this.rayScratch).sub(this.rayFrom);
-        const tall = (mesh.geometry as PlaneGeometry).parameters.height * mesh.getWorldScale(this.spot).y;
-        const reach = Math.atan((tall * (0.5 + TAG_RAY.edge)) / Math.max(0.01, to.length()));
-        const a = to.angleTo(this.rayDir) - reach;
-        if (a < angle) {
-          angle = a;
-          best = { panel: tag.panel, button: tag.panel.buttons[0] ?? null, t: to.length() };
-          tag.panel.mesh.getWorldPosition(this.bestHit);
-          this.bestNormal.set(0, 0, 1).applyQuaternion(tag.panel.mesh.getWorldQuaternion(this.headQ));
-        }
-      }
-    }
-    this.litTag[hand] = best && this.tagOf(best.panel) ? best.panel : null;
     if (!best) return null;
     this.rayHit.copy(this.bestHit);
     this.barNormal.copy(this.bestNormal);
     return best;
   }
-  /** The tag panel each hand's ray lit last frame (it holds the ray a little wider: TAG_RAY.stick). */
-  private readonly litTag: Record<Hand, Panel | null> = { left: null, right: null };
-  /** What each hand's ray was on before its current target, and since when it has been on that (ms): TAG_RAY.before. */
+  /** What each hand's ray was on before its current target, and since when it has been on that (ms): PINCH_NUDGE. */
   private readonly aimBefore: Record<Hand, { panel: Panel; button: Button } | null> = { left: null, right: null };
   private readonly aimNow: Record<Hand, { panel: Panel; button: Button; since: number } | null> = { left: null, right: null };
   private readonly bestHit = new Vector3();
@@ -1540,7 +1442,6 @@ export class GameSystem extends createSystem({}) {
     const targets = [m.sheet, m.how, m.card].filter((p) => p.open && !p.dimmed);
     if (this.strip.panel.open && !this.cafeAway && this.strip.controls !== 'off') targets.push(this.strip.panel);
     if (this.coach.open) targets.push(this.coach);
-    if (this.phase === 'run' || (this.phase === 'tutorial' && this.tableLesson)) for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
     if (this.phase === 'shopping' && this.strip.drawer.panel.open) targets.push(this.strip.drawer.panel);
     let best: { panel: Panel; button: Button; t: number } | null = null;
     for (const panel of targets) {
@@ -1558,10 +1459,6 @@ export class GameSystem extends createSystem({}) {
   /** What a button does (the checks call this directly too). */
   click(id: string): void {
     this.clicks++;
-    if (id.startsWith('table-')) {
-      this.openBuy(Number(id.slice(6)));
-      return;
-    }
     switch (id) {
       case 'open':
         // The checks' shortcut: as CONTINUE (or NEW GAME the first time).
@@ -1665,14 +1562,12 @@ export class GameSystem extends createSystem({}) {
       case 'shop-close':
         this.closeShop();
         break;
-      case 'buy-yes':
-        this.buyTable();
-        break;
-      case 'buy-no':
-        this.closeBuy(true);
+      case 'open-table':
+        this.openTable();
         break;
       case 'hire-janitor-later':
       case 'hire-later':
+      case 'open-table-later':
         // Not yet: the bank cannot pay, or another comes first. The shop says no.
         this.shop.refused++;
         break;
@@ -1733,7 +1628,7 @@ function firstRun(): Step[] {
     { picture: 0, title: MOVES[0].title, text: 'Put your fingers above the guest at the gate. When the guest glows, pinch.', done: (g) => g.guests.pickedUp > g.mark.pickedUp },
     { picture: 1, title: MOVES[1].title, text: MOVES[1].text, done: (g) => g.guests.seated > g.mark.seated },
     { picture: 2, title: 'The guest gets tea', text: 'Guests pay when they get their tea. The bar above the café shows how happy the guests are.', next: true, done: (g) => g.baristas.servedCount > g.mark.served },
-    { picture: 3, lesson: true, title: 'Open a table', text: 'Your first coins! Point your hand at a glowing padlock and pinch, then BUY.', next: true, done: (g) => g.shop.tablesBought > g.mark.tables },
+    { picture: 3, lesson: true, title: 'Open a table', text: 'Your first coins! Point your hand at Shop on the bar and pinch, then OPEN a table.', next: true, done: (g) => g.shop.tablesBought > g.mark.tables },
   ];
 }
 

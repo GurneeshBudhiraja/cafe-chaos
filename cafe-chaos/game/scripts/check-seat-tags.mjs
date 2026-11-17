@@ -3,7 +3,7 @@
  * hand (ui/seat-tag.ts):
  *  1. held low over a dirty seat: it glows amber and a tag over it says
  *     "Dirty" (staff will clean it);
- *  2. over a locked table's seat: "Locked", what it costs to open;
+ *  2. over a locked table's seat: "Locked", open tables in the Shop;
  *  3. over a taken seat: "Taken";
  *  4. over a free seat: no tag, and a soft tick from that seat;
  *  5. let go over the dirty seat: the guest goes back to the line, the
@@ -107,7 +107,7 @@ await h.screenshot('artifacts/seat-tag-1-dirty.png');
 await over(plan.locked);
 s = await st();
 const price = await page.evaluate(() => window.__cafe.shop.tablePrice);
-check(`held over a locked table: "Locked", open it for ${price} coins`, s.refusal?.why === 'locked' && s.refusal.seat === plan.locked.index && s.tag === `Locked|Open it for ${price} coins`, JSON.stringify(s));
+check('held over a locked table: "Locked", open tables in the Shop', s.refusal?.why === 'locked' && s.refusal.seat === plan.locked.index && s.tag === 'Locked|Open tables in the Shop', JSON.stringify({ ...s, price }));
 await h.screenshot('artifacts/seat-tag-2-locked.png');
 
 await over(plan.taken);
