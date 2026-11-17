@@ -29,7 +29,7 @@ servers and janitors; the model first, then the characters).
 | 3 baristas, 2 janitors (one open, one to unlock), 2–3 tables expandable (4 levels) | Progression stays the game's level system; the shell leaves room for 3 inside + 2 patio + dock + 3 bonfire seats (17 seats), tables bought from the Shop as now. A second janitor is a Shop row. |
 | Two-story: deprioritised | Not built (hand tracking cannot reach a lower floor under a roof). |
 | Fresh start per café; "coming soon" placeholders (European etc.) | Game side, later: the café picker on the start card. |
-| Guests, servers and janitors with different looks | Phase 3: Canadian snack spirits (a Snowbit, a Beaver Tail, a Maple Cookie) in toques and scarves; baristas in red aprons and visors; janitors in plaid with a snow shovel; the violinist in a parka. |
+| Guests, servers and janitors with different looks | Phase 3 (built): Canadian snack spirits (a snowbit, a beavertail, a nanaimo bar) with toques, earmuffs, scarves and parkas; three baristas in red aprons (cap, bun, toque); two janitors in plaid with a snow shovel; the violinist in a parka with a violin and a Play clip. See `models/27-cafe-canada/INTEGRATION.md`. |
 | Bright sunny day, snow, not dark, no dimming | Flat snow with blue-tinted shade, one sun from the game's lighting, no emissive walls; the lamps and string lights glow only a little (it is daytime). The game's passthrough dimming is turned off for this café (game side). |
 
 ## Hard constraints (so the game needs no geometry changes)
@@ -49,7 +49,7 @@ The Japanese shell is 35 k triangles and 28 materials, batched to a few dozen dr
 
 1. The shell (this document's layout), with previews from the seat. Review against the notes and Meta's MR guidance (grounding shadows, nothing too close, nothing above the gaze band).
 2. The furniture pieces: cabin tables and chairs, patio tables, the dock bench, the fire chairs, the musician's stand; the violinist.
-3. The characters: three Canadian guest species with winter accessories; three baristas; two janitors; the musician.
+3. The characters (built): three Canadian guest species with winter accessories; three baristas; two janitors; the musician. Scripts `staff_canada_build.py`, `guests_canada_build.py`; names fixed by `fix_names.py`.
 4. Game side (later): the café picker, the new wishes, the takeaway flow, the musician purchase, no dimming.
 
 ## Sources

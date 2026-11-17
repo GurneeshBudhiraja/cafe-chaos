@@ -93,8 +93,67 @@ Flat materials from `kit.py`; 250–510 triangles each.
 | `dock-bench.glb` | pine bench for two facing +Z (the lake and the player), plaid cushion, snow on its back, a mug shelf on each arm (the meal spots) | 8.7 × 4.0 × 2.6 | 1–2 | the dock, `DockSpot` (y 0.030) |
 | `fire-chair.glb` | red Muskoka chair with a log stump beside it (the meal spot), snow on both | 5.7 × 4.7 × 3.5 | 1 | round the fire, `FireSpot-1/2/3`, each turned to face it |
 
+## The characters (phase 3): `staff_canada_build.py`, `guests_canada_build.py`
+
+Both scripts exec the Japanese characters' build scripts from `base/` (copies of the ones that made
+`barista-*.glb`, `guest-*.glb` and `accessories.glb`) and add looks, species and clothes on top, so
+**every node name, attach point, anchor and clip the game already uses is the same**. Several
+characters are built in one scene, so run `python3 fix_names.py <glbs>` after an export: it strips
+Blender's `.001` name suffixes (the scripts' outputs here were run through it). Renders in `previews/`
+(`staff-lineup`, `staff-janitor-wipe`, `staff-fiddler-play`, `guests-lineup`, `guests-seated`,
+`guests-dressed`, `guests-dressed-2`, `guests-walk`).
+
+### Staff (`barista-<name>.glb`, the barista rig: Rig, Body, Head, Blink, Arm-L/R, Leg-L/R, Tray, Guitar, Hand-L/R)
+
+All six have the Japanese staff's eight clips (Idle, Work, Wave, Bow, Walk, Carry, Serve, Strum).
+One 64 px skin each, 108–216 triangles, 46–61 KB.
+
+| File | Who | Look | Extra nodes / clips |
+|---|---|---|---|
+| `barista-maple.glb` | barista 1 | brown hair, red cap with a cream brim, cream shirt, red apron, denim | |
+| `barista-aspen.glb` | barista 2 | blonde bun with a red tie, cream shirt, red apron, white shoes | |
+| `barista-rowan.glb` | barista 3 | dark skin, black hair, cream toque with a red pompom, red apron | `Toque` (on the head) |
+| `barista-birch.glb` | janitor (open from the start) | red lumberjack plaid, dark overalls with a brass button, spruce toque | `Toque`, `Shovel` (on the back), `Cloth` (right hand), `Bucket` (beside, as the Japanese janitor: show it while cleaning); clip `Wipe` (2 s) |
+| `barista-cedar.glb` | janitor (to unlock) | green plaid, dark overalls, red toque band as earmuffs | `Earmuffs`, `Shovel`, `Cloth`, `Bucket`; clip `Wipe` |
+| `barista-fiddler.glb` | the violinist (purchasable) | cream quilted parka with a red zip, denim, red-and-cream toque | `Violin` (under the chin, on the body), `Bow` (in the right hand, so it saws); clip `Play` (2 s loop: bow arm sawing at chin height, a sway, a lean onto the chin rest) |
+
+The game plays the fiddler's `Play` where it plays the Japanese musician's `Strum`; the `Strum`
+clip is still there (the guitar hand pose) if ever needed. The root extra `barista` holds the name.
+
+### Guests (`guest-<species>.glb`, the guest rig, 10 clips, St-/Se- poses, attach points HeadTop/Face/Neck/Chest/Guitar)
+
+| File | Species (`guest_type`) | Shape | Signature accent node | Size (w × h × d) | Tris / pose |
+|---|---|---|---|---|---|
+| `guest-snowbit.glb` | `snowbit` | round donut hole, golden with a pale seam and sugar | `Snowcap` (powdered sugar on the crown) | 3.9 × 5.8 × 3.5 cm | 4,136 |
+| `guest-beavertail.glb` | `beavertail` | tall flat oval of fried dough, cinnamon-sugar | `MapleLeaf` (red leaf with a stem, lying over the crown) | 4.3 × 7.0 × 2.4 cm | 4,016 |
+| `guest-nanaimo.glb` | `nanaimo` | square bar: chocolate top, custard, coconut crumb | `Curl` (two chocolate curls) | 4.0 × 5.6 × 3.4 cm | 3,884 |
+
+**Colours:** unlike the Japanese guests these ship in their real colours (the three layers of the
+nanaimo cannot be a tint). Give them a white tint, or at most a very light pastel (≥ 0.9 per
+channel), or skip tinting for Canadian species. Everything else is as `../11-guest/INTEGRATION.md`
+(materials `GuestSkin-<species>` plus the flat face materials; new flat materials `GuestSugar`,
+`GuestMapleLeaf`, `GuestChoc`).
+
+### Wardrobe (`accessories-canada.glb`, 12 items, 273 KB, one 258 px atlas `GuestAccessoryAtlasCanada`)
+
+Each item's origin is its attach point and its `attach` extra names it, exactly as `accessories.glb`,
+so `actor.ts`'s `dress()` works on it unchanged once it loads this file for Canadian guests.
+
+| Item | Attach | What |
+|---|---|---|
+| `Toque-<species>` | `HeadTop` | red knit cap fitted to the head, cream folded band and pompom |
+| `Earmuffs-<species>` | `HeadTop` | red muffs at the ears on a dark band over the head |
+| `Scarf-<species>` | `Neck` | red knit scarf wound round the neck, a tail with a cream fringe down the front |
+| `Parka-<species>` | `Chest` | cream quilted parka to just under the mouth, fur collar, red zip, two red pockets |
+
+Suggested wardrobe (cast.ts): HeadTop `Toque-{s}` / `Earmuffs-{s}` (chance 0.6), Neck `Scarf-{s}`
+(0.35), Chest `Parka-{s}` (0.4), still at most two items each. Toque + Scarf and Earmuffs + Parka
+are the combinations in the previews. The Japanese items (ChefHat, Beret, Glasses, Bow) fit these
+bodies too if ever wanted; the per-species ones (Hachimaki, Apron, Vest) do not exist for them.
+
 ## Still to come (see the plan)
 
-Phase 3: the Canadian guests, baristas, janitors and the
-violinist. Phase 4 (game): the café picker, the new wishes (`socket`, `outside`, `takeaway`, `lake`,
-`patio`, `bonfire`), the musician purchase, no passthrough dimming here.
+Phase 4 (game): the café picker, registering these files in `assets.ts`, the Canadian layout
+(`canada-layout.ts`), the new wishes (`socket`, `outside`, `takeaway`, `lake`, `patio`, `bonfire`),
+the musician purchase (the fiddler at `MusicianSpot`), the second janitor as a Shop row, no
+passthrough dimming here.

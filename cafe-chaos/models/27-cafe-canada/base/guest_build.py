@@ -291,7 +291,7 @@ def build_parts(kind, M):
         for f in fs: f.material_index = mat
         return fs
 
-    skin_img = make_skin(f"GuestSkin-{kind}", kind, seed={"mochi": 3, "onigiri": 7, "tofu": 11}[kind])
+    skin_img = make_skin(f"GuestSkin-{kind}", kind, seed={"mochi": 3, "onigiri": 7, "tofu": 11}.get(kind, 5))
     skin = tex_mat(f"GuestSkin-{kind}", skin_img, S["skin_rough"])
     M["skin"] = skin
 
