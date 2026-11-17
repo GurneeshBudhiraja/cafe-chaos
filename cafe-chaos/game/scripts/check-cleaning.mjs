@@ -42,7 +42,7 @@ const state = () => page.evaluate(() => {
     phase: game.phase, dirty: mess.dirtyTables(), dirtied: mess.dirtied, cleaned: mess.cleaned, closed: guests.seats.filter((s) => s.dirty).map((s) => s.table),
     staff: baristas.staff.map((m) => ({ role: m.role, state: m.state, chore: m.chore, cleans: m.cleans, trips: m.trips, at: m.barista.root.position.toArray().map((v) => +v.toFixed(3)) })),
     cleanedCount: baristas.cleanedCount, brokenOff: baristas.cleaningsBrokenOff, orders: baristas.orders.length, served: baristas.servedCount,
-    janitor: shop.janitor, janitorPrice: shop.janitorPrice, bank: score.bank, speed: system.timeScale, card: game.menu.card.open ? game.menu.cardKind : null, buttons: game.menu.card.buttons.map((b) => b.id),
+    janitor: shop.janitor, janitorPrice: shop.janitorPrice, bank: score.bank, speed: system.timeScale, card: game.phase === 'shopping' ? 'shop' : game.menu.card.open ? game.menu.cardKind : null, buttons: (game.phase === 'shopping' ? window.__cafe.strip.drawer.panel : game.menu.card).buttons.map((b) => b.id),
     saved: JSON.parse(localStorage.getItem('cafe-chaos/save/v3') ?? 'null'),
   };
 });
@@ -148,11 +148,11 @@ await until(() => window.__cafe.mess.dirtyTables().length === 0 && window.__cafe
 
 // 5. The janitor in the shop.
 await page.evaluate(() => { window.__cafe.score.bank = 150; window.__cafe.game.click('bar-shop'); });
-await until(() => window.__cafe.game.menu.cardKind === 'shop');
+await until(() => window.__cafe.game.phase === 'shopping');
 s = await state();
 check('the shop offers the janitor at 170 (pale with 150 in the bank)', s.card === 'shop' && s.janitorPrice === 170 && !s.buttons.includes('hire-janitor') && s.buttons.includes('hire-janitor-later'), JSON.stringify({ buttons: s.buttons, janitorPrice: s.janitorPrice }));
 await page.evaluate(() => { window.__cafe.score.bank = 180; window.__cafe.game.click('shop-close'); window.__cafe.game.click('bar-shop'); });
-await until(() => window.__cafe.game.menu.cardKind === 'shop' && window.__cafe.game.menu.card.buttons.some((b) => b.id === 'hire-janitor'));
+await until(() => window.__cafe.game.phase === 'shopping' && window.__cafe.strip.drawer.panel.buttons.some((b) => b.id === 'hire-janitor'));
 await h.screenshot('artifacts/cleaning-2-shop.png');
 await page.evaluate(() => window.__cafe.game.click('hire-janitor'));
 await until(() => window.__cafe.baristas.janitor !== null, 60000);
@@ -246,7 +246,7 @@ await until(() => window.__cafe.game.phase === 'run' || window.__cafe.game.phase
 await page.evaluate(() => { const { game } = window.__cafe; if (game.phase === 'tutorial') game.click('skip'); });
 await until(() => window.__cafe.game.phase === 'run', 30000);
 await page.evaluate(() => { const { shop, game, system } = window.__cafe; window.__cafe.score.bank = 500; shop.restore(0, system.tables.filter((i) => i < 13), false); game.applyLocks(); game.click('bar-shop'); });
-await until(() => window.__cafe.game.menu.cardKind === 'shop');
+await until(() => window.__cafe.game.phase === 'shopping');
 await page.evaluate(() => window.__cafe.game.click('hire-janitor'));
 await page.evaluate(() => window.__cafe.game.click('shop-close'));
 await until(() => window.__cafe.baristas.janitor !== null, 60000);

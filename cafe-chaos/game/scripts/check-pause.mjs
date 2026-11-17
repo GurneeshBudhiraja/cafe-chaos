@@ -80,15 +80,15 @@ check('Pause again pauses at once, the card back', s.phase === 'paused' && s.car
 // 5. The pause card (no Hire); the shop from the bar, while paused.
 const ids = await page.evaluate(() => window.__cafe.game.menu.card.buttons.map((b) => b.id));
 await page.evaluate(() => { window.__cafe.score.bank = 100; window.__cafe.game.click('bar-shop'); });
-const shopOpen = await page.evaluate(() => ({ kind: window.__cafe.game.menu.cardKind, phase: window.__cafe.game.phase }));
+const shopOpen = await page.evaluate(() => ({ drawer: window.__cafe.strip.drawer.panel.open, card: window.__cafe.game.menu.card.open, phase: window.__cafe.game.phase }));
 await page.evaluate(() => window.__cafe.game.click('hire'));
 await page.waitForTimeout(800);
-const after = await page.evaluate(() => ({ staff: window.__cafe.shop.staff, phase: window.__cafe.game.phase, next: window.__cafe.game.menu.card.buttons.find((b) => b.id.startsWith('hire'))?.label, wrist: window.__cafe.wrist.open }));
+const after = await page.evaluate(() => ({ staff: window.__cafe.shop.staff, phase: window.__cafe.game.phase, next: window.__cafe.strip.drawer.panel.buttons.find((b) => b.id.startsWith('hire'))?.label, wrist: window.__cafe.wrist.open }));
 await h.screenshot('artifacts/pause-shop.png');
 await page.evaluate(() => window.__cafe.game.click('shop-close'));
 const backTo = await page.evaluate(() => ({ kind: window.__cafe.game.menu.cardKind, phase: window.__cafe.game.phase }));
-check('the pause card offers Resume, How to play, Settings and End; Shop opens the shop, HIRE hires and shows the next price, CLOSE goes back to the pause card',
-  ids.join(',') === 'resume,how,settings,end' && shopOpen.kind === 'shop' && shopOpen.phase === 'paused' && after.staff === 2 && after.phase === 'paused' && /210/.test(after.next ?? '') && backTo.kind === 'pause' && backTo.phase === 'paused',
+check('the pause card offers Resume, How to play, Settings and End; Shop opens the drawer (the card away), HIRE hires and shows the next price, Close goes back to the pause card',
+  ids.join(',') === 'resume,how,settings,end' && shopOpen.drawer && !shopOpen.card && shopOpen.phase === 'shopping' && after.staff === 2 && after.phase === 'shopping' && /210/.test(after.next ?? '') && backTo.kind === 'pause' && backTo.phase === 'paused',
   `${ids.join(',')} | shop ${JSON.stringify(shopOpen)} -> ${JSON.stringify(after)} -> ${JSON.stringify(backTo)}`);
 await h.screenshot('artifacts/pause-card.png');
 // Then all the way through.

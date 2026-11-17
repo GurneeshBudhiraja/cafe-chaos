@@ -106,29 +106,6 @@ export interface FailState {
   /** Guests who left unhappy in the level: why the happiness ran out. */
   left: number;
 }
-/**
- * The shop: the bank, and a row for each kind of staff (not each person):
- * the baristas (how many work of how many there can be, and HIRE for the
- * next at its price, or "All working") and the janitor (HIRE, or
- * "Working"). The row stays the same shape as the staff grows.
- */
-export interface ShopState {
-  coins: number;
-  rows: {
-    kind: 'barista' | 'janitor';
-    name: string;
-    /** What it does, under its name. */
-    line: string;
-    /** How many work now, of the most there can be. */
-    working: number;
-    most: number;
-    /** 'hire': the bank can pay. 'short': it cannot. 'full': as many as there can be. */
-    status: 'hire' | 'short' | 'full';
-    price?: number;
-    /** What HIRE does. */
-    id: string;
-  }[];
-}
 export interface WarnState {
   coins: number;
   staff: number;
@@ -150,17 +127,6 @@ if (typeof Image !== 'undefined') {
     for (const f of iconListeners) f();
   };
   img.src = `${import.meta.env.BASE_URL}models/unlock-icons.png`;
-}
-
-/** The janitor's picture (rendered like the icon set, models/13-janitor/icon-janitor.png). */
-let janitorIcon: HTMLImageElement | null = null;
-if (typeof Image !== 'undefined') {
-  const img = new Image();
-  img.onload = () => {
-    janitorIcon = img;
-    for (const f of iconListeners) f();
-  };
-  img.src = `${import.meta.env.BASE_URL}models/icon-janitor.png`;
 }
 
 let cover: HTMLImageElement | null = null;
@@ -203,7 +169,7 @@ export class StartMenu {
   /** What the sheet shows ('none' when it is closed). */
   sheetKind: 'none' | 'settings' | 'warn' | 'quit' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card or the shop. */
-  cardKind: 'start' | 'pause' | 'shop' | 'failed' | 'buy' = 'start';
+  cardKind: 'start' | 'pause' | 'failed' | 'buy' = 'start';
   private seed = 1;
   private clock = 0;
   private start: StartState = { kind: 'first', coins: 0, staff: 1, level: 1 };
@@ -346,13 +312,7 @@ export class StartMenu {
     this.card.show(true);
   }
 
-  /** The shop (in a run, paused). Shown again after each hire. */
-  showShop(state: ShopState): void {
-    this.cardKind = 'shop';
-    this.card.resize(START_SIZE.width, START_SIZE.height);
-    this.layoutShop(state);
-    this.card.show(true);
-  }
+
 
   openSettings(state: SettingsState): void {
     this.settings = state;
@@ -876,102 +836,6 @@ export class StartMenu {
       if (!can) text(ctx, `Need ${(s.price - s.coins).toLocaleString('en')} more`, tx, coinsY + 56, 30, SKETCH.koi, 'center', false);
       ctx.restore();
     }, buttons);
-  }
-
-  /** The janitor's place in the shop: a round frame with a mop in their colour. */
-  private mopPortrait(rc: RoughCanvas, x: number, y: number, d: number, tint: string, seed: number): void {
-    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
-    rc.line(x + d * 0.12, y - d * 0.3, x - d * 0.08, y + d * 0.22, this.o({ seed: seed + 1, strokeWidth: 3.5 }));
-    rc.ellipse(x - d * 0.1, y + d * 0.27, d * 0.34, d * 0.16, this.o({ seed: seed + 2, strokeWidth: 2.5, fill: tint, fillStyle: 'solid' }));
-    for (const side of [-1, 0, 1]) rc.line(x - d * 0.1 + side * d * 0.1, y + d * 0.3, x - d * 0.12 + side * d * 0.13, y + d * 0.42, this.o({ seed: seed + 4 + side, strokeWidth: 2 }));
-  }
-
-  /** A barista's place in the shop: a round frame with a steaming cup in their colour. */
-  private portrait(rc: RoughCanvas, x: number, y: number, d: number, tint: string, seed: number): void {
-    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
-    rc.rectangle(x - d * 0.2, y - d * 0.08, d * 0.4, d * 0.3, this.o({ seed: seed + 1, strokeWidth: 2.5, fill: tint, fillStyle: 'solid' }));
-    rc.arc(x + d * 0.21, y + d * 0.06, d * 0.16, d * 0.16, -Math.PI / 2, Math.PI / 2, false, this.o({ seed: seed + 2, strokeWidth: 2.5 }));
-    for (const side of [-1, 0, 1]) {
-      const sx = x + side * d * 0.1;
-      rc.curve([[sx, y - d * 0.16], [sx + d * 0.04, y - d * 0.24], [sx, y - d * 0.32]], this.o({ seed: seed + 4 + side, strokeWidth: 2, stroke: SKETCH.soft }));
-    }
-  }
-
-  /**
-   * The shop, wide like the start card: the title and the bank across the
-   * top with CLOSE at the right (as Quit on the start card), then a row for
-   * each barista: their portrait and name, and HIRE with the price (or
-   * "Works for you").
-   */
-  private layoutShop(s: ShopState): void {
-    const SW = Math.round(this.card.width / this.k);
-    const H = Math.round(this.card.height / this.k);
-    const HEAD = 84;
-    const ROW_GAP = 24;
-    const y0 = PAD + HEAD + 24;
-    const ROW = Math.floor((H - PAD - y0 - ROW_GAP * (s.rows.length - 1)) / Math.max(1, s.rows.length));
-    const buttons: Button[] = [];
-    const bw = 290;
-    const bh = Math.min(110, ROW - 20);
-    let y = y0;
-    s.rows.forEach((r) => {
-      if (r.status !== 'full' && r.price !== undefined) {
-        buttons.push(this.priceButton(this.card, r.status === 'hire' ? r.id : `${r.id}-later`, SW - PAD - bw, y + (ROW - bh) / 2, bw, bh, r.status === 'hire' ? 'primary' : 'off', 'HIRE', r.price));
-      }
-      y += ROW + ROW_GAP;
-    });
-    const qw = 170;
-    buttons.push(this.button(this.card, 'shop-close', SW - PAD - qw, PAD, qw, HEAD, 'secondary', 'CLOSE'));
-    this.card.set((ctx) => {
-      ctx.clearRect(0, 0, this.card.width, this.card.height);
-      ctx.save();
-      ctx.scale(this.k, this.k);
-      const rc = pen(this.card.canvas);
-      this.paper(ctx, rc, 0, H, SW);
-      text(ctx, 'Hire staff', PAD + 4, PAD + HEAD / 2, 52, SKETCH.ink, 'left');
-      const coins = `${s.coins.toLocaleString('en')} coins`;
-      ctx.font = font(36);
-      const cw = ctx.measureText(coins).width;
-      const coinX = SW - PAD - qw - 40 - cw;
-      sketchCoin(rc, coinX - 26, PAD + HEAD / 2, 38, this.seed + 3, 2.5);
-      text(ctx, coins, coinX, PAD + HEAD / 2 + 2, 36, SKETCH.ink, 'left');
-      let ry = y0;
-      s.rows.forEach((r, i) => {
-        // The picture: the real model's render in a round paper frame (the janitor drawn until its render is made).
-        const d = Math.min(150, ROW - 8);
-        const px = PAD + d / 2 + 4;
-        const py = ry + ROW / 2;
-        if (r.kind === 'janitor' && janitorIcon) this.imagePortrait(ctx, rc, janitorIcon, px, py, d, this.seed + 100 + i * 10);
-        else if (r.kind === 'janitor') this.mopPortrait(rc, px, py, d, '#6f8f5a', this.seed + 100 + i * 10);
-        else this.iconPortrait(ctx, rc, ICONS.barista, px, py, d, this.seed + 100 + i * 10);
-        const tx = PAD + d + 32;
-        // The words stop short of the HIRE button: what it does on up to two lines.
-        const room = SW - PAD - bw - 24 - tx;
-        text(ctx, r.name, tx, py - 34, 48, SKETCH.ink, 'left');
-        this.wrap(ctx, r.line, 28, false, room).slice(0, 2).forEach((l, n) => text(ctx, l, tx, py + 4 + n * 30, 28, SKETCH.soft, 'left', false));
-        // How many work: a pip each, filled for the ones hired.
-        if (r.most > 1) {
-          for (let k = 0; k < r.most; k++) rc.circle(tx + 12 + k * 34, py + 66, 22, this.o({ seed: this.seed + 200 + i * 10 + k, strokeWidth: 2.5, fill: k < r.working ? SKETCH.moss : SKETCH.paper, fillStyle: 'solid' }));
-          text(ctx, `${r.working} of ${r.most} hired`, tx + r.most * 34 + 6, py + 67, 26, SKETCH.soft, 'left', false);
-        } else if (r.working > 0) text(ctx, 'Working for you', tx, py + 67, 26, SKETCH.moss, 'left', false);
-        if (r.status === 'full') text(ctx, r.most > 1 ? `All ${r.most} hired` : 'Hired', SW - PAD - 14, py + 2, 34, SKETCH.moss, 'right');
-        ry += ROW + ROW_GAP;
-      });
-      ctx.restore();
-    }, buttons);
-  }
-
-  /** A picture of its own (256 px, rendered like the icon set) in the same round paper frame. */
-  private imagePortrait(ctx: CanvasRenderingContext2D, rc: RoughCanvas, image: HTMLImageElement, x: number, y: number, d: number, seed: number): void {
-    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, d / 2 - 4, 0, Math.PI * 2);
-    ctx.clip();
-    const crop = 0.18;
-    const s = d * 0.98;
-    ctx.drawImage(image, image.width * crop, image.height * crop * 0.6, image.width * (1 - crop * 2), image.height * (1 - crop * 2), x - s / 2, y - s / 2, s, s);
-    ctx.restore();
   }
 
   /** A model's picture from the icon set in a round paper frame (a blank disc until the set has loaded). */

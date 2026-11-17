@@ -32,6 +32,7 @@
 import { Color, createSystem, DoubleSide, InstancedMesh, Matrix4, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3, Euler } from '@iwsdk/core';
 import { HAPPINESS } from '../game/rules.js';
 import { Panel, type Button } from '../ui/panel.js';
+import { DRAWER, ShopDrawer } from '../ui/shop-drawer.js';
 import { hand, line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
 import { narrowView } from '../lib/view-fit.js';
 import { CafeSystem } from './cafe-system.js';
@@ -39,15 +40,19 @@ import { ScoreSystem } from './score-system.js';
 import { ShopSystem } from './shop-system.js';
 
 /**
- * Its size (real metres), and where it hangs: over the café's back edge,
+ * Its size (real metres: 64 cm, its parts set close, the level block as
+ * wide as its widest words; the text sizes as before), and where it hangs:
+ * over the café's back edge,
  * `below` under the eyes (a touch under eye level reads most comfortably),
  * never lower than `clear` above the café's tallest point (the cherry
  * tree, 0.405 m in café space) so nothing of the café hides it.
  */
-export const STRIP = { width: 0.72, height: 0.103, below: 0.03, clear: 0.03, back: -0.33, top: 0.405 };
+export const STRIP = { width: 0.64, height: 0.103, below: 0.03, clear: 0.03, back: -0.33, top: 0.405 };
 /** How long a segment takes to drain or fill, and a coin pop lasts (seconds); the pulse under 30 % (times a second); how quickly it follows the eyes' height (per second). */
 const MOTION = { segment: 0.5, pop: 0.3, pulse: 1, follow: 1.2 };
 const SEGMENTS = 10;
+/** How quickly the bar rises to make room for the shop drawer, and settles back (per second). */
+const DRAWER_RISE = 8;
 /** The level banner: how long the bar shows a level just reached (seconds), and its warmer paper. */
 export const LEVEL_BANNER = { seconds: 3, paper: '#f6e7b8' };
 /**
@@ -95,6 +100,10 @@ export class StripSystem extends createSystem({}) {
   controls: 'live' | 'paused' | 'off' = 'off';
   /** Times a new level was celebrated (the sound system plays the chime). */
   celebrations = 0;
+  /** The shop, as a drawer under the bar (GameSystem fills and opens it); while it is open the bar rises so it covers none of the café. */
+  readonly drawer = new ShopDrawer(STRIP.width);
+  /** How far the drawer's room is made (0 to 1, eased): the bar's lowest height rises with it. */
+  private drawerRoom = 0;
   /** A level just reached: the bar shows it, and its coins, for LEVEL_BANNER.seconds (null: the bar as usual). */
   banner: { level: number; bonus: number; left: number } | null = null;
   /** The confetti: a burst of paper scraps, once, when a level is reached. */
@@ -131,6 +140,7 @@ export class StripSystem extends createSystem({}) {
     this.tag.frame = false;
     this.tag.onTop = true;
     this.panel.mesh.add(this.tag.mesh);
+    this.cafe.cafe.add(this.drawer.panel.mesh);
     const colour = new Color();
     for (let i = 0; i < CONFETTI.count; i++) this.confetti.setColorAt(i, colour.set(CONFETTI_COLOURS[i % CONFETTI_COLOURS.length]));
     this.confetti.visible = false;
@@ -146,6 +156,7 @@ export class StripSystem extends createSystem({}) {
     this.place(delta);
     this.flyConfetti(delta);
     const up = this.panel.update(delta, this.head);
+    this.placeDrawer(delta);
     this.showTag(delta);
     if (this.banner) {
       this.banner.left -= delta;
@@ -260,8 +271,22 @@ export class StripSystem extends createSystem({}) {
     cafe.localToWorld(this.spot.set(0, 0, STRIP.back));
     this.spot.y = this.height;
     cafe.worldToLocal(this.spot);
-    const lowest = STRIP.top + (STRIP.clear + STRIP.height / 2) / scale;
+    // With the drawer open, low enough for the drawer under it to clear the café's top as well (eased: it rises, it
+    // does not jump).
+    this.drawerRoom += ((this.drawer.panel.open ? 1 : 0) - this.drawerRoom) * (1 - Math.exp(-DRAWER_RISE * delta));
+    const room = (DRAWER.gap + DRAWER.height + DRAWER.clear - STRIP.clear) * this.drawerRoom;
+    const lowest = STRIP.top + (STRIP.clear + STRIP.height / 2 + room) / scale;
     this.panel.mesh.position.set(0, STRIP_HEIGHT === 'low' ? lowest : Math.max(lowest, this.spot.y), STRIP.back);
+  }
+
+  /** The drawer under the bar: DRAWER.gap below its edge, turned as the bar is, the same size. */
+  private placeDrawer(delta: number): void {
+    const d = this.drawer.panel;
+    d.size = this.panel.size;
+    const scale = this.cafe.cafe.scale.x || 1;
+    d.mesh.position.copy(this.panel.mesh.position);
+    d.mesh.position.y -= ((STRIP.height / 2 + DRAWER.gap + DRAWER.height / 2) * this.panel.size) / scale;
+    if (d.update(delta, this.head)) d.mesh.quaternion.copy(this.panel.mesh.quaternion);
   }
 
   private draw(ctx: CanvasRenderingContext2D, w: number, h: number): void {
@@ -276,12 +301,15 @@ export class StripSystem extends createSystem({}) {
     // The paper, with a marker border.
     rc.rectangle(lw * 2, lw * 2, w - lw * 4, h - lw * 4, line(11, lw * 1.2, { fill: SKETCH.paper, fillStyle: 'solid', roughness: 1.3 }));
     // Laid out left to right with room between every part; the time and the bank are given room for their widest so nothing shifts as they change.
-    const inner = h * 0.12, around = h * 0.15;
+    const inner = h * 0.08, around = h * 0.1;
     const icon = h * 0.36, bankSize = h * 0.34;
-    // Room for the widest level line ('LEVEL 99', '60/60 served') in the hand font; the bank as wide as it is drawn
-    // (measured, two digits at least), so a small number leaves no gap before the shop and a big one never
-    // runs into it. The bar's segments give way only when the bank gains a digit.
-    const timeW = h * 1.35;
+    // Room for the widest level lines ('LEVEL 10', '60/60 served', measured in the hand font); the bank as wide as it
+    // is drawn (two digits at least), so a small number leaves no gap before the shop and a big one never runs into
+    // it. The bar's segments give way only when the bank gains a digit.
+    ctx.font = hand(h * 0.3, 700);
+    const levelW = ctx.measureText('LEVEL 10').width;
+    ctx.font = hand(h * 0.2, 700);
+    const timeW = Math.max(levelW, ctx.measureText('60/60 served').width);
     ctx.font = hand(bankSize, 700);
     const bankW = ctx.measureText(`${s.bank}`.padStart(2, '0')).width;
     // Pause at the left end: the level starts after it and a divider.
@@ -306,7 +334,7 @@ export class StripSystem extends createSystem({}) {
     rc.line(right, h * 0.17, right - 2, h * 0.83, line(22, lw * 0.8));
     const x0 = x;
     const span = right - around - x0;
-    const gap = span * 0.03;
+    const gap = span * 0.04;
     const sw = (span - gap * (SEGMENTS - 1)) / SEGMENTS;
     const sy = h * 0.27;
     const sh = h * 0.46;

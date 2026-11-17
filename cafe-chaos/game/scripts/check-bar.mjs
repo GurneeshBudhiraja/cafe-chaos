@@ -51,9 +51,11 @@ let s = await page.evaluate(() => ({ controls: window.__cafe.strip.controls, but
 check('the bar has Pause and Shop, live in a run; no pause tab', s.controls === 'live' && s.buttons.join() === 'bar-pause,bar-shop' && !s.tab, JSON.stringify(s));
 
 /** Hold the right hand at `from` (world), turned so its ray points at a button's centre: on the bar, or (`card`) on the menu card. */
+/** Aim the right hand's ray at a button: on the bar, on the menu card (`card` true), or on the panel an expression names. */
 const aimAt = async (id, from = [-1.08, 1.0, 0.1], card = false) => {
+  from ??= [-1.08, 1.0, 0.1];
   const target = await page.evaluate(([id, card]) => {
-    const p = card ? window.__cafe.game.menu.card : window.__cafe.strip.panel;
+    const p = typeof card === 'string' ? eval(card) : card ? window.__cafe.game.menu.card : window.__cafe.strip.panel;
     const b = p.buttons.find((x) => x.id === id);
     const g = p.mesh.geometry.parameters;
     const V = p.mesh.position.constructor;
@@ -101,22 +103,28 @@ s = await state();
 const shown = await page.evaluate(() => window.__cafe.system.cafe.visible);
 check('RESUME carries on at once, the café shown again', s.phase === 'run' && !s.card && shown, JSON.stringify({ phase: s.phase, card: s.card, shown }));
 
-// 4. Shop: pauses and opens the shop; HIRE; CLOSE carries on.
+// 4. Shop: the drawer comes down under the bar, the café still and in view; HIRE; Close carries on.
 await page.evaluate(() => (window.__cafe.score.bank = 75));
 await frames(4);
 const badge = await page.evaluate(() => window.__cafe.shop.affordable);
 await aimAt('bar-shop');
 await tap();
 s = await state();
-check('Shop pauses and opens the shop', s.phase === 'paused' && s.kind === 'shop' && s.cardButtons.includes('hire') && s.cardButtons.includes('shop-close') && badge, JSON.stringify({ phase: s.phase, kind: s.kind, buttons: s.cardButtons, affordable: badge }));
+const drawer = () => page.evaluate(() => { const { strip, system } = window.__cafe; const V = system.cafe.position.constructor; const d = strip.drawer.panel; d.mesh.updateWorldMatrix(true, false); return { open: d.open, buttons: d.buttons.map((b) => b.id), speed: system.timeScale, cafe: system.cafe.visible, card: window.__cafe.game.menu.card.open, bottom: d.mesh.localToWorld(new V(0, -0.05, 0)).y, top: system.cafe.localToWorld(new V(0, 0.405, -0.33)).y }; });
+let dr = await drawer();
+check('Shop: the drawer comes down under the bar, the café still and in view (no card), clear of the café\'s top', s.phase === 'shopping' && dr.open && dr.buttons.includes('hire') && dr.buttons.includes('shop-close') && dr.speed === 0 && dr.cafe && !dr.card && dr.bottom > dr.top && badge, JSON.stringify({ phase: s.phase, ...dr, affordable: badge }));
 await page.waitForTimeout(600);
 await page.screenshot({ path: 'artifacts/bar-shop.png' });
-await page.evaluate(() => window.__cafe.game.click('hire'));
+// HIRE pointed at and pinched in the drawer.
+await aimAt('hire', null, 'window.__cafe.strip.drawer.panel');
+await tap();
 s = await state();
-check('HIRE hires the next barista, the price taken; the shop shows it', s.hires === 1 && s.bank === 5 && s.kind === 'shop' && s.cardButtons.includes('hire-later'), JSON.stringify({ hires: s.hires, bank: s.bank, buttons: s.cardButtons }));
-await page.evaluate(() => window.__cafe.game.click('shop-close'));
-const closed = await until(() => window.__cafe.game.phase === 'run' && !window.__cafe.game.menu.card.open, null, 15000);
-check('CLOSE carries on with the run', closed, `${closed}`);
+dr = await drawer();
+check('HIRE (pointed at and pinched) hires the next barista, the price taken; the drawer shows the next price', s.hires === 1 && s.bank === 5 && s.phase === 'shopping' && dr.buttons.includes('hire-later'), JSON.stringify({ hires: s.hires, bank: s.bank, buttons: dr.buttons }));
+await aimAt('shop-close', null, 'window.__cafe.strip.drawer.panel');
+await tap();
+const closed = await until(() => window.__cafe.game.phase === 'run' && !window.__cafe.strip.drawer.panel.open && window.__cafe.system.timeScale === 1, null, 15000);
+check('Close carries on with the run', closed, `${closed}`);
 
 // 5. A hand over the café: no ray, and a pinch presses nothing on the bar.
 const cafeTop = await page.evaluate(() => { const c = window.__cafe.system.cafe.position; return [c.x, c.y + 0.08, c.z]; });

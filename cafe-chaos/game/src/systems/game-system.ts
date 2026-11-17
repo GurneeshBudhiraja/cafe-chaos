@@ -62,11 +62,12 @@ import { MessSystem } from './mess-system.js';
 
 /**
  * A level reached is not a phase: the bar shows it for a moment and the
- * café keeps going (`levelUp`). 'buying': a locked table was pinched;
+ * café keeps going (`levelUp`). 'shopping': the shop drawer is down under
+ * the bar, the café still and in view. 'buying': a locked table was pinched;
  * the café is still (and in view) under the buy card. 'closed': the café's happiness ran
  * out; the card offers the level again.
  */
-export type GamePhase = 'waiting' | 'title' | 'opening' | 'rules' | 'tutorial' | 'run' | 'paused' | 'buying' | 'closed' | 'test';
+export type GamePhase = 'waiting' | 'title' | 'opening' | 'rules' | 'tutorial' | 'run' | 'paused' | 'buying' | 'shopping' | 'closed' | 'test';
 
 /**
  * The cards: the big one (title, pause, closing), How to play, and the
@@ -317,7 +318,10 @@ export class GameSystem extends createSystem({}) {
     // The headset taken off, or another app in front: pause and save.
     const xr = this.world.renderer.xr;
     const onVisibility = (): void => {
-      if (xr.getSession()?.visibilityState !== 'visible') this.pause();
+      if (xr.getSession()?.visibilityState === 'visible') return;
+      // The headset off: a shop opened from a run closes into the pause.
+      this.closeShop();
+      this.pause();
     };
     xr.addEventListener('sessionstart', () => {
       xr.getSession()?.addEventListener('visibilitychange', onVisibility);
@@ -373,7 +377,7 @@ export class GameSystem extends createSystem({}) {
     this.tendTables(cardDelta);
     this.tendTips(cardDelta);
     this.tendNotes(cardDelta);
-    this.strip.controls = this.phase === 'run' ? 'live' : this.phase === 'paused' ? 'paused' : 'off';
+    this.strip.controls = this.phase === 'run' || this.phase === 'shopping' ? 'live' : this.phase === 'paused' ? 'paused' : 'off';
     if (!cafe.placed || cafe.arriving) {
       for (const hand of HANDS) this.rays.update(hand, null, null, null, cardDelta);
       return;
@@ -391,6 +395,7 @@ export class GameSystem extends createSystem({}) {
     this.closeBuy(false);
     if (this.tipShown) this.endTip();
     this.clearNotes();
+    this.strip.drawer.hide();
     this.phase = 'title';
     this.quiet();
     this.coach.show(false);
@@ -675,52 +680,51 @@ export class GameSystem extends createSystem({}) {
    * CLOSE then carries on. Opened while paused, CLOSE goes back to the
    * pause card.
    */
+  /**
+   * Shop on the bar: the shop drawer comes down under the bar and the café
+   * stands still, in view (phase 'shopping'). From a run, closing it goes
+   * back to the run; from the pause card, back to the pause card. Shop
+   * again closes it.
+   */
   private openShop(): void {
+    if (this.phase === 'shopping') {
+      this.closeShop();
+      return;
+    }
     if (this.phase === 'run') {
-      this.pause();
       this.shopFrom = 'run';
+      this.speed = this.cafe.timeScale || this.speed;
+      this.cafe.timeScale = 0;
+      this.guests.handsOff = true;
     } else if (this.phase === 'paused') {
-      this.shopFrom = this.menu.cardKind === 'shop' ? this.shopFrom : 'paused';
+      this.shopFrom = 'paused';
+      this.closeSheet();
+      this.menu.hideAll();
     } else return;
-    this.closeSheet();
+    this.phase = 'shopping';
     this.showShop();
   }
 
+  /** The drawer's hires as they stand: the next barista at its price (one row however many), and the janitor. */
   private showShop(): void {
-    if (!this.menu.card.open) this.menuPlaced = false;
-    const staff = this.shop.staff;
-    this.menu.showShop({
-      coins: this.score.bank,
-      rows: [
-        // The baristas: one row however many there are; HIRE is for the next one, at its price.
-        {
-          kind: 'barista' as const,
-          name: 'Barista',
-          line: 'Brings the food, and cleans when free.',
-          working: staff,
-          most: MAX_STAFF,
-          status: this.shop.price === null ? ('full' as const) : this.score.bank >= this.shop.price ? ('hire' as const) : ('short' as const),
-          price: this.shop.price ?? undefined,
-          id: 'hire',
-        },
-        // The janitor: one, only cleans.
-        {
-          kind: 'janitor' as const,
-          name: 'Janitor',
-          line: 'Cleans the tables, so baristas can serve.',
-          working: this.shop.janitor ? 1 : 0,
-          most: 1,
-          status: this.shop.janitor ? ('full' as const) : this.score.bank >= JANITOR_PRICE ? ('hire' as const) : ('short' as const),
-          price: this.shop.janitor ? undefined : JANITOR_PRICE,
-          id: 'hire-janitor',
-        },
-      ],
-    });
+    const price = this.shop.price;
+    this.strip.drawer.show([
+      { kind: 'barista', name: 'Barista', hired: this.shop.staff, most: MAX_STAFF, price, canPay: price !== null && this.score.bank >= price, id: 'hire' },
+      { kind: 'janitor', name: 'Janitor', hired: this.shop.janitor ? 1 : 0, most: 1, price: this.shop.janitor ? null : JANITOR_PRICE, canPay: this.score.bank >= JANITOR_PRICE, id: 'hire-janitor' },
+    ]);
   }
 
   private closeShop(): void {
-    if (this.shopFrom === 'run') this.resume();
-    else this.showPauseCard();
+    if (this.phase !== 'shopping') return;
+    this.strip.drawer.hide();
+    if (this.shopFrom === 'run') {
+      this.phase = 'run';
+      this.cafe.timeScale = this.speed;
+      this.guests.handsOff = false;
+    } else {
+      this.phase = 'paused';
+      this.showPauseCard();
+    }
   }
 
   /** Carry on from a pause: the café shows and moves again at once. */
@@ -900,7 +904,7 @@ export class GameSystem extends createSystem({}) {
     this.save.hires = this.shop.hires;
     this.save.janitor = this.shop.janitor;
     this.save.tables = [...this.shop.tables];
-    if (this.phase === 'run' || this.phase === 'paused' || this.phase === 'buying' || this.phase === 'closed') {
+    if (this.phase === 'run' || this.phase === 'paused' || this.phase === 'buying' || this.phase === 'shopping' || this.phase === 'closed') {
       this.save.level = this.level;
       this.save.levelServed = this.levelServed;
       this.save.happiness = this.score.happiness;
@@ -1185,7 +1189,7 @@ export class GameSystem extends createSystem({}) {
       case 'table':
         return this.shop.tablesBought > this.tipMark;
       case 'shop':
-        return this.shop.purchases > this.tipMark || (this.menu.card.open && this.menu.cardKind === 'shop');
+        return this.shop.purchases > this.tipMark || this.phase === 'shopping';
       case 'hurry':
       case 'pair': {
         const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
@@ -1319,6 +1323,7 @@ export class GameSystem extends createSystem({}) {
     if (this.coach.open && awayFromCafe) targets.push(this.coach);
     // The padlock tags over the locked tables, in a run (pointed at from anywhere: they stand in the café).
     if (this.phase === 'run') for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
+    if (this.phase === 'shopping' && this.strip.drawer.panel.open) targets.push(this.strip.drawer.panel);
     if (!targets.length) return null;
     this.castRay(hand);
     let best: { panel: Panel; button: Button | null; t: number } | null = null;
@@ -1406,6 +1411,7 @@ export class GameSystem extends createSystem({}) {
     if (this.strip.panel.open && !this.cafeAway && this.strip.controls !== 'off') targets.push(this.strip.panel);
     if (this.coach.open) targets.push(this.coach);
     if (this.phase === 'run') for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
+    if (this.phase === 'shopping' && this.strip.drawer.panel.open) targets.push(this.strip.drawer.panel);
     let best: { panel: Panel; button: Button; t: number } | null = null;
     for (const panel of targets) {
       const hit = this.rayAt(panel);
@@ -1517,7 +1523,9 @@ export class GameSystem extends createSystem({}) {
         if (this.phase === 'paused' || this.phase === 'title') this.toRules();
         break;
       case 'bar-pause':
-        // The bar's Pause: pauses a run; while paused (the card up) it carries on, as RESUME does.
+        // The bar's Pause: pauses a run (the shop drawer, if down, closes first); while paused (the card up) it carries
+        // on, as RESUME does.
+        this.closeShop();
         if (this.phase === 'run') this.pause();
         else if (this.phase === 'paused') this.resume();
         break;
@@ -1569,12 +1577,12 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'hire-janitor':
         this.shop.hireJanitor();
-        if (this.menu.cardKind === 'shop' && this.menu.card.open) this.showShop();
+        if (this.phase === 'shopping') this.showShop();
         break;
       case 'hire':
         this.shop.hire();
         // In the shop: show the new staff and bank.
-        if (this.menu.cardKind === 'shop' && this.menu.card.open) this.showShop();
+        if (this.phase === 'shopping') this.showShop();
         break;
     }
   }
