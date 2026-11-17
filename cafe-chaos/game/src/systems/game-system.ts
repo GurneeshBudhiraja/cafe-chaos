@@ -150,6 +150,7 @@ const MOVES = [
   { picture: 'howto-pinch.jpg', title: 'Pinch a guest', text: 'Put your fingers above a guest at the gate. When the guest glows, pinch.' },
   { picture: 'howto-seat.jpg', title: 'Seat the guest', text: 'Move the guest above the café. Open your fingers. The guest goes to the seat that glows.' },
   { picture: 'howto-happy.jpg', title: 'Keep guests happy', text: 'Seat guests quickly. The bar above the café shows how happy the guests are.' },
+  { picture: 'howto-tables.jpg', title: 'Open a table', text: 'Point at a glowing padlock and pinch, then BUY.' },
 ];
 /** The pieces of the main room (cafe/layout.ts): the shell and the twelve places to sit; the extension's come after. */
 const MAIN_PIECES = 13;
@@ -158,6 +159,8 @@ const AUTOSAVE_SECONDS = 20;
 
 /** The first run: what each step says, and what moves it on (besides Next). */
 interface Step {
+  /** The table lesson: the padlocks show and take the ray (see GameSystem.tableLesson). */
+  lesson?: boolean;
   title: string;
   text: string;
   /** True once the player has done what the step asks. */
@@ -269,7 +272,11 @@ export class GameSystem extends createSystem({}) {
   private readonly previous: Record<Hand, boolean> = { left: false, right: false };
   private readonly head = new Vector3();
   /** Counts when the step began (to tell when the player has done it). */
-  mark = { pickedUp: 0, seated: 0, served: 0, wristOpens: 0 };
+  mark = { pickedUp: 0, seated: 0, served: 0, wristOpens: 0, tables: 0 };
+  /** The first run's last step is up: open a table with the hand ray (the padlocks show and take the ray in the tutorial). */
+  private tableLesson = false;
+  /** Where the buy card goes back to: the run, or the first run's table lesson. */
+  private buyFrom: 'run' | 'tutorial' = 'run';
   /** The first run's guest is still to come (its model may still be loading). */
   private needGuest = false;
   private placement = -1;
@@ -977,7 +984,15 @@ export class GameSystem extends createSystem({}) {
 
   private goToStep(index: number): void {
     this.step = index;
-    this.mark = { pickedUp: this.guests.pickedUp, seated: this.guests.seated, served: this.baristas.servedCount, wristOpens: this.wristOpens };
+    this.mark = { pickedUp: this.guests.pickedUp, seated: this.guests.seated, served: this.baristas.servedCount, wristOpens: this.wristOpens, tables: this.shop.tablesBought };
+    // The table lesson: the padlocks come up and take the ray; if the first guest's coins fall short of a table, the
+    // house makes up the rest, so the lesson always ends in a table opened (a reward, not a chore).
+    this.tableLesson = !!this.steps[index].lesson;
+    if (this.tableLesson) {
+      const short = this.shop.tablePrice - this.score.bank;
+      if (short > 0) this.score.award(short);
+      for (const tag of this.tags) tag.pulse();
+    }
     const step = this.steps[index];
     const last = index === this.steps.length - 1;
     const bw = this.coach.width;
@@ -1018,6 +1033,9 @@ export class GameSystem extends createSystem({}) {
   }
 
   private finishTutorial(): void {
+    this.tableLesson = false;
+    // The ray to a padlock has been learned here: the one-time "Open a table" tip is not needed.
+    if (this.shop.tablesBought > this.mark.tables && !this.save.tips.includes('table')) this.save.tips.push('table');
     this.save.tutorialDone = true;
     writeSave(this.save);
     this.toRun();
@@ -1160,7 +1178,7 @@ export class GameSystem extends createSystem({}) {
    * pop: mid-rush nobody looks at the padlocks (the owner's playtest).
    */
   private tendTables(delta: number): void {
-    const show = (this.phase === 'run' || this.phase === 'buying') && this.cafe.placed && !this.cafe.arriving;
+    const show = (this.phase === 'run' || this.phase === 'buying' || (this.phase === 'tutorial' && this.tableLesson)) && this.cafe.placed && !this.cafe.arriving;
     const price = this.shop.tablePrice;
     const can = this.shop.tableAffordable;
     const ready = show && this.phase === 'run' && can && price !== this.readyAt && this.tags.length > 0;
@@ -1332,7 +1350,11 @@ export class GameSystem extends createSystem({}) {
 
   /** A padlock tag pinched: the café stands still (in view) and the buy card asks. */
   private openBuy(index: number): void {
-    if (this.phase !== 'run' || !this.cafe.isLocked(index)) return;
+    const from = this.phase === 'run' ? 'run' : this.phase === 'tutorial' && this.tableLesson ? 'tutorial' : null;
+    if (!from || !this.cafe.isLocked(index)) return;
+    this.buyFrom = from;
+    // The coach card steps aside while the buy card asks.
+    if (from === 'tutorial') this.coach.show(false);
     this.phase = 'buying';
     this.buying = index;
     this.speed = this.cafe.timeScale || this.speed;
@@ -1376,7 +1398,8 @@ export class GameSystem extends createSystem({}) {
     this.menu.card.onTop = false;
     this.cafe.timeScale = this.speed;
     this.guests.handsOff = false;
-    if (resume) this.phase = 'run';
+    if (resume) this.phase = this.buyFrom;
+    if (this.phase === 'tutorial') this.coach.show(true);
   }
 
   /**
@@ -1394,7 +1417,7 @@ export class GameSystem extends createSystem({}) {
     // ray, from a hand away from the café (a hand reaching for a guest never presses Skip).
     if (this.coach.open && awayFromCafe) targets.push(this.coach);
     // The padlock tags over the locked tables, in a run (pointed at from anywhere: they stand in the café).
-    if (this.phase === 'run') for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
+    if (this.phase === 'run' || (this.phase === 'tutorial' && this.tableLesson)) for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
     if (this.phase === 'shopping' && this.strip.drawer.panel.open) targets.push(this.strip.drawer.panel);
     if (!targets.length) return null;
     this.castRay(hand);
@@ -1414,7 +1437,7 @@ export class GameSystem extends createSystem({}) {
     }
     // A near miss: the affordable tag nearest the ray, within TAG_RAY.assist degrees outside its hit area (measured
     // from the edge of that area: its half height plus TAG_RAY.edge of its height, as seen from the hand).
-    if (!best && this.phase === 'run') {
+    if (!best && (this.phase === 'run' || this.tableLesson)) {
       let angle = (TAG_RAY.assist * Math.PI) / 180;
       for (const tag of this.tags) {
         if (!tag.canBuy || !tag.panel.open) continue;
@@ -1512,7 +1535,7 @@ export class GameSystem extends createSystem({}) {
     const targets = [m.sheet, m.how, m.card].filter((p) => p.open && !p.dimmed);
     if (this.strip.panel.open && !this.cafeAway && this.strip.controls !== 'off') targets.push(this.strip.panel);
     if (this.coach.open) targets.push(this.coach);
-    if (this.phase === 'run') for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
+    if (this.phase === 'run' || (this.phase === 'tutorial' && this.tableLesson)) for (const tag of this.tags) if (tag.panel.open) targets.push(tag.panel);
     if (this.phase === 'shopping' && this.strip.drawer.panel.open) targets.push(this.strip.drawer.panel);
     let best: { panel: Panel; button: Button; t: number } | null = null;
     for (const panel of targets) {
@@ -1692,16 +1715,20 @@ export class GameSystem extends createSystem({}) {
 
 /**
  * The first run's steps, each done rather than read: pick up the guest,
- * seat it, watch its tea come (or press Open! sooner). Then the café
- * opens. Pause and the Shop are not taught here: the "More hands" tip
- * points at the Shop the moment it matters (game/tips.ts), and the
- * How to play card has the full list.
+ * seat it, watch its tea come, then open a table with the hand ray (the
+ * first thing the ray is needed for: pointing is learned by doing it, for
+ * a reward, as the playtest asked; the house tops up the coins if the
+ * first guest paid too little). Open! skips on. Then the café opens.
+ * Pause and the Shop are not taught here: the ray learned on a padlock
+ * finds the bar's buttons (the short beam shows a raised hand pointing),
+ * and the "More hands" tip points at the Shop the moment it matters.
  */
 function firstRun(): Step[] {
   return [
     { picture: 0, title: MOVES[0].title, text: 'Put your fingers above the guest at the gate. When the guest glows, pinch.', done: (g) => g.guests.pickedUp > g.mark.pickedUp },
     { picture: 1, title: MOVES[1].title, text: MOVES[1].text, done: (g) => g.guests.seated > g.mark.seated },
     { picture: 2, title: 'The guest gets tea', text: 'Guests pay when they get their tea. The bar above the café shows how happy the guests are.', next: true, done: (g) => g.baristas.servedCount > g.mark.served },
+    { picture: 3, lesson: true, title: 'Open a table', text: 'Your first coins! Point your hand at a glowing padlock and pinch, then BUY.', next: true, done: (g) => g.shop.tablesBought > g.mark.tables },
   ];
 }
 

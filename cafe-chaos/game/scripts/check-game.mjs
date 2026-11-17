@@ -139,10 +139,23 @@ await until(() => window.__cafe.guests.seated >= 1, null, 30000);
 await until(() => window.__cafe.game.step === 2, null, 20000);
 s = await state();
 check('picking the guest up and seating it move the coach card on', step1 === 1 && s.step === 2, `step after pick-up ${step1}, after seating ${s.step}`);
-// The server brings the tea: the last first-run step is done with it (Open! on the card would start the run sooner), and the café opens.
-const opened = await until(() => window.__cafe.game.phase === 'run', null, 240000);
+// The server brings the tea; then the last step: open a table with the hand ray (the padlocks come up, glowing).
+const lesson = await until(() => window.__cafe.game.step === 3, null, 240000);
+const atLesson = await page.evaluate(() => {
+  const { game, shop, score } = window.__cafe;
+  return { title: game.steps[game.step].title, coach: game.coach.open, tags: game.tags.filter((t) => t.panel.open).length, ready: game.tags.filter((t) => t.canBuy).length, bank: score.bank, price: shop.tablePrice, phase: game.phase };
+});
+check('after the tea, the last step teaches the ray on a padlock: "Open a table", the padlocks up and affordable (the house tops the coins up if short)', lesson && atLesson.title === 'Open a table' && atLesson.coach && atLesson.phase === 'tutorial' && atLesson.tags > 0 && atLesson.ready === atLesson.tags && atLesson.bank >= atLesson.price, JSON.stringify(atLesson));
+await h.screenshot('artifacts/game-lesson.png');
+// The padlock pinched (check-tables points the ray at one): the buy card, the coach card stepping aside; BUY.
+const lessonTable = await page.evaluate(() => window.__cafe.game.tags[0].table);
+await page.evaluate((t) => window.__cafe.game.click(`table-${t}`), lessonTable);
+const buying = await page.evaluate(() => ({ phase: window.__cafe.game.phase, coach: window.__cafe.game.coach.open }));
+await page.evaluate(() => window.__cafe.game.click('buy-yes'));
+const opened = await until(() => window.__cafe.game.phase === 'run', null, 20000);
 s = await state();
-check('the tea served ends the first run\'s three steps: the run starts, the clock near 0:00, the coach card away', opened && s.phase === 'run' && !s.coach && s.live && s.clock < 20, `phase ${s.phase}, coach ${s.coach}, clock ${s.clock.toFixed(1)}`);
+const after = await page.evaluate(() => ({ tables: window.__cafe.shop.tablesBought, tips: window.__cafe.game.save.tips }));
+check('BUY opens the table and ends the first run: the run starts, the clock near 0:00, the coach card away, the one-time table tip not needed', buying.phase === 'buying' && !buying.coach && opened && s.phase === 'run' && !s.coach && s.live && s.clock < 20 && after.tables === 1 && after.tips.includes('table'), JSON.stringify({ buying, phase: s.phase, coach: s.coach, clock: +s.clock.toFixed(1), ...after }));
 await page.evaluate(() => {
   // From here guests eat quickly and nobody in the line gives up, so each outcome below is the one asked for.
   window.__cafe.guests.mealSeconds = 4;
