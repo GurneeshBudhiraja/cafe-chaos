@@ -368,7 +368,6 @@ export class StartMenu {
   }
 
   openWarn(state: WarnState): void {
-    this.sheet.resize(MENU_SIZE.width, MENU_SIZE.sheetHeight);
     this.warn = state;
     this.sheetKind = 'warn';
     this.layoutWarn();
@@ -402,20 +401,24 @@ export class StartMenu {
 
   /** A question on the sheet: its title, a sentence (wrapped), and one or two wide buttons under it. */
   private layoutQuestion(title: string, sentence: string, choices: { id: string; kind: 'primary' | 'secondary' | 'danger'; label: string }[]): void {
-    // One button: the sheet is shorter by a button and its gap, so nothing hangs in empty paper.
-    const full = Math.round((MENU_SIZE.sheetHeight * PPM) / this.k);
-    const H = choices.length > 1 ? full : full - 120 - TOUCH_GAP;
+    // Fitted to its content: the title, the sentence, then the buttons a block gap under it, PAD at the bottom as at
+    // the sides (a one-line sentence leaves no empty paper above the buttons).
+    const ctx = this.sheet.ctx;
+    // Each sentence starts its own line (one idea a line, ASD-STE100), wrapped only if it is too long for one.
+    const lines = sentence.split(/(?<=\.)\s+/).flatMap((one) => this.wrap(ctx, one, 32, false, W - PAD * 2));
+    const textTop = 150;
+    const top = textTop + (lines.length - 1) * 44 + 22 + 48;
+    const H = top + choices.length * 120 + (choices.length - 1) * TOUCH_GAP + PAD + 14;
     this.sheet.resize(MENU_SIZE.width, (H * this.k) / PPM);
-    const top = 300;
     const buttons = choices.map((c, i) => this.button(this.sheet, c.id, PAD, top + i * (120 + TOUCH_GAP), W - PAD * 2, 120, c.kind, c.label));
-    this.sheet.set((ctx) => {
-      ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
-      ctx.save();
-      ctx.scale(this.k, this.k);
-      this.paper(ctx, pen(this.sheet.canvas), 0, H);
-      text(ctx, title, W / 2, 80, 48, SKETCH.ink);
-      this.wrap(ctx, sentence, 32, false, W - PAD * 2).forEach((l, i) => text(ctx, l, W / 2, 150 + i * 44, 32, SKETCH.soft, 'center', false));
-      ctx.restore();
+    this.sheet.set((c) => {
+      c.clearRect(0, 0, this.sheet.width, this.sheet.height);
+      c.save();
+      c.scale(this.k, this.k);
+      this.paper(c, pen(this.sheet.canvas), 0, H);
+      text(c, title, W / 2, 80, 48, SKETCH.ink);
+      lines.forEach((l, i) => text(c, l, W / 2, textTop + i * 44, 32, SKETCH.soft, 'center', false));
+      c.restore();
     }, buttons);
   }
 
@@ -482,7 +485,7 @@ export class StartMenu {
    * 'danger' (koi outline), 'off' (pale, cannot go further). It lights from
    * inside when a finger is near and moves down when pressed.
    */
-  private button(panel: Panel, id: string, x: number, y: number, w: number, h: number, kind: 'primary' | 'secondary' | 'danger' | 'off', label: string, sub?: string, glyph = false, size?: number): Button {
+  private button(panel: Panel, id: string, x: number, y: number, w: number, h: number, kind: 'primary' | 'secondary' | 'danger' | 'off' | 'busy', label: string, sub?: string, glyph = false, size?: number): Button {
     const k = panel === this.how ? this.kh : this.k;
     return {
       id, label, x: x * k, y: y * k, w: w * k, h: h * k, bare: true,
@@ -493,11 +496,13 @@ export class StartMenu {
         const dip = pressed ? 6 : 0;
         // Lit (the beam or a finger on it): plain buttons darken to a deeper paper, the red ones take a red tint,
         // the green one keeps its colour and glows (the lantern), so the button about to be pressed is plain to see.
-        const fill = kind === 'primary' ? SKETCH.moss : kind === 'off' ? SKETCH.paper : !hover ? SKETCH.paper : kind === 'danger' ? HOVER.danger : HOVER.plain;
-        const stroke = kind === 'primary' ? SKETCH.mossDeep : kind === 'danger' ? SKETCH.koi : kind === 'off' ? '#b6a993' : SKETCH.ink;
+        // 'busy' (waiting on something, a café still loading): a deeper paper, its words in the soft ink (6:1, readable;
+        // the pale 'off' ink is only for a control that cannot go further, its state shown by the control beside it).
+        const fill = kind === 'primary' ? SKETCH.moss : kind === 'busy' ? SKETCH.paperDeep : kind === 'off' ? SKETCH.paper : !hover ? SKETCH.paper : kind === 'danger' ? HOVER.danger : HOVER.plain;
+        const stroke = kind === 'primary' ? SKETCH.mossDeep : kind === 'danger' ? SKETCH.koi : kind === 'off' ? '#b6a993' : kind === 'busy' ? SKETCH.soft : SKETCH.ink;
         rc.rectangle(x, y + dip, w, h, this.o({ fill, fillStyle: 'solid', stroke, seed: this.seed + Math.round(x + y) }));
-        if (hover && kind !== 'off') this.lantern(ctx, x, y + dip, w, h);
-        const ink = kind === 'primary' ? '#f2ebdd' : kind === 'danger' ? SKETCH.koi : kind === 'off' ? '#b6a993' : SKETCH.ink;
+        if (hover && kind !== 'off' && kind !== 'busy') this.lantern(ctx, x, y + dip, w, h);
+        const ink = kind === 'primary' ? '#f2ebdd' : kind === 'danger' ? SKETCH.koi : kind === 'off' ? '#b6a993' : kind === 'busy' ? SKETCH.soft : SKETCH.ink;
         if (sub) {
           text(ctx, label, x + w / 2, y + h * 0.4 + dip, Math.round(h * 0.34), ink);
           text(ctx, sub, x + w / 2, y + h * 0.73 + dip, 28, kind === 'primary' ? '#f2ebdd' : SKETCH.soft, 'center', false);
@@ -531,14 +536,15 @@ export class StartMenu {
    *
    * Sizes (the card stands a metre away, shown twice its size: a unit is
    * 0.67 mm there): the big buttons 94 units (3.6 degrees), the small ones
-   * and the bottom row 72 (2.75), all over Meta's 2.5 to 3 degree minimum
-   * for a ray; 40 units (27 mm) between things pressed, over Meta's 12 mm.
+   * and the bottom row 80 (3.1), at or over the top of Meta's 2.5 to 3
+   * degree minimum for a ray (3 degrees for gaze); 40 units (27 mm) between
+   * things pressed, over Meta's 12 mm and Apple's 16 pt.
    */
   private layoutStart(): void {
     const st = this.start;
     const SW = Math.round(this.card.width / this.k);
     const buttons: Button[] = [];
-    const ROW = { title: 56, art: 160, name: 34, line: 32, status: 38, main: 94, small: 72, bottom: 72 };
+    const ROW = { title: 56, art: 160, name: 34, line: 32, status: 38, main: 94, small: 80, bottom: 80 };
     // Down the card: the title, then the tiles' rows, then the bottom row; GAP between blocks, TOUCH_GAP between
     // things pressed.
     const titleY = PAD;
@@ -555,10 +561,10 @@ export class StartMenu {
     const tiles = st.tiles.map((t, i) => {
       const x = PAD + i * (tw + TOUCH_GAP);
       const label = t.loading ? 'LOADING…' : !t.owned ? 'TRY FREE' : t.started ? 'CONTINUE' : 'START';
-      buttons.push(this.button(this.card, `play-${t.id}`, x, mainY, tw, ROW.main, t.loading ? 'off' : i === 0 ? 'primary' : 'secondary', label, undefined, false, 40));
+      buttons.push(this.button(this.card, `play-${t.id}`, x, mainY, tw, ROW.main, t.loading ? 'busy' : i === 0 ? 'primary' : 'secondary', label, undefined, false, 40));
       if (!t.owned) buttons.push(this.button(this.card, `buy-${t.id}`, x, smallY, tw, ROW.small, 'secondary', `Buy · ${st.price} coins`, undefined, false, 28));
       else if (t.started) buttons.push(this.button(this.card, `new-${t.id}`, x, smallY, tw, ROW.small, 'secondary', 'New game', undefined, false, 28));
-      const status = !t.owned ? 'Free trial · progress not saved' : t.started ? `Level ${t.level} · ${t.coins.toLocaleString('en')} coins` : st.lesson ? 'New · starts with a short lesson' : 'New';
+      const status = t.loading ? 'Loading · it opens when ready' : !t.owned ? 'Free trial · progress not saved' : t.started ? `Level ${t.level} · ${t.coins.toLocaleString('en')} coins` : st.lesson ? 'New · starts with a short lesson' : 'New';
       return { t, x, status };
     });
     // The bottom row: three buttons across both tiles, the same width, evenly spaced.
@@ -745,36 +751,19 @@ export class StartMenu {
     }, buttons);
   }
 
+  /**
+   * New game: the safe choice first and moss (GO BACK), the one that deletes
+   * under it in koi red, as Leave the trial and Quit (NN/g: a dangerous
+   * action is never the default).
+   */
   private layoutWarn(): void {
     const s = this.warn;
-    const H = Math.round(this.sheet.height / this.k);
     const lost = [`${s.coins.toLocaleString('en')} coins`, `${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`].concat(s.level > 1 ? [`level ${s.level}`] : []);
     const sentence = `This deletes its ${lost.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
-    const buttons: Button[] = [
-      this.button(this.sheet, 'fresh', PAD, 300, W - PAD * 2, 120, 'danger', 'DELETE AND START'),
-      this.button(this.sheet, 'keep', PAD, 300 + 120 + TOUCH_GAP, W - PAD * 2, 120, 'secondary', 'GO BACK'),
-    ];
-    this.sheet.set((ctx) => {
-      ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
-      ctx.save();
-      ctx.scale(this.k, this.k);
-      const rc = pen(this.sheet.canvas);
-      this.paper(ctx, rc, 0, H);
-      text(ctx, `Start the ${s.cafe} again?`, W / 2, 80, 44, SKETCH.ink);
-      ctx.font = font(34, false);
-      const lines: string[] = [];
-      let line = '';
-      for (const word of sentence.split(' ')) {
-        const next = line ? `${line} ${word}` : word;
-        if (ctx.measureText(next).width > W - PAD * 2) {
-          lines.push(line);
-          line = word;
-        } else line = next;
-      }
-      lines.push(line);
-      lines.forEach((l, i) => text(ctx, l, W / 2, 160 + i * 48, 34, SKETCH.soft, 'center', false));
-      ctx.restore();
-    }, buttons);
+    this.layoutQuestion(`Start the ${s.cafe} again?`, sentence, [
+      { id: 'keep', kind: 'primary', label: 'GO BACK' },
+      { id: 'fresh', kind: 'danger', label: 'DELETE AND START' },
+    ]);
   }
 
   private layoutQuit(): void {
