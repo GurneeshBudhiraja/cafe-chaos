@@ -8,7 +8,10 @@
  *  4. over a free seat: no tag, and a soft tick from that seat;
  *  5. let go over the dirty seat: the guest goes back to the line, the
  *     "uh-uh" plays, the tag stays a moment and then goes;
- *  6. no console errors.
+ *  6. a guest wanting the window, over a seat away from it (meeting none
+ *     of its wishes): red, "Not here" and what it wants; let go, it goes
+ *     back to the line;
+ *  7. no console errors.
  * Usage: dev server running, then `node scripts/check-seat-tags.mjs`.
  * Output: PASS/FAIL lines; artifacts/seat-tag-*.png.
  */
@@ -131,6 +134,25 @@ check('let go over the dirty seat: back to the line, the "uh-uh" plays, the tag 
 // Then it goes (its 1.5 s are counted in the page's frames, which the emulator runs slower than real time).
 const gone = await until((i) => !window.__cafe.guests.seatTags[i].card.panel.open, 15000, await page.evaluate(() => window.__rightHand));
 check('then the tag goes', gone, `gone ${gone}`);
+
+// 6. A guest that wants a window seat, held over a seat that is not by the window (it meets none of its wishes): the seat
+// glows red, "Not here / Wants a window seat"; let go there, it goes back to the line.
+await until(() => window.__cafe.guests.line.some((g) => g.state === 'queued' && !g.walk), 30000);
+await page.evaluate(() => { const g = window.__cafe.guests.line.find((x) => x.state === 'queued'); g.wishes = ['window']; window.__picky = g.id; });
+const again = await st();
+await pinchTo(add(again.grip, [0, 0.05, 0])); await frames(2);
+await pinchTo(again.grip); await frames(2);
+await pinch(1); await frames(4);
+await over(plan.free);
+s = await st();
+const red = await page.evaluate((i) => { const { guests } = window.__cafe; const g = guests.glow.landing[i]; return g.group.visible ? g.pad.color.getHexString() : null; }, await page.evaluate(() => window.__rightHand));
+check('a guest wanting the window, held over a seat away from it: red, "Not here", what it wants', s.refusal?.why === 'unwanted' && s.tag === 'Not here|Wants a window seat' && red === 'ff4a3a', JSON.stringify({ refusal: s.refusal, tag: s.tag, glow: red }));
+await h.screenshot('artifacts/seat-tag-4-unwanted.png');
+const wishBefore = await page.evaluate(() => window.__cafe.guests.refusedWish);
+await pinch(0);
+await frames(4);
+const backToLine = await page.evaluate((id) => { const { guests } = window.__cafe; const g = guests.guests.find((x) => x.id === id); return { state: g?.state, seat: g?.seat?.index ?? null, refused: guests.refusedWish }; }, await page.evaluate(() => window.__picky));
+check('let go there, it goes back to the line (it does not sit)', (backToLine.state === 'hop' || backToLine.state === 'queued') && backToLine.seat === null && backToLine.refused === wishBefore + 1, JSON.stringify(backToLine));
 
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');

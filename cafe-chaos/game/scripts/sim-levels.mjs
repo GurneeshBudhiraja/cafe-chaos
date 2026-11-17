@@ -106,6 +106,8 @@ for (const player of players) {
         const score = each.filter(Boolean).length;
         if (score > bestScore) { bestScore = score; best = s; }
       }
+      // As a player must: a guest with wishes is not seated where none is met (it would refuse; GuestSystem.meetsNone).
+      if (bestScore === 0 && guest.wishes.length > 0) return;
       if (c.guests.seatGuest(guest.id, best.index)) lastSeat = clock;
     }, 40);
   }), [player.hand, LEVELS, CAP, SCALE]);

@@ -1,8 +1,9 @@
 /**
  * Why a carried guest will not sit there: a small paper tag over the seat
  * the guest is held over, while it is held there, with a picture and a few
- * words ("Dirty", staff will clean it; "Locked", what it costs to open;
- * "Taken"). The seat's amber or red glow stays; the tag says what the
+ * words ("Dirty", staff will clean it; "Locked", open tables in the Shop;
+ * "Taken"; "Not here", what it wants, for a seat that meets none of its
+ * wishes). The seat's amber or red glow stays; the tag says what the
  * colour means, so colour is never the only signal.
  *
  * The guidance it follows: show whether a destination can take what is
@@ -19,7 +20,7 @@
 
 import { TipCard } from './tip-card.js';
 
-export type SeatRefusal = 'dirty' | 'locked' | 'taken';
+export type SeatRefusal = 'dirty' | 'locked' | 'taken' | 'unwanted';
 
 /** How high over the seat it stands (metres), and how long it stays after a refused let-go (seconds). */
 export const SEAT_TAG = { above: 0.075, linger: 1.5 };
@@ -68,6 +69,23 @@ const ICONS: Record<SeatRefusal, Icon> = {
     ctx.arc(x, y - r * 0.05, r * 0.3, Math.PI, Math.PI * 2);
     ctx.stroke();
   }),
+  // Not what the guest wants: a thought bubble with a cross.
+  unwanted: badge('#9a3b2a', (ctx, x, y, r) => {
+    ctx.beginPath();
+    ctx.ellipse(x + r * 0.05, y - r * 0.08, r * 0.55, r * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x - r * 0.42, y + r * 0.45, r * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#9a3b2a';
+    ctx.lineWidth = r * 0.14;
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.15, y - r * 0.28);
+    ctx.lineTo(x + r * 0.25, y + r * 0.12);
+    ctx.moveTo(x + r * 0.25, y - r * 0.28);
+    ctx.lineTo(x - r * 0.15, y + r * 0.12);
+    ctx.stroke();
+  }),
   // Someone already sitting: a head and shoulders.
   taken: badge('#9a3b2a', (ctx, x, y, r) => {
     ctx.beginPath();
@@ -91,7 +109,7 @@ export class SeatTag {
 
   /** Say why: `detail` is the second line (the game supplies the price of a locked table). */
   show(why: SeatRefusal, detail: string): void {
-    const title = why === 'dirty' ? 'Dirty' : why === 'locked' ? 'Locked' : 'Taken';
+    const title = why === 'dirty' ? 'Dirty' : why === 'locked' ? 'Locked' : why === 'taken' ? 'Taken' : 'Not here';
     this.card.show(title, detail, ICONS[why]);
   }
 

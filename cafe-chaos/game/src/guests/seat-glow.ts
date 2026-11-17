@@ -14,10 +14,11 @@
  * - a column: a faint shaft of light rising from the seat, which is
  *   what shows when the seat is seen from the side or is behind a table.
  * While a guest is carried, the seat it would land on says whether it
- * meets the guest's wishes: mint if it meets them all, red if it does
- * not (so a seat that would let the guest down is plain before letting
- * go); amber if its table is dirty (the guest will not sit there: let go,
- * it goes back to the line). The dirty table's sign says so too. The other free seats keep their small dots: mint for the seats
+ * meets the guest's wishes: mint if it meets them all, violet if some, red
+ * if none (the guest will not sit there: let go, it goes back, and a tag
+ * says what it wants; the owner, after the first playtest: seating guests
+ * anywhere made the game no challenge); amber if it is dirty (it will not
+ * sit there either). The dirty table's sign says so too. The other free seats keep their small dots: mint for the seats
  * that would meet every wish, violet for the rest.
  * One set per hand; the dots are one instanced mesh.
  */
@@ -152,9 +153,10 @@ export class SeatGlow {
    * seat); the dots show on the other free seats while anything is
    * carried. `granting` is the seats that would meet every wish of the
    * carried guest: their dots show mint, and larger; the landing seat is
-   * mint if it is one of them, red if not.
+   * mint if it is one of them, red if it is one of `refusing` (it meets
+   * none of the wishes: the guest will not sit there), violet otherwise.
    */
-  show(seats: Seat[], targets: (Seat | null)[], carrying: boolean, delta: number, granting: ReadonlySet<Seat> | null = null): void {
+  show(seats: Seat[], targets: (Seat | null)[], carrying: boolean, delta: number, granting: ReadonlySet<Seat> | null = null, refusing: ReadonlySet<Seat> | null = null): void {
     this.time += delta;
     const pulse = PULSE.low + (PULSE.high - PULSE.low) * (0.5 + 0.5 * Math.sin(this.time * PULSE.rate * Math.PI * 2));
     for (let i = 0; i < this.landing.length; i++) {
@@ -164,7 +166,7 @@ export class SeatGlow {
       glow.group.visible = !!seat;
       if (!seat) continue;
       glow.group.position.set(seat.position.x, seat.position.y + GLOW.lift, seat.position.z);
-      const tint = seat.dirty ? this.amber : granting ? (granting.has(seat) ? this.mint : this.red) : this.violet;
+      const tint = seat.dirty ? this.amber : granting?.has(seat) ? this.mint : refusing?.has(seat) ? this.red : this.violet;
       glow.pad.color.copy(tint);
       glow.halo.color.copy(tint);
       glow.column.color.copy(tint);

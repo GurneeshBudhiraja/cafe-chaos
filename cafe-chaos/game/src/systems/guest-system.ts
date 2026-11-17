@@ -52,7 +52,7 @@ import {
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
-import { grants, pickName, pickWishes, tablesOf, type Sitter, type WishId, openWishes, type Friendship } from '../guests/wishes.js';
+import { grants, pickName, pickWishes, tablesOf, WISHES, type Sitter, type WishId, openWishes, type Friendship } from '../guests/wishes.js';
 import { payFor, wishCount } from '../game/rules.js';
 import { BUBBLE, feelingFor, Reactions, type Reacting } from '../guests/reactions.js';
 import { WishCards } from '../ui/wish-card.js';
@@ -221,6 +221,8 @@ export class GuestSystem extends createSystem({}) {
   private quietCorner = -1;
   private readonly sitters: Sitter[] = [];
   private readonly granting = new Set<Seat>();
+  /** The free seats meeting none of a carried guest's wishes (they glow red under it, and refuse it). */
+  private readonly refusing = new Set<Seat>();
   private lastWishes: WishId[] = [];
   private readonly cardAt = new Vector3();
   private readonly headLocal = new Vector3();
@@ -344,7 +346,7 @@ export class GuestSystem extends createSystem({}) {
     this.wishesShown(frameDelta);
     // After the wishes: the head is this frame's, so the bubbles turn to where the eyes are now.
     this.react(delta);
-    this.glow.show(this.seats, this.targets, this.targets.some((t, i) => t !== null || this.carriedBy(HANDS[i]) !== undefined), delta, this.granting);
+    this.glow.show(this.seats, this.targets, this.targets.some((t, i) => t !== null || this.carriedBy(HANDS[i]) !== undefined), delta, this.granting, this.refusing);
     this.tendSeatTags(frameDelta);
     this.peak = Math.max(this.peak, this.guests.length);
   }
@@ -368,7 +370,7 @@ export class GuestSystem extends createSystem({}) {
       const r = this.handsOff ? null : (this.refusals[i] ?? this.lingering[i]);
       const tag = this.seatTags[i];
       if (r) {
-        const detail = r.why === 'dirty' ? 'Staff will clean it' : r.why === 'locked' ? this.lockedNote(r.seat.table) : 'Someone sits here';
+        const detail = r.why === 'dirty' ? 'Staff will clean it' : r.why === 'locked' ? this.lockedNote(r.seat.table) : r.why === 'taken' ? 'Someone sits here' : (r.detail ?? 'It wants another seat');
         tag.show(r.why, detail);
         tag.card.panel.mesh.position.copy(r.seat.position);
         tag.card.panel.mesh.position.y += SEAT_TAG.above / scale;
@@ -384,8 +386,10 @@ export class GuestSystem extends createSystem({}) {
    * means no tag; else that seat's own reason (taken, locked or dirty), or
    * the dirty seat it is aimed at when it is over none.
    */
-  private refusalFor(guest: Guest, own: Seat | null): { seat: Seat; why: SeatRefusal } | null {
+  private refusalFor(guest: Guest, own: Seat | null): { seat: Seat; why: SeatRefusal; detail?: string } | null {
     const target = guest.target;
+    // A seat that meets none of its wishes: it will not sit there.
+    if (target && !target.dirty && target !== own && this.meetsNone(guest, target)) return { seat: target, why: 'unwanted', detail: `Wants ${WISHES[guest.wishes[0]]?.wants ?? 'another seat'}` };
     if (target && !target.dirty) return null;
     const near = seatNear(this.seats, guest.actor.root.position, SEAT_REACH_M);
     if (near && near !== own) {
@@ -423,6 +427,19 @@ export class GuestSystem extends createSystem({}) {
   wouldGrant(guest: Guest, seat: Seat): boolean {
     return this.grantsEach(guest, seat).every(Boolean);
   }
+
+  /**
+   * Would this seat meet none of this guest's wishes (it has some)? Then
+   * the guest will not sit there (the owner, after the first playtest:
+   * seating guests anywhere kept the coins coming, no challenge). A seat
+   * meeting some sits it, less happy; a guest with no wishes sits anywhere.
+   */
+  meetsNone(guest: Guest, seat: Seat): boolean {
+    return guest.wishes.length > 0 && !this.grantsEach(guest, seat).some(Boolean);
+  }
+
+  /** Guests let go over a seat meeting none of their wishes and sent back (for the checks). */
+  refusedWish = 0;
 
   /**
    * A guest has just sat down: its wishes are judged now, once (it cannot
@@ -463,6 +480,7 @@ export class GuestSystem extends createSystem({}) {
     const cafe = this.cafeSystem.cafe;
     const scale = cafe.scale.x || 1;
     this.granting.clear();
+    this.refusing.clear();
     this.headLocal.copy(this.eye);
     cafe.worldToLocal(this.headLocal);
     HANDS.forEach((hand, i) => {
@@ -483,7 +501,13 @@ export class GuestSystem extends createSystem({}) {
         scale,
         Math.min(0.1, delta),
       );
-      if (carried) for (const seat of this.seats) if (seat.occupant === 0 && !seat.locked && !seat.dirty && this.wouldGrant(carried, seat)) this.granting.add(seat);
+      if (carried) {
+        for (const seat of this.seats) {
+          if (seat.occupant !== 0 || seat.locked || seat.dirty) continue;
+          if (this.wouldGrant(carried, seat)) this.granting.add(seat);
+          else if (this.meetsNone(carried, seat)) this.refusing.add(seat);
+        }
+      }
     });
   }
 
@@ -525,9 +549,9 @@ export class GuestSystem extends createSystem({}) {
    * or it is over no seat), the tag that says so over the seat, and a
    * reason kept SEAT_TAG.linger seconds after a refused let-go.
    */
-  readonly refusals: ({ seat: Seat; why: SeatRefusal } | null)[] = [null, null];
+  readonly refusals: ({ seat: Seat; why: SeatRefusal; detail?: string } | null)[] = [null, null];
   readonly seatTags = [new SeatTag(), new SeatTag()];
-  private readonly lingering: ({ seat: Seat; why: SeatRefusal; left: number } | null)[] = [null, null];
+  private readonly lingering: ({ seat: Seat; why: SeatRefusal; detail?: string; left: number } | null)[] = [null, null];
   /** The second line for a locked table (the game says what it costs to open). */
   lockedNote: (table: number) => string = () => 'Open it to seat guests here';
   /** Guests let go over a seat that would not take them (the sound plays at `refusedAt`, café space). */
@@ -1132,7 +1156,7 @@ export class GuestSystem extends createSystem({}) {
     if (hi >= 0) {
       this.refusals[hi] = this.refusalFor(guest, own);
       // A seat that will take it, newly under it: a soft tick there.
-      const yes = guest.target && !guest.target.dirty ? guest.target : null;
+      const yes = guest.target && !guest.target.dirty && (guest.target === own || !this.meetsNone(guest, guest.target)) ? guest.target : null;
       if (yes && yes !== this.lastAimed[hi]) {
         this.aimedSeats++;
         this.aimedAt.copy(yes.meal ?? yes.position);
@@ -1231,6 +1255,10 @@ export class GuestSystem extends createSystem({}) {
     if (guest.target?.dirty) {
       guest.target = null;
       this.refusedDirty++;
+    } else if (guest.target && guest.target !== homeSeat && this.meetsNone(guest, guest.target)) {
+      // A seat that meets none of its wishes: it will not sit there; back where it came from.
+      guest.target = null;
+      this.refusedWish++;
     }
     // Let go where it will not sit: it goes back (below), the "uh-uh" plays at that seat and the tag stays a moment.
     const hi = guest.hand ? HANDS.indexOf(guest.hand) : -1;
