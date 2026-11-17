@@ -192,6 +192,21 @@ export class CafeSystem extends createSystem({
     if (this.arrival === -2) this.arrival = 0;
   }
 
+  /**
+   * Back to the start card: the café goes as it was before it was first
+   * opened (hidden, waiting where it stands), so the start card at its front
+   * edge stands clear of it, not inside its roof and tree; CONTINUE or NEW
+   * GAME brings it up again with its rise (`release`).
+   */
+  putAway(): void {
+    if (!this.placed) return;
+    this.cafe.visible = false;
+    this.outline.hide();
+    this.cafe.scale.setScalar(this.targetScale);
+    this.cafe.position.copy(this.landing);
+    this.arrival = -2;
+  }
+
   /** The middle of the café's front edge, on the table (world), into `out`. */
   frontEdge(out: Vector3): Vector3 {
     return this.cafe.localToWorld(out.set(0, 0, this.footprint.maxZ));

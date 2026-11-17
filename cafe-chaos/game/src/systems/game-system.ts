@@ -433,6 +433,9 @@ export class GameSystem extends createSystem({}) {
     this.clearNotes();
     this.strip.drawer.hide();
     this.phase = 'title';
+    // The café away, as before it was first opened: the start card stands clear of it (it was inside the roof and
+    // the cherry tree after MAIN MENU), and CONTINUE brings it up again with its rise.
+    this.cafe.putAway();
     this.quiet();
     this.coach.show(false);
     this.card.show(false);
@@ -560,11 +563,13 @@ export class GameSystem extends createSystem({}) {
    * on RESUME.
    */
   private awayWhilePaused(): void {
-    // The buy card is not here: the café stays in view under it, the table in question among it.
-    const away = this.phase === 'paused' || this.phase === 'closed' || (this.phase === 'rules' && this.rulesFrom === 'paused');
+    // The buy card is not here: the café stays in view under it, the table in question among it. Waiting for the
+    // start card (put away, or not yet opened) it is hidden too; rising, its arrival shows it when it is time.
+    const away = this.phase === 'paused' || this.phase === 'closed' || (this.phase === 'rules' && this.rulesFrom === 'paused') || this.cafe.waiting;
     if (away === this.cafeAway) return;
     this.cafeAway = away;
-    this.cafe.cafe.visible = !away;
+    if (away) this.cafe.cafe.visible = false;
+    else if (!this.cafe.arriving) this.cafe.cafe.visible = true;
   }
   /** True while the café is hidden behind the pause card. */
   private cafeAway = false;

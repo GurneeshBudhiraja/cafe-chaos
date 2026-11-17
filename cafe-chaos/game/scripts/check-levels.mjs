@@ -147,10 +147,15 @@ s = await state();
 check('MAIN MENU saves the level as it stands; the start card offers CONTINUE', s.card === 'start' && s.buttons.includes('continue') && s.saved?.level === 2 && s.saved?.levelServed === 3 && s.speed === 1, JSON.stringify({ card: s.card, buttons: s.buttons, saved: s.saved, speed: s.speed }));
 await page.waitForTimeout(600);
 await h.screenshot('artifacts/levels-5-continue.png');
+// The café put away behind the start card (it used to stand there, the card inside its roof and tree), for some frames.
+const awayAtTitle = await page.evaluate(() => new Promise((ok) => { const { system } = window.__cafe; let seen = 0; let shown = 0; const t = () => { seen++; if (system.cafe.visible) shown++; if (seen < 20) requestAnimationFrame(t); else ok({ waiting: system.waiting, shown, seen }); }; t(); }));
+check('back at the start card the café is put away (hidden and waiting), so the card stands clear of it', awayAtTitle.waiting && awayAtTitle.shown === 0, JSON.stringify(awayAtTitle));
 await page.evaluate(() => window.__cafe.game.click('continue'));
+// CONTINUE: the outline, then the café rises again.
+const rose = await until(() => window.__cafe.system.arriving, 10000);
 await until(() => window.__cafe.game.phase === 'run');
 s = await state();
-check('CONTINUE carries the level on with the count it had', s.level === 2 && s.served === 3 && s.bar.join() === '2,3,7', JSON.stringify({ level: s.level, served: s.served, bar: s.bar }));
+check('CONTINUE brings the café up again with its rise, and carries the level on with the count it had', rose && s.cafe && s.level === 2 && s.served === 3 && s.bar.join() === '2,3,7', JSON.stringify({ rose, cafe: s.cafe, level: s.level, served: s.served, bar: s.bar }));
 
 // 8. Happiness at zero.
 const bank = s.bank;
