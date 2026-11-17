@@ -76,6 +76,32 @@ if (typeof Image !== 'undefined') {
   }
 }
 
+/** A name in the drawer is drawn no smaller than this share of a line's height (it is 0.24 when it fits). */
+const NAME_MIN = 0.17;
+
+/** The largest size, from `size` down to `min`, at which `s` fits `width`. */
+function fitSize(ctx: CanvasRenderingContext2D, s: string, width: number, size: number, min: number, weight: 400 | 700): number {
+  ctx.font = hand(size, weight);
+  const w = ctx.measureText(s).width;
+  return w <= width ? size : Math.max(min, (size * width) / w);
+}
+
+/** `s` in lines that fit `width` at `size` (the hand font, regular), two at most. */
+function wrapTo(ctx: CanvasRenderingContext2D, s: string, width: number, size: number): string[] {
+  ctx.font = hand(size, 400);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of s.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > width) {
+      lines.push(line);
+      line = word;
+    } else line = next;
+  }
+  lines.push(line);
+  return lines.slice(0, 2);
+}
+
 export class ShopDrawer {
   readonly panel: Panel;
   private rows: DrawerRow[] = [];
@@ -192,19 +218,23 @@ export class ShopDrawer {
           }
           ctx.restore();
         }
-        // The name, and a pip for each that can be hired (filled: hired).
-        scrawl(ctx, row.name, tx, y0 + h * 0.28, h * 0.24);
-        if (row.note) {
-          ctx.font = hand(h * 0.24, 700);
-          const nw = ctx.measureText(row.name).width;
-          scrawl(ctx, row.note, tx + nw + h * 0.12, y0 + h * 0.29, h * 0.17, { color: SKETCH.soft, weight: 400 });
-        } else if (row.most > 1) {
-          ctx.font = hand(h * 0.24, 700);
-          const nw = ctx.measureText(row.name).width;
-          for (let q = 0; q < row.most; q++) rc.circle(tx + nw + h * 0.14 + q * h * 0.15, y0 + h * 0.27, h * 0.1, line(340 + i * 5 + q, lw * 0.8, { fill: q < row.hired ? SKETCH.moss : SKETCH.paper, fillStyle: 'solid' }));
+        // The name, and beside it a note or a pip for each that can be hired (filled: hired). The name gives way
+        // (a smaller size, never under NAME_MIN of the line) so name and pips always fit the column.
+        ctx.font = hand(h * 0.17, 400);
+        const noteW = row.note ? h * 0.12 + ctx.measureText(row.note).width : row.most > 1 ? h * 0.14 + row.most * h * 0.15 : 0;
+        const nameSize = fitSize(ctx, row.name, tw - noteW, h * 0.24, h * NAME_MIN, 700);
+        scrawl(ctx, row.name, tx, y0 + h * 0.28, nameSize);
+        ctx.font = hand(nameSize, 700);
+        const nw = ctx.measureText(row.name).width;
+        if (row.note) scrawl(ctx, row.note, tx + nw + h * 0.12, y0 + h * 0.29, h * 0.17, { color: SKETCH.soft, weight: 400 });
+        else if (row.most > 1) for (let q = 0; q < row.most; q++) rc.circle(tx + nw + h * 0.14 + q * h * 0.15, y0 + h * 0.27, h * 0.1, line(340 + i * 5 + q, lw * 0.8, { fill: q < row.hired ? SKETCH.moss : SKETCH.paper, fillStyle: 'solid' }));
+        // No price: said where the button would be (all hired, all open, or how to get it), on up to two lines.
+        if (row.price === null) {
+          const said = row.done ?? (row.kind === 'table' ? 'All open' : row.most > 1 ? `All ${row.most} hired` : 'Hired');
+          const size = h * (row.done ? 0.16 : 0.2);
+          const lines = wrapTo(ctx, said, tw, size);
+          lines.forEach((l, j) => scrawl(ctx, l, tx + tw / 2, by + bh / 2 + h * 0.02 + (j - (lines.length - 1) / 2) * size * 1.15, size, { color: row.done ? SKETCH.soft : SKETCH.moss, align: 'center', weight: row.done ? 400 : 700 }));
         }
-        // All hired: said where the button would be.
-        if (row.price === null) scrawl(ctx, row.done ?? (row.kind === 'table' ? 'All open' : row.most > 1 ? `All ${row.most} hired` : 'Hired'), tx + tw / 2, by + bh / 2 + h * 0.02, h * 0.2, { color: row.done ? SKETCH.soft : SKETCH.moss, align: 'center' });
       });
     }, buttons);
   }

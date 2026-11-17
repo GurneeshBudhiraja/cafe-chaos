@@ -639,7 +639,10 @@ export class GameSystem extends createSystem({}) {
   private awayWhilePaused(): void {
     // The buy card is not here: the café stays in view under it, the table in question among it. Waiting for the
     // start card (put away, or not yet opened) it is hidden too; rising, its arrival shows it when it is time.
-    const away = this.phase === 'paused' || this.phase === 'closed' || (this.phase === 'rules' && this.rulesFrom === 'paused') || this.cafe.waiting;
+    // The Buy question asked from the Shop stands a metre away like the pause card, so the café, between it and the
+    // eyes, goes away under it too.
+    const buying = this.phase === 'shopping' && this.menu.sheetKind === 'buy';
+    const away = this.phase === 'paused' || this.phase === 'closed' || (this.phase === 'rules' && this.rulesFrom === 'paused') || this.cafe.waiting || buying;
     if (away === this.cafeAway) return;
     this.cafeAway = away;
     if (away) this.cafe.cafe.visible = false;
@@ -743,7 +746,7 @@ export class GameSystem extends createSystem({}) {
       this.addNote('The Canadian café is yours', 'shop', NOTE.seconds, 'Your progress is saved.');
     } else {
       this.book.reset('canada');
-      this.addNote('Canadian café bought', 'shop', NOTE.seconds, 'Play it from the main menu.');
+      this.addNote('You bought the Canadian café', 'shop', NOTE.seconds, 'Play it from the main menu.');
     }
     this.backToShop();
   }
@@ -902,7 +905,7 @@ export class GameSystem extends createSystem({}) {
     const shop = this.shop;
     if (current.id === 'canada') {
       const price = shop.musicianPrice;
-      rows.push({ kind: 'musician', name: 'Musician', hired: shop.musicians, most: 2, price, canPay: price !== null && this.score.bank >= price, id: 'buy-musician', word: 'BUY', picture: shop.musicians === 0 ? 'ui/shop-fiddler.jpg' : 'ui/shop-pianist.jpg', done: price === null ? 'Both play' : undefined });
+      rows.push({ kind: 'musician', name: 'Musician', hired: shop.musicians, most: 2, price, canPay: price !== null && this.score.bank >= price, id: 'buy-musician', word: 'BUY', picture: shop.musicians === 0 ? 'ui/shop-fiddler.jpg' : 'ui/shop-pianist.jpg', done: price === null ? 'Both play now' : undefined });
     }
     const forSale = !this.book.owns('canada') && (this.trial || (current.id === 'japan' && (this.save.forSaleSeen || this.score.bank >= CANADA_PRICE)));
     if (forSale) {
@@ -1017,7 +1020,7 @@ export class GameSystem extends createSystem({}) {
     if (this.trial && this.level > TRIAL_LEVELS) {
       if (this.score.trial !== 'done') {
         this.score.trial = 'done';
-        this.addNote('Trial done', 'shop', NOTE.seconds * 1.5, 'You can play on. Buy the café in the Shop to keep it.');
+        this.addNote('Trial done', 'shop', NOTE.seconds * 1.5, 'Buy the café in the Shop to keep it.');
       }
       return;
     }

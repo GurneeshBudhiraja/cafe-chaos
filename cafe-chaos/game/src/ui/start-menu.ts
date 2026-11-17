@@ -352,6 +352,7 @@ export class StartMenu {
 
 
   openSettings(state: SettingsState): void {
+    this.sheet.resize(MENU_SIZE.width, MENU_SIZE.sheetHeight);
     this.settings = state;
     this.sheetKind = 'settings';
     this.layoutSettings();
@@ -365,6 +366,7 @@ export class StartMenu {
   }
 
   openWarn(state: WarnState): void {
+    this.sheet.resize(MENU_SIZE.width, MENU_SIZE.sheetHeight);
     this.warn = state;
     this.sheetKind = 'warn';
     this.layoutWarn();
@@ -375,7 +377,7 @@ export class StartMenu {
   openBuy(state: BuyCafeState): void {
     this.sheetKind = 'buy';
     const can = state.coins >= state.price;
-    const after = state.trial ? ' Your trial progress is kept.' : state.fromJapan ? '' : ' It starts at level 1.';
+    const after = state.trial ? ' You keep your trial progress.' : state.fromJapan ? '' : ' It starts at level 1.';
     if (can)
       this.layoutQuestion('Buy the Canadian café?', `It costs ${state.price} coins from the Japanese café. You will have ${(state.coins - state.price).toLocaleString('en')} coins left there.${after}`, [
         { id: 'buy-yes', kind: 'primary', label: `BUY · ${state.price} COINS` },
@@ -398,8 +400,11 @@ export class StartMenu {
 
   /** A question on the sheet: its title, a sentence (wrapped), and one or two wide buttons under it. */
   private layoutQuestion(title: string, sentence: string, choices: { id: string; kind: 'primary' | 'secondary' | 'danger'; label: string }[]): void {
-    const H = Math.round(this.sheet.height / this.k);
-    const top = choices.length > 1 ? 300 : 300 + 120 + TOUCH_GAP;
+    // One button: the sheet is shorter by a button and its gap, so nothing hangs in empty paper.
+    const full = Math.round((MENU_SIZE.sheetHeight * PPM) / this.k);
+    const H = choices.length > 1 ? full : full - 120 - TOUCH_GAP;
+    this.sheet.resize(MENU_SIZE.width, (H * this.k) / PPM);
+    const top = 300;
     const buttons = choices.map((c, i) => this.button(this.sheet, c.id, PAD, top + i * (120 + TOUCH_GAP), W - PAD * 2, 120, c.kind, c.label));
     this.sheet.set((ctx) => {
       ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
@@ -414,6 +419,7 @@ export class StartMenu {
 
   /** Are you sure? before leaving the headset view. */
   openQuit(): void {
+    this.sheet.resize(MENU_SIZE.width, MENU_SIZE.sheetHeight);
     this.sheetKind = 'quit';
     this.layoutQuit();
     this.sheet.show(true);
@@ -581,10 +587,12 @@ export class StartMenu {
         ctx.restore();
         rc.rectangle(x, artY, tw, artH, this.o({ strokeWidth: 3, seed: this.seed + 3 + i }));
         text(ctx, t.name, x + 4, nameY, 40, SKETCH.ink, 'left');
-        this.wrap(ctx, t.line, 25, false, tw - 8)
+        // 27 units is 18 mm at the card's metre (shown twice its size): a cap height of about 0.65 degrees, inside the
+        // comfortable 0.6 to 0.75 for reading (Microsoft's mixed reality typography).
+        this.wrap(ctx, t.line, 27, false, tw - 8)
           .slice(0, 2)
-          .forEach((l, j) => text(ctx, l, x + 4, lineY + j * 30, 25, SKETCH.soft, 'left', false));
-        if (status) text(ctx, status, x + 4, statusY, 25, t.owned ? SKETCH.ink : SKETCH.mossDeep, 'left');
+          .forEach((l, j) => text(ctx, l, x + 4, lineY + j * 32, 27, SKETCH.soft, 'left', false));
+        if (status) text(ctx, status, x + 4, statusY, 27, t.owned ? SKETCH.ink : SKETCH.mossDeep, 'left');
       });
       ctx.restore();
     }, buttons);

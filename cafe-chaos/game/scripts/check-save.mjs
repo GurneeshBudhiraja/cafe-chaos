@@ -1,5 +1,5 @@
 /**
- * Saving the staff, across a reload of the page:
+ * Saving the staff, across a reload of the page (the Japanese café's save, save/v4):
  * 1. a fresh café has one barista;
  * 2. a hire is saved, and after a reload the café comes back with two (not more,
  *    and none appearing then going);
@@ -13,7 +13,7 @@ process.env.APP_URL = process.env.APP_URL_GAME ?? 'https://localhost:8082/';
 const { startHeadset } = await import('./lib/headset.mjs');
 const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
 const LOOK = { x: -1.3, y: 0.79, z: 0.28 };
-const KEY = 'cafe-chaos/save/v3';
+const KEY = 'cafe-chaos/save/v4';
 const ready = async (h) => {
   await h.head(SEAT, LOOK);
   await h.page.evaluate(() => window.__cafe.system.replace());
@@ -31,7 +31,7 @@ async function reload() {
   await page.evaluate(() => { window.__most = 0; const tick = () => { window.__most = Math.max(window.__most, window.__cafe.baristas.staff.length); requestAnimationFrame(tick); }; tick(); });
   await ready(h);
 }
-const staff = () => page.evaluate(() => ({ staff: window.__cafe.baristas.staff.length, most: window.__most ?? null, hires: window.__cafe.shop.hires, price: window.__cafe.shop.price, saved: JSON.parse(localStorage.getItem('cafe-chaos/save/v3') ?? 'null') }));
+const staff = () => page.evaluate(() => ({ staff: window.__cafe.baristas.staff.length, most: window.__most ?? null, hires: window.__cafe.shop.hires, price: window.__cafe.shop.price, saved: JSON.parse(localStorage.getItem('cafe-chaos/save/v4') ?? 'null')?.cafes?.japan ?? null }));
 
 await ready(h);
 let s = await staff();
@@ -43,7 +43,7 @@ check('a hire is saved', s.staff === 2 && s.saved?.hires === 1, JSON.stringify(s
 await reload();
 s = await staff();
 check('after a reload the café comes back with two baristas, never more', s.staff === 2 && s.most === 2 && s.hires === 1 && s.price === 120, JSON.stringify(s));
-await page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ bank: 50, hires: 5, tutorialDone: true, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, runs: 1 })), KEY);
+await page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ tutorialDone: true, owned: ['japan'], last: 'japan', cafes: { japan: { bank: 50, hires: 5, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, runs: 1 } } })), KEY);
 await reload();
 s = await staff();
 check('an old save with more hires is held to three baristas, and Hire is no longer offered', s.staff === 3 && s.most === 3 && s.hires === 2 && s.price === null, JSON.stringify(s));

@@ -296,9 +296,11 @@ export class StripSystem extends createSystem({}) {
     this.spot.y = this.height;
     cafe.worldToLocal(this.spot);
     // With the drawer open, low enough for the drawer under it to clear the café's top as well (eased: it rises, it
-    // does not jump).
+    // does not jump). Only its first line is made room for: a second line hangs over the back of the café, which
+    // stands still while the Shop is open, so the bar never climbs above the eyes (Meta: UI slightly below the
+    // line of sight).
     this.drawerRoom += ((this.drawer.panel.open ? 1 : 0) - this.drawerRoom) * (1 - Math.exp(-DRAWER_RISE * delta));
-    const room = (DRAWER.gap + this.drawer.heightM + DRAWER.clear - STRIP.clear) * this.drawerRoom;
+    const room = (DRAWER.gap + DRAWER.height + DRAWER.clear - STRIP.clear) * this.drawerRoom;
     const lowest = STRIP.top + (STRIP.clear + STRIP.height / 2 + room) / scale;
     this.panel.mesh.position.set(0, STRIP_HEIGHT === 'low' ? lowest : Math.max(lowest, this.spot.y), STRIP.back);
   }
