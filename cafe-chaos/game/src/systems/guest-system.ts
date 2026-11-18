@@ -40,10 +40,10 @@
  * with it.
  */
 
-import { createSystem, Vector3, type Sprite } from '@iwsdk/core';
+import { createSystem, Group, PerspectiveCamera, Vector3, type Camera, type Sprite } from '@iwsdk/core';
 import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/actor.js';
 import { Blobs } from '../guests/blobs.js';
-import { randomLook, type Look } from '../guests/cast.js';
+import { CANADA_SPECIES, fullOutfit, randomLook, SPECIES, type Look } from '../guests/cast.js';
 import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, CANADA_EXIT_LANES, CANADA_OUTSIDE_Z, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import { CANADA_FLOOR_TOP_M, CANADA_PLACES } from '../cafe/canada-layout.js';
@@ -371,6 +371,7 @@ export class GuestSystem extends createSystem({}) {
       if (!cafe.placed) return;
     }
     if (cafe.arriving) return;
+    this.prewarm();
     this.spawnTick(delta);
     this.hands(delta);
     this.keepLine();
@@ -695,6 +696,51 @@ export class GuestSystem extends createSystem({}) {
       this.nextSpawnIn = PAIR_FOLLOW_SECONDS;
     }
   }
+
+  /**
+   * Compile the cast's shaders before the first guest comes: one actor of
+   * each species in the café's clothes, with a patience dot, drawn once
+   * off-screen by `compileAsync`, then thrown away. Without it the first
+   * guest of each kind (and each new face, hat or scarf) compiled its
+   * programs on arrival: a hitch on the headset every few guests in the
+   * first minutes. Once per café (its lights differ, so its programs do).
+   */
+  private prewarm(): void {
+    const key = `${isCanada() ? 'canada' : 'japan'}|${this.rooms}`;
+    if (this.prewarmed === key || this.prewarming) return;
+    const species = isCanada() ? CANADA_SPECIES : SPECIES;
+    const looks: Look[] = species.map((s) => ({ species: s, tint: 0xffffff, tintName: 'plain', outfit: fullOutfit(s) }));
+    if (!looks.every(castLoaded)) return;
+    this.prewarming = true;
+    const stage = new Group();
+    stage.name = 'Prewarm';
+    stage.userData.dynamic = true;
+    const actors = looks.map((look) => new GuestActor(look));
+    const dials = actors.map(() => new PatienceDial());
+    actors.forEach((actor, i) => {
+      actor.setOpacity(0.5);
+      stage.add(actor.root);
+      dials[i].update(0.5, 10, 2, true, 1, 0, true, true, true, true);
+      stage.add(dials[i].sprite);
+    });
+    // Under the plate, out of sight; the compile needs it in the scene for the lights and the fog.
+    stage.position.y = -1;
+    this.cafeSystem.cafe.add(stage);
+    const renderer = this.world.renderer;
+    const camera = (this.world as unknown as { camera?: Camera }).camera ?? new PerspectiveCamera();
+    const done = (): void => {
+      stage.removeFromParent();
+      for (const actor of actors) actor.dispose();
+      for (const dial of dials) dial.dispose();
+      this.prewarmed = key;
+      this.prewarming = false;
+    };
+    const compile = (renderer as unknown as { compileAsync?: (o: Group, c: Camera, s: unknown) => Promise<unknown> }).compileAsync;
+    if (compile) compile.call(renderer, stage, camera, this.world.scene).then(done, done);
+    else done();
+  }
+  private prewarmed = '';
+  private prewarming = false;
 
   /** Bring a new guest on at the arrival point and send it to the back of the line. */
   spawn(look: Look = randomLook(Math.random, this.lastLook)): Guest {

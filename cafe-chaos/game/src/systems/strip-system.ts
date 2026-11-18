@@ -204,8 +204,13 @@ export class StripSystem extends createSystem({}) {
     }
     const low = this.live && s.happiness / HAPPINESS.max <= 0.3 && s.happiness > 0;
     const shopNow = this.shop.price === null ? 'full' : this.shop.affordable ? 'can' : 'not';
-    const now = `${Math.round(s.happiness)}|${s.bank}|${s.level}|${s.levelServed}|${s.levelGoal}|${this.live}|${this.controls}|${shopNow}|${this.banner ? this.banner.title : ''}|${s.trial}`;
-    if (moving || low || now !== this.shown) {
+    // What the picture depends on, with its motion in steps (a segment in 12, the pulse in 12 a cycle, the pop and the
+    // count-down at 30 a second): the 1536 px canvas is redrawn and uploaded only when a step changes, never every
+    // frame (on the headset a redraw every frame under 30 % happiness cost the frame rate just when it mattered).
+    const pulseStep = low ? Math.round(((this.time * MOTION.pulse) % 1) * 12) % 12 : -1;
+    const motion = moving ? `${this.fill.map((f) => Math.round(f * 12)).join('')}|${Math.round(this.shownBank)}|${this.popAge < MOTION.pop ? Math.round(this.popAge * 30) : -1}` : '';
+    const now = `${Math.round(s.happiness)}|${s.bank}|${s.level}|${s.levelServed}|${s.levelGoal}|${this.live}|${this.controls}|${shopNow}|${this.banner ? this.banner.title : ''}|${s.trial}|${pulseStep}|${motion}`;
+    if (now !== this.shown) {
       this.shown = now;
       this.panel.paint();
     }

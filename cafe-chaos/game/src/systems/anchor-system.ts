@@ -12,10 +12,13 @@
  *
  * Whenever something else moves the café (the arrival, the hold, the
  * handles), the anchor is let go, and a new one is made once the café has
- * stood still for a moment. Corrections smaller than a millimetre (or a
- * tenth of a degree) are left alone, so the café, and its shadow map, are
- * not touched every frame for nothing. The café stays upright: only the
- * anchor's turn about the vertical is used.
+ * stood still for a moment. The anchor's pose carries a little noise from
+ * frame to frame: a correction starts only once the café is CORRECT (a few
+ * millimetres, a third of a degree) off its anchor, and then eases it into
+ * place over a few frames instead of snapping, so the café never twitches
+ * on the table (and its shadow map is not redrawn every frame for
+ * nothing). The café stays upright: only the anchor's turn about the
+ * vertical is used.
  */
 
 import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
@@ -23,8 +26,12 @@ import { CafeSystem } from './cafe-system.js';
 
 /** How long the café must stand still before it is pinned (seconds). */
 const SETTLE_S = 0.5;
-/** Smaller differences than these are not a move (by others) nor a correction worth making. */
+/** Smaller differences than these are not a move (by others); a correction under way stops here. */
 const EPSILON = { metres: 0.001, radians: 0.0017 };
+/** How far off its anchor the café must be before it is corrected (the anchor's own noise is under this). */
+const CORRECT = { metres: 0.004, radians: 0.006 };
+/** How quickly a correction closes the gap (per second; most of it in a quarter of a second). */
+const CORRECT_EASE = 12;
 
 export class AnchorSystem extends createSystem({}) {
   /** The anchor the café stands on (null: not pinned). */
@@ -82,12 +89,26 @@ export class AnchorSystem extends createSystem({}) {
     this.placed.decompose(this.p, this.q, this.s);
     this.forward.set(0, 0, 1).applyQuaternion(this.q);
     const anchoredYaw = Math.atan2(this.forward.x, this.forward.z);
-    if (this.p.distanceTo(cafe.position) <= EPSILON.metres && Math.abs(anchoredYaw - yaw) <= EPSILON.radians) return;
-    cafe.position.copy(this.p);
-    cafe.rotation.set(0, anchoredYaw, 0);
-    this.corrected++;
-    this.remember(cafe.position, anchoredYaw);
+    const off = this.p.distanceTo(cafe.position);
+    let turn = anchoredYaw - yaw;
+    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    if (!this.correcting) {
+      if (off <= CORRECT.metres && Math.abs(turn) <= CORRECT.radians) return;
+      this.correcting = true;
+      this.corrected++;
+    }
+    if (off <= EPSILON.metres && Math.abs(turn) <= EPSILON.radians) {
+      this.correcting = false;
+      return;
+    }
+    // Eased toward the anchor's pose; the last millimetre in one step.
+    const k = off <= EPSILON.metres * 2 && Math.abs(turn) <= EPSILON.radians * 2 ? 1 : 1 - Math.exp(-CORRECT_EASE * delta);
+    cafe.position.lerp(this.p, k);
+    cafe.rotation.set(0, yaw + turn * k, 0);
+    this.remember(cafe.position, cafe.rotation.y);
   }
+  /** A correction is under way (the café is easing onto its anchor). */
+  private correcting = false;
 
   /** Make an anchor where the café stands (world pose taken back into the session's space). */
   private pin(frame: XRFrame, space: XRReferenceSpace, position: Vector3, yaw: number): void {
@@ -116,6 +137,7 @@ export class AnchorSystem extends createSystem({}) {
   }
 
   private letGo(): void {
+    this.correcting = false;
     if (this.anchor) this.anchor.delete();
     this.anchor = null;
     // Any anchor still being made is not wanted.

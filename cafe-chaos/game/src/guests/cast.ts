@@ -66,6 +66,12 @@ const CANADA_WARDROBE: readonly { attach: string; chance: number; items: readonl
 /** Nobody wears more than this many things at once. */
 const MAX_ITEMS = 2;
 
+/** Everything a species can wear (one of each), for warming the shaders up. */
+export function fullOutfit(species: Species): string[] {
+  const places = CANADA_SPECIES.includes(species) ? CANADA_WARDROBE : WARDROBE;
+  return places.flatMap((place) => place.items.map((item) => item.replace('{s}', species)));
+}
+
 export interface Look {
   species: Species;
   tint: number;
