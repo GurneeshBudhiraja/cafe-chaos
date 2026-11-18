@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",
+    "pure-rand": "^6.1.0",
     "roughjs": "^4.6.6",
     "three": "npm:super-three@0.181.0"
   },
