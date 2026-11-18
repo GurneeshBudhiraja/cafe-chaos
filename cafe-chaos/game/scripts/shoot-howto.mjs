@@ -3,8 +3,8 @@
  * the game itself: a hand over a guest at the gate (it glows); a guest
  * carried over a glowing seat; the scoreboard over a busy café; a hand
  * pointed at the bar, its ray on Pause.
- * The cream model hands are drawn for these (`?hands=cream`), since the
- * player's real hands cannot be in a picture. The emulator's grey room is
+ * The hands are the game's default, Meta's outline hand (the look of hands
+ * on Quest), since the player's real hands cannot be in a picture. The emulator's grey room is
  * hidden, so the café stands on a plain dark ground (in the headset, the
  * player's own room is there).
  *
@@ -14,7 +14,7 @@
 
 import { mkdirSync } from 'node:fs';
 
-process.env.APP_URL = process.env.APP_URL_GAME ?? 'https://localhost:8082/?hands=cream';
+process.env.APP_URL = process.env.APP_URL_GAME ?? 'https://localhost:8082/';
 const { startHeadset } = await import('./lib/headset.mjs');
 mkdirSync('public/ui', { recursive: true });
 

@@ -32,7 +32,7 @@
 ---
 
 <p align="center">
-  <img src="cafe-chaos/game/assets/source/renders/jp-landscape.jpg" alt="The Japanese café on a table: guests at their tables, and a hand carrying a pink guest to a seat" width="100%">
+  <img src="cafe-chaos/game/docs/screenshots/seat.jpg" alt="The Japanese café at night: a hand, drawn as Meta's outline hand, carries a guest over a seat that glows violet, while more guests wait at the gate" width="100%">
 </p>
 
 ## The idea
@@ -68,13 +68,17 @@ pauses when you take the headset off.
 
 | | |
 |:-:|:-:|
-| <img src="cafe-chaos/game/public/ui/howto-pinch.jpg" alt="A hand over the guests waiting at the gate" width="420"> | <img src="cafe-chaos/game/public/ui/howto-seat.jpg" alt="A guest carried over the café, above a glowing seat" width="420"> |
+| <img src="cafe-chaos/game/docs/screenshots/pinch.jpg" alt="An outline hand over the guests waiting at the gate, with a tip card above them" width="420"> | <img src="cafe-chaos/game/docs/screenshots/seat.jpg" alt="A guest carried over the café, above a glowing seat" width="420"> |
 | **Pinch a guest.** Put your fingers above a guest at the gate. When it glows, pinch. | **Seat it.** Move it over the café and open your fingers. It goes to the seat that glows. |
-| <img src="cafe-chaos/game/public/ui/howto-guests.jpg" alt="Three guests in the line, each with a patience dial over its head" width="420"> | <img src="cafe-chaos/game/public/ui/howto-happy.jpg" alt="The café full of guests, with the bar showing the clock, happiness and coins" width="420"> |
+| <img src="cafe-chaos/game/docs/screenshots/line.jpg" alt="Guests in the line at the gate, each with a patience dial over its head" width="420"> | <img src="cafe-chaos/game/docs/screenshots/happy.jpg" alt="The café with the bar above it, showing the level, happiness and coins" width="420"> |
 | **Read the guest.** The dial over its head counts down its patience. An hourglass means it is in a hurry. Hearts mean two friends. | **Keep the café happy.** Serve enough guests to finish the level. Granted wishes pay more. If happiness runs out, you play the level again and keep your coins and staff. |
 
 The bar over the café has **Pause** at the left end and **Shop** at the right
 end. Point your hand at it and pinch.
+
+<p align="center">
+  <img src="cafe-chaos/game/docs/screenshots/bar.jpg" alt="An outline hand points at the bar over the café; its ray rests on Pause" width="640">
+</p>
 
 ### The guests' wishes
 
@@ -99,7 +103,7 @@ before the guest runs out of patience.
 
 ## Two cafés
 
-| <img src="cafe-chaos/game/public/ui/cover.jpg" alt="The Japanese café at night" width="420"> | <img src="cafe-chaos/game/assets/source/renders/ca-square.jpg" alt="The Canadian café: a log cabin with a fireplace, an upper deck, a patio, a bonfire and a frozen lake" width="420"> |
+| <img src="cafe-chaos/game/public/ui/cover.jpg" alt="The Japanese café at night" width="420"> | <img src="cafe-chaos/game/public/ui/canada-card.jpg" alt="The Canadian café: a log cabin with a fireplace, an upper deck with a piano, a patio, a bonfire and a frozen lake" width="420"> |
 |:-:|:-:|
 | **Japanese café** | **Canadian café** |
 | A cherry-blossom tea garden at dusk. Paper lanterns come up as the room around you dims. Your first café. | A snowy log cabin with a fireplace, an upper deck, a patio, a bonfire, a frozen lake and live music. |
@@ -122,8 +126,9 @@ rules from the first day.
   fingers along your line of sight, so you never reach across the table. The
   pinch holds until your fingers are well apart, so a tracking flicker never
   drops a guest.
-- **Your real hands stay in front.** The café is not drawn where your hand
-  is, so your own hand covers it as it would cover a real model.
+- **Hands the way Quest shows them.** Your real hand stays in view through
+  passthrough, with Meta's own faint outline hand around it, the look Quest
+  players already know.
 - **Clear feedback for every state.** A free hand near a guest lights it with
   a warm ring. A seat glows mint, violet or red to say whether the guest will
   take it, with a short reason and a sound. Colour is never the only signal.
