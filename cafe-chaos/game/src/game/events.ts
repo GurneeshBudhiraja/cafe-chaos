@@ -2,14 +2,13 @@
  * The café's events (docs/CANADA-CHALLENGES.md): states of the café that
  * come and go during a run, one at a time. Only the Canadian café has any
  * so far: the snowstorm, always STORM.at of the way into level STORM.level
- * (the first five minutes' moment), then every `stormEvery` levels after
- * that on the day's forecast.
+ * (the first five minutes' moment).
  *
  * Pure timing: the game (systems/game-system.ts) asks it each frame of a
  * run and acts on what starts and ends.
  */
 
-import { STORM, type Forecast } from './rules.js';
+import { STORM } from './rules.js';
 
 export type EventChange = 'stormStart' | 'stormEnd' | null;
 
@@ -23,18 +22,16 @@ export class CafeEvents {
     return this.stormLeft > 0;
   }
 
-  /** Does a storm come in `level` on this forecast? */
-  static stormLevel(level: number, forecast: Forecast | null): boolean {
-    if (level === STORM.level) return true;
-    const every = forecast?.stormEvery ?? 0;
-    return every > 0 && level > STORM.level && (level - STORM.level) % every === 0;
+  /** Does a storm come in `level`? */
+  static stormLevel(level: number): boolean {
+    return level === STORM.level;
   }
 
   /**
    * One frame of a run: `progress` is how far into the level (0 to 1).
    * Says when a storm starts or ends.
    */
-  update(delta: number, level: number, progress: number, forecast: Forecast | null): EventChange {
+  update(delta: number, level: number, progress: number): EventChange {
     if (this.stormLeft > 0) {
       this.stormLeft -= delta;
       if (this.stormLeft <= 0) {
@@ -43,9 +40,9 @@ export class CafeEvents {
       }
       return null;
     }
-    if (this.stormedLevel !== level && progress >= STORM.at && CafeEvents.stormLevel(level, forecast)) {
+    if (this.stormedLevel !== level && progress >= STORM.at && CafeEvents.stormLevel(level)) {
       this.stormedLevel = level;
-      this.stormLeft = level === STORM.level ? STORM.seconds : forecast?.stormSeconds || STORM.seconds;
+      this.stormLeft = STORM.seconds;
       return 'stormStart';
     }
     return null;

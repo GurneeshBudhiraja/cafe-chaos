@@ -7,10 +7,8 @@
  * 2. the snowstorm: a third of the way into level 2 it starts, its note goes
  *    up, snow falls, most new guests are cold and none wishes for outside,
  *    the lake or upstairs; it ends on time and the snow fades;
- * 3. the forecast changes with the date, 3 sunny, 2 cold-snap and 2 snow
- *    days in any seven in a row;
- * 4. the trial ends after its levels with the Trial over card;
- * 5. the Japanese café has no cold guests and no storm.
+ * 3. the trial ends after its levels with the Trial over card;
+ * 4. the Japanese café has no cold guests and no storm.
  * Screenshots in artifacts/canada-*.png.
  *
  * Usage: dev server running, then `node scripts/check-canada-twists.mjs`.
@@ -126,24 +124,7 @@ check('the storm ends on time and the snow fades', ended && !after.snow && after
 await page.waitForTimeout(1500);
 check('one storm a level', !(await page.evaluate(() => window.__cafe.game.events.storming)), 'calm');
 
-// 3. The forecast by date.
-const fc = await page.evaluate(async () => {
-  const { forecastFor } = await import('/src/game/forecast.ts');
-  const weeks = [];
-  // The forecast's weeks start on a day whose number since 1970 is a multiple of 7.
-  let first = 1;
-  while (Math.floor(Date.UTC(2026, 10, first) / 86400000) % 7 !== 0) first++;
-  for (let week = 0; week < 8; week++) {
-    const n = { sunny: 0, snap: 0, snow: 0 };
-    for (let d = 0; d < 7; d++) n[forecastFor(new Date(2026, 10, first + week * 7 + d)).id]++;
-    weeks.push(n);
-  }
-  const days = Array.from({ length: 14 }, (_, d) => forecastFor(new Date(2026, 10, 17 + d)).id);
-  return { weeks, days, today: forecastFor().name };
-});
-check('the forecast changes with the date: 3 / 2 / 2 a week', fc.weeks.every((w) => w.sunny === 3 && w.snap === 2 && w.snow === 2) && new Set(fc.days).size === 3, `${fc.days.join(' ')}; today ${fc.today}`);
-
-// 4. The trial ends after its levels: the café pauses and the Trial over card is up; RESUME brings the card back.
+// 3. The trial ends after its levels: the café pauses and the Trial over card is up; RESUME brings the card back.
 await page.evaluate(async () => {
   const { game } = window.__cafe;
   const { levelGoal } = await import('/src/game/rules.ts');
@@ -161,16 +142,16 @@ await shot('trial-over');
 await page.evaluate(() => window.__cafe.game.click('trial-menu'));
 await until(() => window.__cafe.game.phase === 'title', null, 10000);
 
-// 5. Japanese café: no cold guests, no storm.
+// 4. Japanese café: no cold guests, no storm.
 await page.evaluate(() => window.__cafe.game.startCafe('japan', 'continue'));
 await until(() => ['run', 'tutorial'].includes(window.__cafe.game.phase), null, 240000);
 const jp = await page.evaluate(() => {
   const { game, guests } = window.__cafe;
   game.level = 2;
   game.pace();
-  return { cold: guests.coldChance, storm: guests.storm, events: game.events.storming, lean: guests.forecastLean.length, how: game.menu ? 0 : 0 };
+  return { cold: guests.coldChance, storm: guests.storm, events: game.events.storming };
 });
-check('the Japanese café: no cold guests, no storm', jp.cold === 0 && !jp.storm && !jp.events && jp.lean === 0, JSON.stringify(jp));
+check('the Japanese café: no cold guests, no storm', jp.cold === 0 && !jp.storm && !jp.events, JSON.stringify(jp));
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | ') || 'none');
 
 await h.finish?.();

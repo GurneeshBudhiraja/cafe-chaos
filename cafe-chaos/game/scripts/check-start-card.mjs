@@ -4,9 +4,9 @@
  * 1. everything on the card is inside its outer box, and the café row's
  *    buttons inside its window;
  * 2. Settings, Quit and How to play open their cards (and close again);
- * 3. the arrow scrolls the row to its end, and back;
- * 4. a pinch dragged along the row scrolls it and starts no café;
- * 5. Coming Soon cannot be picked;
+ * 3. two cafés fit the window: no arrows, the row centred;
+ * 4. a pinch dragged along the row moves nothing and starts no café;
+ * 5. the row holds the cafés only (no Coming Soon card);
  * 6. a pinch on a café's card (no drag) starts that café.
  * Shots: artifacts/start-card-after.png (the card, flat), -scrolled.png,
  * and -view.png (the headset view).
@@ -53,7 +53,7 @@ const box = await page.evaluate(() => {
   const live = c.buttons.filter((b) => b.w > 0);
   const out = live.filter((b) => b.x < 24 * k || b.x + b.w > c.width - 24 * k || b.y < 24 * k || b.y + b.h > c.height - 24 * k).map((b) => b.id);
   const row = live.filter((b) => b.id.startsWith('play-') || b.id.startsWith('new-') || b.id.startsWith('buy-'));
-  const outRow = row.filter((b) => b.x < 44 * k - 0.5 || b.x + b.w > 916 * k + 0.5).map((b) => b.id);
+  const outRow = row.filter((b) => b.x < 52 * k - 0.5 || b.x + b.w > 908 * k + 0.5).map((b) => b.id);
   return { ids: live.map((b) => b.id), out, outRow };
 });
 check('everything inside the outer box, the row inside its window', box.out.length === 0 && box.outRow.length === 0, JSON.stringify(box));
@@ -130,51 +130,36 @@ await until(() => window.__cafe.game.menu.card.open && !window.__cafe.game.menu.
 await page.waitForTimeout(800);
 check('How to play (beside Settings) opens How to play, ✕ comes back', litHelp === 'help' && help.how, JSON.stringify({ litHelp, help }));
 
-// 3. The arrows.
-const litNext = await aimAt('card', 'carousel-next');
-await tap();
-await page.waitForTimeout(900);
-const scrolled = await state();
-await shot('start-card-after-scrolled');
-const soonVisible = await page.evaluate(() => {
-  const m = window.__cafe.game.menu;
-  // The café to come is the last card: its right edge inside the window once scrolled to the end.
-  return 44 + 3 * 356 + 2 * 32 - m.scroll <= 916 + 0.5;
+// 3. Two cafés fit the window: no arrows, and the row centred in it (the owner's playtest: no café-to-come card).
+const row = await page.evaluate(() => {
+  const c = window.__cafe.game.menu.card;
+  const k = c.width / 960;
+  const b = (id) => c.buttons.find((x) => x.id === id);
+  const jp = b('play-japan');
+  const ca = b('play-canada');
+  return { arrows: [b('carousel-prev')?.w ?? 0, b('carousel-next')?.w ?? 0], left: +(jp.x / k - 52).toFixed(1), right: +(908 - (ca.x + ca.w) / k).toFixed(1), plays: c.buttons.filter((x) => x.id.startsWith('play-')).map((x) => x.id) };
 });
-const litPrev = await aimAt('card', 'carousel-prev');
-await tap();
-await page.waitForTimeout(900);
-const back = await state();
-check('the arrow scrolls the row to its end (Coming Soon in view), and back', litNext === 'carousel-next' && scrolled.scroll > 200 && soonVisible && litPrev === 'carousel-prev' && back.scroll === 0, JSON.stringify({ litNext, scrolled: scrolled.scroll, soonVisible, litPrev, back: back.scroll }));
+check('two cafés fit: no arrows, the row centred in its window', row.arrows.every((w) => w === 0) && Math.abs(row.left - row.right) < 2, JSON.stringify(row));
 
-// 4. A pinch dragged along the row: from the Canadian card leftwards.
+// 4. A pinch dragged along the row: it does not scroll (there is nowhere to go) and starts no café.
 const k = await page.evaluate(() => window.__cafe.game.menu.card.width / 960);
-const y = 330 * k;
+const y = 360 * k;
 await aimPx('card', 600 * k, y);
 await pinch(1);
 await frames(3);
 for (let x = 600; x >= 300; x -= 50) {
   await aimPx('card', x * k, y);
 }
-const mid = await state();
 await pinch(0);
 await frames(4);
 await page.waitForTimeout(900);
 const dragged = await state();
-check('a pinch dragged along the row scrolls it and starts no café', mid.scroll > 100 && dragged.scroll > 200 && dragged.phase === 'title' && !dragged.pending, JSON.stringify({ during: mid.scroll, after: dragged }));
+check('a pinch dragged along the row moves nothing and starts no café', dragged.scroll === 0 && dragged.phase === 'title' && !dragged.pending, JSON.stringify(dragged));
 
-// 5. Coming Soon: a pinch on it does nothing.
-const soonX = (44 + 2 * (356 + 32) + 178) * k - dragged.scroll * k;
-const litSoon = await aimPx('card', soonX, y);
-await tap();
-await page.waitForTimeout(600);
-const afterSoon = await state();
-check('Coming Soon cannot be picked', litSoon === '' && afterSoon.phase === 'title' && !afterSoon.pending && afterSoon.sheet === 'none', JSON.stringify({ litSoon, afterSoon }));
+// 5. Only the cafés are in the row: no café-to-come card.
+check('the row holds the two cafés only (no Coming Soon)', row.plays.join() === 'play-japan,play-canada' || row.plays.join() === 'play-canada,play-japan', row.plays.join());
 
-// Back to the start, then 6: pinch a café's card.
-await aimAt('card', 'carousel-prev');
-await tap();
-await page.waitForTimeout(900);
+// 6: pinch a café's card.
 const litCafe = await aimAt('card', `play-${CAFE}`);
 await tap();
 const started = await until((c) => window.__cafe.game.phase !== 'title' || window.__cafe.game.pending?.id === c || window.__cafe.cafe?.id === c, CAFE, 20000);
