@@ -280,6 +280,8 @@ export class GameSystem extends createSystem({}) {
   private handles: HandleSystem | null = null;
   private readonly spot = new Vector3();
   private readonly previous: Record<Hand, boolean> = { left: false, right: false };
+  /** A pinch dragging the start card's café row: where it closed (canvas pixels across), the card it closed on, and whether it has moved. */
+  private readonly drags: Record<Hand, { x: number; id: string | null; moved: boolean } | null> = { left: null, right: null };
   private readonly head = new Vector3();
   /** Counts when the step began (to tell when the player has done it). */
   mark = { pickedUp: 0, seated: 0, served: 0, wristOpens: 0, tables: 0 };
@@ -496,13 +498,12 @@ export class GameSystem extends createSystem({}) {
   }
 
   /**
-   * The start card: the cafés side by side, the one played last first
-   * (ui/start-menu.ts). One press plays: Start, Continue, or the Canadian
-   * café's Try free.
+   * The start card: the cafés in a row, the Japanese café first, then the
+   * Canadian (ui/start-menu.ts). One press on a café's card plays: Start,
+   * Continue, or the Canadian café's Try free.
    */
   private showPicker(): void {
-    const last = this.book.last;
-    const ids: CafeId[] = last === 'canada' ? ['canada', 'japan'] : ['japan', 'canada'];
+    const ids: CafeId[] = ['japan', 'canada'];
     const tiles: CafeTile[] = ids.map((id) => {
       const p = this.book.load(id);
       return {
@@ -1307,6 +1308,31 @@ export class GameSystem extends createSystem({}) {
       this.previous[hand] = pinch.closed;
       const busy = pinch.gap === Infinity || pinch.ghost || hold.holding.includes(hand) || !!this.guests.carriedBy(hand);
       const tip = hold.tip[hand];
+      // A pinch held on the start card's café row drags the row sideways; let go without moving it and it presses the
+      // café's card it closed on (ui/start-menu.ts).
+      const drag = this.drags[hand];
+      if (drag) {
+        const m = this.menu;
+        if (pinch.closed && !busy && m.card.open && !m.card.dimmed && m.cardKind === 'start') {
+          this.castRay(hand);
+          const hit = this.rayAt(m.card, 1);
+          if (hit) {
+            const dx = m.card.toCanvas(this.rayHit).x - drag.x;
+            if (Math.abs(dx) > m.dragSlop) drag.moved = true;
+            if (drag.moved) m.dragBy(dx);
+          }
+          this.aim[hand] = hit ? (hit.button?.id ?? '') : null;
+          this.rays.update(hand, this.rayFrom, hit ? this.rayHit : null, hit ? this.barNormal : null, delta, null);
+          continue;
+        }
+        this.drags[hand] = null;
+        m.dragEnd();
+        if (!pinch.closed && !drag.moved && drag.id && m.card.open && !m.card.dimmed) {
+          m.card.press(drag.id);
+          this.click(drag.id);
+          continue;
+        }
+      }
       let done = false;
       let near = false;
       for (let i = 0; i < panels.length; i++) {
@@ -1350,6 +1376,17 @@ export class GameSystem extends createSystem({}) {
       }
       const nudged = fresh && this.aimBefore[hand] && now - (this.aimNow[hand]?.since ?? 0) < PINCH_NUDGE.before * 1000 ? this.aimBefore[hand] : null;
       const target = nudged ?? on;
+      // A pinch closing on the café row (on a café's card, or between them) waits: it may be a drag.
+      if (fresh && aimed?.panel === this.menu.card && now - this.gazePressAt > 250 && !this.drags.left && !this.drags.right) {
+        const at = this.menu.card.toCanvas(this.rayHit);
+        const id = target?.panel === this.menu.card ? target.button.id : null;
+        if (this.menu.inCarousel(at.x, at.y) && (id === null || this.menu.isCafeCard(id))) {
+          this.drags[hand] = { x: at.x, id, moved: false };
+          this.menu.dragBegin();
+          if (on) this.hovers[panels.indexOf(on.panel)] = on.button.id;
+          continue;
+        }
+      }
       if (!target) continue;
       if (on) this.hovers[panels.indexOf(on.panel)] = on.button.id;
       if (fresh && now - this.gazePressAt > 250 && (target.panel.open || target === on)) {
@@ -1782,6 +1819,12 @@ export class GameSystem extends createSystem({}) {
         this.startCafe(cafeId, this.book.owns(cafeId) ? 'continue' : 'trial');
         break;
       }
+      case 'carousel-prev':
+        this.menu.carouselStep(-1);
+        break;
+      case 'carousel-next':
+        this.menu.carouselStep(1);
+        break;
       case 'new-japan':
       case 'new-canada': {
         // A new game asks first, naming the café and what goes.
