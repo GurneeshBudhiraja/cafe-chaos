@@ -19,10 +19,17 @@
  * on the table (and its shadow map is not redrawn every frame for
  * nothing). The café stays upright: only the anchor's turn about the
  * vertical is used.
+ *
+ * After the headset comes back (the session visible again, after a pause
+ * for the headset off or another app in front), tracking may relocalise
+ * and the anchor jump: corrections wait RETURN_HOLD_S for it to settle,
+ * and a jump over SNAP_M is then made in one step, not eased over several
+ * frames (a long glide of the whole café reads as the café swimming).
  */
 
 import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 import { CafeSystem } from './cafe-system.js';
+import { PROBE } from '../lib/probe.js';
 
 /** How long the café must stand still before it is pinned (seconds). */
 const SETTLE_S = 0.5;
@@ -32,6 +39,10 @@ const EPSILON = { metres: 0.001, radians: 0.0017 };
 const CORRECT = { metres: 0.004, radians: 0.006 };
 /** How quickly a correction closes the gap (per second; most of it in a quarter of a second). */
 const CORRECT_EASE = 12;
+/** After the session is visible again, corrections wait this long (seconds). */
+const RETURN_HOLD_S = 1;
+/** A correction this far (metres) is made at once. */
+const SNAP_M = 0.02;
 
 export class AnchorSystem extends createSystem({}) {
   /** The anchor the café stands on (null: not pinned). */
@@ -56,10 +67,23 @@ export class AnchorSystem extends createSystem({}) {
 
   init(): void {
     this.cafeSystem = this.world.getSystem(CafeSystem) ?? null;
-    this.world.renderer.xr.addEventListener('sessionend', () => this.letGo());
+    const xr = this.world.renderer.xr;
+    xr.addEventListener('sessionend', () => this.letGo());
+    xr.addEventListener('sessionstart', () => {
+      this.holdFor = RETURN_HOLD_S;
+      xr.getSession()?.addEventListener('visibilitychange', () => {
+        if (xr.getSession()?.visibilityState === 'visible') this.holdFor = RETURN_HOLD_S;
+      });
+    });
   }
+  /** Seconds corrections still wait after the session became visible again. */
+  private holdFor = 0;
+  /** Corrections made at once (over SNAP_M), for the checks. */
+  snapped = 0;
 
   update(delta: number): void {
+    // `?noanchor` (lib/probe.ts): the café is never pinned or corrected.
+    if (PROBE.noAnchor) return;
     const system = this.cafeSystem;
     const frame = this.xrFrame as XRFrame | undefined;
     const space = this.xrManager.getReferenceSpace();
@@ -81,7 +105,11 @@ export class AnchorSystem extends createSystem({}) {
       if (this.still >= SETTLE_S && !this.busy) this.pin(frame, space, cafe.position, yaw);
       return;
     }
-    // Pinned: the café takes its place from the anchor.
+    // Pinned: the café takes its place from the anchor (once tracking has settled after the headset came back).
+    if (this.holdFor > 0) {
+      this.holdFor -= delta;
+      return;
+    }
     if (!frame.trackedAnchors?.has(this.anchor)) return;
     const pose = frame.getPose(this.anchor.anchorSpace, space);
     if (!pose) return;
@@ -101,8 +129,10 @@ export class AnchorSystem extends createSystem({}) {
       this.correcting = false;
       return;
     }
-    // Eased toward the anchor's pose; the last millimetre in one step.
-    const k = off <= EPSILON.metres * 2 && Math.abs(turn) <= EPSILON.radians * 2 ? 1 : 1 - Math.exp(-CORRECT_EASE * delta);
+    // Eased toward the anchor's pose; the last millimetre in one step, and a jump (relocalised tracking) in one step.
+    const jump = off > SNAP_M;
+    if (jump) this.snapped++;
+    const k = jump || (off <= EPSILON.metres * 2 && Math.abs(turn) <= EPSILON.radians * 2) ? 1 : 1 - Math.exp(-CORRECT_EASE * delta);
     cafe.position.lerp(this.p, k);
     cafe.rotation.set(0, yaw + turn * k, 0);
     this.remember(cafe.position, cafe.rotation.y);

@@ -4,6 +4,14 @@
  * papers brightened, the house light and its shadows, the faint moon, and
  * the light spill onto the table. The models are not changed; this is what they are lit
  * and painted with.
+ *
+ * The lights themselves (the lamps, the moon and the house light) hang on
+ * a rig of their own beside the café, not in it, kept on the café's pose
+ * each frame (MoodSystem). The café is hidden while the pause card is up;
+ * lights inside it would go with it, and every lit material's shader is
+ * built for the number of lights in view, so each pause and resume linked
+ * shaders again (a long frame, and a flash on the headset). On the rig the
+ * set of lights stays the same whether the café shows or not.
  */
 
 import { Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, Object3D, PointLight, SpotLight, type HemisphereLight, type Material, type Sprite } from '@iwsdk/core';
@@ -12,6 +20,8 @@ import { DAY, GLOW, HALOS, HOUSE, LAMPS, MOON } from './mood.js';
 import { makeSpill } from './spill.js';
 
 export interface CafeLights {
+  /** What the lights hang on: kept on the café's pose (MoodSystem), outside the café so they stay when it is hidden. */
+  rig: Group;
   /** One per entry in LAMPS, in order. */
   lamps: PointLight[];
   /** One per entry in HALOS, in order. */
@@ -25,15 +35,15 @@ export interface CafeLights {
   fill?: HemisphereLight;
 }
 
-/** Add the lights to the café group (call once the café is built). */
-export function lightTheCafe(cafe: Group): CafeLights {
+/** Light the café: its glow and shadow flags on the café, the lights on `rig` (kept on the café's pose by MoodSystem). */
+export function lightTheCafe(cafe: Group, rig: Group): CafeLights {
   brightenGlow(cafe);
   setShadowFlags(cafe);
   const lamps = LAMPS.map((lamp) => {
     const light = new PointLight(lamp.color, lamp.intensity, lamp.distance, 2);
     light.position.set(...lamp.position);
     light.name = 'Lamp';
-    cafe.add(light);
+    rig.add(light);
     return light;
   });
   const halos = HALOS.map((spec) => {
@@ -46,12 +56,12 @@ export function lightTheCafe(cafe: Group): CafeLights {
   moon.name = 'Moon';
   moon.position.set(...MOON.position);
   moon.target.position.set(0, 0, 0);
-  cafe.add(moon, moon.target);
+  rig.add(moon, moon.target);
   const house = makeHouseLight();
-  cafe.add(house, house.target);
+  rig.add(house, house.target);
   const spill = makeSpill();
   cafe.add(spill);
-  return { lamps, halos, moon, house, spill };
+  return { rig, lamps, halos, moon, house, spill };
 }
 
 /**

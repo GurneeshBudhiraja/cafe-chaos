@@ -6,21 +6,27 @@
  * lamps, house light, moon and spill that hang on the café itself).
  */
 
-import { ACESFilmicToneMapping, HemisphereLight, PCFShadowMap, type Group, type World } from '@iwsdk/core';
+import { ACESFilmicToneMapping, Group, HemisphereLight, PCFShadowMap, type World } from '@iwsdk/core';
 import { lightTheCafe, type CafeLights } from './light/cafe-lights.js';
 import { ENVIRONMENT_INTENSITY, EXPOSURE, FILL } from './light/mood.js';
+import { PROBE } from './lib/probe.js';
 
 export function setUpLighting(world: World, cafe: Group): CafeLights {
   const { renderer, scene } = world;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = EXPOSURE;
-  renderer.shadowMap.enabled = true;
+  // `?noshadow` (lib/probe.ts): no shadow map, to see whether its redraws are what flickers on the headset.
+  renderer.shadowMap.enabled = !PROBE.noShadow;
   // Plain PCF: the soft kind samples the shadow map many more times on every pixel that receives a shadow.
   renderer.shadowMap.type = PCFShadowMap;
   scene.environmentIntensity = ENVIRONMENT_INTENSITY;
   const fill = new HemisphereLight(FILL.sky, FILL.ground, FILL.intensity);
   world.createTransformEntity(fill);
-  const lights = lightTheCafe(cafe);
+  // The café's lights on a rig of their own (light/cafe-lights.ts), kept on the café's pose by MoodSystem.
+  const rig = new Group();
+  rig.name = 'CafeLightRig';
+  world.createTransformEntity(rig);
+  const lights = lightTheCafe(cafe, rig);
   lights.fill = fill;
   return lights;
 }

@@ -361,18 +361,46 @@ missed frame shows as judder and smearing when the head moves).
   200. The originals stay, hidden, for their anchors. Anything that moves on
   its own is marked `userData.dynamic` and left out.
 - **The shadow map rests.** The house light and its shadow casters stand
-  still inside the café, so the map is redrawn only when the café is moved,
-  turned or resized (or when something calls `touchShadows()`), not every
-  frame.
+  still inside the café, so the map is redrawn only when the café is
+  resized or its furniture changes (or when something calls
+  `touchShadows()`), not every frame. When the café is only moved or turned
+  (dragged, or corrected onto its anchor), the lights move with it and only
+  their shadow matrices are brought up to date: under multiview each redraw
+  is a render-target switch mid-frame, a known cause of whole-scene flicker
+  on the Quest. No redraw happens while the café is hidden for a pause.
 - **Five lights, not seven.** Every light is worked out for every lit pixel:
   the centre lantern's light is carried by its neighbours and the room
   light (its paper and halo still glow).
 - **A matte spill.** The disc on the table covers much of the view, so it
   uses the cheapest lit material.
 - **A steady 72 Hz** is asked of the headset where it offers a choice.
+- **A guest is one draw call.** Every part of a pose (skin, face, clothes)
+  is folded into one skinned mesh (`src/guests/actor.ts`), drawing from one
+  atlas per species (`src/guests/guest-atlas.ts`). Ten guests used to add
+  about 340 draw calls in the emulator; now about 60.
+- **The patience dots share one texture** (`DialAtlas` in
+  `src/guests/patience-dial.ts`): a dot drawn again is copied into its own
+  cell, at most two a frame.
+- **No shader is linked during play.** The warm-up compiles the whole scene
+  once the café is up and keeps what it compiled; the lamps stay in the
+  shaders by night at any strength; the lights hang on a rig beside the
+  café, so hiding the café for a pause does not change the set of lights.
+- **The anchor** waits a second after the headset comes back before it
+  corrects the café, and makes a jump of over 2 cm in one step.
 - Add `?fps` to the address for a frames-per-second readout over the café.
   `node scripts/probe-perf.mjs` counts what a frame draws and times the
   parts of the look in the emulator.
+- **Finding a flicker on the headset** (`src/lib/probe.ts`): add `?probe`
+  for a readout over the café (fps; draw calls and triangles a frame;
+  shadow redraws, texture uploads and shader links a second; anchor
+  corrections; guests; whether multiview and shadows are on). Each of these
+  turns one suspect off: `?nomultiview` (both eyes drawn one after the
+  other), `?noshadow`, `?nodials` (the patience dots drawn once, never
+  again), `?nobar` (the bar drawn once) and `?noanchor`. They combine:
+  `?probe&noshadow&nodials`.
+- `node scripts/check-render-budget.mjs` fails if ten guests cost more than
+  300 draw calls a frame in the emulator, or if any shader is linked after
+  the café is up (a crowd, every species dressed, a pause and resume).
 
 **The hands** (`src/hands/cafe-hand.ts`): the player's tracked hands are
 the café's own minimal cream hands (`public/models/cafe-hand-left.glb` and
