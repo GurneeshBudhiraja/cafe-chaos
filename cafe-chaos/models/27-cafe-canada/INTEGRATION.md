@@ -259,6 +259,15 @@ pianist played standing with its legs through the bench and the fiddler's neck h
 The game plays the fiddler's `Play` where it plays the Japanese musician's `Strum`; the `Strum`
 clip is still there (the guitar hand pose) if ever needed. The root extra `barista` holds the name.
 
+### Music notes (`music-notes.glb`, `notes_build.py`)
+
+Three tiny dark notes (two eighths and a beamed pair, about 6 mm tall; the seated pianist is 8 cm) that pop up over
+the piano's top, rise 4 cm with a sway and a rock, and shrink away to nothing, a third of a loop apart: one 2 s
+`Ambient` clip, 340 triangles, 21 KB. Place it at `PianoSpot` **with its rotation** (the pianist's frame: +Z toward
+the keys and the sign) and play `Ambient` on a loop only while the pianist plays; hide it otherwise. The notes face
+the player and rise in front of the cream sign board, so they read dark against it.
+
+
 ### Guests (`guest-<species>.glb`, the guest rig, 12 clips, St-/Se- poses, attach points HeadTop/Face/Neck/Chest/Guitar)
 
 The Japanese guests' ten clips, and `StairsUp` / `StairsDown` (1 s, two steps a loop, on the
