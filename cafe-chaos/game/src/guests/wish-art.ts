@@ -16,7 +16,8 @@
  * - outside: a snowy spruce;
  * - takeaway: a paper cup with its lid;
  * - lake: a red canoe on two waves;
- * - patio: a bistro table under its umbrella;
+ * - inside: a log cabin, its door lit;
+ * - board: the chalk menu board on its easel;
  * - bonfire: a flame over two crossed logs;
  * - warm: a thermometer, red to the top;
  * - upstairs: a flight of steps and an arrow up.
@@ -238,21 +239,62 @@ export function drawWish(ctx: CanvasRenderingContext2D, kind: WishPicture, x: nu
         ctx.stroke();
       }
       break;
-    case 'patio':
-      // A bistro table under an umbrella.
+    case 'inside':
+      // A log cabin, its door lit and smoke from the chimney.
       ctx.beginPath();
-      ctx.moveTo(-u * 0.85, -u * 0.25);
-      ctx.quadraticCurveTo(0, -u * 1.0, u * 0.85, -u * 0.25);
+      ctx.moveTo(-u * 0.85, -u * 0.05);
+      ctx.lineTo(0, -u * 0.75);
+      ctx.lineTo(u * 0.85, -u * 0.05);
       ctx.closePath();
       ctx.fillStyle = '#c8322e';
       ctx.fill();
+      ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(0, -u * 0.25);
-      ctx.lineTo(0, u * 0.75);
-      ctx.moveTo(-u * 0.45, u * 0.3);
-      ctx.lineTo(u * 0.45, u * 0.3);
-      ctx.moveTo(-u * 0.3, u * 0.75);
-      ctx.lineTo(u * 0.3, u * 0.75);
+      ctx.rect(-u * 0.65, -u * 0.05, u * 1.3, u * 0.85);
+      ctx.fillStyle = '#b5814f';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.roundRect(-u * 0.2, u * 0.3, u * 0.4, u * 0.5, [u * 0.2, u * 0.2, 0, 0]);
+      ctx.fillStyle = '#f6c445';
+      ctx.fill();
+      ctx.lineWidth = s * 0.05;
+      ctx.beginPath();
+      for (const ly of [0.15, 0.4, 0.62]) {
+        ctx.moveTo(-u * 0.6, u * ly);
+        ctx.lineTo(-u * 0.28, u * ly);
+        ctx.moveTo(u * 0.28, u * ly);
+        ctx.lineTo(u * 0.6, u * ly);
+      }
+      ctx.stroke();
+      break;
+    case 'board':
+      // The chalk menu board on its easel, a line of chalk and a cup.
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.55, u * 0.85);
+      ctx.lineTo(-u * 0.3, u * 0.35);
+      ctx.moveTo(u * 0.55, u * 0.85);
+      ctx.lineTo(u * 0.3, u * 0.35);
+      ctx.strokeStyle = '#7a4a2a';
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.roundRect(-u * 0.8, -u * 0.75, u * 1.6, u * 1.15, u * 0.1);
+      ctx.fillStyle = '#2f3b33';
+      ctx.fill();
+      ctx.strokeStyle = '#7a4a2a';
+      ctx.stroke();
+      ctx.strokeStyle = '#f4ead8';
+      ctx.lineWidth = s * 0.05;
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.55, -u * 0.45);
+      ctx.lineTo(u * 0.55, -u * 0.45);
+      ctx.moveTo(-u * 0.55, -u * 0.2);
+      ctx.lineTo(u * 0.2, -u * 0.2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.roundRect(-u * 0.2, u * 0.0, u * 0.32, u * 0.26, u * 0.06);
+      ctx.moveTo(u * 0.12, u * 0.06);
+      ctx.arc(u * 0.17, u * 0.12, u * 0.07, -Math.PI / 2, Math.PI / 2);
       ctx.stroke();
       break;
     case 'bonfire':

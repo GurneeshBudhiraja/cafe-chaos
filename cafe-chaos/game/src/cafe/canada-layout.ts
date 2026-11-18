@@ -64,7 +64,13 @@ export const CANADA_PLACES = {
   warmTables: [1, 2],
   /** Everything not inside the cabin (the upper deck is outside too: it is open to the sky). */
   outsideTables: [4, 5, 6, 7, 8, 9, 10, 11, 12],
-  patioTables: [4, 5],
+  /** Lake view (docs/CANADA-CHALLENGES.md): the deck's two tables stand on its front half over the frozen lake (the `patio` wish was folded into this). */
+  lakeTables: [4, 5],
+  /** Inside the cabin (the `inside` wish): the two window tables and the long table. */
+  insideTables: [1, 2, 3],
+  /** By the chalk menu board (the `board` wish): the long table facing the counter. */
+  boardTables: [3],
+  /** The bonfire's chairs: one table for company, alone and quiet (they share the fire; wishes.ts tablesOf). */
   bonfireTables: [6, 7, 8],
   /** Upstairs (the `upstairs` wish: a view over the café). */
   upperTables: [9, 10, 11, 12],
@@ -72,8 +78,8 @@ export const CANADA_PLACES = {
   takeaway: { x: 0.0, z: -0.085 },
   /** The two musicians, each bought in the shop; seats within `earshot` of one meet `music` once it plays. `yawDeg` is three.js's (rotation.y). */
   musicians: [
-    /** The violinist on the snow beside the coffee bear, by the deck's back rail (the shell's `MusicianSpot`, barista-fiddler.glb, clip `Play`). */
-    { model: 'barista-fiddler', x: 0.205, y: CANADA_FLOOR_TOP_M, z: -0.19, yawDeg: 180, clip: 'Play', earshot: 0.2 },
+    /** (Earshot 0.34: both seats at each deck table, 4 and 5, 0.30 to 0.33 m off, and the two roof tables nearest the stairs, 10 and 12; docs/CANADA-CHALLENGES.md.) The violinist on the snow beside the coffee bear, by the deck's back rail (the shell's `MusicianSpot`, barista-fiddler.glb, clip `Play`). */
+    { model: 'barista-fiddler', x: 0.205, y: CANADA_FLOOR_TOP_M, z: -0.19, yawDeg: 180, clip: 'Play', earshot: 0.34 },
     /** The pianist at the rooftop upright, which stands against the sign, centred under the logo; at its keys, back to the player (the shell's `PianoSpot`, barista-pianist.glb, clip `PlayPiano`). */
     { model: 'barista-pianist', x: -0.17, y: CANADA_UPPER_TOP_M, z: -0.212, yawDeg: 180, clip: 'PlayPiano', earshot: 0.2 },
   ],
