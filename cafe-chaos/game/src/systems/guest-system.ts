@@ -216,6 +216,14 @@ export interface Outcome {
   hurried: boolean;
 }
 
+/**
+ * A hand whose ray was on a menu card, the bar or the Shop this long ago
+ * (ms) or less takes no guest (GuestSystem.rayOn): longer than a pinch's
+ * nudge (PINCH_NUDGE, 120 ms in game-system.ts), short enough that a hand
+ * turned from the bar to the café can take a guest at once.
+ */
+const RAY_GUARD_MS = 200;
+
 export class GuestSystem extends createSystem({}) {
   /** Everyone on stage. */
   readonly guests: Guest[] = [];
@@ -323,6 +331,14 @@ export class GuestSystem extends createSystem({}) {
   /** The ring round the guest each hand would pick up now, and that guest (null: none). */
   readonly rings = new PickRings();
   readonly hovered: (Guest | null)[] = [null, null];
+  /**
+   * When each hand's ray was last on a menu card, the bar or the Shop
+   * (performance.now(), ms; GameSystem sets it). Until RAY_GUARD_MS after,
+   * that hand lights and takes no guest: the pinch is the button's (the
+   * owner's Quest playtest: a pinch on the Shop took a guest from the gate
+   * too, the guest just beyond the fingers by sight).
+   */
+  readonly rayOn: Record<Hand, number> = { left: -Infinity, right: -Infinity };
   /** How many seat anchors the café had when the seats were last taken in, and the furniture count then. */
   private seatAnchors = 0;
   private furniture = 0;
@@ -1204,6 +1220,12 @@ export class GuestSystem extends createSystem({}) {
       // The guest a pinch here would take: the nearest within reach of this free hand (not on the café's handles).
       // It lights up while the hand is open, and a pinch closing now (or just before reaching it) takes exactly it.
       if (pinch.gap === Infinity || pinch.ghost || hold.holding.includes(hand) || this.handles?.near(pinch.point)) return;
+      // The hand's ray is on a button (or was a moment ago: a pinch nudges it): its pinch is the button's.
+      if (performance.now() - this.rayOn[hand] < RAY_GUARD_MS) {
+        lit.guest = null;
+        lit.age = Infinity;
+        return;
+      }
       if (pinch.closed && !recent) return;
       let near = this.nearestGuest(pinch.point, 1);
       if (!recent) {

@@ -1401,6 +1401,8 @@ export class GameSystem extends createSystem({}) {
       const toBar = this.strip.controls !== 'off' && !hold.overCafe(pinch.point, RAY.awayFromCafe);
       const aimed = !busy && !done && !near ? this.aimRay(hand, toBar, !hold.overCafe(pinch.point, RAY.awayFromCafe)) : null;
       this.aim[hand] = aimed ? (aimed.button?.id ?? '') : null;
+      // On a card, the bar or the Shop: the guests leave this hand's pinch to the button (GuestSystem.rayOn).
+      if (aimed) this.guests.rayOn[hand] = performance.now();
       // Pointing at nothing yet: the short beam, so the ray can be found (BEAM).
       let idle: Vector3 | null = null;
       if (!aimed && !busy && !done && !near && pinch.gap !== Infinity && !hold.overCafe(pinch.point, RAY.awayFromCafe) && pinch.point.y > this.head.y - BEAM.below) {
