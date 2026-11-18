@@ -9,7 +9,7 @@
  *   goes;
  * - guests (a still): a guest in a hurry (the hourglass) and two friends
  *   (the hearts) waiting at the gate.
- * Cream model hands (`?hands=cream`), the emulator's grey room hidden.
+ * Meta's outline hands (the game's default), the emulator's grey room hidden.
  *
  * Usage: dev server running, then `node scripts/record-howto-more.mjs`.
  * Output: public/howto/tables.mp4, clean.mp4; public/ui/howto-tables.jpg,
@@ -19,7 +19,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 
-process.env.APP_URL = `${process.env.APP_URL_GAME ?? 'https://localhost:8082/'}?hands=cream`;
+process.env.APP_URL = process.env.APP_URL_GAME ?? 'https://localhost:8082/';
 const { startHeadset } = await import('./lib/headset.mjs');
 mkdirSync('public/howto', { recursive: true });
 
