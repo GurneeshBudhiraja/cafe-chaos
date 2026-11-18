@@ -67,7 +67,7 @@ async function measure(query) {
 }
 
 const wide = await measure('');
-check('wide view (Quest): the café and the bar at full size, as designed', !wide.narrow && wide.viewFactor === 1 && wide.barSize === 1, JSON.stringify({ narrow: wide.narrow, viewFactor: wide.viewFactor, barSize: wide.barSize }));
+check('wide view (Quest): the café at full size and the bar at the menu scale (MENU_SCALE 0.65)', !wide.narrow && wide.viewFactor === 1 && Math.abs(wide.barSize - 0.65) < 1e-9, JSON.stringify({ narrow: wide.narrow, viewFactor: wide.viewFactor, barSize: wide.barSize }));
 const narrow = await measure('?fov=narrow');
 check(`narrow view (Glasses): the café and the bar inside the design area (${AREA.h * 2} x ${AREA.v * 2} deg)`, narrow.narrow && narrow.worstH <= AREA.h && narrow.worstV <= AREA.v, `furthest ${narrow.worstH.toFixed(1)} deg across, ${narrow.worstV.toFixed(1)} deg up or down; café at ${(narrow.viewFactor * 100).toFixed(0)} %, bar at ${(narrow.barSize * 100).toFixed(0)} %`);
 const errors = [...wide.errors, ...narrow.errors];

@@ -49,7 +49,7 @@ import { PLACES, type WishId } from '../guests/wishes.js';
 import { freshProgress, SaveBook, TEST_MODE, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS, SPAWN_SECONDS } from '../guests/rules.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
-import { coin, INK, moodFace, Panel, paragraph, roundRect, write, type Button } from '../ui/panel.js';
+import { coin, INK, MENU_SCALE, moodFace, Panel, paragraph, roundRect, write, type Button } from '../ui/panel.js';
 import type { PlaneGeometry } from '@iwsdk/core';
 import { castLoaded } from '../guests/actor.js';
 import { randomLook } from '../guests/cast.js';
@@ -122,9 +122,10 @@ const SIZE = { min: 60, max: 140, step: 10 };
  * - `distance`: 1 m from the eyes. Meta places objects "at a roughly 1
  *   meter distance slightly below the user's line of sight", and indirect
  *   (ray) panels no nearer than 0.8 m.
- * - `size`: the cards stand twice as big as made, so at 1 m they look the
- *   size they would at 50 cm: the same text, and buttons over 3 degrees
- *   (Meta asks 2.5 to 3 at least) for the ray.
+ * - `size`: the cards stand 2 x MENU_SCALE (1.3 times) as big as made, so
+ *   at 1 m they look the size they would at about 77 cm: first made twice
+ *   as big, they read as too big in the headset. A card's main buttons
+ *   stay near 3 degrees for the ray.
  * - `top`: the top edge 4 degrees under the level line of sight, so the
  *   card hangs just under where the eyes look and never covers them (the
  *   eyes rest 10 to 20 degrees down, Microsoft). A taller card hangs lower,
@@ -137,7 +138,7 @@ const SIZE = { min: 60, max: 140, step: 10 };
  */
 /** The notes under the bar: how long each stays (seconds), the gap between two, and how far under the bar's edge (metres). */
 const NOTE = { seconds: 4, gap: 0.4, below: 0.012 };
-const MENU_SPOT = { distance: 1, size: 2, top: 4, lowest: 30, follow: 35, glide: 4, shift: 0.12, dwell: 0.6 };
+const MENU_SPOT = { distance: 1, size: 2 * MENU_SCALE, top: 4, lowest: 30, follow: 35, glide: 4, shift: 0.12, dwell: 0.6 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
 
@@ -317,7 +318,10 @@ export class GameSystem extends createSystem({}) {
     this.strip = this.world.getSystem(StripSystem)!;
     this.hold = this.world.getSystem(HoldSystem) ?? null;
     this.handles = this.world.getSystem(HandleSystem) ?? null;
-    for (const panel of [this.card, this.coach]) this.cafe.cafe.add(panel.mesh);
+    for (const panel of [this.card, this.coach]) {
+      this.cafe.cafe.add(panel.mesh);
+      panel.size = MENU_SCALE;
+    }
     this.cafe.cafe.add(this.snow.points);
     this.world.createTransformEntity(this.how.mesh);
     this.card.mesh.position.set(...CARD.position);
@@ -339,7 +343,7 @@ export class GameSystem extends createSystem({}) {
     // A carried guest held over a locked table's seat: the tag there says where tables are opened.
     this.guests.lockedNote = () => 'Open tables in the Shop';
     // The start menu stands in the world (the café is hidden until it is opened).
-    // The menu cards stand a metre away, twice as big (MENU_SPOT).
+    // The menu cards stand a metre away, 2 x MENU_SCALE as big (MENU_SPOT).
     for (const p of [this.menu.card, this.menu.sheet, this.menu.how]) p.size = MENU_SPOT.size;
     this.world.createTransformEntity(this.menu.card.mesh);
     this.world.createTransformEntity(this.menu.sheet.mesh);
@@ -1138,6 +1142,8 @@ export class GameSystem extends createSystem({}) {
     bar.mesh.localToWorld(this.spot.set(0, -g.height / 2 - NOTE.below - tall / 2, 0.01));
     this.cafe.cafe.worldToLocal(this.spot);
     this.note.panel.mesh.position.copy(this.spot);
+    // As big beside the bar as it was made to be.
+    this.note.panel.size = bar.size;
   }
 
   /** The level's pace now: how often guests come, how many may queue, how long they wait, how many wishes (game/rules.ts LEVEL). */

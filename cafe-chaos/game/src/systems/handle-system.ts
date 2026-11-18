@@ -69,7 +69,9 @@ export class HandleSystem extends createSystem({}) {
   update(delta: number): void {
     const cafe = this.cafe;
     const hold = this.hold;
-    const shown = !!cafe && !!hold && cafe.placed && !cafe.waiting && this.world.renderer.xr.isPresenting;
+    // Hidden with the café: while it is away behind the pause card (GameSystem hides it), its pill and corner
+    // brackets go too, so only the card is left; they come back with it on RESUME.
+    const shown = !!cafe && !!hold && cafe.placed && !cafe.waiting && cafe.cafe.visible && this.world.renderer.xr.isPresenting;
     this.shown = shown;
     for (const handle of [this.pill, ...this.brackets]) handle.group.visible = shown;
     if (!shown) {

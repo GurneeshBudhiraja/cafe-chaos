@@ -73,6 +73,15 @@ const REACH_M = 0.035;
 const FINGER_RADIUS = 0.009;
 const TOUCH = { hover: 0.05, press: FINGER_RADIUS + 0.002, rearm: FINGER_RADIUS + 0.014, behind: 0.03 };
 /** Pixels per metre of panel (café space). */
+/**
+ * How big the game's menus stand, as a share of the size they are drawn at:
+ * the bar (with the happiness meter) and the Shop under it, the menu cards
+ * (start, pause, How to play), the game card and the coach card. About a
+ * third smaller than first made, which read as too big in the headset;
+ * everything on a card (words, pictures, buttons) shrinks with it.
+ */
+export const MENU_SCALE = 0.65;
+
 const PPM = 2400;
 
 export class Panel {
