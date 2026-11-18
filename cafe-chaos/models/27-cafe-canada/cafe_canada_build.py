@@ -243,7 +243,6 @@ snow.boxb((0.00, 0.02, -0.29), (0.92, 0.004, 0.04))          # back strip behind
 snow.boxb((0.43, 0.02, 0.00), (0.06, 0.004, 0.62))           # right strip: the gate's ground
 snow.boxb((0.23, 0.02, -0.195), (0.34, 0.004, 0.15))         # behind the deck: the stage's ground
 snow.boxb((0.09, 0.02, 0.245), (0.06, 0.004, 0.13))          # between the bonfire and the lake
-snow.boxb((0.04, 0.02, -0.055), (0.04, 0.004, 0.43))         # the cabin's doorstep strip, under the deck's left edge
 # Soft banks where the snow meets the lake and the deck, and drifts along the plate's back edge.
 # Every bank stays inside the plate (x ±0.46). The lake's back bank is two pieces, either side of the
 # dock (x 0.22 … 0.30): one long piece ran under the dock and 11 cm past the plate's right edge, its thin
@@ -260,11 +259,18 @@ CAB = dict(x0=-0.42, x1=0.04, z0=-0.27, z1=0.16)   # outer walls
 LOG_R = 0.0072
 WALL_LOGS = 9                                        # the walls stop just over the baristas' heads: the upper deck sits on them
 H = WALL_LOGS * (2 * LOG_R - 0.0006) + 0.0006        # wall height over the floor (0.125)
-Part('CabinFloor', 'PlankFloor').boxb((-0.19, 0.02, -0.055), (0.44, 0.004, 0.41)).done()
+Part('CabinFloor', 'PlankFloor').boxb((-0.19, 0.02, -0.05), (0.44, 0.004, 0.42)).done()   # to z 0.16, edge to edge with the snow (no front wall now)
 grooves = Part('CabinFloorGrooves', 'PineDark')
 for i in range(10):
     grooves.boxb((-0.19, 0.0241, -0.245 + i * 0.042), (0.44, 0.0005, 0.0015))
 grooves.done()
+# The threshold between the cabin floor (to x 0.03) and the deck (from x 0.06), now the cabin's right side is open:
+# pine boards edge to edge with both (no overlap, so no two surfaces share a height and flicker), along its length.
+Part('Threshold', 'Deck').boxb((0.045, 0.02, -0.055), (0.03, 0.004, 0.43)).done()
+tg = Part('ThresholdGrooves', 'PineDark')
+for i in range(1, 3):
+    tg.boxb((0.03 + i * 0.01, 0.0241, -0.055), (0.0012, 0.0005, 0.43))
+tg.done()
 
 def log_wall(part, spans, z=None, x=None, y_from=FLOOR, logs=WALL_LOGS, gap=None):
     """Horizontal logs stacked `logs` high along x (`z` fixed) or along z (`x` fixed); `spans` are (from, to) pairs along the wall; `gap` (lo, hi, log_lo, log_hi) leaves a window: logs log_lo..log_hi skip (lo, hi)."""
@@ -288,8 +294,7 @@ walls = Part('CabinLogs', 'Pine', smooth=True)
 log_wall(walls, [(CAB['x0'], CAB['x1'])], z=CAB['z0'])
 # Left wall: full height, a window in its middle (logs 3..7 skip z -0.17..-0.03).
 log_wall(walls, [(CAB['z0'], CAB['z1'])], x=CAB['x0'], gap=(-0.17, -0.03, 3, 7))
-# Front wall: a knee-high half wall (4 logs), so the player sees every table; a front window frame stands on it (below).
-log_wall(walls, [(CAB['x0'], CAB['x1'])], z=CAB['z1'], logs=4)
+# Front: no wall. The room is open to the player (the half wall only hid the tables' feet).
 # Right side: no wall. The cabin opens straight onto the patio and the stairs (the half walls either side of the
 # old door were in the way and served nothing).
 walls.done()
@@ -300,14 +305,11 @@ for k in range(WALL_LOGS):
     for cx in (CAB['x0'], CAB['x1']):
         ends.cyl((cx, y, CAB['z0'] - 0.006), LOG_R * 0.95, 0.012, axis='z', seg=8)
     ends.cyl((CAB['x0'] - 0.006, y, CAB['z0']), LOG_R * 0.95, 0.012, axis='x', seg=8)
-    if k < 4:
-        ends.cyl((CAB['x0'] - 0.006, y, CAB['z1']), LOG_R * 0.95, 0.012, axis='x', seg=8)
-        ends.cyl((CAB['x1'] + 0.006, y, CAB['z1']), LOG_R * 0.95, 0.012, axis='x', seg=8)
-        ends.cyl((CAB['x0'], y, CAB['z1'] + 0.006), LOG_R * 0.95, 0.012, axis='z', seg=8)
+    ends.cyl((CAB['x0'], y, CAB['z1'] + 0.006), LOG_R * 0.95, 0.012, axis='z', seg=8)   # the left wall's front ends, all nine logs
 ends.done()
-# Corner posts: square posts at the four corners (the right side is open: no wall, no door frame).
+# Corner posts: the two back corners only (the front and the right side are open: no walls, no door frame).
 posts = Part('CabinPosts', 'PineDark')
-for px, pz in ((CAB['x0'], CAB['z0']), (CAB['x1'], CAB['z0']), (CAB['x0'], CAB['z1']), (CAB['x1'], CAB['z1'])):
+for px, pz in ((CAB['x0'], CAB['z0']), (CAB['x1'], CAB['z0'])):
     tall = H if pz == CAB['z0'] else 4 * (2 * LOG_R - 0.0006) + 0.01
     posts.boxb((px, FLOOR, pz), (0.016, tall, 0.016))
 posts.done()
@@ -556,10 +558,10 @@ rail.done()
 Part('DeckRailSnow', 'Snow').box((0.26, FLOOR + 0.0345, DZ0), (0.28, 0.003, 0.007)).done()
 # String lights: three posts and two sagging lines of bulbs over the deck.
 poles = Part('LightPoles', 'PineDark')
-for x, z in ((DX1, DZ0), (DX1, DZ1), (DX0, DZ1)):
+for x, z in ((DX1, DZ0), (DX1, DZ1)):              # no pole at the deck's front-left corner (it stood in the way by the exit walk)
     poles.boxb((x, FLOOR, z), (0.01, 0.13, 0.01))
 poles.done()
-Part('LightPoleSnow', 'Snow').box((DX1, FLOOR + 0.132, DZ0), (0.012, 0.004, 0.012)).box((DX1, FLOOR + 0.132, DZ1), (0.012, 0.004, 0.012)).box((DX0, FLOOR + 0.132, DZ1), (0.012, 0.004, 0.012)).done()
+Part('LightPoleSnow', 'Snow').box((DX1, FLOOR + 0.132, DZ0), (0.012, 0.004, 0.012)).box((DX1, FLOOR + 0.132, DZ1), (0.012, 0.004, 0.012)).done()
 wire = Part('LightWire', 'Wire')
 bulbs = Part('LightBulbs', 'Bulb', smooth=True)
 def string(a, b, n=7, sag=0.025):
@@ -580,7 +582,9 @@ def string(a, b, n=7, sag=0.025):
         bulbs.sphere((p[0], p[1] - 0.004, p[2]), 0.0035, seg=8, rings=5)
 TOP = FLOOR + 0.125
 string((DX1, TOP, DZ0), (DX1, TOP, DZ1))
-string((DX1, TOP, DZ1), (DX0, TOP, DZ1))
+# The front line runs from the gate-side front pole up to the upper deck's front-right light pole, festoon-style
+# over the patio (well above the seated guests), instead of to a pole at the deck's front-left corner.
+string((DX1, TOP, DZ1), (0.034, FLOOR + 0.125 + 0.006 + 0.086 + 0.004, -0.093), n=10, sag=0.03)
 wire.done()
 bulbs.done()
 # A patio heater: a steel pole with a mushroom top, snow on the top.
@@ -822,8 +826,7 @@ cracks = Part('IceCracks', 'SnowShade')
 for x, z, l, a in ((0.20, 0.26, 0.05, 20), (0.34, 0.235, 0.06, -35), (0.41, 0.28, 0.035, 60)):
     cracks.box((x, 0.0222, z), (0.0012, 0.0004, l), rot_y=a)
 cracks.done()
-# No dock: the dock bench (a piece) stands on the ice itself at `DockSpot`, by the canoe.
-anchor('DockSpot', (0.26, 0.022, 0.25))
+# No dock and no lake bench: the lake is left to the canoe, the hockey net and the skating patch.
 # The red canoe pulled up on the ice beside the dock, snow in it, two paddles across.
 canoe = Part('Canoe', 'Red', smooth=True)
 g = bmesh.ops.create_uvsphere(canoe.bm, u_segments=14, v_segments=8, radius=1.0)
@@ -881,7 +884,7 @@ fire('Bonfire', (FX, FLOOR + 0.013, FZ), 1.0,
      ((0.0, 0.0, 0.042, 0.0115, 0.0, 0.0, 0.15), (-0.009, 0.005, 0.031, 0.009, -0.002, 0.001, 0.2), (0.009, -0.004, 0.028, 0.0085, 0.002, -0.001, 0.25),
       (0.002, 0.010, 0.023, 0.007, 0.0, 0.002, 0.3), (-0.004, -0.010, 0.021, 0.0065, -0.001, -0.002, 0.3)), flames)
 # Three chair spots round the fire (the Muskoka chairs are pieces, phase 2) and a woodpile against the cabin's front.
-for i, a in enumerate((205, 270, 335)):
+for i, a in enumerate((210, 330, 90)):      # front-left, front-right, behind: none straight in front, which put the chair past the plate's front edge
     r = 0.085
     anchor(f'FireSpot-{i + 1}', (FX + r * math.cos(math.radians(a)), FLOOR, FZ - r * math.sin(math.radians(a))), rot_y=90 - a)   # facing the fire (an anchor's rot_y is the negative of three.js's yaw)
 wood = Part('Woodpile', 'Trunk', smooth=True)
@@ -1147,8 +1150,6 @@ anchor('TableSpot-2', (-0.31, FLOOR, 0.09))
 anchor('TableSpot-3', (-0.17, FLOOR, 0.02))
 anchor('TableSpot-4', (-0.03, FLOOR, -0.05))
 anchor('TableSpot-5', (-0.03, FLOOR, 0.09))
-# A sixth table (patio-table.glb, the log table) right in front of the hearth, between the two window tables.
-anchor('TableSpot-6', (-0.31, FLOOR, 0.02))
 
 # ------------------------------------------------------------------ the Ambient clip: the smoke puffs rise, the flames flicker
 def fcurves_of(o):
