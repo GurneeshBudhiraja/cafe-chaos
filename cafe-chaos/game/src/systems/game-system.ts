@@ -94,6 +94,16 @@ const COACH = { width: 0.34, height: 0.12, position: [-0.08, 0.34, -0.2] as cons
 /** The hand ray: a hand within `awayFromCafe` of the café's footprint, up to well over its roof, is working over it and has no ray (HoldSystem.overCafe); `reach` metres at most; `edge` of a card's height round it still hits. */
 const RAY = { awayFromCafe: 0.04, reach: 4, edge: 0.15 };
 /**
+ * The ray is steadied as the pinch point is (hold/hold.ts SMOOTH): a
+ * one-euro filter, so a still hand's ray and cursor keep still (tracking
+ * jitter, magnified by the ray's length, is ironed out) and a moving one
+ * follows with no lag to speak of. `turn`: the cutoff (Hz) at rest and
+ * its rise per radian a second; `move`: the same for where it starts, per
+ * metre a second. A pointer pose lost for under `holdMs` keeps the last
+ * ray. (The owner's Quest playtest: the ray was not smooth.)
+ */
+const RAY_STEADY = { turn: { minHz: 1.5, beta: 4 }, move: { minHz: 3, beta: 60 }, holdMs: 250 };
+/**
  * A pinch counts the target the ray was on `before` seconds earlier if it
  * changed just as the fingers closed: a pinch nudges the hand, and a ray
  * magnifies it (the Heisenberg effect, Wolf et al. CHI 2020).
@@ -1329,6 +1339,9 @@ export class GameSystem extends createSystem({}) {
   private press(delta: number): void {
     const hold = this.hold;
     if (!hold) return;
+    this.rayTick++;
+    this.rayDelta = delta;
+    this.rays.eye.copy(this.head);
     const panels = this.panels;
     for (let i = 0; i < panels.length; i++) this.hovers[i] = null;
     for (const hand of HANDS) {
@@ -1388,6 +1401,8 @@ export class GameSystem extends createSystem({}) {
       const toBar = this.strip.controls !== 'off' && !hold.overCafe(pinch.point, RAY.awayFromCafe);
       const aimed = !busy && !done && !near ? this.aimRay(hand, toBar, !hold.overCafe(pinch.point, RAY.awayFromCafe)) : null;
       this.aim[hand] = aimed ? (aimed.button?.id ?? '') : null;
+      // On a card, the bar or the Shop: the guests leave this hand's pinch to the button (GuestSystem.rayOn).
+      if (aimed) this.guests.rayOn[hand] = performance.now();
       // Pointing at nothing yet: the short beam, so the ray can be found (BEAM).
       let idle: Vector3 | null = null;
       if (!aimed && !busy && !done && !near && pinch.gap !== Infinity && !hold.overCafe(pinch.point, RAY.awayFromCafe) && pinch.point.y > this.head.y - BEAM.below) {
@@ -1756,15 +1771,30 @@ export class GameSystem extends createSystem({}) {
    * a line from the shoulder through the pinch. Sets rayFrom and rayDir.
    */
   private castRay(hand: Hand): void {
+    const steady = this.raySteady[hand];
+    // Once a frame a hand: the second ask in a frame (the drag, the aim, the short beam) gets the same ray.
+    if (steady.tick === this.rayTick) {
+      this.rayFrom.copy(steady.from);
+      this.rayDir.copy(steady.dir);
+      return;
+    }
     const pinch = this.hold!.pinch[hand];
     const source = this.world.input.xr.getPrimaryInputSource(hand) as XRInputSource | undefined;
     const frame = this.xrFrame as XRFrame | undefined;
     const space = this.xrManager.getReferenceSpace();
     const pose = source?.targetRaySpace && frame && space ? frame.getPose(source.targetRaySpace, space) : null;
+    const now = performance.now();
     if (pose) {
       this.rayMatrix.fromArray(pose.transform.matrix).premultiply(this.player.matrixWorld);
       this.rayFrom.setFromMatrixPosition(this.rayMatrix);
       this.rayDir.set(0, 0, -1).transformDirection(this.rayMatrix);
+      steady.posedAt = now;
+    } else if (steady.posed && now - steady.posedAt < RAY_STEADY.holdMs) {
+      // The headset's pointer lost for a moment: keep the last steady ray (the shoulder line would point elsewhere).
+      steady.tick = this.rayTick;
+      this.rayFrom.copy(steady.from);
+      this.rayDir.copy(steady.dir);
+      return;
     } else {
       // About where the shoulder is: below the eyes, to the hand's side.
       this.player.head.getWorldQuaternion(this.headQ);
@@ -1774,7 +1804,34 @@ export class GameSystem extends createSystem({}) {
       this.rayFrom.copy(pinch.point);
       this.rayDir.copy(pinch.point).sub(this.shoulder).normalize();
     }
+    // Steadied (RAY_STEADY): a one-euro filter on where it starts and where it points. Taken afresh after a gap
+    // (a frame without a ray) or a change between the headset's pointer and the shoulder line.
+    const delta = this.rayDelta;
+    const fresh = steady.tick !== this.rayTick - 1 || steady.posed !== !!pose || delta <= 0;
+    if (fresh) {
+      steady.from.copy(this.rayFrom);
+      steady.dir.copy(this.rayDir);
+    } else {
+      const turn = Math.acos(Math.min(1, Math.max(-1, steady.dir.dot(this.rayDir)))) / delta;
+      const kd = 1 - Math.exp(-2 * Math.PI * (RAY_STEADY.turn.minHz + RAY_STEADY.turn.beta * turn) * delta);
+      steady.dir.lerp(this.rayDir, kd).normalize();
+      const speed = steady.from.distanceTo(this.rayFrom) / delta;
+      const kf = 1 - Math.exp(-2 * Math.PI * (RAY_STEADY.move.minHz + RAY_STEADY.move.beta * speed) * delta);
+      steady.from.lerp(this.rayFrom, kf);
+    }
+    steady.tick = this.rayTick;
+    steady.posed = !!pose;
+    this.rayFrom.copy(steady.from);
+    this.rayDir.copy(steady.dir);
   }
+  /** Each hand's steadied ray (castRay): where it starts and points, the frame it was taken, and the pointer's last pose. */
+  private readonly raySteady: Record<Hand, { from: Vector3; dir: Vector3; tick: number; posed: boolean; posedAt: number }> = {
+    left: { from: new Vector3(), dir: new Vector3(0, 0, -1), tick: -10, posed: false, posedAt: 0 },
+    right: { from: new Vector3(), dir: new Vector3(0, 0, -1), tick: -10, posed: false, posedAt: 0 },
+  };
+  /** The frame count and its time (s) for the rays (press). */
+  private rayTick = 0;
+  private rayDelta = 0;
 
   /** Where the ray (castRay) meets a card's face, from the front: how far, and the button there; null if it misses. Sets rayHit and barNormal. */
   private rayAt(panel: Panel, edgeShare = RAY.edge): { t: number; button: Button | null } | null {

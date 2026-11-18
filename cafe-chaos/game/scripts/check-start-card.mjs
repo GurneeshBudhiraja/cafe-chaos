@@ -4,6 +4,7 @@
  * 1. everything on the card is inside its outer box, and the café row's
  *    buttons inside its window;
  * 2. Settings, Quit and How to play open their cards (and close again);
+ *    with Settings open, the start card behind it is hidden;
  * 3. two cafés fit the window: no arrows, the row centred;
  * 4. a pinch dragged along the row moves nothing and starts no café;
  * 5. the row holds the cafés only (no Coming Soon card);
@@ -105,11 +106,16 @@ const state = () => page.evaluate(() => {
 const litGear = await aimAt('card', 'gear');
 await tap();
 const gear = (await state()).sheet;
-await page.waitForTimeout(400);
+await page.waitForTimeout(600);
+// Only the card in front is seen: the start card behind fades out altogether (the owner's Quest playtest).
+const behind = await page.evaluate(() => ({ card: window.__cafe.game.menu.card.mesh.visible, sheet: window.__cafe.game.menu.sheet.mesh.visible }));
+await shot('start-card-settings');
 await aimAt('sheet', 'close');
 await tap();
-await page.waitForTimeout(400);
+await page.waitForTimeout(600);
+const back = await page.evaluate(() => window.__cafe.game.menu.card.mesh.visible);
 check('Settings (top right) opens Settings, CLOSE closes it', litGear === 'gear' && gear === 'settings' && (await state()).sheet === 'none', JSON.stringify({ litGear, gear }));
+check('with Settings open the start card behind is hidden (only the card in front is seen), and back after CLOSE', !behind.card && behind.sheet && back, JSON.stringify({ behind, back }));
 
 const litQuit = await aimAt('card', 'quit');
 await tap();

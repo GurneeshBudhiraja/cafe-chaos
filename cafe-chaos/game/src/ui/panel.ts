@@ -111,9 +111,9 @@ export class Panel {
    */
   turn = Infinity;
   /**
-   * Dimmed behind a card opened in front of it (true): it fades to about 60%
-   * brightness and takes no presses (the game skips it) until the card in
-   * front closes.
+   * Behind a card opened in front of it (true): it fades out altogether and
+   * takes no presses (the game skips it) until the card in front closes,
+   * then fades back. Only one card is seen at a time.
    */
   dimmed = false;
   private dimNow = 0;
@@ -163,7 +163,7 @@ export class Panel {
 
   /** How far it is shown now (0 hidden to 1 up, eased): things laid over the card fade with it. */
   get shownAmount(): number {
-    return this.mesh.visible ? this.shown : 0;
+    return this.mesh.visible ? this.shown * (1 - this.dimNow) : 0;
   }
 
   /**
@@ -219,11 +219,13 @@ export class Panel {
     const target = this.want ? 1 : 0;
     this.shown += (target - this.shown) * (1 - Math.exp(-12 * delta));
     if (Math.abs(this.shown - target) < 0.01) this.shown = target;
-    this.mesh.visible = this.shown > 0;
-    if (!this.mesh.visible) return false;
-    this.material.opacity = this.shown;
     this.dimNow += ((this.dimmed ? 1 : 0) - this.dimNow) * (1 - Math.exp(-14 * delta));
-    this.material.color.setScalar(1 - 0.42 * this.dimNow);
+    if (Math.abs(this.dimNow - (this.dimmed ? 1 : 0)) < 0.01) this.dimNow = this.dimmed ? 1 : 0;
+    // A card behind another fades out altogether, so only the card in front is seen (the owner's Quest playtest: the
+    // pause card's edges showed round the Trial over card).
+    this.mesh.visible = this.shown > 0 && this.dimNow < 1;
+    if (!this.mesh.visible) return false;
+    this.material.opacity = this.shown * (1 - this.dimNow);
     // Its size is in real metres, whatever the café's scale.
     const parent = this.mesh.parent ? this.mesh.parent.getWorldScale(this.scale).x : 1;
     const s = (this.size * (0.9 + 0.1 * this.shown)) / (parent || 1);

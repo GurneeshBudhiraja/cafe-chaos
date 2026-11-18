@@ -9,7 +9,8 @@
  *    the card, pointed at and pinched: the run goes on at once;
  * 4. with the coins, Shop opens the shop and the run goes on (the clock,
  *    the guests, the hands); HIRE hires the next barista (the price
- *    taken); CLOSE closes it;
+ *    taken), also with the hand where its pinch would take a guest in the
+ *    line by sight (no guest is taken); CLOSE closes it;
  * 5. a hand over the café has no ray, and its pinch presses nothing;
  * 6. nothing on the console.
  *
@@ -117,11 +118,35 @@ const handsOn = await page.evaluate(() => !window.__cafe.guests.handsOff);
 check('Shop: the drawer comes down under the bar, the café going on and in view (no card), hands still on the guests, clear of the café\'s top', s.phase === 'shopping' && dr.open && dr.buttons.includes('hire') && dr.buttons.includes('shop-close') && dr.speed === 1 && handsOn && dr.cafe && !dr.card && dr.bottom > dr.top && badge, JSON.stringify({ phase: s.phase, ...dr, affordable: badge }));
 await page.waitForTimeout(600);
 await page.screenshot({ path: 'artifacts/bar-shop.png' });
-// HIRE pointed at and pinched in the drawer.
-await aimAt('hire', null, 'window.__cafe.strip.drawer.panel');
+// HIRE pointed at and pinched in the drawer, with the hand held where its pinch would also take a guest in the line by
+// sight (the guest just beyond the fingers, on the line from the eyes): the owner's Quest playtest, a pinch on the Shop
+// took a guest from the gate too. The ray's button wins; no guest is taken.
+await until(() => window.__cafe.guests.guests.some((g) => g.state === 'queued' && g.actor.opacity >= 0.99), null, 40000);
+const DRAWER = 'window.__cafe.strip.drawer.panel';
+let from = [-1.08, 1.0, 0.1];
+let sightGuest = null;
+for (let i = 0; i < 4; i++) {
+  await aimAt('hire', from, DRAWER);
+  const at = await page.evaluate(() => {
+    const { game, guests, hold } = window.__cafe;
+    const g = guests.guests.find((x) => x.state === 'queued' && x.actor.opacity >= 0.99);
+    const V = game.head.constructor;
+    const grip = g.actor.grip.getWorldPosition(new V());
+    // 30 cm along the line from the eyes to the guest: the pinch point wanted there.
+    const want = game.head.clone().lerp(grip, 0.3 / game.head.distanceTo(grip));
+    const pinchAt = hold.pinch.right.point;
+    return { id: g.id, shift: want.clone().sub(pinchAt).toArray(), off: +want.distanceTo(pinchAt).toFixed(4) };
+  });
+  sightGuest = at;
+  from = from.map((v, k) => v + at.shift[k]);
+}
+await aimAt('hire', from, DRAWER);
+const before = await page.evaluate(() => ({ aim: window.__cafe.game.aim.right, lit: window.__cafe.guests.hovered.map((g) => g?.id ?? null) }));
 await tap();
 s = await state();
 dr = await drawer();
+const carried = await page.evaluate(() => window.__cafe.guests.guests.filter((g) => g.state === 'held' || g.hand).map((g) => g.id));
+check('HIRE pointed at with a guest in the line just beyond the fingers by sight: the pinch hires, no guest is lit or taken', before.aim === 'hire' && before.lit.every((x) => x === null) && carried.length === 0 && s.hires === 1, JSON.stringify({ guest: sightGuest, before, carried, hires: s.hires }));
 check('HIRE (pointed at and pinched) hires the next barista, the price taken; the drawer shows the next price', s.hires === 1 && s.bank === 35 && s.phase === 'shopping' && dr.buttons.includes('hire-later'), JSON.stringify({ hires: s.hires, bank: s.bank, buttons: dr.buttons }));
 await aimAt('shop-close', null, 'window.__cafe.strip.drawer.panel');
 await tap();
