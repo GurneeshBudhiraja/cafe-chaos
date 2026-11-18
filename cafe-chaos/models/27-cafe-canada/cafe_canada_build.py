@@ -573,18 +573,20 @@ def string(a, b, n=7, sag=0.025):
         y = a[1] - sag * 4 * t * (1 - t)
         pts.append((x, y, z))
     for p, q in zip(pts, pts[1:]):
-        mid = ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2)
-        length = math.dist(p, q)
-        ang_y = math.degrees(math.atan2(q[0] - p[0], q[2] - p[2]))
-        tilt = math.degrees(math.atan2(q[1] - p[1], math.hypot(q[0] - p[0], q[2] - p[2])))
-        wire.box(mid, (0.0012, 0.0012, length), rot_y=ang_y, rot_x=-tilt)
+        # Each piece of wire points straight from one bulb to the next (aligned in 3D, so the pieces join end to end
+        # on a line that runs across and up at once, not only on a level one), a touch longer so the joints close.
+        a3, b3 = G(*p), G(*q)
+        d = b3 - a3
+        g = bmesh.ops.create_cube(wire.bm, size=1.0)
+        M = Matrix.Translation((a3 + b3) / 2) @ d.to_track_quat('Z', 'Y').to_matrix().to_4x4() @ Matrix.Diagonal(Vector((0.0012, 0.0012, d.length + 0.0012, 1)))
+        bmesh.ops.transform(wire.bm, matrix=M, verts=g['verts'])
     for p in pts[1:-1]:
         bulbs.sphere((p[0], p[1] - 0.004, p[2]), 0.0035, seg=8, rings=5)
 TOP = FLOOR + 0.125
 string((DX1, TOP, DZ0), (DX1, TOP, DZ1))
 # The front line runs from the gate-side front pole up to the upper deck's front-right light pole, festoon-style
 # over the patio (well above the seated guests), instead of to a pole at the deck's front-left corner.
-string((DX1, TOP, DZ1), (0.034, FLOOR + 0.125 + 0.006 + 0.086 + 0.004, -0.093), n=10, sag=0.03)
+string((DX1, TOP, DZ1), (0.034, FLOOR + 0.125 + 0.006 + 0.086 + 0.004, -0.093), n=10, sag=0.012)
 wire.done()
 bulbs.done()
 # A patio heater: a steel pole with a mushroom top, snow on the top.

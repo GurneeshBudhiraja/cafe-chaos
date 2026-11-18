@@ -28,6 +28,8 @@ export const LATER_PIECES = ['cafe-annex', 'unlock-plaque', 'window-booth', 'tab
 export const CANADA_PIECES = ['cafe-canada', 'table-ca-2', 'table-ca-4', 'patio-table', 'fire-chair'] as const;
 export const CANADA_GUESTS = ['guest-snowbit', 'guest-beavertail', 'guest-nanaimo', 'guest-doubledouble', 'guest-buttertart', 'accessories-canada'] as const;
 export const CANADA_STAFF = ['barista-maple', 'barista-aspen', 'barista-rowan', 'barista-birch', 'barista-cedar', 'barista-fiddler', 'barista-pianist'] as const;
+/** The rooftop pianist's music notes (shown while the pianist plays). */
+export const CANADA_PROPS = ['music-notes'] as const;
 
 export type ModelName =
   | (typeof CAFE_PIECES)[number]
@@ -36,12 +38,13 @@ export type ModelName =
   | (typeof LATER_PIECES)[number]
   | (typeof CANADA_PIECES)[number]
   | (typeof CANADA_GUESTS)[number]
-  | (typeof CANADA_STAFF)[number];
+  | (typeof CANADA_STAFF)[number]
+  | (typeof CANADA_PROPS)[number];
 
 export default defineAssets({
   ...Object.fromEntries(CAFE_PIECES.map((name) => [name, { url: url(name), type: AssetType.GLTF, priority: 'critical' as const, name }])),
   ...Object.fromEntries(GUEST_PIECES.map((name) => [name, { url: url(name), type: AssetType.GLTF, priority: 'background' as const, name }])),
   ...Object.fromEntries(STAFF_PIECES.map((name) => [name, { url: url(name), type: AssetType.GLTF, priority: 'background' as const, name }])),
   ...Object.fromEntries(LATER_PIECES.map((name) => [name, { url: url(name), type: AssetType.GLTF, priority: 'background' as const, name }])),
-  ...Object.fromEntries([...CANADA_PIECES, ...CANADA_GUESTS, ...CANADA_STAFF].map((name) => [name, { url: url(name), type: AssetType.GLTF, priority: 'background' as const, name }])),
+  ...Object.fromEntries([...CANADA_PIECES, ...CANADA_GUESTS, ...CANADA_STAFF, ...CANADA_PROPS].map((name) => [name, { url: url(name), type: AssetType.GLTF, priority: 'background' as const, name }])),
 });
