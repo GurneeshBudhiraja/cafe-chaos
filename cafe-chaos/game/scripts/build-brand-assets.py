@@ -1,5 +1,5 @@
-"""Every brand asset from two sources: the 3D logo (scripts/build-logo-3d.py) and the 3D key-art renders
-(scripts/render-key-art.py). See docs/STORE-ART.md.
+"""Every brand asset from the 3D logo (scripts/build-logo-3d.py): the logo on the brand's moss field with a lantern glow,
+at each place's exact size. See docs/STORE-ART.md.
 
 Runs in a background Blender (it reads and writes images with Blender's own image library, so no
 Pillow is needed):
@@ -97,15 +97,23 @@ def over(base, logo, width_frac, cx, top):
     return base
 
 
-def field(size, glow=0.40):
+def field(w, h=None, glow=0.40):
     """The brand field: moss, with a soft lantern glow in the middle (the café's lamplight)."""
-    h = w = size
+    h = w if h is None else h
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    r = np.sqrt(((xx - w / 2) / w) ** 2 + ((yy - h / 2) / h) ** 2)
+    m = min(w, h)
+    r = np.sqrt(((xx - w / 2) / m) ** 2 + ((yy - h / 2) / m) ** 2)
     t = np.clip(1 - r / glow, 0, 1) ** 2 * 0.55
     out = np.ones((h, w, 4), np.float32)
     out[..., :3] = MOSS * (1 - t[..., None]) + LANTERN * t[..., None]
     return out
+
+
+def card(w, h, logo_w):
+    """The logo centred on the brand field, logo_w of the width (never taller than 70% of the height)."""
+    lw = min(logo_w, 0.70 * h / w * LOGO.shape[1] / LOGO.shape[0])
+    lh = lw * w * LOGO.shape[0] / LOGO.shape[1]
+    return over(field(w, h), LOGO, lw, 0.5, (1 - lh / h) / 2)
 
 
 # ------------------------------------------------------------------ the logo, cropped tight
@@ -126,13 +134,9 @@ C = C[max(0, rows.min() - 6):rows.max() + 7]
 
 # ------------------------------------------------------------------ the icon (store, library, shortcut)
 def icon(size, logo_w, art=LOGO):
-    base = field(size * 2)
-    base = over(base, art, logo_w, 0.5, 0.0)
-    # centre the logo vertically
-    lh = int(size * 2 * logo_w * art.shape[0] / art.shape[1])
-    base2 = field(size * 2)
-    base2 = over(base2, art, logo_w, 0.5, (1 - lh / (size * 2)) / 2)
-    return scale(base2, size, size)
+    big = size * 2
+    lh = big * logo_w * art.shape[0] / art.shape[1]
+    return scale(over(field(big), art, logo_w, 0.5, (1 - lh / big) / 2), size, size)
 
 
 save(icon(512, 0.86), os.path.join(OUT, 'meta-store', 'icon-512x512.png'))
@@ -142,22 +146,14 @@ save(icon(192, 0.86), os.path.join(ICONS, 'icon-192.png'))
 save(icon(180, 0.86), os.path.join(ICONS, 'apple-touch-icon.png'))
 save(icon(32, 0.62, C), os.path.join(ICONS, 'favicon-32.png'))
 
-# ------------------------------------------------------------------ the covers
-land = render('jp-landscape')
-save(over(land.copy(), LOGO, 0.30, 0.20, 0.04), os.path.join(OUT, 'meta-store', 'cover-landscape-2560x1440.png'))
-dev = scale(crop(land, 330, 0, 2160, 1440), 1500, 1000)
-save(over(dev, LOGO, 0.36, 0.23, 0.04), os.path.join(OUT, 'devpost', 'thumbnail-1500x1000.png'))
-hero = render('jp-hero')
-save(over(hero.copy(), LOGO, 0.27, 0.5, 0.04), os.path.join(OUT, 'meta-store', 'hero-3000x900.png'))
-mini = scale(crop(hero, 150, 0, 2700, 900), 1080, 360)
-save(over(mini, LOGO, 0.38, 0.5, 0.05), os.path.join(OUT, 'meta-store', 'mini-landscape-1080x360.png'))
-sq = render('ca-square')
-save(over(sq.copy(), LOGO, 0.60, 0.5, 0.03), os.path.join(OUT, 'meta-store', 'cover-square-1440x1440.png'))
-po = render('ca-portrait')
-save(over(po.copy(), LOGO, 0.80, 0.5, 0.05), os.path.join(OUT, 'meta-store', 'cover-portrait-1008x1440.png'))
-
-# ------------------------------------------------------------------ social
-share = scale(crop(land, 0, 48, 2560, 1344), 1200, 630)
-save(over(share, LOGO, 0.34, 0.22, 0.05), os.path.join(OUT, 'social', 'link-preview-1200x630.png'))
-vid = scale(land, 1280, 720)
-save(over(vid, LOGO, 0.40, 0.25, 0.04), os.path.join(OUT, 'social', 'video-thumbnail-1280x720.png'))
+# ------------------------------------------------------------------ the covers and social: the logo on the brand field
+for path, w, h, lw in (
+        (('meta-store', 'hero-3000x900.png'), 3000, 900, 0.34),
+        (('meta-store', 'cover-landscape-2560x1440.png'), 2560, 1440, 0.56),
+        (('meta-store', 'cover-square-1440x1440.png'), 1440, 1440, 0.72),
+        (('meta-store', 'cover-portrait-1008x1440.png'), 1008, 1440, 0.80),
+        (('meta-store', 'mini-landscape-1080x360.png'), 1080, 360, 0.40),
+        (('devpost', 'thumbnail-1500x1000.png'), 1500, 1000, 0.62),
+        (('social', 'link-preview-1200x630.png'), 1200, 630, 0.56),
+        (('social', 'video-thumbnail-1280x720.png'), 1280, 720, 0.56)):
+    save(card(w, h, lw), os.path.join(OUT, *path))

@@ -57,6 +57,10 @@ every size (consistent, crisp, and Meta needs the logo as its own file).
 
 ## The brand now (Nov 17 2026)
 
+**One logo for everything, on moss (Nov 17 2026, final).** Every brand image
+is now the 3D logo centred on the moss field with a soft lantern glow, at each
+place's exact size; the game renders are no longer used in them.
+
 **One logo for everything.** The rebrand replaced the hand-drawn wordmark and
 sketch cast: the logo is a 3D build ("The Rush"), CAFÉ arched close over
 CHAOS, every letter of CHAOS on its own tilt, all glossy lantern-gold glaze
