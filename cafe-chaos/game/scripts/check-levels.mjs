@@ -9,8 +9,8 @@
  *  3. each guest served is counted on the bar and saved, so a level left
  *     part-way is carried on from there;
  *  4. the goal met, even with a guest in the hand: no card, the café keeps
- *     going; the bar shows "LEVEL 2!" and its coins with confetti, the
- *     next goal is a one-line note under the bar, and no guest comes for
+ *     going; the bar shows "LEVEL 2!" and its coins with confetti, no
+ *     note pops up under the bar (no pop-ups), and no guest comes for
  *     the breather; the next level, its bonus and a full happiness are
  *     already saved; after 3 s the bar is itself again;
  *  5. (none)
@@ -102,10 +102,10 @@ await page.waitForTimeout(450);
 s = await state();
 check('the goal met (a guest in the hand too): no card, the café keeps going; the bar shows LEVEL 2! +10 with confetti', s.phase === 'run' && s.card === null && s.speed === 1 && s.cafe && !s.handsOff && s.banner?.join() === 'LEVEL 2!,10' && s.confetti === before.confetti + 1, JSON.stringify({ phase: s.phase, card: s.card, speed: s.speed, cafe: s.cafe, handsOff: s.handsOff, banner: s.banner, confetti: [before.confetti, s.confetti] }));
 check('level 2 is reached and saved at once: its bonus in the bank, the happiness full', s.level === 2 && s.served === 0 && s.bank === before.bank + paid + 10 && s.happiness === 100 && s.saved?.level === 2 && s.saved?.levelServed === 0 && s.saved?.bank === s.bank, JSON.stringify({ level: s.level, served: s.served, bank: [before.bank, paid, s.bank], happiness: s.happiness, saved: s.saved }));
-check('the next goal, one line under the bar ("Next: serve 7 guests"), and a breather: no guest for about 5 s', s.note === 'Next: serve 7 guests' && s.nextGuest > 3.5, JSON.stringify({ note: s.note, nextGuest: s.nextGuest }));
+check('no note pops up under the bar (the owner\'s playtest: no pop-ups), and a breather: no guest for about 5 s', s.note === null && s.nextGuest > 3.5, JSON.stringify({ note: s.note, nextGuest: s.nextGuest }));
 await h.screenshot('artifacts/levels-2-level-up.png');
 await page.evaluate(() => { delete window.__cafe.guests.carrying; });
-// Measured in the page's own frames (the emulator can run slower than real time): the banner's 3 s, the note's 4 s.
+// Measured in the page's own frames (the emulator can run slower than real time): the banner's 3 s; no note at any time.
 const went = await page.evaluate(() => new Promise((ok) => {
   const { strip, game, world } = window.__cafe;
   const info = world.renderer.info.render;
@@ -118,14 +118,14 @@ const went = await page.evaluate(() => new Promise((ok) => {
     t += Math.min(0.1, (now - last) / 1000);
     last = now;
     if (r.banner === undefined && !strip.banner) r.banner = +t.toFixed(1);
-    if (r.note === undefined && !game.note.panel.open) r.note = +t.toFixed(1);
-    if ((r.banner !== undefined && r.note !== undefined) || t > 10) { r.frames = info.frame - f0; ok(r); return; }
+    if (game.note.panel.open) r.noteSeen = true;
+    if (r.banner !== undefined || t > 10) { r.frames = info.frame - f0; ok(r); return; }
     requestAnimationFrame(tick);
   };
   tick();
 }));
 s = await state();
-check('the bar is itself again after its 3 s, and the note goes after its 4 s', s.banner === null && s.note === null && went.banner <= 3.2 && went.note <= 4.2, JSON.stringify(went));
+check('the bar is itself again after its 3 s, and no note came meanwhile', s.banner === null && s.note === null && went.banner <= 3.2 && !went.noteSeen, JSON.stringify(went));
 
 // 6. The next level's pace.
 check('level 2 runs at its own pace: a guest about every 11 s, 29 s in the line, the bar at 0 of 7', s.phase === 'run' && Math.abs((s.gap[0] + s.gap[1]) / 2 - 11) < 0.5 && s.line === 29 && s.bar.join() === '2,0,7', JSON.stringify({ phase: s.phase, gap: s.gap, line: s.line, bar: s.bar }));

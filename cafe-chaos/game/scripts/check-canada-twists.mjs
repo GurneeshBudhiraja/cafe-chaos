@@ -3,9 +3,9 @@
  * (not test mode), in the desktop preview:
  * 1. cold guests: none at level 1; from level 2 a cold guest wishes for the
  *    fireplace, waits COLD.line as long in the line, is tinted ice-blue and
- *    carries a snowflake on its dot; the "A cold guest!" tip comes once;
- * 2. the snowstorm: a third of the way into level 2 it starts, its note goes
- *    up, snow falls, most new guests are cold and none wishes for outside,
+ *    carries a snowflake on its dot; no tip pops up (no pop-ups in the café);
+ * 2. the snowstorm: a third of the way into level 2 it starts (no note),
+ *    snow falls, most new guests are cold and none wishes for outside,
  *    the lake or upstairs; it ends on time and the snow fades;
  * 3. the trial ends after its levels with the Trial over card;
  * 4. the Japanese café has no cold guests and no storm.
@@ -63,8 +63,6 @@ await page.evaluate(() => {
   game.servedMark = game.score.servedGuests;
   game.levelServed = 0;
   game.pace();
-  // The tips before the cold one in TIP_ORDER count as seen, so the cold tip is the next due (this checks it, not the order).
-  for (const id of ['goal', 'card', 'hurry']) if (!game.save.tips.includes(id)) game.save.tips.push(id);
   guests.coldChance = 1;
   guests.nextSpawnIn = 0;
 });
@@ -72,16 +70,17 @@ await until(() => window.__cafe.guests.guests.some((x) => x.cold && x.state === 
 const cold = await page.evaluate(() => {
   const { guests, game } = window.__cafe;
   const c = guests.guests.find((x) => x.cold);
-  const skin = c.actor.materials.find((m) => m.color);
-  return { wishes: c.wishes, full: c.patienceFull, line: guests.patienceSeconds, color: skin.color.getHexString(), warm: skin.userData.warmColor?.getHexString(), tipShown: game.tipShown, saved: game.save.tips.includes('cold'), dot: c.dial.drawn };
+  // One material a guest now (its parts' colours are vertex colours): its colour is white when warm, ice-blue when cold.
+  const skin = c.actor.material;
+  return { wishes: c.wishes, full: c.patienceFull, line: guests.patienceSeconds, color: skin.color.getHexString(), warm: 'ffffff', dot: c.dial.drawn };
 });
 check('a cold guest wishes for the fireplace', cold.wishes.includes('warm'), cold.wishes.join(','));
 check('a cold guest waits 0.75 as long in the line', cold.full <= cold.line * 0.75 * (1 + 0.16) + 0.01, `${cold.full.toFixed(1)} s of ${cold.line} s`);
 check('a cold guest is tinted and its dot has the snowflake', cold.color !== cold.warm && /\|true$/.test(cold.dot ?? ''), `${cold.warm} -> ${cold.color}, dot ${cold.dot}`);
-// Other tips may come first (the wish card's); the cold one follows within a few tips.
-await until(() => window.__cafe.game.save.tips.includes('cold'), null, 60000);
-const tip = await page.evaluate(() => ({ shown: window.__cafe.game.tipShown, saved: window.__cafe.game.save.tips.includes('cold') }));
-check('the cold tip comes, once', tip.saved, JSON.stringify(tip));
+// No tip pops up (the owner's playtest: no pop-ups in the café): the snowflake and the tint say it.
+await page.waitForTimeout(3000);
+const tip = await page.evaluate(() => ({ shown: window.__cafe.game.tipShown, open: window.__cafe.game.tip.panel.open }));
+check('no tip pops up for the cold guest', tip.shown === null && !tip.open, JSON.stringify(tip));
 await shot('cold-guest');
 
 // 2. The storm: a third of the way into level 2.
@@ -96,7 +95,7 @@ const st = await page.evaluate(() => {
   const { game, guests } = window.__cafe;
   return { left: game.events.stormLeft, storm: guests.storm, cold: guests.coldChance, note: game.notes[0]?.title };
 });
-check('the level-2 storm starts, with its note', started && st.storm && Math.abs(st.cold - 0.6) < 1e-9 && st.left > 50 && st.note === 'Snowstorm!', JSON.stringify(st));
+check('the level-2 storm starts (no note pops up: the snow says it)', started && st.storm && Math.abs(st.cold - 0.6) < 1e-9 && st.left > 50 && !st.note, JSON.stringify(st));
 await until(() => window.__cafe.game.snow.material.opacity > 0.85, null, 10000);
 // New guests in the storm.
 const pool = await page.evaluate(() => {

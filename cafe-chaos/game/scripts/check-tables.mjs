@@ -4,8 +4,8 @@
  *     in this game's order), every other table hidden (not drawn, no seats,
  *     not on the walk grid);
  *  2. the ghost's two looks: faint with the bank short (no tag), ready with
- *     the bank able to pay (darker, the coin and price tag); "TABLE READY"
- *     on the bar once a price;
+ *     the bank able to pay (darker, the coin and price tag); the Shop
+ *     button's red badge counts it (no "TABLE READY" banner: no pop-ups);
  *  3. OPEN in the Shop: refused with the bank short; with enough, no card:
  *     the ghost's table opens (fading in, then folded into the room's batch,
  *     an obstacle on the walk grid), the price taken, saved, and the next
@@ -76,7 +76,8 @@ await look('1-faint');
 await page.evaluate(() => { window.__cafe.score.bank = 9; });
 await until(() => window.__cafe.system.ghost?.tagShown, 8000);
 s = await state();
-check('the bank able to pay: the ghost ready, with its coin and price tag; "TABLE READY" on the bar', s.ghost?.ready && s.ghost.tag && s.banner?.join() === 'TABLE READY,8', JSON.stringify({ ghost: s.ghost, banner: s.banner }));
+const news = await page.evaluate(() => window.__cafe.strip.shopNews);
+check('the bank able to pay: the ghost ready, with its coin and price tag; the Shop button counts it, no banner', s.ghost?.ready && s.ghost.tag && news >= 1 && !s.banner, JSON.stringify({ ghost: s.ghost, banner: s.banner, news }));
 await look('2-ready');
 
 // 3. OPEN: refused when short, then the ghost's table opens and the next ghost comes.
