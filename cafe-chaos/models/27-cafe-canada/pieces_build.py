@@ -10,7 +10,8 @@ front of each seat (2.8 cm up), `TableTop` at the top's centre. The same sizes a
 
 - table-ca-2: a square maple table on a pedestal, two slat-back chairs with red cushions.
 - table-ca-4: a long maple table with a plaid-cushioned bench either side (four seats).
-- patio-table: a red steel bistro table with snow on it and two red chairs.
+- patio-table: a log-cabin table (a round pine slab with its bark rim on a log pedestal) and two log chairs
+  with red buffalo-plaid cushions; used on the patio, the upper deck and by the fireplace.
 - dock-bench: a pine bench for two facing the lake, snow on its back, a mug shelf on each arm.
 - fire-chair: a red Muskoka chair with a log stump side table (three stand round the fire).
 """
@@ -112,35 +113,40 @@ anchor('TableTop', (0, TOP_Y, 0), T4)
 
 # ------------------------------------------------------------------ patio-table
 PT = root_of('patio-table', 0.32)
-Part('Top', 'Red', smooth=True).cyl((0, TOP_Y - 0.15 * CM, 0), 2.2 * CM, 0.3 * CM, seg=18).done(PT)
-Part('TopSnow', 'Snow', smooth=True).sphere((0.3 * CM, TOP_Y, -0.4 * CM), 1.0, seg=10, rings=5, scale=(1.3 * CM, 0.18 * CM, 1.0 * CM)).done(PT)
-Part('Pole', 'Steel', smooth=True).cyl((0, (TOP_Y - 0.3 * CM) / 2, 0), 0.25 * CM, TOP_Y - 0.3 * CM, seg=8).done(PT)
-feet = Part('Feet', 'Steel')
-for a in (0, 120, 240):
-    feet.box((1.0 * CM * math.cos(math.radians(a)), 0.15 * CM, 1.0 * CM * math.sin(math.radians(a))), (2.0 * CM, 0.25 * CM, 0.35 * CM), rot_y=-a)
+# A log-cabin table: a round pine slab cut from a log (its bark left on round the rim) on a log pedestal with three
+# short log feet; two log chairs with red buffalo-plaid cushions and a rail back. No snow: it stands inside too.
+Part('Top', 'Pine', smooth=True).cyl((0, TOP_Y - 0.17 * CM, 0), 2.1 * CM, 0.34 * CM, seg=18).done(PT)
+Part('TopBark', 'Trunk', smooth=True).cyl((0, TOP_Y - 0.19 * CM, 0), 2.25 * CM, 0.32 * CM, seg=18).done(PT)
+Part('TopRings', 'PineDark', smooth=True).cyl((0, TOP_Y + 0.002 * CM, 0), 1.2 * CM, 0.004 * CM, seg=16).cyl((0, TOP_Y + 0.004 * CM, 0), 0.5 * CM, 0.004 * CM, seg=12).done(PT)
+Part('Pole', 'Trunk', smooth=True).cyl((0, (TOP_Y - 0.36 * CM) / 2, 0), 0.55 * CM, TOP_Y - 0.36 * CM, seg=10, r2=0.45 * CM).done(PT)
+feet = Part('Feet', 'Trunk', smooth=True)
+for a in (90, 210, 330):
+    feet.cyl((0.95 * CM * math.cos(math.radians(a)), 0.3 * CM, 0.95 * CM * math.sin(math.radians(a))), 0.3 * CM, 1.7 * CM, axis='x', seg=8, rot_y=-a)
 feet.done(PT)
-def bistro_chair(parent, tag, at, face_rot):
+def log_chair(parent, tag, at, face_rot):
     x, z = at
     def P(dx, dz):
         a = math.radians(face_rot)
         # The sitter's +Z turned by face_rot about up (the same hand as Part.box's rot_y: +90 turns +Z to -X).
         return (x + dx * math.cos(a) - dz * math.sin(a), z + dx * math.sin(a) + dz * math.cos(a))
-    s = Part(f'{tag}-Steel', 'Steel')
-    for dx, dz in ((-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)):
+    logs = Part(f'{tag}-Logs', 'Trunk', smooth=True)
+    for dx, dz in ((-0.95, -0.95), (0.95, -0.95), (-0.95, 0.95), (0.95, 0.95)):
         px, pz = P(dx * CM, dz * CM)
-        s.boxb((px, 0, pz), (0.22 * CM, 1.4 * CM, 0.22 * CM), rot_y=face_rot)
-    for dx in (-1.0, 1.0):
-        px, pz = P(dx * CM, -1.1 * CM)
-        s.boxb((px, 1.4 * CM, pz), (0.22 * CM, 2.2 * CM, 0.22 * CM), rot_y=face_rot)
-    px, pz = P(0, -1.1 * CM)
-    s.box((px, 3.6 * CM, pz), (2.2 * CM, 0.22 * CM, 0.22 * CM), rot_y=face_rot)
-    s.done(parent)
+        logs.cyl((px, 0.6 * CM, pz), 0.24 * CM, 1.2 * CM, seg=7)                       # legs
+    for dx in (-0.95, 0.95):
+        px, pz = P(dx * CM, -1.05 * CM)
+        logs.cyl((px, 2.3 * CM, pz), 0.24 * CM, 2.3 * CM, seg=7)                       # back posts
+    logs.done(parent)
     px, pz = P(0, 0)
-    Part(f'{tag}-Seat', 'Red', smooth=True).cyl((px, 1.5 * CM, pz), 1.25 * CM, 0.25 * CM, seg=14).done(parent)
-    px, pz = P(0, -1.1 * CM)
-    Part(f'{tag}-Back', 'Red').box((px, 2.9 * CM, pz), (2.0 * CM, 0.9 * CM, 0.2 * CM), rot_y=face_rot).done(parent)
-bistro_chair(PT, 'ChairL', (-3.3 * CM, 0), -90)
-bistro_chair(PT, 'ChairR', (3.3 * CM, 0), 90)
+    Part(f'{tag}-Seat', 'Pine').box((px, 1.3 * CM, pz), (2.3 * CM, 0.25 * CM, 2.3 * CM), rot_y=face_rot).done(parent)
+    Part(f'{tag}-Cushion', 'Plaid', smooth=True).box((px, 1.5 * CM, pz + 0.0), (2.0 * CM, 0.22 * CM, 2.0 * CM), rot_y=face_rot).done(parent)
+    rails = Part(f'{tag}-Rails', 'Pine', smooth=True)
+    for y in (2.5, 3.2):
+        px, pz = P(0, -1.05 * CM)
+        rails.cyl((px, y * CM, pz), 0.2 * CM, 2.1 * CM, axis='x', seg=7, rot_y=face_rot)
+    rails.done(parent)
+log_chair(PT, 'ChairL', (-3.3 * CM, 0), -90)
+log_chair(PT, 'ChairR', (3.3 * CM, 0), 90)
 anchor('Seat-1', (-3.3 * CM, SEAT_Y, 0), PT, rot_y=-90)
 anchor('Seat-2', (3.3 * CM, SEAT_Y, 0), PT, rot_y=90)
 anchor('Meal-1', (-1.2 * CM, TOP_Y, 0.2 * CM), PT)
