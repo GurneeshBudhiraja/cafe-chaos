@@ -204,15 +204,20 @@ export class MoodSystem extends createSystem({}) {
     lamps.forEach((lamp, i) => {
       const grow = i === ROOM_LAMP ? 1 + (ANNEX_LIGHT.room.strength - 1) * this.grown : 1;
       lamp.intensity = LAMPS[i].intensity * grow * this.lampsUp * breath(LAMPS[i].breathes, i);
+      // A lamp at zero (by day, or before dusk) is left out of every shader: a point light costs each pixel even when dark.
+      lamp.visible = lamp.intensity > 0.001;
     });
     halos.forEach((halo, i) => {
       halo.material.opacity = HALOS[i].opacity * this.lampsUp * breath(HALOS[i].breathes, i);
+      halo.visible = halo.material.opacity > 0.002;
     });
     // The annex's lanterns breathe as the main room's do, out of step with them, and come up as it rises.
     this.annexLamps.forEach((lamp, i) => {
       const b = breath(true, LAMPS.length + i);
       lamp.intensity = ANNEX_LAMP.intensity * this.grown * this.lampsUp * b;
+      lamp.visible = lamp.intensity > 0.001;
       this.annexHalos[i].material.opacity = ANNEX_LAMP.halo.opacity * this.grown * this.lampsUp * b;
+      this.annexHalos[i].visible = this.annexHalos[i].material.opacity > 0.002;
     });
   }
 }

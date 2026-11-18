@@ -197,7 +197,7 @@ export class Popups {
   /** Show the coins a guest paid (or cost, if negative) at `at` (café space). */
   coins(amount: number, at: Vector3): void {
     this.shown.coins = (this.shown.coins ?? 0) + 1;
-    this.add(coinPicture(amount), at, POPUP.coinSize, 2, POPUP.seconds * 1.1);
+    this.add(this.picture(`coin:${amount}`, () => coinPicture(amount)), at, POPUP.coinSize, 2, POPUP.seconds * 1.1);
   }
 
   /**
@@ -209,7 +209,15 @@ export class Popups {
     this.shown.result = (this.shown.result ?? 0) + 1;
     if (met === of) this.shown.heart = (this.shown.heart ?? 0) + 1;
     if (met === 0) this.shown.shrug = (this.shown.shrug ?? 0) + 1;
-    this.add(resultPicture(met, of), at, POPUP.resultSize, 2, POPUP.seconds * 1.4);
+    this.add(this.picture(`result:${met}/${of}`, () => resultPicture(met, of)), at, POPUP.resultSize, 2, POPUP.seconds * 1.4);
+  }
+
+  /** A popup's picture, drawn once and kept (a few dozen at most: the coin amounts and the wish results). */
+  private readonly pictures = new Map<string, CanvasTexture>();
+  private picture(key: string, draw: () => CanvasTexture): CanvasTexture {
+    let t = this.pictures.get(key);
+    if (!t) this.pictures.set(key, (t = draw()));
+    return t;
   }
 
   /** Let a held popup go: it floats off and fades from now. */

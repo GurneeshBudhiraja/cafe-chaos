@@ -255,16 +255,7 @@ export class GuestActor {
     if (opacity === this.opacity) return;
     this.opacity = opacity;
     this.root.visible = opacity > 0.01;
-    for (const material of this.materials) {
-      const base = (material.userData.baseOpacity as number | undefined) ?? 1;
-      const blended = (material.userData.baseTransparent as boolean | undefined) ?? false;
-      material.opacity = base * opacity;
-      const transparent = blended || opacity < 1;
-      if (material.transparent !== transparent) {
-        material.transparent = transparent;
-        material.needsUpdate = true;
-      }
-    }
+    for (const material of this.materials) material.opacity = ((material.userData.baseOpacity as number | undefined) ?? 1) * opacity;
   }
 
   /** Let go of what this guest alone owns. */
@@ -315,6 +306,11 @@ export class GuestActor {
         copy = source.clone();
         copy.userData.baseOpacity = source.opacity;
         copy.userData.baseTransparent = source.transparent;
+        // Always blended, depth written: at full opacity it draws as the opaque one would, and a fade in or out never
+        // switches `transparent`, which would relink the material's shader (a hitch, and a flash, on the headset
+        // each time a guest arrived or left).
+        copy.transparent = true;
+        copy.depthWrite = true;
         const standard = copy as MeshStandardMaterial;
         if (source.name.startsWith('GuestSkin')) standard.color.multiply(new Color(tint));
         // The skin and the clothes glow a little in their own colour (through their own texture).

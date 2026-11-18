@@ -232,7 +232,7 @@ export class StartMenu {
   /** Players who ask the system for less motion see the still picture, not the clip. */
   private readonly still = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** What the sheet shows ('none' when it is closed). */
-  sheetKind: 'none' | 'settings' | 'warn' | 'quit' | 'buy' | 'leave' = 'none';
+  sheetKind: 'none' | 'settings' | 'warn' | 'quit' | 'buy' | 'leave' | 'trialDone' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card or the shop. */
   cardKind: 'start' | 'pause' | 'failed' = 'start';
   private seed = 1;
@@ -427,6 +427,24 @@ export class StartMenu {
       { id: 'leave-no', kind: 'primary', label: 'KEEP PLAYING' },
       { id: 'leave-yes', kind: 'danger', label: 'LEAVE' },
     ]);
+    this.sheet.show(true);
+  }
+
+  /**
+   * The trial is over (its levels played): the Japanese café is the
+   * player's, the Canadian café costs `price` coins earned there; Buy now
+   * if the Japanese café has them.
+   */
+  openTrialDone(state: { levels: number; price: number; coins: number }): void {
+    this.sheetKind = 'trialDone';
+    const canBuy = state.coins >= state.price;
+    const coins = state.coins.toLocaleString('en');
+    const sentence = `You played the ${state.levels} trial levels. You own the Japanese café. ${canBuy ? `It has ${coins} coins: you can buy the Canadian café now.` : `Earn ${state.price} coins there to buy the Canadian café (it has ${coins}).`}`;
+    const choices: { id: string; kind: 'primary' | 'secondary' | 'danger'; label: string }[] = [];
+    if (canBuy) choices.push({ id: 'trial-buy', kind: 'primary', label: `BUY · ${state.price} COINS` });
+    choices.push({ id: 'trial-japan', kind: canBuy ? 'secondary' : 'primary', label: 'PLAY THE JAPANESE CAFÉ' });
+    choices.push({ id: 'trial-menu', kind: 'secondary', label: 'MAIN MENU' });
+    this.layoutQuestion('Trial over', sentence, choices);
     this.sheet.show(true);
   }
 

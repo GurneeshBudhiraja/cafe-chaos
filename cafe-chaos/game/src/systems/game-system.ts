@@ -795,6 +795,12 @@ export class GameSystem extends createSystem({}) {
     this.backToShop();
   }
 
+  /** The trial is over: its card over the paused café (RESUME brings it back; Buy, the Japanese café or the menu end it). */
+  private askTrialDone(): void {
+    this.menu.card.dimmed = true;
+    this.menu.openTrialDone({ levels: TRIAL_LEVELS, price: CANADA_PRICE, coins: this.book.bank('japan') });
+  }
+
   /** Leaving the trial asks first: its progress is not saved. */
   private askLeave(): void {
     this.menu.card.dimmed = true;
@@ -1063,14 +1069,13 @@ export class GameSystem extends createSystem({}) {
     this.pace();
     this.keep();
     this.guests.holdArrivals(LEVEL.breather);
-    // The trial's levels played: the café goes on, and the bar and a note say it can be bought. "TRIAL DONE!" once,
-    // then no more level numbers (the bar reads "Trial done" until the café is bought).
+    // The trial's levels played: the café stops here (the owner, Nov 17: the trial must end, not run on), "TRIAL
+    // DONE!" on the bar, and the card says the Japanese café is the player's and what the Canadian one costs there.
     if (this.trial && this.level > TRIAL_LEVELS) {
-      if (this.score.trial !== 'done') {
-        this.score.trial = 'done';
-        this.strip.showLevel(this.level, levelBonus(this.level), 'TRIAL DONE!');
-        this.addNote('Trial done', 'shop', NOTE.seconds * 1.5, 'Buy the café in the Shop to keep it.');
-      }
+      this.score.trial = 'done';
+      this.strip.showLevel(this.level, levelBonus(this.level), 'TRIAL DONE!');
+      this.pause();
+      this.askTrialDone();
       return;
     }
     this.strip.showLevel(this.level, levelBonus(this.level));
@@ -1860,6 +1865,23 @@ export class GameSystem extends createSystem({}) {
       case 'leave-no':
         this.closeSheet();
         break;
+      case 'trial-buy':
+        // Bought at the trial's end: what was played is the café's own (buyCanada's trial branch), and the run goes on.
+        this.buyFrom = 'shop';
+        this.menu.openBuy({ price: CANADA_PRICE, coins: this.book.bank('japan'), trial: true, fromJapan: false });
+        break;
+      case 'trial-japan':
+        // Out of the trial, to the start card with the Japanese café first.
+        this.closeSheet();
+        this.endTrial();
+        this.book.setLast('japan');
+        this.toTitle();
+        break;
+      case 'trial-menu':
+        this.closeSheet();
+        this.endTrial();
+        this.toTitle();
+        break;
       case 'hire-janitor2':
         this.shop.hireJanitor2();
         if (this.phase === 'shopping') this.showShop();
@@ -1998,7 +2020,9 @@ export class GameSystem extends createSystem({}) {
         this.pause();
         break;
       case 'resume':
-        this.resume();
+        // The trial's levels are played: it does not go on; the card comes back.
+        if (this.trial && this.level > TRIAL_LEVELS) this.askTrialDone();
+        else this.resume();
         break;
       case 'end':
         // MAIN MENU from the pause card: the level is saved as it stands; CONTINUE carries it on.
