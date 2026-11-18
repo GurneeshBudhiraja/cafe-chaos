@@ -359,7 +359,7 @@ export class GuestSystem extends createSystem({}) {
       this.furniture = cafe.furniture;
       this.clear();
       this.readSeats();
-      this.setLockedTables(this.lockedTables);
+      this.setLockedTables(this.lockedTables, this.hiddenTables);
     }
     // New furniture (the annex's) is taken in whether or not the café is down yet.
     if (cafe.furniture !== this.furniture) this.takeInSeats();
@@ -568,6 +568,7 @@ export class GuestSystem extends createSystem({}) {
     for (const seat of fresh.slice(0, SEAT_HEADROOM - (this.seats.length - this.firstSeatCount))) {
       seat.index = this.seats.length;
       seat.locked = this.lockedTables.has(seat.table);
+      seat.hidden = this.hiddenTables.has(seat.table);
       this.seats.push(seat);
     }
     if (this.wishPool) this.wishPool = openWishes(this.seats.filter((x) => !x.locked), this.quietCorner, this.band);
@@ -579,9 +580,14 @@ export class GuestSystem extends createSystem({}) {
    * locked seat could give it. The game sets it (and again after a
    * purchase, and after the extension's tables come).
    */
-  setLockedTables(locked: ReadonlySet<number>): void {
+  setLockedTables(locked: ReadonlySet<number>, hidden: ReadonlySet<number> = new Set()): void {
     this.lockedTables = locked;
-    for (const seat of this.seats) seat.locked = locked.has(seat.table);
+    this.hiddenTables = hidden;
+    // A hidden table (not drawn: not the next one to open) has no seats: none is aimed at, glows or is tagged.
+    for (const seat of this.seats) {
+      seat.locked = locked.has(seat.table);
+      seat.hidden = hidden.has(seat.table);
+    }
     this.wishPool = openWishes(this.seats.filter((s) => !s.locked), this.quietCorner, this.band);
   }
 
@@ -592,6 +598,7 @@ export class GuestSystem extends createSystem({}) {
     this.wishPool = openWishes(this.seats.filter((s) => !s.locked), this.quietCorner, this.band);
   }
   private lockedTables: ReadonlySet<number> = new Set();
+  private hiddenTables: ReadonlySet<number> = new Set();
   /** The wishes an open seat can meet (all of them until the game says which tables are locked). */
   private wishPool: WishId[] | null = null;
 

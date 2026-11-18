@@ -118,15 +118,6 @@ export interface PauseState {
   served: number;
   goal: number;
 }
-/** The buy card: the table pointed at (its name, its picture and seats), what it costs, and the bank. */
-export interface BuyState {
-  name: string;
-  /** Its picture in the icon set (ICONS). */
-  icon: number;
-  seats: number;
-  price: number;
-  coins: number;
-}
 /** The card when the café's happiness ran out: the level, and how far it got. */
 export interface FailState {
   level: number;
@@ -143,22 +134,6 @@ export interface WarnState {
   level: number;
 }
 
-/**
- * The icon set (public/models/unlock-icons.png, rendered in Blender from
- * the real models in the café's materials): 4 x 2 tiles of 256 px. The
- * staff and the tables are shown by their pictures, not drawings.
- */
-export const ICONS = { barista: 0, table2: 1, table4: 2, bar: 3, quiet: 4, janitor: -1 } as const;
-let icons: HTMLImageElement | null = null;
-const iconListeners: (() => void)[] = [];
-if (typeof Image !== 'undefined') {
-  const img = new Image();
-  img.onload = () => {
-    icons = img;
-    for (const f of iconListeners) f();
-  };
-  img.src = `${import.meta.env.BASE_URL}models/unlock-icons.png`;
-}
 
 /**
  * The cafés' pictures on the start card: the Japanese café's cover, and the
@@ -211,7 +186,7 @@ export class StartMenu {
   /** What the sheet shows ('none' when it is closed). */
   sheetKind: 'none' | 'settings' | 'warn' | 'quit' | 'buy' | 'leave' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card or the shop. */
-  cardKind: 'start' | 'pause' | 'failed' | 'buy' = 'start';
+  cardKind: 'start' | 'pause' | 'failed' = 'start';
   private seed = 1;
   private clock = 0;
   private start: StartState = { tiles: [], price: 0, lesson: true };
@@ -230,7 +205,6 @@ export class StartMenu {
     this.k = this.sheet.width / W;
     this.kh = this.how.width / HW;
     coverListeners.push(() => this.card.paint());
-    iconListeners.push(() => this.card.paint());
   }
 
   /** How to play, in front of the eyes where the start card stands (the game hides the card behind), from `index`. */
@@ -338,13 +312,6 @@ export class StartMenu {
     this.card.show(true);
   }
 
-  /** A locked table pointed at and pinched: buy it, or not now. Shown again if the bank changes. */
-  showBuy(state: BuyState): void {
-    this.cardKind = 'buy';
-    this.card.resize(START_SIZE.width, START_SIZE.height);
-    this.layoutBuy(state);
-    this.card.show(true);
-  }
 
   /** The café's happiness ran out: the level starts again (TRY AGAIN), or back to the menu. */
   showFailed(state: FailState): void {
@@ -908,72 +875,6 @@ export class StartMenu {
       text(ctx, 'Your coins and staff are kept.', mid, H / 2 + 146, 30, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
-  }
-
-  /**
-   * The buy card, wide like the start card: on the left a padlock seal
-   * and what the table is; on the right the price beside the bank, BUY
-   * (moss when the bank can pay; pale, and refused, when it cannot: the
-   * card says how many more coins) and NOT NOW.
-   */
-  private layoutBuy(s: BuyState): void {
-    const SW = Math.round(this.card.width / this.k);
-    const H = Math.round(this.card.height / this.k);
-    const lx = PAD;
-    const lw = 360;
-    const cx = lx + lw + 30;
-    const cw = SW - PAD - cx;
-    const can = s.coins >= s.price;
-    const yNo = H - PAD - 96;
-    const buttons: Button[] = [
-      this.priceButton(this.card, 'buy-yes', cx, yNo - TOUCH_GAP - 150, cw, 150, can ? 'primary' : 'off', 'BUY', s.price),
-      this.button(this.card, 'buy-no', cx, yNo, cw, 96, 'secondary', 'NOT NOW'),
-    ];
-    this.card.set((ctx) => {
-      ctx.clearRect(0, 0, this.card.width, this.card.height);
-      ctx.save();
-      ctx.scale(this.k, this.k);
-      const rc = pen(this.card.canvas);
-      this.paper(ctx, rc, 0, H, SW);
-      const mid = lx + lw / 2;
-      // The table's picture (the real model's render), a small padlock on its frame.
-      const sy = H / 2 - 40;
-      this.iconPortrait(ctx, rc, s.icon, mid, sy, 260, this.seed + 80);
-      const lx2 = mid + 92;
-      const ly2 = sy + 88;
-      rc.circle(lx2, ly2, 64, this.o({ fill: SKETCH.paper, fillStyle: 'solid', stroke: SKETCH.timber, strokeWidth: 3, seed: this.seed + 84 }));
-      rc.rectangle(lx2 - 15, ly2 - 4, 30, 24, this.o({ fill: SKETCH.ink, fillStyle: 'solid', stroke: SKETCH.ink, seed: this.seed + 81 }));
-      rc.arc(lx2, ly2 - 4, 22, 28, Math.PI, Math.PI * 2, false, this.o({ strokeWidth: 4, seed: this.seed + 82 }));
-      text(ctx, s.name, mid, sy + 182, 44, SKETCH.ink);
-      text(ctx, `Seats ${s.seats}`, mid, sy + 230, 32, SKETCH.soft, 'center', false);
-      const tx = cx + cw / 2;
-      text(ctx, 'Open this table?', tx, PAD + 60, 50, SKETCH.ink);
-      const coinsY = PAD + 150;
-      ctx.font = font(38);
-      const word = `You have ${s.coins.toLocaleString('en')}`;
-      const ww = ctx.measureText(word).width;
-      rc.circle(tx - ww / 2 - 30, coinsY, 40, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, seed: this.seed + 83 }));
-      text(ctx, word, tx + 18, coinsY, 38, SKETCH.ink);
-      if (!can) text(ctx, `Need ${(s.price - s.coins).toLocaleString('en')} more`, tx, coinsY + 56, 30, SKETCH.koi, 'center', false);
-      ctx.restore();
-    }, buttons);
-  }
-
-  /** A model's picture from the icon set in a round paper frame (a blank disc until the set has loaded). */
-  private iconPortrait(ctx: CanvasRenderingContext2D, rc: RoughCanvas, tile: number, x: number, y: number, d: number, seed: number): void {
-    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
-    if (!icons || tile < 0) return;
-    const tw = icons.width / 4;
-    const th = icons.height / 2;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, d / 2 - 4, 0, Math.PI * 2);
-    ctx.clip();
-    // The renders have room round them: the middle of the tile, larger, fills the frame.
-    const crop = 0.18;
-    const s = d * 0.98;
-    ctx.drawImage(icons, (tile % 4) * tw + tw * crop, Math.floor(tile / 4) * th + th * crop * 0.6, tw * (1 - crop * 2), th * (1 - crop * 2), x - s / 2, y - s / 2, s, s);
-    ctx.restore();
   }
 }
 

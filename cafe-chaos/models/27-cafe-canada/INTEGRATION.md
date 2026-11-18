@@ -178,7 +178,7 @@ its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −9
 | `PatioSpot-1/2` | (0.15, 0.11), (0.31, 0.11) (the deck's front half, either side of the heater, clear of the way from the gate) | the deck's tables: `patio` and `outside` |
 | `FireSpot-1/2/3` | round the ring at radius 8.5 cm, 120° apart (front-left, front-right, behind toward the cabin; none straight in front, which put a chair past the plate's front edge), each facing the fire | the Muskoka chairs: `bonfire`, `outside` |
 | `MusicianSpot` | (0.205, 0.024, −0.19), facing −Z | the violinist once bought; seats within earshot meet `music` |
-| `Exit` | (0.06, 0.024, 0.295), facing +Z | the foot of the exit walkway at the plate's front edge: where guests leave the café (new; the game's `guests/paths.ts` CANADA_EXIT_LANES) |
+| `Exit` | (0.06, 0.024, 0.295), facing +Z | the foot of the exit walkway at the plate's front edge: where guests leave the café (new; the game still sends them out by the gate until `canada-layout.ts` uses it) |
 | `BenchSpot` | (0.235, 0.024, 0.165) | kept for compatibility (unused: the queue stands outside) |
 
 ## Walkways
@@ -248,13 +248,13 @@ pianist played standing with its legs through the bench and the fiddler's neck h
 
 | File | Who | Look | Extra nodes / clips |
 |---|---|---|---|
-| `barista-maple.glb` | barista 1 | brown hair, red cap with a cream brim, cream shirt, red apron, denim | |
-| `barista-aspen.glb` | barista 2 | blonde bun with a red tie, cream shirt, red apron, white shoes | |
-| `barista-rowan.glb` | barista 3 | dark skin, black hair, cream toque with a red pompom, red apron | `Toque` (on the head) |
-| `barista-birch.glb` | janitor (open from the start) | red lumberjack plaid, dark overalls with a brass button, spruce toque | `Toque`, `Shovel` (on the back), `Cloth` (right hand), `Bucket` (beside, as the Japanese janitor: show it while cleaning); clip `Wipe` (2 s) |
-| `barista-cedar.glb` | janitor (to unlock) | green plaid, dark overalls, red toque band as earmuffs | `Earmuffs`, `Shovel`, `Cloth`, `Bucket`; clip `Wipe` |
-| `barista-fiddler.glb` | the violinist (purchasable) | cream quilted parka with a red zip, denim, red-and-cream toque | `Violin` (on the body: on the left shoulder tucked under the chin, the neck reaching forward and out to the left, strings up), `Bow` (in the right hand, so it saws); clip `Play` (2 s loop: the left hand on the violin's neck with a vibrato, the bow arm sawing across the strings at chin height, a sway, a lean onto the chin rest) |
-| `barista-pianist.glb` | the pianist (purchasable) | navy cardigan, red bow tie, dark hair in a bun with a red ribbon | clip `PlayPiano` (2 s loop, sitting: the rig lowered 8 mm onto the bench, legs straight out under the keys, hands rising and falling out of step and drifting along the keys, a sway and a nod); place it at `PianoSpot` |
+| `barista-maple.glb` | barista 1 | brown hair, a green cap with a white brim, a white shirt under green overalls | |
+| `barista-aspen.glb` | barista 2 | blonde bun with a green tie, a white shirt under green overalls, white shoes | |
+| `barista-rowan.glb` | barista 3 | dark skin, black hair, a white toque with a green pompom, a white shirt under green overalls | `Toque` (on the head) |
+| `barista-birch.glb` | janitor (open from the start) | blue work uniform: a blue shirt under dark blue overalls, a navy toque | `Toque`, `Shovel` (on the back), `Cloth` (right hand), `Bucket` (beside, as the Japanese janitor: show it while cleaning); clip `Wipe` (2 s) |
+| `barista-cedar.glb` | janitor (to unlock) | blue work uniform: a blue shirt under dark blue overalls, navy earmuffs | `Earmuffs`, `Shovel`, `Cloth`, `Bucket`; clip `Wipe` |
+| `barista-fiddler.glb` | the violinist (purchasable) | dressed as the pianist: a black tailcoat over a white shirt front with gold trim, a red bow tie, black trousers, the hair in a bun with a red ribbon | `Violin` (on the body: on the left shoulder tucked under the chin, the neck reaching forward and out to the left, strings up), `Bow` (in the right hand, so it saws); clip `Play` (2 s loop: the left hand on the violin's neck with a vibrato, the bow arm sawing across the strings at chin height, a sway, a lean onto the chin rest) |
+| `barista-pianist.glb` | the pianist (purchasable) | a black tailcoat over a white shirt front with gold trim, a red bow tie, black trousers, dark hair in a bun with a red ribbon | clip `PlayPiano` (2 s loop, sitting: the rig lowered 8 mm onto the bench, legs straight out under the keys, hands rising and falling out of step and drifting along the keys, a sway and a nod); place it at `PianoSpot` |
 
 The game plays the fiddler's `Play` where it plays the Japanese musician's `Strum`; the `Strum`
 clip is still there (the guitar hand pose) if ever needed. The root extra `barista` holds the name.

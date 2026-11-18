@@ -21,6 +21,8 @@
 import { AnimationMixer, AssetManager, Color, LoopRepeat, type AnimationAction, type AnimationClip, type Material, type Mesh, type MeshStandardMaterial, type Object3D, type SkinnedMesh } from '@iwsdk/core';
 import { foldParts } from '../lib/fold-parts.js';
 import { GUEST_MODEL, wardrobeOf, type Look } from './cast.js';
+import { isCanada } from '../cafe/style.js';
+import { DAY } from '../light/mood.js';
 
 export type ClipName = 'Idle' | 'Impatient' | 'Walk' | 'Lifted' | 'SitIdle' | 'SitHappy' | 'SitEating' | 'SitUnhappy' | 'StairsUp' | 'StairsDown';
 export type Pose = 'standing' | 'seated';
@@ -93,6 +95,8 @@ export class GuestActor {
   /** Each face part's scale as the model has it at rest (before any clip). */
   private readonly restScale = new Map<Object3D, number>();
   private readonly materials: Material[] = [];
+  /** Its own light from within: lower by day (the Canadian café: light/mood.ts DAY). */
+  private readonly glow = isCanada() ? DAY.characterGlow.guest : GLOW;
   /** How brightened it is now (setHighlight). */
   private highlight = 0;
   private readonly skins: SkinnedMesh[] = [];
@@ -241,7 +245,7 @@ export class GuestActor {
     this.highlight = amount;
     for (const material of this.materials) {
       const standard = material as MeshStandardMaterial;
-      if (standard.emissiveMap) standard.emissiveIntensity = GLOW + HIGHLIGHT * amount;
+      if (standard.emissiveMap) standard.emissiveIntensity = this.glow + HIGHLIGHT * amount;
     }
   }
 
@@ -317,7 +321,7 @@ export class GuestActor {
         if (standard.map && standard.emissive) {
           standard.emissive.copy(standard.color);
           standard.emissiveMap = standard.map;
-          standard.emissiveIntensity = GLOW;
+          standard.emissiveIntensity = this.glow;
         }
         own.set(source, copy);
         this.materials.push(copy);

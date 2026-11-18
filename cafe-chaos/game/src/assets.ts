@@ -26,7 +26,7 @@ export const LATER_PIECES = ['cafe-annex', 'unlock-plaque', 'window-booth', 'tab
  * card's Try free waits for them if they are not in yet.
  */
 export const CANADA_PIECES = ['cafe-canada', 'table-ca-2', 'table-ca-4', 'patio-table', 'fire-chair'] as const;
-export const CANADA_GUESTS = ['guest-snowbit', 'guest-beavertail', 'guest-nanaimo', 'accessories-canada'] as const;
+export const CANADA_GUESTS = ['guest-snowbit', 'guest-beavertail', 'guest-nanaimo', 'guest-doubledouble', 'guest-buttertart', 'accessories-canada'] as const;
 export const CANADA_STAFF = ['barista-maple', 'barista-aspen', 'barista-rowan', 'barista-birch', 'barista-cedar', 'barista-fiddler', 'barista-pianist'] as const;
 
 export type ModelName =

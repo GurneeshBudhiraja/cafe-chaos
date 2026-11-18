@@ -42,6 +42,10 @@ import { forecastFor } from '../game/forecast.js';
 import { CafeEvents } from '../game/events.js';
 import { Snow } from '../ambience/snow.js';
 import type { Forecast } from '../game/rules.js';
+import { TABLE_RINGS } from '../cafe/layout.js';
+import { CANADA_TABLE_RINGS } from '../cafe/canada-layout.js';
+import { newSeed, tableOrder } from '../game/table-order.js';
+import { PLACES } from '../guests/wishes.js';
 import { freshProgress, SaveBook, TEST_MODE, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS, SPAWN_SECONDS } from '../guests/rules.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
@@ -53,7 +57,7 @@ import { BaristaSystem } from './barista-system.js';
 import { sketchFontReady } from '../ui/sketch.js';
 import { StripSystem } from './strip-system.js';
 import { SoundSystem } from './sound-system.js';
-import { ICONS, LEVELS, MENU_SIZE, StartMenu, type CafeTile } from '../ui/start-menu.js';
+import { LEVELS, StartMenu, type CafeTile } from '../ui/start-menu.js';
 import type { DrawerRow } from '../ui/shop-drawer.js';
 import { TipCard, TIP } from '../ui/tip-card.js';
 import { TIP_GAP, TIP_ORDER, TIPS, tipIcon, type TipId } from '../game/tips.js';
@@ -97,8 +101,6 @@ const RAY = { awayFromCafe: 0.04, reach: 4, edge: 0.15 };
  * magnifies it (the Heisenberg effect, Wolf et al. CHI 2020).
  */
 const PINCH_NUDGE = { before: 0.12 };
-/** Tables the same distance from the front are put in order by a random amount up to this (metres, café space), fixed per café. */
-const TABLE_ORDER = { jitter: 0.01 };
 /**
  * A free hand raised and pointing shows the short beam (hands/hand-ray.ts)
  * even before the ray is on anything, so pointing is discoverable: a hand
@@ -195,10 +197,6 @@ export class GameSystem extends createSystem({}) {
   notesShown = 0;
   private noteLeft = 0;
   private noteRest = 0;
-  /** Each table's place in the opening order for this café (nearer the front first; `tableOrder`). */
-  private tableJitter = new Map<number, number>();
-  /** The table the buy card is about (an index into the café's pieces), while it is up. */
-  buying = -1;
   /** The tip card (game/tips.ts), the tip it shows (null: none), how long it has been up, and how long since the last went. */
   readonly tip = new TipCard();
   tipShown: TipId | null = null;
@@ -538,7 +536,11 @@ export class GameSystem extends createSystem({}) {
     const s = this.save;
     this.score.bank = s.bank;
     this.shop.restore(s.hires, s.tables, s.janitor, s.janitor2, s.musicians);
-    this.tableJitter.clear();
+    // A game with no table order yet (a new game, or a save from before there was one): its seed, drawn once and kept.
+    if (!s.tableSeed) {
+      s.tableSeed = newSeed() || 1;
+      this.persist();
+    }
     this.readyAt = -1;
     this.applyLocks();
     this.score.trial = this.trial ? (s.level > TRIAL_LEVELS ? 'done' : 'on') : 'off';
@@ -1355,29 +1357,32 @@ export class GameSystem extends createSystem({}) {
   // ---------------------------------------------------------------- tables
 
   /**
-   * Lock every table the player has not bought (a grey, see-through ghost),
-   * open the rest, and tell the guests which seats are off.
+   * The tables: the ones bought (and the starting ones) open, the next in
+   * this game's order a ghost, every other hidden (cafe/ghost-table.ts);
+   * and the guests told which seats are off.
    */
   private applyLocks(): void {
     const cafe = this.cafe;
-    let changed = false;
-    for (const index of cafe.tables) if (cafe.setTableLocked(index, !this.shop.tables.includes(index))) changed = true;
-    // The open tables are folded into the room's batch; the locked ones stand apart as ghosts.
-    if (changed) cafe.rebatch();
-    this.guests.setLockedTables(cafe.lockedTables);
+    cafe.setTables(this.shop.tables, this.nextTable() ?? -1);
+    cafe.setGhostReady(this.shop.tableAffordable, this.shop.tablePrice);
+    this.guests.setLockedTables(cafe.lockedTables, this.hiddenTables());
     this.rebuildPanels();
   }
 
+  /** The tables not open and not the ghost: not drawn, so their seats are not there either. */
+  private hiddenTables(): Set<number> {
+    const next = this.nextTable();
+    return new Set([...this.cafe.lockedTables].filter((t) => t !== next));
+  }
+
   /**
-   * The tables are bought in the Shop, the nearest to the player first
-   * (the owner, after the first playtest: pointing at padlocks over far
-   * tables missed and caught stray pinches; and a near table is the one
-   * easiest to seat guests at). When the bank first reaches the next
-   * table's price (once a price: buying one raises it), "TABLE READY" and
-   * the price show on the bar for a moment, as a level does: mid-rush
-   * nobody looks anywhere else.
+   * The ghost's look follows the bank (faint, or ready with its price tag);
+   * and when the bank first reaches the next table's price (once a price:
+   * buying one raises it), "TABLE READY" and the price show on the bar for
+   * a moment, as a level does: mid-rush nobody looks anywhere else.
    */
   private tendTables(): void {
+    this.cafe.setGhostReady(this.shop.tableAffordable, this.shop.tablePrice);
     if (this.phase !== 'run' || !this.cafe.placed || this.cafe.arriving) return;
     const price = this.shop.tablePrice;
     if (!this.shop.tableAffordable || price === this.readyAt || this.nextTable() === null) return;
@@ -1386,32 +1391,45 @@ export class GameSystem extends createSystem({}) {
   }
 
   /**
-   * The locked tables in the order they open: nearest the café's front
-   * middle (the player's side) first. Tables the same distance (a pair, left
-   * and right) are ordered by a small random amount fixed for this café, so
-   * which of the pair comes first differs from one new game to the next.
+   * This game's table order (game/table-order.ts): the café's rings by
+   * reach, shuffled with the seed kept in its save, so Continue shows the
+   * same next table and a new game a new order.
    */
-  private tableOrder(): number[] {
+  tableOrder(): number[] {
     const cafe = this.cafe;
-    const front = cafe.frontEdge(this.spot);
-    cafe.cafe.worldToLocal(front);
-    const away = (t: number): number => {
-      if (!cafe.tableTop(t, this.at)) return Infinity;
-      if (!this.tableJitter.has(t)) this.tableJitter.set(t, Math.random() * TABLE_ORDER.jitter);
-      return Math.hypot(this.at.x - front.x, this.at.z - front.z) + this.tableJitter.get(t)!;
-    };
-    return [...cafe.lockedTables].sort((a, b) => away(a) - away(b));
+    const rings = current.id === 'canada' ? CANADA_TABLE_RINGS : TABLE_RINGS;
+    const key = `${current.id}|${this.save.tableSeed}`;
+    if (key !== this.orderKey) {
+      this.orderKey = key;
+      this.order = tableOrder(this.save.tableSeed, rings, (index) => {
+        const piece = cafe.pieces[index];
+        const x = piece?.position.x ?? 0;
+        // Window and gate sides are the Japanese café's (its wishes); the Canadian café's rings are its places.
+        const side = current.id === 'canada' ? 'middle' : x < PLACES.windowX ? 'window' : x > PLACES.doorX ? 'gate' : 'middle';
+        return { index, kind: piece?.name ?? '', side };
+      });
+    }
+    return this.order;
   }
+  private order: number[] = [];
+  private orderKey = '';
 
   /** The table OPEN in the Shop opens next (null: all open). */
   nextTable(): number | null {
-    return this.tableOrder()[0] ?? null;
+    const open = this.shop.tables;
+    return this.tableOrder().find((t) => !open.includes(t)) ?? null;
   }
 
-  /** OPEN in the Shop: the next table opens (paid for), confetti from it; refused (an "uh-uh") if the bank is short. */
+  /**
+   * OPEN in the Shop (only when the bank can pay: the drawer's button is
+   * pale and refused otherwise): no question, it opens at once. The ghost
+   * fades into the real table with a sparkle and the unlock sound, the
+   * coins count down on the bar, and the next ghost fades in.
+   */
   private openTable(): void {
     const index = this.nextTable();
     if (index === null || !this.shop.buyTable(index)) return;
+    this.cafe.revealTable(index);
     this.applyLocks();
     if (this.cafe.tableTop(index, this.at)) this.strip.sparkle(this.cafe.cafe.localToWorld(this.at.clone()));
     this.keep();

@@ -11,6 +11,8 @@
 
 import { AnimationMixer, AssetManager, Color, LoopOnce, LoopRepeat, type AnimationAction, type AnimationClip, type Mesh, type MeshStandardMaterial, type Object3D } from '@iwsdk/core';
 import { foldParts } from '../lib/fold-parts.js';
+import { isCanada } from '../cafe/style.js';
+import { DAY } from '../light/mood.js';
 
 export const BARISTA_NAMES = ['sora', 'momo', 'yuki'] as const;
 /** The Canadian café's three baristas, its two janitors and its two musicians (models/27-cafe-canada/INTEGRATION.md). */
@@ -70,7 +72,8 @@ export class Barista {
       if (skin.map) {
         skin.emissive = new Color(0xffffff);
         skin.emissiveMap = skin.map;
-        skin.emissiveIntensity = GLOW;
+        // Lower by day (the Canadian café's daylight: light/mood.ts DAY).
+        skin.emissiveIntensity = isCanada() ? DAY.characterGlow.staff : GLOW;
       }
       for (const part of parts) part.material = skin;
     }

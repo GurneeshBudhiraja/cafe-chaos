@@ -25,15 +25,14 @@ export const BACK_BAR_YAW = Math.PI;
 export const SHUFFLE_M = 0.022;
 
 /**
- * The Canadian café's stations: its counter came 4.5 cm forward in the
- * layout pass of 17 Nov, and the shell's `BaristaSpot-1/2/3` with it, to
- * z -0.159 on a duckboard now 11.5 cm deep (z -0.27 to -0.155). The
- * anchor is under the counter top's back lip, where the walk grid has no
- * ground (it starts at z -0.173), so the stations stand just behind it,
- * as they stood 1.7 cm behind the anchor before the pass. The baristas
- * walk along the duckboard to the way out at the counter's left end.
+ * The Canadian café's stations: on the duckboard behind the counter, in the
+ * middle of the strip the walk grid finds there (z -0.222 to -0.175). The
+ * shell's `BaristaSpot-1/2/3` anchors (z -0.159, moved 4.5 cm forward with
+ * the counter on 17 Nov) are on the counter top's back edge (it reaches back
+ * to -0.159), off the ground. The baristas walk along the strip to the way
+ * out at the counter's left end.
  */
-const CANADA_STATION_Z = -0.175;
+const CANADA_STATION_Z = -0.185;
 
 const board = (x: number, z: number): Vector3 => new Vector3(x, DUCKBOARD_TOP_M, z);
 

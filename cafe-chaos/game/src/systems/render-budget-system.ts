@@ -34,6 +34,7 @@ export class RenderBudgetSystem extends createSystem({}) {
   shadowDraws = 0;
   private readonly last = new Matrix4();
   private settle = SETTLE_FRAMES;
+  private furniture = -1;
   private session: XRSession | null = null;
   private frames = 0;
   private elapsed = 0;
@@ -55,8 +56,13 @@ export class RenderBudgetSystem extends createSystem({}) {
   update(delta: number): void {
     const system = this.world.getSystem(CafeSystem);
     const cafe = system?.cafe;
-    // The annex rising out of the plate casts a changing shadow.
+    // The annex rising out of the plate casts a changing shadow; and the furniture changed (a table shown or hidden, the
+    // café swapped for the other) casts a new one.
     if (system?.annex && system.annex.rising < 1) this.touchShadows();
+    if (system && system.furniture !== this.furniture) {
+      this.furniture = system.furniture;
+      this.touchShadows();
+    }
     this.keepShadows(cafe?.matrixWorld);
     this.keepRate();
     this.measure(delta, cafe?.position);

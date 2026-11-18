@@ -9,7 +9,7 @@
  * 4. the bonfire's three chairs are one table (company, alone, quiet);
  * 5. a cold guest at a bonfire chair is warm, at a deck table it is not,
  *    and it waits less there; a storm drains the deck faster;
- * 6. the fiddler's music reaches the deck tables (4, 5), the pianist's the
+ * 6. the fiddler's music reaches the deck tables (6, 7), the pianist's the
  *    roof's, and neither is quiet there.
  *
  * Usage: dev server running, then `node scripts/check-canada-wishes.mjs`.
@@ -45,12 +45,12 @@ const r = await page.evaluate(async () => {
   g.stormOutside = 1.3;
   const seats = g.seats.filter((s) => !s.takeaway);
   const band = (n) => CANADA_PLACES.musicians.slice(0, n).map((m) => new V(m.x, m.y, m.z));
-  const looks = ['snowbit', 'beavertail', 'nanaimo'].map((species) => ({ species, tint: 0xffffff, tintName: 'plain', outfit: [] }));
+  const looks = ['snowbit', 'beavertail', 'nanaimo', 'doubledouble', 'buttertart'].map((species) => ({ species, tint: 0xffffff, tintName: 'plain', outfit: [] }));
   const problems = [];
   const seen = {};
   const allLocked = (open) => new Set([...new Set(seats.map((s) => s.table))].filter((t) => !open.includes(t)));
   const scenarios = [];
-  for (const open of [[1, 2], [1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]])
+  for (const open of [[1, 2], [1, 2, 3, 4, 5, 6, 7], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]])
     for (const musicians of [0, 1, 2]) for (const storm of [false, true]) for (const cold of [false, true]) scenarios.push({ open, musicians, storm, cold });
   for (const sc of scenarios) {
     g.setBand(band(sc.musicians));
@@ -59,7 +59,7 @@ const r = await page.evaluate(async () => {
     for (let level = 1; level <= 8; level++) {
       g.level = level;
       for (let i = 0; i < 60; i++) {
-        const look = looks[i % 3];
+        const look = looks[i % looks.length];
         const wishes = g.canadaWishes(look, sc.cold);
         for (const w of wishes) {
           seen[w] ??= 99;
@@ -89,10 +89,10 @@ const r = await page.evaluate(async () => {
   // Cold drain.
   const fake = (t, cold) => ({ seat: at(t), cold });
   g.storm = false;
-  const drains = { coldDeck: g.coldDrain(fake(4, true)), coldFire: g.coldDrain(fake(6, true)), coldCabin: g.coldDrain(fake(1, true)), warmDeck: g.coldDrain(fake(4, false)) };
+  const drains = { coldDeck: g.coldDrain(fake(6, true)), coldFire: g.coldDrain(fake(8, true)), coldCabin: g.coldDrain(fake(1, true)), warmDeck: g.coldDrain(fake(6, false)) };
   g.storm = true;
-  drains.stormDeck = g.coldDrain(fake(4, false));
-  drains.stormFire = g.coldDrain(fake(7, false));
+  drains.stormDeck = g.coldDrain(fake(7, false));
+  drains.stormFire = g.coldDrain(fake(9, false));
   g.storm = false;
   const fiddler = band(1);
   const both = band(2);
@@ -101,25 +101,25 @@ const r = await page.evaluate(async () => {
     nproblems: problems.length,
     seen,
     meets: { inside: meets('inside'), board: meets('board'), lake: meets('lake'), warm: meets('warm'), outside: meets('outside') },
-    coldWarm: { fire: grant('warm', 6, { cold: true }) && grant('warm', 7, { cold: true }), deck: grant('warm', 4, { cold: true }), notColdFire: grant('warm', 7) },
+    coldWarm: { fire: grant('warm', 8, { cold: true }) && grant('warm', 10, { cold: true }), deck: grant('warm', 6, { cold: true }), notColdFire: grant('warm', 9) },
     fireOneTable: new Set(fire.map((s) => g.tables.get(s.index))).size === 1,
-    fireCompany: grant('company', 7, { sitters: sitterAt(8) }) && !grant('alone', 7, { sitters: sitterAt(8) }) && !grant('quiet', 7, { sitters: sitterAt(6) }),
+    fireCompany: grant('company', 9, { sitters: sitterAt(10) }) && !grant('alone', 9, { sitters: sitterAt(10) }) && !grant('quiet', 9, { sitters: sitterAt(8) }),
     fiddler: tables.filter((t) => seats.filter((s) => s.table === t).every((s) => W.grants('music', s, -1, [], g.tables, -1, null, fiddler))),
     fiddlerAny: tables.filter((t) => seats.some((s) => s.table === t && W.grants('music', s, -1, [], g.tables, -1, null, fiddler))),
     pianist: tables.filter((t) => seats.filter((s) => s.table === t).every((s) => W.grants('music', s, -1, [], g.tables, -1, null, [new V(9, 9, 9), both[1]]))),
-    quietUnderMusic: [4, 5, 9, 10, 11, 12].filter((t) => grant('quiet', t, { band: both })),
+    quietUnderMusic: [6, 7, 11, 12, 13, 14].filter((t) => grant('quiet', t, { band: both })),
     drains,
   };
 });
 
 check('every card can be met by one open seat', r.nproblems === 0, r.nproblems ? r.problems.join(' | ') : 'all scenarios, levels 1-8');
 check('difficulty by level', r.seen.lake >= 2 && r.seen.bonfire >= 2 && r.seen.board >= 2 && r.seen.upstairs >= 2 && r.seen.quiet >= 3 && r.seen.music >= 3 && r.seen.inside === 1 && r.seen.warm === 1, JSON.stringify(r.seen));
-check('inside, board, lake at their tables', r.meets.inside.join() === '1,2,3' && r.meets.board.join() === '3' && r.meets.lake.join() === '4,5', JSON.stringify(r.meets));
+check('inside, board, lake at their tables', r.meets.inside.join() === '1,2,3,4,5' && r.meets.board.join() === '3' && r.meets.lake.join() === '6,7', JSON.stringify(r.meets));
 check('bonfire chairs are one table', r.fireOneTable && r.fireCompany, `one ${r.fireOneTable}, company/alone/quiet ${r.fireCompany}`);
 check('a cold guest is warm at the bonfire, not on the deck', r.coldWarm.fire && !r.coldWarm.deck && !r.coldWarm.notColdFire, JSON.stringify(r.coldWarm));
 check('cold and storm drain outside, not at the fire', Math.abs(r.drains.coldDeck - 1 / 0.75) < 1e-6 && r.drains.coldFire === 1 && r.drains.coldCabin === 1 && r.drains.warmDeck === 1 && Math.abs(r.drains.stormDeck - 1.3) < 1e-6 && r.drains.stormFire === 1, JSON.stringify(r.drains));
-check('the fiddler reaches the deck tables', r.fiddler.includes(4) && r.fiddler.includes(5), `every seat at ${r.fiddler.join(',')}; some seat at ${r.fiddlerAny.join(',')}`);
-check('the pianist reaches all four roof tables', [9, 10, 11, 12].every((t) => r.pianist.includes(t)) && r.pianist.every((t) => t >= 9), r.pianist.join(','));
+check('the fiddler reaches the deck tables', r.fiddler.includes(6) && r.fiddler.includes(7) && r.fiddler.every((t) => t >= 4), `every seat at ${r.fiddler.join(',')}; some seat at ${r.fiddlerAny.join(',')}`);
+check('the pianist reaches all four roof tables', [11, 12, 13, 14].every((t) => r.pianist.includes(t)) && r.pianist.every((t) => t >= 11), r.pianist.join(','));
 check('no table in earshot is quiet', r.quietUnderMusic.length === 0, r.quietUnderMusic.join(',') || 'none');
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | ') || 'none');
 await browser.close();
