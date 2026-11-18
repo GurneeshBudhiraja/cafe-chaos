@@ -385,6 +385,12 @@ missed frame shows as judder and smearing when the head moves).
   once the café is up and keeps what it compiled; the lamps stay in the
   shaders by night at any strength; the lights hang on a rig beside the
   café, so hiding the café for a pause does not change the set of lights.
+- **A busy café plans cheaply.** The servers' dispatcher weighs walking
+  lengths, not full paths (`NavGrid.distance`): the walks from each
+  station are worked out ahead and kept, and a plan makes at most 8 new
+  path searches for servers on the move. With ten guests a plan once took
+  up to 26 ms here (several missed frames on the headset, seen as the
+  whole café stuttering); now under 4 ms.
 - **The anchor** waits a second after the headset comes back before it
   corrects the café, and makes a jump of over 2 cm in one step.
 - Add `?fps` to the address for a frames-per-second readout over the café.

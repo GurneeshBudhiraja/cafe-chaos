@@ -59,7 +59,8 @@ await page.evaluate(() => {
 await until(() => window.__cafe.guests.prewarmed || window.__cafe.guests.warm, 30000);
 await frames(60);
 
-const cost = async () => { await frames(3); return page.evaluate(() => ({ ...window.__frame, programs: window.__cafe.world.renderer.info.programs.length, links: window.__cafe.budget.probe?.links ?? 0 })); };
+// The links counted live (lib/probe.ts wraps linkProgram), not the readout's figure, which is only refreshed twice a second.
+const cost = async () => { await frames(3); return page.evaluate(async () => ({ ...window.__frame, programs: window.__cafe.world.renderer.info.programs.length, links: (await import('/src/lib/probe.ts')).COUNTS.links })); };
 /** The programs alive now, by a short name (shader type and custom key) and their full key. */
 const programs = () => page.evaluate(() => window.__cafe.world.renderer.info.programs.map((p) => ({ id: p.id, name: p.name, key: p.cacheKey })));
 const linkedSince = (was, now) => now.filter((p) => !was.some((q) => q.id === p.id)).map((p) => `${p.name} [${p.key.split(',').slice(-4).join(',')}]`);
@@ -83,9 +84,25 @@ const fill = async (n, looks = null) => {
 
 const upAt = await cost();
 const upPrograms = await programs();
+// Name every link from here on (the shader's name, and the step it happened at). The emulator draws its room with its
+// own copy of three.js (`iwer-injection-runtime`): its links are not the game's and are left out.
+await page.evaluate(() => {
+  window.__linked = [];
+  const proto = WebGL2RenderingContext.prototype;
+  const link = proto.linkProgram;
+  proto.linkProgram = function (program) {
+    if (!/iwer-injection-runtime/.test(new Error().stack ?? '')) {
+      const names = this.getAttachedShaders(program).map((s) => (this.getShaderSource(s).match(/#define SHADER_NAME (.*)/) ?? [])[1]).filter(Boolean);
+      window.__linked.push(`${window.__step ?? '?'}: ${names[0] || 'unnamed'}`);
+    }
+    return link.call(this, program);
+  };
+});
+const step = (name) => page.evaluate((n) => (window.__step = n), name);
 console.log(`café up: ${upAt.calls} draw calls, ${(upAt.triangles / 1000).toFixed(0)}k triangles, ${upAt.programs} programs`);
 const table = [];
 for (const n of [3, 6, 10]) {
+  await step(`fill ${n}`);
   await fill(n);
   const c = await cost();
   table.push({ guests: await guestsNow(), ...c });
@@ -107,20 +124,24 @@ const looks = await page.evaluate(async () => {
   const species = style.isCanada() ? cast.CANADA_SPECIES : cast.SPECIES;
   return species.flatMap((s) => [{ species: s, tint: 0xfaa8c2, tintName: 'sakura pink', outfit: cast.fullOutfit(s).slice(0, 2) }, { species: s, tint: 0xffffff, tintName: 'plain', outfit: cast.fullOutfit(s).slice(2, 4) }]);
 });
+await step('dressed');
 await fill(Math.min(10, looks.length), looks);
 // One lit up (a hand near it), one cold if the café has the cold.
 await page.evaluate(() => { const g = window.__cafe.guests.guests[0]; g.actor.setHighlight(1); window.__cafe.guests.guests[1]?.actor.setCold?.(true); });
 await frames(10);
 const dressed = await cost();
+await step('pause');
 await page.evaluate(() => window.__cafe.game.pause());
 await frames(20);
 const paused = await cost();
+await step('resume');
 await page.evaluate(() => window.__cafe.game.resume());
 await frames(20);
 const resumed = await cost();
-const linksCounted = resumed.links - upAt.links;
+const named = await page.evaluate(() => window.__linked);
+const linksCounted = named.length;
 const fresh = linkedSince(upPrograms, await programs());
-check('no shader program is linked after the café is up (a crowd; every species dressed, lit, cold; a pause and resume)', linksCounted <= 0, `links counted ${linksCounted} (programs ${upAt.programs} up, ${before.programs} crowded, ${dressed.programs} dressed, ${paused.programs} paused, ${resumed.programs} resumed)${fresh.length ? `; new: ${fresh.join(' | ')}` : ''}`);
+check('no shader program is linked after the café is up (a crowd; every species dressed, lit, cold; a pause and resume)', linksCounted <= 0, `game links counted ${linksCounted} (programs ${upAt.programs} up, ${before.programs} crowded, ${dressed.programs} dressed, ${paused.programs} paused, ${resumed.programs} resumed)${fresh.length ? `; new: ${fresh.join(' | ')}` : ''}${named.length ? `; linked: ${named.join(' | ')}` : ''}`);
 
 const errors = await h.finish();
 check('no console errors', errors.length === 0, errors.length ? errors.slice(0, 3).join(' | ') : 'clean');

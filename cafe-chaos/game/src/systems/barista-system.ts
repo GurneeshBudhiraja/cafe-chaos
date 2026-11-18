@@ -51,6 +51,11 @@ import { Walk, yawDelta } from '../guests/walker.js';
 import { CafeSystem } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
 
+/** Walks from the stations worked out ahead each frame (each about a tenth of a millisecond here). */
+const WALKS_AHEAD_PER_FRAME = 4;
+/** Path searches one plan may make for servers on the move (each about a tenth of a millisecond here, more on the headset). */
+const ON_THE_WAY_SEARCHES = 8;
+
 /**
  * working: at its station. shuffling: a step along the bar. backBar:
  * turned to the back bar. waving. out: carrying a tray to a guest.
@@ -258,6 +263,7 @@ export class BaristaSystem extends createSystem({}) {
     }
     // In the desktop preview and while the café pops up they simply work; orders wait for the café to be down.
     if (cafe.placed && !cafe.arriving) {
+      this.walkAhead();
       this.greet();
       this.takeOrders();
       this.sinceplan += delta;
@@ -501,6 +507,49 @@ export class BaristaSystem extends createSystem({}) {
     return best;
   }
 
+  /** How far a server at `from` walks to the nearest of an order's standing places (metres; Infinity: none reachable). */
+  private walkTo(from: Vector3, order: Order, keep = false): number {
+    // Nearest by a straight line first; a place whose straight line is already longer than the best walk is passed by.
+    const points = order.points.map((point) => ({ point, line: Math.hypot(point.stand.x - from.x, point.stand.z - from.z) })).sort((a, b) => a.line - b.line);
+    let best = Infinity;
+    for (const { point, line } of points) {
+      if (line >= best) break;
+      best = Math.min(best, this.cafeSystem.walkDistance(from, point.stand, undefined, keep));
+    }
+    return best;
+  }
+
+  /**
+   * The walks from each server's station to every place it may serve
+   * from, worked out ahead, a few a frame once the café is up, and kept:
+   * a plan with servers free at the bar then looks them up instead of
+   * searching (the first plan of a rush made frames of 20 ms here, far more
+   * on the headset).
+   */
+  private walkAhead(): void {
+    const guests = this.guests;
+    if (!guests) return;
+    const homes = this.baristas.map((m) => m.home);
+    const key = `${guests.seats.length}|${homes.length}|${this.cafeSystem.furniture}|${this.rooms}`;
+    if (key !== this.aheadKey) {
+      this.aheadKey = key;
+      this.ahead = 0;
+    }
+    const total = guests.seats.length * homes.length;
+    for (let n = 0; n < WALKS_AHEAD_PER_FRAME && this.ahead < total; this.ahead++) {
+      const seat = guests.seats[Math.floor(this.ahead / homes.length)];
+      const home = homes[this.ahead % homes.length];
+      for (const point of this.pointsFor(seat)) {
+        this.cafeSystem.walkDistance(home, point.stand, undefined, true);
+        n++;
+      }
+    }
+  }
+  private aheadKey = '';
+  private ahead = 0;
+  /** Plans made (which server on the move is weighed first turns with it). */
+  private plans = 0;
+
   /**
    * The dispatcher: decide who brings which order (see the notes at the
    * top of this file).
@@ -521,13 +570,23 @@ export class BaristaSystem extends createSystem({}) {
       if (!row) cost.set(order, (row = new Map()));
       let d = row.get(member);
       if (d === undefined) {
-        const from = atBar(member) ? member.home : member.barista.root.position;
-        d = this.wayTo(from, order)?.length ?? Infinity;
+        const home = atBar(member);
+        const from = home ? member.home : member.barista.root.position;
+        // A length, not a way (NavGrid.distance): a busy café plans many times a second, and the full path finding
+        // (dozens a plan) made frames of 10 ms and more on the headset, a stutter of the whole view.
+        d = this.walkTo(from, order, home);
         row.set(member, d);
       }
       return d;
     };
     const waiting = (): Order[] => this.orders.filter((order) => !order.served && !order.server);
+    // A straight line is never longer than the walk: where it already rules a choice out, no way is worked out.
+    const atLeast = (member: Staff, order: Order): number => {
+      const from = atBar(member) ? member.home : member.barista.root.position;
+      let best = Infinity;
+      for (const point of order.points) best = Math.min(best, Math.hypot(point.stand.x - from.x, point.stand.z - from.z));
+      return best;
+    };
 
     // A server out with a tray but no order (its guest left) takes a waiting order if there is one, else goes home.
     for (const member of enRoute) {
@@ -576,15 +635,35 @@ export class BaristaSystem extends createSystem({}) {
       next.forEach((order, i) => matched[i] && this.send(matched[i], order));
     }
 
+    // Steps 2 and 3 only improve on what is already under way, and the plan runs again every REPLAN_SECONDS while
+    // anyone waits: each plan makes at most ON_THE_WAY_SEARCHES path searches for servers on the move (what is not
+    // weighed is left for a later plan), starting with a different server each time, so a rush never makes a long frame.
+    const searches = (): number => this.cafeSystem.nav.searches + (this.cafeSystem.upperNav?.searches ?? 0);
+    const budget = searches() + ON_THE_WAY_SEARCHES;
+    const known = (member: Staff, order: Order): number | null => {
+      if (cost.get(order)?.has(member)) return distance(member, order);
+      if (searches() >= budget) return null;
+      return distance(member, order);
+    };
+    const out = baristas.filter((m) => m.state === 'out' && m.order);
+    const turn = out.length ? this.plans % out.length : 0;
+    const walking = [...out.slice(turn), ...out.slice(0, turn)];
+    this.plans++;
+
     // 2. On the way: a server walking to one guest turns to a waiting guest that is nearer it (by a real margin).
     //    The guest it was walking to goes back to the front of the queue, and cannot be passed over again.
-    const walking = baristas.filter((m) => m.state === 'out' && m.order);
     for (const member of walking) {
       const mine = member.order!;
       // A server on its way to a guest in a hurry is never sent elsewhere.
       if (mine.bumped > 0 || mine.urgent) continue;
+      const mineD = known(member, mine);
+      if (mineD === null) continue;
       const nearer = waiting()
-        .filter((order) => distance(member, order) + SWITCH_GAIN_M < distance(member, mine))
+        .filter((order) => {
+          if (atLeast(member, order) + SWITCH_GAIN_M >= mineD) return false;
+          const d = known(member, order);
+          return d !== null && d + SWITCH_GAIN_M < mineD;
+        })
         .sort((a, b) => distance(member, a) - distance(member, b))[0];
       if (!nearer) continue;
       mine.server = null;
@@ -602,7 +681,14 @@ export class BaristaSystem extends createSystem({}) {
         const b = walking[j];
         // A guest in a hurry keeps the server already on its way.
         if (!a.order || !b.order || a.order.urgent || b.order.urgent) continue;
-        if (distance(a, b.order) + distance(b, a.order) + SWITCH_GAIN_M >= distance(a, a.order) + distance(b, b.order)) continue;
+        const da = known(a, a.order);
+        const db = known(b, b.order);
+        if (da === null || db === null) continue;
+        const now = da + db;
+        if (atLeast(a, b.order) + atLeast(b, a.order) + SWITCH_GAIN_M >= now) continue;
+        const ab = known(a, b.order);
+        const ba = ab === null ? null : known(b, a.order);
+        if (ab === null || ba === null || ab + ba + SWITCH_GAIN_M >= now) continue;
         const [first, second] = [a.order, b.order];
         this.switches++;
         this.send(a, second);
