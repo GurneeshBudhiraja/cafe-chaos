@@ -152,4 +152,21 @@ export const DAY = {
   sun: { color: 0xfff4e2, intensity: 2.3, position: [0.5, 1.4, 0.7] as const },
   fill: { sky: 0xdfeaff, ground: 0xb9b2a6, intensity: 1.25 },
   environment: 1.0,
+  /**
+   * The sun's shadow: the one shadow by day (the house light is off), from
+   * high over the front right, so the cabin, the deck, the tables and the
+   * mountains ground themselves on the snow. Its box covers the plate (café
+   * space, metres); one 1024 map, redrawn only when something moves
+   * (RenderBudgetSystem): Meta counts shadow maps against the WebXR budget.
+   */
+  shadow: { half: 0.56, near: 0.2, far: 3.2, mapSize: 1024, bias: -0.0004, normalBias: 0.0025, radius: 2 },
+  /**
+   * By day the café's own glow is low (it is daylight: light only shows in
+   * shade). The string lights' and the heater's bulbs come down from the
+   * model's 1.6; the flames keep their cel-shaded bands at full strength,
+   * the embers and the waterfall as made.
+   */
+  glow: { Bulb: { strength: 0.55 }, Fire: { strength: 1 }, FireCore: { strength: 1 } } as Record<string, { strength: number; color?: number }>,
+  /** The guests' and the staff's light from within (their own skin colour): set for the Japanese café's night, lower by day so the colours do not wash out. */
+  characterGlow: { guest: 0.12, staff: 0.08 },
 };

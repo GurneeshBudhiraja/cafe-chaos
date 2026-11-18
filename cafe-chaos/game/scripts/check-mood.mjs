@@ -30,7 +30,7 @@ const check = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
 };
 
-const h = await startHeadset({
+const h = await startHeadset({ sound: true,
   async prepare(h) {
     await h.head(SEAT, LOOK);
     await h.page.evaluate(() => window.IWER_DEVICE.remote.dispatch('set_transform', { device: 'hand-right', position: { x: -1.0, y: 0.98, z: 0.43 } }));

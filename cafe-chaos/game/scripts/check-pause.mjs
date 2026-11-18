@@ -18,7 +18,7 @@ process.env.APP_URL = process.env.APP_URL_GAME ?? 'https://localhost:8082/';
 const { startHeadset } = await import('./lib/headset.mjs');
 const SEAT = { x: -0.85, y: 1.22, z: 0.28 };
 const LOOK = { x: -1.3, y: 0.79, z: 0.28 };
-const h = await startHeadset({
+const h = await startHeadset({ sound: true,
   async prepare(h) {
     await h.head(SEAT, LOOK);
     await h.page.evaluate(() => window.__cafe.system.replace());

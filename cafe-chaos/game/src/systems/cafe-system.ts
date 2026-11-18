@@ -803,6 +803,12 @@ export function copyModel(model: ModelName): Object3D {
   if (!scene) throw new Error(`[Cafe] Model ${model} is not loaded.`);
   const root = scene.getObjectByName(model) ?? scene;
   root.name = model;
+  // Blender's duplicate suffixes (`Meal-1.001`; three.js's loader drops the dot: `Meal-11001`... `Meal-1001`): an
+  // export not run through the models' fix_names.py still names the anchors the game reads as it reads them
+  // (`Seat-N` and `Meal-N` with one digit, `TableTop`).
+  root.traverse((node) => {
+    node.name = node.name.replace(/^((?:Seat|Meal)-\d)[._]?\d{3}$/, '$1').replace(/^(TableTop)[._]?\d{3}$/, '$1');
+  });
   dressGreyBox(root);
   return root;
 }

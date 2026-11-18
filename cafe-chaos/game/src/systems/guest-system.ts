@@ -45,7 +45,7 @@ import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/ac
 import { Blobs } from '../guests/blobs.js';
 import { randomLook, type Look } from '../guests/cast.js';
 import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
-import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, CANADA_EXIT_LANES, CANADA_OUTSIDE_X, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
+import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, CANADA_EXIT_LANES, CANADA_OUTSIDE_Z, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
 import { CANADA_FLOOR_TOP_M, CANADA_PLACES } from '../cafe/canada-layout.js';
 import { isCanada } from '../cafe/style.js';
 import {
@@ -1505,7 +1505,7 @@ export class GuestSystem extends createSystem({}) {
       let speed = guest.speed;
       if (guest.state === 'leaving') {
         // Once through the exit the walk becomes a march; and nobody treads on the heels of the one ahead.
-        if (root.position.x < (isCanada() ? CANADA_OUTSIDE_X : this.cafeSystem.annexOpen ? ANNEX_OUTSIDE_X : OUTSIDE_X)) speed = SPEED.march;
+        if (isCanada() ? root.position.z > CANADA_OUTSIDE_Z : root.position.x < (this.cafeSystem.annexOpen ? ANNEX_OUTSIDE_X : OUTSIDE_X)) speed = SPEED.march;
         if (this.crowded(guest)) speed *= 0.35;
       }
       // On the Canadian café's stairs: the stair clips at their own pace, and no hop (it is a flight of steps, not one).

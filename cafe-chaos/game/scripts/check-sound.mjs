@@ -22,7 +22,7 @@ const check = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
 };
 
-const h = await startHeadset({
+const h = await startHeadset({ sound: true,
   async prepare(h) {
     await h.head(SEAT, LOOK);
     await h.page.evaluate(() => {

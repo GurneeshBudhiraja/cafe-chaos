@@ -9,10 +9,10 @@
 
 import { isCanada } from '../cafe/style.js';
 
-export type Species = 'mochi' | 'onigiri' | 'tofu' | 'snowbit' | 'beavertail' | 'nanaimo';
+export type Species = 'mochi' | 'onigiri' | 'tofu' | 'snowbit' | 'beavertail' | 'nanaimo' | 'doubledouble' | 'buttertart';
 export const SPECIES: readonly Species[] = ['mochi', 'onigiri', 'tofu'];
-/** The Canadian café's guests (models/27-cafe-canada/INTEGRATION.md): a donut hole, a beaver tail and a nanaimo bar. */
-export const CANADA_SPECIES: readonly Species[] = ['snowbit', 'beavertail', 'nanaimo'];
+/** The Canadian café's guests (models/27-cafe-canada/INTEGRATION.md): a donut hole, a beaver tail, a nanaimo bar, a double-double coffee cup and a butter tart. */
+export const CANADA_SPECIES: readonly Species[] = ['snowbit', 'beavertail', 'nanaimo', 'doubledouble', 'buttertart'];
 
 /** The model each species loads from. */
 export const GUEST_MODEL: Record<Species, `guest-${Species}`> = {
@@ -22,6 +22,8 @@ export const GUEST_MODEL: Record<Species, `guest-${Species}`> = {
   snowbit: 'guest-snowbit',
   beavertail: 'guest-beavertail',
   nanaimo: 'guest-nanaimo',
+  doubledouble: 'guest-doubledouble',
+  buttertart: 'guest-buttertart',
 };
 
 /** The file a species' clothes come from: the Canadian guests wear the winter set. */
