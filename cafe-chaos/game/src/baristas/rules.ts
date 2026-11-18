@@ -26,7 +26,7 @@ export const FIDGET_SECONDS: [number, number] = [2.5, 6];
 /** How long a turn to the back bar lasts (seconds, at random within the range). */
 export const BACK_BAR_SECONDS: [number, number] = [2, 3.5];
 /** The chance that a server behind the counter waves when a guest joins the line. */
-export const WAVE_CHANCE = 0.6;
+export const WAVE_CHANCE = 0.12;
 
 /**
  * The dispatcher (see systems/barista-system.ts).

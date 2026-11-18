@@ -89,11 +89,12 @@ export const LEVEL = {
   firstGoal: 5,
   goalCap: 60,
   capFrom: 10,
-  gaps: [15, 15, 15, 12, 10, 8.5, 7, 6, 5.5, 5],
+  // The first levels were 15 s apart with two in the line: the owner's playtest (Nov 17) found the start too slow.
+  gaps: [11, 11, 11, 10, 9, 8, 7, 6, 5.5, 5],
   floor: 5,
   speedUp: 0.85,
   rush: { every: 5, gap: 0.85, after: 1.1 },
-  queue: [2, 2, 3, 3, 3, 3, 3, 4],
+  queue: [3, 3, 3, 3, 3, 3, 3, 4],
   linePatience: { start: 30, perLevel: 1, min: 20 },
   seatedPatience: 40,
   wishes: [

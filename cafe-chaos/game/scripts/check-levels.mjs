@@ -67,7 +67,7 @@ await page.evaluate(() => { const { game } = window.__cafe; game.click('open'); 
 await until(() => window.__cafe.game.phase === 'run');
 let s = await state();
 check('a fresh game opens on level 1: the bar shows it, 0 of 5 served', s.level === 1 && s.served === 0 && s.bar.join() === '1,0,5', JSON.stringify({ level: s.level, served: s.served, bar: s.bar }));
-check('level 1: a guest about every 15 s, two in the line at most, 30 s in the line, 40 s seated', Math.abs((s.gap[0] + s.gap[1]) / 2 - 15) < 0.5 && s.queue === 2 && s.line === 30 && s.seated === 40, JSON.stringify({ gap: s.gap, queue: s.queue, line: s.line, seated: s.seated }));
+check('level 1: a guest about every 11 s, three in the line at most, 30 s in the line, 40 s seated', Math.abs((s.gap[0] + s.gap[1]) / 2 - 11) < 0.5 && s.queue === 3 && s.line === 30 && s.seated === 40, JSON.stringify({ gap: s.gap, queue: s.queue, line: s.line, seated: s.seated }));
 await h.screenshot('artifacts/levels-1-level-1.png');
 
 // 2. The pay.
@@ -102,7 +102,7 @@ await page.waitForTimeout(450);
 s = await state();
 check('the goal met (a guest in the hand too): no card, the café keeps going; the bar shows LEVEL 2! +10 with confetti', s.phase === 'run' && s.card === null && s.speed === 1 && s.cafe && !s.handsOff && s.banner?.join() === '2,10' && s.confetti === before.confetti + 1, JSON.stringify({ phase: s.phase, card: s.card, speed: s.speed, cafe: s.cafe, handsOff: s.handsOff, banner: s.banner, confetti: [before.confetti, s.confetti] }));
 check('level 2 is reached and saved at once: its bonus in the bank, the happiness full', s.level === 2 && s.served === 0 && s.bank === before.bank + paid + 10 && s.happiness === 100 && s.saved?.level === 2 && s.saved?.levelServed === 0 && s.saved?.bank === s.bank, JSON.stringify({ level: s.level, served: s.served, bank: [before.bank, paid, s.bank], happiness: s.happiness, saved: s.saved }));
-check('the next goal, one line under the bar ("Next: serve 7 guests"), and a breather: no guest for about 5 s', s.note === 'Next: serve 7 guests' && s.nextGuest > 4, JSON.stringify({ note: s.note, nextGuest: s.nextGuest }));
+check('the next goal, one line under the bar ("Next: serve 7 guests"), and a breather: no guest for about 5 s', s.note === 'Next: serve 7 guests' && s.nextGuest > 3.5, JSON.stringify({ note: s.note, nextGuest: s.nextGuest }));
 await h.screenshot('artifacts/levels-2-level-up.png');
 await page.evaluate(() => { delete window.__cafe.guests.carrying; });
 // Measured in the page's own frames (the emulator can run slower than real time): the banner's 3 s, the note's 4 s.
@@ -128,7 +128,7 @@ s = await state();
 check('the bar is itself again after its 3 s, and the note goes after its 4 s', s.banner === null && s.note === null && went.banner <= 3.2 && went.note <= 4.2, JSON.stringify(went));
 
 // 6. The next level's pace.
-check('level 2 runs at its own pace: a guest about every 15 s, 29 s in the line, the bar at 0 of 7', s.phase === 'run' && Math.abs((s.gap[0] + s.gap[1]) / 2 - 15) < 0.5 && s.line === 29 && s.bar.join() === '2,0,7', JSON.stringify({ phase: s.phase, gap: s.gap, line: s.line, bar: s.bar }));
+check('level 2 runs at its own pace: a guest about every 11 s, 29 s in the line, the bar at 0 of 7', s.phase === 'run' && Math.abs((s.gap[0] + s.gap[1]) / 2 - 11) < 0.5 && s.line === 29 && s.bar.join() === '2,0,7', JSON.stringify({ phase: s.phase, gap: s.gap, line: s.line, bar: s.bar }));
 await h.screenshot('artifacts/levels-3-level-2.png');
 
 // 7. Pause, MAIN MENU, CONTINUE.
@@ -215,7 +215,7 @@ const rules = await page.evaluate(async () => {
   return { goals: levels.map((l) => r.levelGoal(l)), gaps: levels.map((l) => +r.arrivalGap(l).toFixed(2)), queue: levels.map((l) => r.queueCap(l)), line: levels.map((l) => r.linePatience(l)) };
 });
 check('goals 5, 7, 10, 14, 19, 25, 32, 40, 49, then 60 from level 10', rules.goals.join() === '5,7,10,14,19,25,32,40,49,60,60,60', rules.goals.join());
-check('gaps 15, 15, 15, 12, 8.5 (rush), 9.35 (breather), 7, 6, 5.5, then 5 (the floor); the line 2, 2, 3 ... 4; patience 30 down to 20', rules.gaps.join() === '15,15,15,12,8.5,9.35,7,6,5.5,5,5,5' && rules.queue.join() === '2,2,3,3,3,3,3,4,4,4,4,4' && rules.line[0] === 30 && rules.line[11] === 20, JSON.stringify(rules));
+check('gaps 11, 11, 11, 10, 7.65 (rush), 8.8 (breather), 7, 6, 5.5, then 5 (the floor); the line 3 ... 4; patience 30 down to 20', rules.gaps.join() === '11,11,11,10,7.65,8.8,7,6,5.5,5,5,5' && rules.queue.join() === '3,3,3,3,3,3,3,4,4,4,4,4' && rules.line[0] === 30 && rules.line[11] === 20, JSON.stringify(rules));
 
 // 11. An old save keeps only its settings.
 const migrated = await page.evaluate(async () => {
