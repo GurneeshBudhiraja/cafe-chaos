@@ -1,101 +1,243 @@
-# Meta Notes (working name)
+<p align="center">
+  <img src="cafe-chaos/game/assets/meta-store/hero-3000x900.png" alt="Café Chaos" width="100%">
+</p>
 
-A spatial notes app for Meta Quest 3 / 3S: capture the room, annotate it, and
-keep notes near their useful context. Built with TypeScript and Meta's
-Immersive Web SDK (IWSDK) on WebXR. "Meta Notes" is a placeholder name and does
-not imply Meta affiliation.
+<p align="center">
+  <b>A tiny café on your real table. Pinch guests into the seats they wish for.</b><br>
+  A hands-only mixed-reality seating puzzle for Meta Quest 3 and 3S, played sitting down.
+</p>
 
-The application lives in [`app/`](app/README.md). Start there for run commands
-and the source layout.
+<p align="center">
+  <a href="https://gurneeshbudhiraja.github.io/cafe-chaos/"><img alt="Play in the Quest browser" src="https://img.shields.io/badge/Play-in%20the%20Quest%20browser-3d6b3a?style=for-the-badge"></a>
+</p>
 
-## Recorded versions
+<p align="center">
+  <img alt="Meta Quest 3 and 3S" src="https://img.shields.io/badge/Meta%20Quest-3%20%2F%203S-1c1e20">
+  <img alt="Hands only" src="https://img.shields.io/badge/input-hands%20only-c8862a">
+  <img alt="Mixed reality" src="https://img.shields.io/badge/mode-mixed%20reality-6b4a2b">
+  <img alt="Immersive Web SDK 1.0" src="https://img.shields.io/badge/Immersive%20Web%20SDK-1.0-0866ff">
+  <img alt="three.js" src="https://img.shields.io/badge/three.js-r181-000000">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178c6">
+</p>
 
-| Tool | Version |
-| --- | --- |
-| @iwsdk/core, @iwsdk/cli, @iwsdk/vite-plugin-dev | 1.0.1 |
-| Three.js (super-three, via IWSDK) | r181 (0.181.0) |
-| IWER emulator | 2.6.0 |
-| @pmndrs/uikit | 1.0.77 |
-| Vite / TypeScript | 7.3.7 / 5.9.3 |
-| Node.js / npm (cloud dev container) | 22.22.0 / 10.9.4 |
+<p align="center">
+  <a href="#play-it">Play it</a> ·
+  <a href="#how-to-play">How to play</a> ·
+  <a href="#two-cafés">Two cafés</a> ·
+  <a href="#built-for-hands-and-mixed-reality">Built for hands</a> ·
+  <a href="#run-it-yourself">Run it yourself</a> ·
+  <a href="#inside-the-repo">Inside the repo</a>
+</p>
 
-## Status
+---
 
-All results below come from desktop Chromium and the IWER emulator. **Nothing
-has been tested on a physical Quest yet.** Headset checks are tracked
-separately and remain open.
+<p align="center">
+  <img src="cafe-chaos/game/docs/screenshots/seat.jpg" alt="The Japanese café at night: a hand, drawn as Meta's outline hand, carries a guest over a seat that glows violet, while more guests wait at the gate" width="100%">
+</p>
 
-### Phase 1, day 1 (roadmap: 17 October)
+## The idea
 
-| Check | Result | Evidence |
-| --- | --- | --- |
-| Clean launch | Pass | No console errors or warnings after a fresh reload |
-| Tablet with pen interaction | Pass | Mouse and simulated-hand pinch strokes commit in page coordinates |
-| Simulated hand selects the tablet | Pass | IWER hand ray hovers the tablet; pinch-select and pinch-drag create ink |
-| Tablet moves only through its handle | Pass | Pinch-grab on the handle moves the tablet by the same offset; no ink while moving |
-| Ink stops at the page edge | Pass | A stroke that leaves the page ends at the edge |
-| Camera trial produces a still | Pass (desktop) | `npm run smoke:camera` captures 1920x1080 from Chromium's fake camera |
-| Optional feature checks with fallbacks | Pass | Panel reports camera, hands, surfaces, anchors; app works when absent |
+Café Chaos puts a hand-sized café on the table in front of you. Small guests
+walk up to its gate and wait. You pinch one up between two fingers, carry it
+over the café and open your hand. It hops onto the seat glowing under it. The
+baristas bring its food. A fed guest pays you, and a guest kept waiting walks
+off unhappy.
 
-### Phase 1, day 2 (roadmap: 18 October)
+Every guest wants something: a window seat, a quiet table, a seat by the
+fire, the table where its friend sits. The line keeps growing while you
+decide. Spend your coins on more tables and more staff, then try to keep up.
 
-| Check | Result | Evidence |
-| --- | --- | --- |
-| Note list, create, open | Pass | Notes panel lists notes (5 per page), opens on select, highlights the active note |
-| Rename and typed text | Pass | Title and text fields save through autosave |
-| Strokes saved locally | Pass | IndexedDB; status shows Saving, Saved, or Save failed |
-| Note with text and strokes survives 5 reloads | Pass | `npm run smoke:notes`: 5/5, tablet re-renders every stroke |
-| Simulated save failure keeps the note | Pass | Error shown, stroke kept on screen, saved after "Try saving again" |
-| Delete needs confirmation | Pass | Cancel keeps the note; confirm deletes only that note |
+It is played seated, with bare hands, in passthrough. One press on the start
+card opens the café, and a level lasts a few minutes.
 
-### Home window
+Built for the **Meta VR Start Developer Competition 2026** (Gaming track, New
+Experience).
 
-The first screen is laid out like a document app's home, on clear frosted
-glass in the warm "calm and studious" theme (warm ink, warm paper, one clay
-accent; Bricolage Grotesque and Fraunces): a top bar (app name,
-clock, settings, compact toggle), "Start a new note" paper templates (Blank,
-Lined, Grid, Dotted, Cornell, Checklist; Blank is the clay main action) and
-"Recent notes" cards that preview each note's real ink on its paper, with a
-Recent / A-Z sort and chevrons (or a drag) for more. Minimise swaps the
-window for the compact dock: five floating glass buttons with only
-passthrough between them (Expand, Recent | New note | Templates, Settings).
-Recent and Templates open a small pop-up above the buttons; a grab bar
-underneath moves the dock, which turns to face you on release, and Expand
-opens the window where the dock is. The window has its own grab bar too.
-Minimising fades the window out and the dock fades in with a small pop and
-a shine; expanding fades the window in with a warm glow behind it. The pin
-(window top bar, and beside the dock's grab bar) is stick mode: while on,
-the window and dock follow your head (IWSDK Follower, thresholded and
-smooth); while off, they stay where you put them. Saving is silent; a line with a
-retry button appears only when a save fails. Headset walkthrough:
-`npm run record:home`.
+## Play it
 
-| Check | Result | Evidence |
-| --- | --- | --- |
-| New note adds a recent card | Pass | `npm run smoke:notes` |
-| Tapping an older card reopens that note | Pass | Strokes re-render on the tablet |
-| Compact mode collapses and expands | Pass | Recent notes hide in compact mode and return on expand |
-| Recent strip scrolls past four notes | Pass | Chevrons page by four; wheel on desktop; XR rays and hands drag (IWSDK pointer workaround in `xr-scroll-fix-system.ts`) |
+1. On a Meta Quest 3 or 3S, open
+   **[gurneeshbudhiraja.github.io/cafe-chaos](https://gurneeshbudhiraja.github.io/cafe-chaos/)**
+   in the Quest browser.
+2. Sit at a table or a desk and put your controllers down.
+3. Press **Enter AR**. The café comes up on the table in front of you.
 
-Removed with the old panel: rename, typed text and delete. The note model and
-session still support them; they need a new home in the UI.
+No install and no account. The game saves itself in the browser, and it
+pauses when you take the headset off.
 
-### Open items
+## How to play
 
-- Headset: Quest outward-camera access, hand-tracking quality, system keyboard
-  focus on the UIKit text fields, readability, and frame rate.
-- XR panel clicks with simulated hands were not checked separately (the same
-  IWSDK pointer path was checked with the mouse and with hand rays on the tablet).
-- Pen-tip proximity feedback and stroke smoothing arrive with pen tools (19 October).
-- Browser storage is not a backup; export and restore arrive on 23 October.
+| | |
+|:-:|:-:|
+| <img src="cafe-chaos/game/docs/screenshots/pinch.jpg" alt="An outline hand over the guests waiting at the gate, with a tip card above them" width="420"> | <img src="cafe-chaos/game/docs/screenshots/seat.jpg" alt="A guest carried over the café, above a glowing seat" width="420"> |
+| **Pinch a guest.** Put your fingers above a guest at the gate. When it glows, pinch. | **Seat it.** Move it over the café and open your fingers. It goes to the seat that glows. |
+| <img src="cafe-chaos/game/docs/screenshots/line.jpg" alt="Guests in the line at the gate, each with a patience dial over its head" width="420"> | <img src="cafe-chaos/game/docs/screenshots/happy.jpg" alt="The café with the bar above it, showing the level, happiness and coins" width="420"> |
+| **Read the guest.** The dial over its head counts down its patience. An hourglass means it is in a hurry. Hearts mean two friends. | **Keep the café happy.** Serve enough guests to finish the level. Granted wishes pay more. If happiness runs out, you play the level again and keep your coins and staff. |
 
-### Run the checks
+The bar over the café has **Pause** at the left end and **Shop** at the right
+end. Point your hand at it and pinch.
 
-```sh
-cd app
+<p align="center">
+  <img src="cafe-chaos/game/docs/screenshots/bar.jpg" alt="An outline hand points at the bar over the café; its ray rests on Pause" width="640">
+</p>
+
+### The guests' wishes
+
+Each guest shows its wish on a card. A guest seated where its wish is met
+pays the most, a guest seated where part of it is met pays less, and a guest
+refuses a seat that meets none of it. New kinds of wish come in one at a
+time, each first on a guest with only that wish, so a new player meets most
+of them within about five minutes:
+
+- **Places:** a window seat, by the gate, by the baristas, a big table, inside,
+  by the fireplace, at the bonfire, by the lake, upstairs.
+- **Company:** a table to myself, with other guests, with my friend, with my
+  own kind, with someone in a hat.
+- **People:** meet a named guest (it glows while you hold the one looking for
+  it), keep away from someone, keep away from hurried guests.
+- **Music:** near the singer or the musicians, or a quiet seat far from them.
+
+The first three guests of a run have one easy wish each. From level 3 some
+guests have two wishes, and from level 5 some have three. Wishes never
+contradict each other, and a wish is only offered if a seat can meet it
+before the guest runs out of patience.
+
+## Two cafés
+
+| <img src="cafe-chaos/game/public/ui/cover.jpg" alt="The Japanese café at night" width="420"> | <img src="cafe-chaos/game/public/ui/canada-card.jpg" alt="The Canadian café: a log cabin with a fireplace, an upper deck with a piano, a patio, a bonfire and a frozen lake" width="420"> |
+|:-:|:-:|
+| **Japanese café** | **Canadian café** |
+| A cherry-blossom tea garden at dusk. Paper lanterns come up as the room around you dims. Your first café. | A snowy log cabin with a fireplace, an upper deck, a patio, a bonfire, a frozen lake and live music. |
+| Guests: mochi, onigiri and tofu. | Guests: snowbit, beavertail, nanaimo, double-double and butter tart. |
+| Hire up to two more baristas and a janitor. Singing guests arrive from level 3. | Hire up to two more servers, two janitors, a fiddler and a pianist. Cold guests want a fire, and a snowstorm blows in at level 2. |
+| Free, and always yours. | Play the first 3 levels free. Buy it for 750 coins earned in the Japanese café to keep your progress. |
+
+Each café keeps its own save: its coins, tables, staff and level.
+
+## Built for hands and mixed reality
+
+Meta asks for experiences that are seated, fully usable with hands, quick to
+start and satisfying within ten minutes. Café Chaos was designed around those
+rules from the first day.
+
+- **The café lands on your real table.** Plane detection finds the table, and
+  the café sits on it, at table height, facing you. A WebXR anchor keeps it
+  there while the headset refines its map of the room.
+- **Pinch what you see.** A guest is under your pinch when it is behind your
+  fingers along your line of sight, so you never reach across the table. The
+  pinch holds until your fingers are well apart, so a tracking flicker never
+  drops a guest.
+- **Hands the way Quest shows them.** Your real hand stays in view through
+  passthrough, with Meta's own faint outline hand around it, the look Quest
+  players already know.
+- **Clear feedback for every state.** A free hand near a guest lights it with
+  a warm ring. A seat glows mint, violet or red to say whether the guest will
+  take it, with a short reason and a sound. Colour is never the only signal.
+- **Menus for hands.** Cards stand about a metre away, a little below eye
+  level, with buttons sized for the hand ray. Pinch with the ray from a
+  distance, or look and pinch.
+- **Move the café.** Pinch the handle under the café to move it, and the
+  corner brackets to turn or resize it.
+- **Teach by doing.** The first run teaches one move at a time, with short
+  clips recorded from the game. How to play is always one pinch away.
+- **Comfort.** No locomotion, no camera motion, and nothing appears suddenly
+  close. The passthrough dims gently for the night café and stays clear by
+  day.
+
+### Made to run on a standalone headset
+
+- The café's furniture is merged into one mesh per material, so the whole
+  room draws in a few dozen draw calls.
+- Materials are swapped to cheaper Lambert shading. Texture detail and baked
+  ambient occlusion keep the look.
+- The shadow map is redrawn only when something in the café changes, not on
+  every frame.
+- The game asks the Quest browser for a steady 72 Hz. Add `?fps` to the
+  address to see the frame rate in the headset.
+
+## Run it yourself
+
+You need Node.js 20.19+, 22.12+ or 24.
+
+```bash
+cd cafe-chaos/game
 npm install
-npm run dev            # in one terminal
-npm run typecheck && npm run build
-npm run smoke:notes    # notes, reloads, save failure, home window
-npm run smoke:camera   # camera capture with a fake camera
+npm run dev
 ```
+
+`npm run dev` opens the game in a browser with the Immersive Web Emulator, a
+virtual Quest in a living room with a table.
+
+**On a Quest:** the dev server prints a network HTTPS address on port 8082.
+Open it in the Quest browser on the same Wi-Fi, accept the certificate
+warning, and press **Enter AR** at a table. Over USB, run
+`adb reverse tcp:8082 tcp:8082` and open `https://localhost:8082`.
+
+```bash
+npm run typecheck   # TypeScript
+npm run build       # static site in dist/
+```
+
+Every push to `main` builds the game and publishes it to GitHub Pages
+(`.github/workflows/deploy-pages.yml`).
+
+### Checks
+
+The game is tested by scripts that play it in the emulator, as a player
+would, and print PASS or FAIL for each rule. Start the dev server, then run
+the check for the part you changed:
+
+```bash
+node scripts/check-wish-rules.mjs   # wishes: one on the first guests, none that contradict, all meetable
+node scripts/check-levels.mjs       # levels, goals and saving the level
+node scripts/check-start-card.mjs   # the start card and the café picker
+```
+
+There are 33 checks in [`cafe-chaos/game/scripts`](cafe-chaos/game/scripts):
+placement on the table, pinching and carrying, seating, cleaning, the staff,
+pause, saving, sound and more. Add `?test` to the address for a run that
+never reads or writes the save.
+
+## Inside the repo
+
+```
+cafe-chaos/
+  game/                 the game (IWSDK, three.js, TypeScript, Vite)
+    src/
+      systems/          the café, guests, baristas, game flow, shop, mood, frame budget
+      guests/           wishes, the cast, a guest's model, its dial, the seat glow
+      game/rules.ts     every number: levels, pay, patience, prices
+      cafe/             the floor plans of both cafés, batching, materials
+      ui/               the start menu, the cards and their buttons
+    public/models/      the glTF models the game loads
+    scripts/            emulator checks and recordings
+    docs/               the plans, the design notes and the review
+  models/               the Blender build scripts for every model
+  docs/game-brief.md    the original brief
+```
+
+Start with [`cafe-chaos/game/README.md`](cafe-chaos/game/README.md) for the
+full tour of the code, and
+[`cafe-chaos/START-HERE.md`](cafe-chaos/START-HERE.md) for the models and how
+they were sized.
+
+## Built with
+
+- [Immersive Web SDK](https://developers.meta.com/horizon/documentation/web/iwsdk-overview/)
+  1.0 (Meta): the world, hand input, plane detection, anchors and the
+  emulator.
+- [three.js](https://threejs.org/) r181 and WebXR.
+- [Blender](https://www.blender.org/), scripted in Python, for every model,
+  texture and animation.
+- [Rough.js](https://roughjs.com/) for the hand-drawn cards, and
+  [pure-rand](https://github.com/dubzzz/pure-rand) for the seeded order in
+  which tables open.
+
+## Credits
+
+- Theme music: "Tokyo Sunset (Lofi, Peaceful, Soft)" by HoliznaCC0, CC0 1.0
+  ([details](cafe-chaos/game/public/audio/CREDITS.md)). Every other sound is
+  made in code with the Web Audio API.
+- Fonts, both under the SIL Open Font License 1.1: Jost for the game's text
+  ([licence](cafe-chaos/game/public/fonts/OFL-Jost.txt)) and Fredoka for the
+  logo ([licence](cafe-chaos/game/assets/source/fonts/OFL.txt)).
+- The models, the textures and the art were made for this game.

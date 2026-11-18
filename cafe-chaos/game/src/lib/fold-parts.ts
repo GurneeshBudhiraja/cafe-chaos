@@ -22,15 +22,21 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * skinned mesh added to `container`. Call with the model in its rest
  * pose, before any clip has moved it. Returns null if there is nothing
  * worth folding.
+ *
+ * Parts with different materials can be folded too, given the one
+ * `material` they all draw with and a `decorate` that gives each part's
+ * geometry what that material needs (its texture coordinates moved into
+ * an atlas, its colour as vertex colours): see guests/actor.ts. Every
+ * geometry must end up with the same attributes.
  */
-export function foldParts(container: Object3D, parts: Mesh[], name: string): SkinnedMesh | null {
+export function foldParts(container: Object3D, parts: Mesh[], name: string, material: Material = parts[0]?.material as Material, decorate?: (part: Mesh, geometry: BufferGeometry) => void): SkinnedMesh | null {
   if (parts.length < 2) return null;
   container.updateWorldMatrix(true, true);
-  const material = parts[0].material as Material;
   const toContainer = new Matrix4().copy(container.matrixWorld).invert();
   const local = new Matrix4();
   const geometries: BufferGeometry[] = parts.map((part, bone) => {
     const geometry = part.geometry.clone().applyMatrix4(local.multiplyMatrices(toContainer, part.matrixWorld));
+    decorate?.(part, geometry);
     const count = geometry.attributes.position.count;
     const index = new Uint16Array(count * 4);
     const weight = new Float32Array(count * 4);

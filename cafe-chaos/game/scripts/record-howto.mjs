@@ -8,8 +8,8 @@
  * - happy: the café and the bar above it; coins come in, the meter fills;
  * - bar: the hand comes up, points at the bar (the ray lights Pause), and
  *   pinches: the pause card comes up.
- * The cream model hands are drawn (`?hands=cream`), since the player's real
- * hands cannot be filmed; the emulator's grey room is hidden.
+ * The hands are the game's default, Meta's outline hand (the look of hands
+ * on Quest), since the player's real hands cannot be filmed; the emulator's grey room is hidden.
  *
  * Usage: dev server running, then `node scripts/record-howto.mjs`.
  * Output: public/howto/pinch.mp4, seat.mp4, happy.mp4, bar.mp4 (and the
@@ -19,7 +19,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 
-process.env.APP_URL = `${process.env.APP_URL_GAME ?? 'https://localhost:8082/'}?hands=cream`;
+process.env.APP_URL = process.env.APP_URL_GAME ?? 'https://localhost:8082/';
 const { startHeadset } = await import('./lib/headset.mjs');
 mkdirSync('public/howto', { recursive: true });
 

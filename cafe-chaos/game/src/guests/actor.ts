@@ -9,17 +9,26 @@
  * - shows the pose group a clip belongs to and plays the clip;
  * - hides, each frame, the face parts a clip has scaled to nothing, so
  *   they are not drawn at all;
- * - folds the nine skin-coloured parts of each pose (body, arms, legs)
- *   into one skinned mesh whose bones are those parts, so the clips move
- *   it exactly as before but it is one draw call, not nine. Ten guests
- *   then cost about as many draw calls as the café itself;
- * - gives the guest its own materials, so it can be tinted and faded on
- *   its own;
+ * - folds every part of each pose (body, arms, legs, every face part,
+ *   and the clothes it wears) into one skinned mesh whose bones are those
+ *   parts, so the clips move it exactly as before (a face part scaled to
+ *   nothing by a clip folds away to nothing) but a guest is one draw
+ *   call, not fifty. The parts' textures share one atlas per species
+ *   (guests/guest-atlas.ts); the plain-coloured parts carry their colour as
+ *   vertex colours, and only the skin and the clothes glow;
+ * - gives the guest its own material, so it can be lit up and faded on
+ *   its own. It is always drawn in the blended pass (at full opacity it
+ *   looks as an opaque one would): the passthrough dimmer (light/dimmer.ts)
+ *   is blended too and three.js draws every opaque object before it, so
+ *   an opaque guest would be dimmed with the café, 42 % darker than the
+ *   guests have always looked. Never switching also means a fade never
+ *   changes the shader, which the warm-up (GuestSystem) compiles and keeps;
  * - lets code take the face over for custom moments (expressions.ts).
  */
 
-import { AnimationMixer, AssetManager, Color, LoopRepeat, type AnimationAction, type AnimationClip, type Material, type Mesh, type MeshStandardMaterial, type Object3D, type SkinnedMesh } from '@iwsdk/core';
+import { AnimationMixer, AssetManager, BufferAttribute, Color, LoopRepeat, type AnimationAction, type AnimationClip, type BufferGeometry, type Material, type Mesh, type MeshStandardMaterial, type Object3D, type SkinnedMesh, type Texture } from '@iwsdk/core';
 import { foldParts } from '../lib/fold-parts.js';
+import { guestAtlas, type GuestAtlas } from './guest-atlas.js';
 import { GUEST_MODEL, wardrobeOf, type Look } from './cast.js';
 import { isCanada } from '../cafe/style.js';
 import { DAY } from '../light/mood.js';
@@ -94,7 +103,8 @@ export class GuestActor {
   private readonly pupilHome: Record<Pose, { x: number; y: number }> = { standing: { x: 0, y: 0 }, seated: { x: 0, y: 0 } };
   /** Each face part's scale as the model has it at rest (before any clip). */
   private readonly restScale = new Map<Object3D, number>();
-  private readonly materials: Material[] = [];
+  /** The one material the whole guest draws with (both poses). */
+  readonly material: MeshStandardMaterial;
   /** Its own light from within: lower by day (the Canadian café: light/mood.ts DAY). */
   private readonly glow = isCanada() ? DAY.characterGlow.guest : GLOW;
   /** How brightened it is now (setHighlight). */
@@ -119,10 +129,11 @@ export class GuestActor {
     this.grip = this.root.getObjectByName('Grip')!;
     this.bubbleAnchor = this.root.getObjectByName('BubbleAnchor')!;
     this.dress(look.outfit);
-    this.ownMaterials(look.tint);
     this.collectFaces();
-    this.foldSkin(this.groups.standing);
-    this.foldSkin(this.groups.seated);
+    const { material, atlas } = this.ownMaterial();
+    this.material = material;
+    this.fold(this.groups.standing, atlas, new Color(look.tint));
+    this.fold(this.groups.seated, atlas, new Color(look.tint));
     this.mixer = new AnimationMixer(this.root);
     this.play('Idle');
   }
@@ -210,14 +221,10 @@ export class GuestActor {
   setCold(cold: boolean): void {
     if (cold === this.cold) return;
     this.cold = cold;
-    for (const material of this.materials) {
-      const standard = material as MeshStandardMaterial;
-      if (!standard.color) continue;
-      if (!material.userData.warmColor) material.userData.warmColor = standard.color.clone();
-      standard.color.copy(material.userData.warmColor as Color);
-      if (cold) standard.color.multiply(COLD_TINT);
-      if (standard.emissiveMap && standard.emissive) standard.emissive.copy(standard.color);
-    }
+    // The parts' own colours are vertex colours: the material's colour (white when warm) tints them all, and the glow.
+    this.material.color.set(0xffffff);
+    if (cold) this.material.color.multiply(COLD_TINT);
+    this.material.emissive.copy(this.material.color);
     if (!cold) for (const g of [this.groups.standing, this.groups.seated]) g.rotation.z = 0;
   }
   private cold = false;
@@ -243,19 +250,16 @@ export class GuestActor {
   setHighlight(amount: number): void {
     if (amount === this.highlight) return;
     this.highlight = amount;
-    for (const material of this.materials) {
-      const standard = material as MeshStandardMaterial;
-      if (standard.emissiveMap) standard.emissiveIntensity = this.glow + HIGHLIGHT * amount;
-    }
+    this.material.emissiveIntensity = this.glow + HIGHLIGHT * amount;
   }
 
-  /** 0 hidden to 1 solid. Below 1 the guest is drawn blended; at 1 it is opaque again. */
+  /** 0 hidden to 1 solid (always drawn blended: see the class notes, so a fade never changes the shader). */
   setOpacity(value: number): void {
     const opacity = Math.min(1, Math.max(0, value));
     if (opacity === this.opacity) return;
     this.opacity = opacity;
     this.root.visible = opacity > 0.01;
-    for (const material of this.materials) material.opacity = ((material.userData.baseOpacity as number | undefined) ?? 1) * opacity;
+    this.material.opacity = opacity;
   }
 
   /** Let go of what this guest alone owns. */
@@ -263,7 +267,7 @@ export class GuestActor {
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.root);
     this.root.removeFromParent();
-    for (const material of this.materials) material.dispose();
+    this.material.dispose();
     for (const skin of this.skins) {
       skin.geometry.dispose();
       skin.skeleton.dispose();
@@ -283,6 +287,7 @@ export class GuestActor {
       if (!source || !attach) continue;
       for (const prefix of ['St-', 'Se-']) {
         const copy = source.clone();
+        copy.traverse((node) => (node.userData.clothes = true));
         // Its origin is already at the attach point: only the parent changes.
         copy.position.set(0, 0, 0);
         copy.rotation.set(0, 0, 0);
@@ -292,50 +297,92 @@ export class GuestActor {
     }
   }
 
-  /** One copy of each material for this guest alone; the skin takes the tint. */
-  private ownMaterials(tint: number): void {
-    const own = new Map<Material, Material>();
+  /**
+   * The guest's own material: the skin's (matte, see light/cheap-materials.ts),
+   * drawing from the species' atlas, coloured by its vertices, glowing a
+   * little in its own colours (only where a part's `glow` is 1: the skin and
+   * the clothes).
+   */
+  private ownMaterial(): { material: MeshStandardMaterial; atlas: GuestAtlas } {
+    let skin: MeshStandardMaterial | null = null;
+    let clothes: Texture | null = null;
     this.root.traverse((node) => {
       const mesh = node as Mesh;
       if (!mesh.isMesh) return;
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      const source = mesh.material as Material;
-      let copy = own.get(source);
-      if (!copy) {
-        copy = source.clone();
-        copy.userData.baseOpacity = source.opacity;
-        copy.userData.baseTransparent = source.transparent;
-        // Always blended, depth written: at full opacity it draws as the opaque one would, and a fade in or out never
-        // switches `transparent`, which would relink the material's shader (a hitch, and a flash, on the headset
-        // each time a guest arrived or left).
-        copy.transparent = true;
-        copy.depthWrite = true;
-        const standard = copy as MeshStandardMaterial;
-        if (source.name.startsWith('GuestSkin')) standard.color.multiply(new Color(tint));
-        // The skin and the clothes glow a little in their own colour (through their own texture).
-        if (standard.map && standard.emissive) {
-          standard.emissive.copy(standard.color);
-          standard.emissiveMap = standard.map;
-          standard.emissiveIntensity = this.glow;
-        }
-        own.set(source, copy);
-        this.materials.push(copy);
-      }
-      mesh.material = copy;
+      const material = mesh.material as MeshStandardMaterial;
+      if (!skin && material.name.startsWith('GuestSkin')) skin = material;
+      if (!clothes && mesh.userData.clothes && material.map) clothes = material.map;
     });
+    if (!skin) throw new Error(`[Guest] ${this.look.species} has no skin material.`);
+    const source = skin as MeshStandardMaterial;
+    const atlas = guestAtlas(source.map!, clothes ?? this.wardrobeTexture());
+    const material = source.clone() as MeshStandardMaterial;
+    material.name = `Guest-${this.look.species}`;
+    material.map = atlas.texture;
+    material.emissiveMap = atlas.texture;
+    material.color.set(0xffffff);
+    material.emissive.set(0xffffff);
+    material.emissiveIntensity = this.glow;
+    material.vertexColors = true;
+    // Blended, depth written: at full opacity it draws as an opaque one would, after the passthrough dimmer.
+    material.transparent = true;
+    material.opacity = 1;
+    material.depthWrite = true;
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float glow;\nvarying float vGlow;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vGlow;')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= vColor.rgb * vGlow;');
+    };
+    material.customProgramCacheKey = () => 'guest-folded';
+    return { material, atlas };
   }
 
-  /** Fold a pose's skin-coloured parts (body, arms, legs) into one skinned mesh (see lib/fold-parts.ts). */
-  private foldSkin(pose: Object3D): void {
+  /** The species' clothes texture (for an undressed guest: the atlas has room for it all the same, so every guest of a species shares one). */
+  private wardrobeTexture(): Texture | null {
+    const scene = AssetManager.getGLTF(wardrobeOf(this.look.species), { shared: true })?.scene;
+    let map: Texture | null = null;
+    scene?.traverse((node) => {
+      const mesh = node as Mesh;
+      if (!map && mesh.isMesh) map = (mesh.material as MeshStandardMaterial).map ?? null;
+    });
+    return map;
+  }
+
+  /**
+   * Fold every part of a pose (skin, face and clothes) into one skinned
+   * mesh (lib/fold-parts.ts). Each part's texture coordinates move into
+   * the atlas, its colour (the skin's times the guest's tint) becomes its
+   * vertex colour, and `glow` says whether it glows. The face parts are
+   * folded at full size (some rest at nothing, which a skeleton cannot be
+   * bound to) and put back after.
+   */
+  private fold(pose: Object3D, atlas: GuestAtlas, tint: Color): void {
+    const prefix = pose === this.groups.standing ? 'standing' : 'seated';
+    const faces = Object.values(this.faces[prefix]);
+    for (const part of faces) part.scale.setScalar(1);
     this.root.updateMatrixWorld(true);
     const parts: Mesh[] = [];
     pose.traverse((node) => {
       const mesh = node as Mesh;
-      if (mesh.isMesh && !Array.isArray(mesh.material) && mesh.material.name.startsWith('GuestSkin')) parts.push(mesh);
+      if (mesh.isMesh && !Array.isArray(mesh.material)) parts.push(mesh);
     });
-    const skin = foldParts(pose, parts, `${pose.name}-Skin`);
+    const colour = new Color();
+    const skin = foldParts(pose, parts, `${pose.name}-Guest`, this.material, (part, geometry) => {
+      const source = part.material as MeshStandardMaterial;
+      const isSkin = source.name.startsWith('GuestSkin');
+      const isClothes = !!part.userData.clothes;
+      colour.copy(source.color ?? colour.set(0xffffff));
+      if (isSkin) colour.multiply(tint);
+      const region = isSkin ? atlas.skin : isClothes ? atlas.clothes : null;
+      remapUv(geometry, region, atlas.white);
+      paint(geometry, colour, isSkin || isClothes ? 1 : 0);
+    });
     if (skin) this.skins.push(skin);
+    for (const part of faces) part.scale.setScalar(this.restScale.get(part) ?? 1);
+    this.root.updateMatrixWorld(true);
   }
 
   private collectFaces(): void {
@@ -371,4 +418,37 @@ export class GuestActor {
     }
     for (const part of Object.values(parts)) part.visible = part.scale.x > 0.01;
   }
+}
+
+/** Move a part's texture coordinates into its region of the atlas, or (a plain-coloured part) all onto the white patch. */
+function remapUv(geometry: BufferGeometry, region: { su: number; sv: number; ou: number; ov: number } | null, white: { u: number; v: number }): void {
+  const count = geometry.attributes.position.count;
+  const old = geometry.attributes.uv as BufferAttribute | undefined;
+  const uv = new Float32Array(count * 2);
+  for (let i = 0; i < count; i++) {
+    if (region && old) {
+      uv[i * 2] = old.getX(i) * region.su + region.ou;
+      uv[i * 2 + 1] = old.getY(i) * region.sv + region.ov;
+    } else {
+      uv[i * 2] = white.u;
+      uv[i * 2 + 1] = white.v;
+    }
+  }
+  geometry.setAttribute('uv', new BufferAttribute(uv, 2));
+}
+
+/** Give every vertex of a part its colour and whether it glows. */
+function paint(geometry: BufferGeometry, colour: Color, glow: number): void {
+  const count = geometry.attributes.position.count;
+  const colours = new Float32Array(count * 3);
+  const glows = new Float32Array(count).fill(glow);
+  for (let i = 0; i < count; i++) {
+    colours[i * 3] = colour.r;
+    colours[i * 3 + 1] = colour.g;
+    colours[i * 3 + 2] = colour.b;
+  }
+  geometry.setAttribute('color', new BufferAttribute(colours, 3));
+  geometry.setAttribute('glow', new BufferAttribute(glows, 1));
+  // Only what the folded mesh draws with: the merge needs every part alike.
+  for (const name of Object.keys(geometry.attributes)) if (!['position', 'normal', 'uv', 'color', 'glow'].includes(name)) geometry.deleteAttribute(name);
 }

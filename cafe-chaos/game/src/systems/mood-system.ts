@@ -7,7 +7,7 @@
  * preview) the lamps are simply on and nothing is dimmed.
  */
 
-import { createSystem, PointLight, Vector3, type Object3D, type Sprite } from '@iwsdk/core';
+import { createSystem, Matrix4, PointLight, Vector3, type Object3D, type Sprite } from '@iwsdk/core';
 import { makeHalo } from '../light/halo.js';
 import { lightAddition, lightDay, type CafeLights } from '../light/cafe-lights.js';
 import { RenderBudgetSystem } from './render-budget-system.js';
@@ -92,6 +92,7 @@ export class MoodSystem extends createSystem({}) {
       this.sinceDusk = -1;
       this.lampsUp = presenting || day ? 0 : 1;
     }
+    this.followCafe(cafe);
     this.growLight(cafe);
     // Paused (the café's clock stopped): the lamps go down a little, so the pause is plain to see; eased on real time.
     const pausedNow = cafe?.timeScale === 0 ? 1 : 0;
@@ -99,6 +100,21 @@ export class MoodSystem extends createSystem({}) {
     this.fitSpill(cafe, frameDelta);
     this.light();
   }
+
+  /** Keep the lights' rig on the café's pose (it hangs outside the café: light/cafe-lights.ts). */
+  private followCafe(cafe: CafeSystem | undefined): void {
+    const rig = this.lights?.rig;
+    if (!rig || !cafe) return;
+    cafe.cafe.updateWorldMatrix(true, false);
+    this.pose.copy(cafe.cafe.matrixWorld);
+    if (rig.parent) {
+      rig.parent.updateWorldMatrix(true, false);
+      this.pose.premultiply(this.toRig.copy(rig.parent.matrixWorld).invert());
+    }
+    this.pose.decompose(rig.position, rig.quaternion, rig.scale);
+  }
+  private readonly pose = new Matrix4();
+  private readonly toRig = new Matrix4();
 
   /** The day (the Canadian café) or the night (the Japanese café): the sun or the moon, the fill, the house light and the spill. */
   private day = false;
@@ -113,6 +129,9 @@ export class MoodSystem extends createSystem({}) {
     lights.moon.position.set(sun.position[0], sun.position[1], sun.position[2]);
     lights.house.visible = !day;
     lights.spill.visible = !day;
+    // The lamps are in every lit shader by night, at whatever strength (0 before dusk); by day, in none. Set once per
+    // café, never as their strength crosses zero: each change of the number of lights relinks every lit material.
+    for (const lamp of lights.lamps) lamp.visible = !day;
     // By day the sun casts the shadows (the house light is off); by night the house light does.
     const sunLight = lights.moon;
     sunLight.castShadow = day;
@@ -204,8 +223,6 @@ export class MoodSystem extends createSystem({}) {
     lamps.forEach((lamp, i) => {
       const grow = i === ROOM_LAMP ? 1 + (ANNEX_LIGHT.room.strength - 1) * this.grown : 1;
       lamp.intensity = LAMPS[i].intensity * grow * this.lampsUp * breath(LAMPS[i].breathes, i);
-      // A lamp at zero (by day, or before dusk) is left out of every shader: a point light costs each pixel even when dark.
-      lamp.visible = lamp.intensity > 0.001;
     });
     halos.forEach((halo, i) => {
       halo.material.opacity = HALOS[i].opacity * this.lampsUp * breath(HALOS[i].breathes, i);
@@ -215,7 +232,6 @@ export class MoodSystem extends createSystem({}) {
     this.annexLamps.forEach((lamp, i) => {
       const b = breath(true, LAMPS.length + i);
       lamp.intensity = ANNEX_LAMP.intensity * this.grown * this.lampsUp * b;
-      lamp.visible = lamp.intensity > 0.001;
       this.annexHalos[i].material.opacity = ANNEX_LAMP.halo.opacity * this.grown * this.lampsUp * b;
       this.annexHalos[i].visible = this.annexHalos[i].material.opacity > 0.002;
     });

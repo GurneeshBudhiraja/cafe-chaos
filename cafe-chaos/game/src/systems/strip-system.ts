@@ -38,6 +38,7 @@ import { narrowView } from '../lib/view-fit.js';
 import { CafeSystem } from './cafe-system.js';
 import { ScoreSystem } from './score-system.js';
 import { ShopSystem } from './shop-system.js';
+import { PROBE } from '../lib/probe.js';
 
 /**
  * Its size (real metres: 64 cm, its parts set close, the level block as
@@ -211,7 +212,8 @@ export class StripSystem extends createSystem({}) {
     const pulseStep = low ? Math.round(((this.time * MOTION.pulse) % 1) * 12) % 12 : -1;
     const motion = moving ? `${this.fill.map((f) => Math.round(f * 12)).join('')}|${Math.round(this.shownBank)}|${this.popAge < MOTION.pop ? Math.round(this.popAge * 30) : -1}` : '';
     const now = `${Math.round(s.happiness)}|${s.bank}|${s.level}|${s.levelServed}|${s.levelGoal}|${this.live}|${this.controls}|${shopNow}|${this.banner ? this.banner.title : ''}|${s.trial}|${pulseStep}|${motion}`;
-    if (now !== this.shown) {
+    // `?nobar` (lib/probe.ts): drawn once, never again.
+    if (now !== this.shown && !(PROBE.noBar && this.shown)) {
       this.shown = now;
       this.panel.paint();
     }
