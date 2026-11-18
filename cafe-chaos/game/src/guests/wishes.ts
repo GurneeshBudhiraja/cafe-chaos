@@ -247,7 +247,8 @@ export function openWishes(open: readonly Seat[], quietCorner: number, band: rea
     const tables = open.filter((s) => !s.takeaway).map((s) => s.table);
     const has = (list: number[]): boolean => tables.some((t) => list.includes(t));
     const P = CANADA_PLACES;
-    if (has(P.socketTables)) out.push('socket', 'warm');
+    if (has(P.socketTables)) out.push('socket');
+    if (has(P.warmTables)) out.push('warm');
     if (has(P.outsideTables)) out.push('outside');
     if (has(P.patioTables)) out.push('patio');
     if (has(P.lakeTables)) out.push('lake');

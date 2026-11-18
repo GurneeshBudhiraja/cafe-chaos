@@ -2,7 +2,7 @@
  * The Canadian café's layout check (the layout pass of 17 Nov,
  * models/27-cafe-canada/INTEGRATION.md). In the desktop preview, with the
  * Canadian café swapped in, checks that:
- * 1. the cabin's three tables, the deck, the dock, the bonfire and the
+ * 1. the cabin's four tables, the deck, the lake bench, the bonfire and the
  *    upper deck's four tables have their seats, on the shell's anchors;
  * 2. the takeaway spot is the shell's `TakeawaySpot`;
  * 3. the baristas' stations are walk-grid ground behind the counter, and
@@ -29,7 +29,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 await page.goto(APP_URL);
 await page.waitForFunction(() => window.__cafe?.system.nav && window.__cafe.guests.seats.length > 0, null, { timeout: 90000 });
-await page.waitForFunction(() => window.__cafe.system.setCafe('canada'), null, { timeout: 90000, polling: 1000 });
+await page.waitForFunction(() => window.__cafe.system.setCafe('canada'), null, { timeout: 240000, polling: 1000 });
 await page.waitForFunction(() => window.__cafe.guests.seats.some((s) => s.takeaway), null, { timeout: 30000 });
 
 const r = await page.evaluate(async () => {
@@ -66,11 +66,12 @@ const r = await page.evaluate(async () => {
 
 const near = (a, x, z) => Math.hypot(a.x - x, a.z - z) < 0.002;
 const T = r.tables;
-check('every table has seats', r.seatTables.join() === '1,2,3,4,5,6,7,8,9,10,11,12', `tables ${r.seatTables.join(',')}, ${r.seats} seats`);
-check('cabin tables on TableSpot-1/2/3', near(T[1], -0.31, -0.05) && near(T[2], -0.31, 0.09) && near(T[3], -0.17, 0.02), T.slice(1, 4).map((t) => `(${t.x}, ${t.z})`).join(' '));
+check('every table has seats', r.seatTables.join() === '1,2,3,4,5,6,7,8,9,10,11,12,13', `tables ${r.seatTables.join(',')}, ${r.seats} seats`);
+check('cabin tables on TableSpot-1/2/3/6', near(T[1], -0.31, -0.05) && near(T[2], -0.31, 0.09) && near(T[3], -0.17, 0.02) && near(T[13], -0.31, 0.02), [1, 2, 3, 13].map((i) => `(${T[i].x}, ${T[i].z})`).join(' '));
+check('deck tables on PatioSpot-1/2, the bench on DockSpot', near(T[4], 0.15, 0.11) && near(T[5], 0.31, 0.11) && near(T[6], 0.26, 0.25) && T[6].y === 0.022, [4, 5, 6].map((i) => `(${T[i].x}, ${T[i].y}, ${T[i].z})`).join(' '));
 check(
   'four upper-deck tables on UpperSpot-1..4',
-  near(T[9], -0.32, -0.2225) && near(T[10], -0.03, -0.2225) && near(T[11], -0.32, -0.1375) && near(T[12], -0.03, -0.1375) && T.slice(9).every((t) => t.model === 'patio-table' && t.y === 0.1548) && r.upstairs === 8,
+  near(T[9], -0.32, -0.2225) && near(T[10], -0.03, -0.2225) && near(T[11], -0.32, -0.1375) && near(T[12], -0.03, -0.1375) && T.slice(9, 13).every((t) => t.model === 'patio-table' && t.y === 0.1548) && r.upstairs === 8,
   `${r.upstairs} seats upstairs`,
 );
 check('takeaway at TakeawaySpot', !!r.take && near(r.take, 0, -0.085), JSON.stringify(r.take));

@@ -4,14 +4,15 @@
  * +Z; the origin at the centre of the plate's underside), on the anchors
  * the shell carries (`cafe-canada`, models/27-cafe-canada/INTEGRATION.md).
  *
- * Two floors. Downstairs, inside the cabin (the left half): two tables for
- * two along the window wall, each under a wall socket (the second one by
- * the fireplace), and a table for four in the middle. On the deck (the
- * patio): two bistro tables. On the dock: a bench for two facing the lake.
+ * Two floors. Downstairs, inside the cabin (the left half, open along its
+ * right side): two tables for two along the window wall, each under a wall
+ * socket, a log table for two in front of the fireplace between them, and
+ * a table for four in the middle. On the deck (the patio): two log tables.
+ * On the lake's ice: a bench for two facing the lake.
  * Round the bonfire: two Muskoka chairs facing the fire. Upstairs, on the
  * upper deck over the counter (reached by the stairs outside the cabin's
  * right wall): four bistro tables, two either side of the rooftop piano.
- * Twenty-four seats in all; the game opens them table by table as the Japanese café's (the
+ * Twenty-six seats in all; the game opens them table by table as the Japanese café's (the
  * first two inside tables at the start).
  *
  * CafeSystem builds it when the Canadian café is chosen on the start card;
@@ -32,11 +33,11 @@ export const CANADA_LAYOUT: Placement[] = [
   { model: 'table-ca-2' as const, x: -0.31, z: 0.09 },
   // 3. The middle table for four (TableSpot-3). The shell's TableSpot-4/5 on the door side stay empty.
   { model: 'table-ca-4' as const, x: -0.17, z: 0.02, yawDeg: 90 },
-  // 4-5. The deck: two bistro tables.
-  { model: 'patio-table' as const, x: 0.16, z: 0.08 },
-  { model: 'patio-table' as const, x: 0.31, z: 0.06 },
-  // 6. The dock: the bench, its sitters facing the lake (and the player).
-  { model: 'dock-bench' as const, x: 0.26, z: 0.25, y: 0.030 },
+  // 4-5. The deck's front half: two log tables, either side of the heater (PatioSpot-1/2).
+  { model: 'patio-table' as const, x: 0.15, z: 0.11 },
+  { model: 'patio-table' as const, x: 0.31, z: 0.11 },
+  // 6. The lake: the bench on the ice (the dock is gone), its sitters facing the lake (and the player) (DockSpot).
+  { model: 'dock-bench' as const, x: 0.26, z: 0.25, y: 0.022 },
   // 7-8. The bonfire: two chairs either side of the ring at (-0.27, 0.245), each turned to face it. The shell's third
   // spot (FireSpot-2, in front of the ring at z 0.33) is past the plate's front edge (0.31): a chair there would hang
   // over the player's real table, and behind the ring the cabin's front wall and the way out leave no room.
@@ -51,6 +52,9 @@ export const CANADA_LAYOUT: Placement[] = [
   { model: 'patio-table' as const, x: -0.03, z: -0.2225, y: CANADA_UPPER_TOP_M },
   { model: 'patio-table' as const, x: -0.32, z: -0.1375, y: CANADA_UPPER_TOP_M },
   { model: 'patio-table' as const, x: -0.03, z: -0.1375, y: CANADA_UPPER_TOP_M },
+  // 13. Inside again: a log table for two right in front of the hearth, between the window tables (TableSpot-6). Last,
+  // so every other table keeps its index (and a save its tables).
+  { model: 'patio-table' as const, x: -0.31, z: 0.02 },
 ];
 
 /**
@@ -64,8 +68,8 @@ export { CANADA_START_TABLES } from '../game/rules.js';
 export const CANADA_PLACES = {
   /** Seats whose table stands under a wall socket. */
   socketTables: [1, 2],
-  /** By the fireplace inside (the `warm` wish): both window tables, either side of the hearth. */
-  warmTables: [1, 2],
+  /** By the fireplace inside (the `warm` wish): both window tables, either side of the hearth, and the one in front of it. */
+  warmTables: [1, 2, 13],
   /** Everything not inside the cabin (the upper deck is outside too: it is open to the sky). */
   outsideTables: [4, 5, 6, 7, 8, 9, 10, 11, 12],
   patioTables: [4, 5],
@@ -79,8 +83,8 @@ export const CANADA_PLACES = {
   musicians: [
     /** The violinist on the snow beside the coffee bear, by the deck's back rail (the shell's `MusicianSpot`, barista-fiddler.glb, clip `Play`). */
     { model: 'barista-fiddler', x: 0.205, y: CANADA_FLOOR_TOP_M, z: -0.19, yawDeg: 180, clip: 'Play', earshot: 0.2 },
-    /** The pianist at the rooftop piano, centred under the rooftop logo, behind it and facing the player (the shell's `PianoSpot`, barista-pianist.glb, clip `PlayPiano`). */
-    { model: 'barista-pianist', x: -0.17, y: CANADA_UPPER_TOP_M, z: -0.261, yawDeg: 0, clip: 'PlayPiano', earshot: 0.2 },
+    /** The pianist at the rooftop upright, which stands against the sign, centred under the logo; at its keys, back to the player (the shell's `PianoSpot`, barista-pianist.glb, clip `PlayPiano`). */
+    { model: 'barista-pianist', x: -0.17, y: CANADA_UPPER_TOP_M, z: -0.212, yawDeg: 180, clip: 'PlayPiano', earshot: 0.2 },
   ],
   /** Where leaving guests walk to: the foot of the stone exit walkway at the plate's front edge (the shell's `Exit`). */
   exit: { x: 0.06, z: 0.295 },
