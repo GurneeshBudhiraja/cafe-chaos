@@ -22,7 +22,7 @@ const LOOK = { x: -1.3, y: 0.79, z: 0.28 };
 const h = await startHeadset({
   async prepare(h) {
     await h.head(SEAT, LOOK);
-    await h.page.evaluate(() => { localStorage.removeItem('cafe-chaos/save/v3'); window.__cafe.system.replace(); });
+    await h.page.evaluate(() => { localStorage.removeItem('cafe-chaos/save/v4'); window.__cafe.system.replace(); });
     await h.page.waitForFunction(() => window.__cafe?.system.placed && !window.__cafe.system.arriving && window.__cafe.game.phase === 'title', null, { timeout: 60000 });
   },
 });

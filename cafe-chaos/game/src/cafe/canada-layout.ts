@@ -70,24 +70,24 @@ export const CANADA_TABLE_RINGS: number[][] = [[3, 4, 5], [6, 7], [8, 9, 10], [1
 
 /** The wishes the Canadian café can meet, by piece (the game's wish logic reads these; CANADA-PLAN.md). */
 export const CANADA_PLACES = {
-  /** Seats whose table stands under a wall socket. */
-  socketTables: [1, 2],
   /** By the fireplace inside (the `warm` wish): both window tables, either side of the hearth. */
   warmTables: [1, 2],
   /** Everything not inside the cabin (the upper deck is outside too: it is open to the sky). */
   outsideTables: [6, 7, 8, 9, 10, 11, 12, 13, 14],
-  /** Lake view (docs/CANADA-CHALLENGES.md): the deck's two tables stand on its front half over the frozen lake (the `patio` wish was folded into this). */
-  lakeTables: [6, 7],
+  /** On the patio, under the string lights (the `patio` wish): the deck's two tables. */
+  patioTables: [6, 7],
+  /**
+   * By the lake (the `lake` wish): the deck table at the lake's middle (the
+   * dock was removed with its bench; the owner's list asks "on the dock",
+   * so the nearest seat to the ice stands in for it).
+   */
+  lakeTables: [7],
   /** Inside the cabin (the `inside` wish): the window pair, the long table and the door-side pair. */
   insideTables: [1, 2, 3, 4, 5],
-  /** By the chalk menu board (the `board` wish): the long table facing the counter. */
-  boardTables: [3],
   /** The bonfire's chairs: one table for company, alone and quiet (they share the fire; wishes.ts tablesOf). */
   bonfireTables: [8, 9, 10],
   /** Upstairs (the `upstairs` wish: a view over the café). */
   upperTables: [11, 12, 13, 14],
-  /** Where a takeaway guest stands (the shell's `TakeawaySpot`). */
-  takeaway: { x: 0.0, z: -0.085 },
   /** The two musicians, each bought in the shop; seats within `earshot` of one meet `music` once it plays. `yawDeg` is three.js's (rotation.y). */
   musicians: [
     /** The violinist at the back of the deck (the shell's `MusicianSpot`, barista-fiddler.glb, clip `Play`), facing the patio and the player. Earshot 0.34: both seats at each deck table (6, 7), 0.30 to 0.33 m off, and the two roof tables nearest the stairs (docs/CANADA-CHALLENGES.md). */

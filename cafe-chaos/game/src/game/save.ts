@@ -42,7 +42,12 @@ export interface Progress {
   /** The first hurried guest and the first pair have been cued (they come on cue once, then by chance). */
   metHurry: boolean;
   metPair: boolean;
+  /** The first singer has been cued (the Japanese café, from level 3). */
+  metSinger: boolean;
   runs: number;
+  /** Guests so far in this game, and the wish types it has met (guests/wish-plan.ts: new types come in by guest count). */
+  wishGuests: number;
+  wishSeen: string[];
   /** The seed of this game's table order (game/table-order.ts): drawn once a new game, so Continue shows the same next table. 0: none yet. */
   tableSeed: number;
 }
@@ -61,6 +66,8 @@ export interface Shared {
   last: CafeId;
   /** The one-time note in the Japanese café that the Canadian café can be bought has been shown. */
   forSaleSeen: boolean;
+  /** Seat hints (Settings): the seats meeting a carried guest's wishes glow. Off by default. */
+  seatHints: boolean;
 }
 
 /** The café up now, as the game works with it: its progress and the shared part together. */
@@ -84,11 +91,11 @@ const V2_KEY = 'cafe-chaos/save/v2';
 export const TEST_MODE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('test');
 
 export function freshProgress(id: CafeId): Progress {
-  return { bank: 0, tables: [...startTables(id)], hires: 0, janitor: false, janitor2: false, musicians: 0, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, metHurry: false, metPair: false, runs: 0, tableSeed: 0 };
+  return { bank: 0, tables: [...startTables(id)], hires: 0, janitor: false, janitor2: false, musicians: 0, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, metHurry: false, metPair: false, metSinger: false, runs: 0, tableSeed: 0, wishGuests: 0, wishSeen: [] };
 }
 
 function freshShared(): Shared {
-  return { tutorialDone: false, tips: [], music: 2, sounds: 3, size: 100, owned: ['japan'], last: 'japan', forSaleSeen: false };
+  return { tutorialDone: false, tips: [], music: 2, sounds: 3, size: 100, owned: ['japan'], last: 'japan', forSaleSeen: false, seatHints: false };
 }
 
 const PROGRESS_KEYS = Object.keys(freshProgress('japan')) as (keyof Progress)[];

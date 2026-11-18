@@ -111,6 +111,8 @@ export interface BuyCafeState {
 export interface SettingsState {
   music: number;
   sounds: number;
+  /** Seat hints: the seats meeting a carried guest's wishes glow (off by default). */
+  hints: boolean;
 }
 /** The pause card: the level, and guests served in it of the number that passes it. */
 export interface PauseState {
@@ -201,7 +203,7 @@ export class StartMenu {
   private seed = 1;
   private clock = 0;
   private start: StartState = { tiles: [], price: 0, lesson: true };
-  private settings: SettingsState = { music: 2, sounds: 3 };
+  private settings: SettingsState = { music: 2, sounds: 3, hints: false };
   private warn: WarnState = { cafe: '', coins: 0, staff: 1, level: 1 };
   private readonly k: number;
   /** How to play's scale (metres per design unit). */
@@ -745,11 +747,22 @@ export class StartMenu {
   private layoutSettings(): void {
     const s = this.settings;
     const H = Math.round(this.sheet.height / this.k);
-    const rows = { music: 170, sounds: 170 + 84 + 100 };
+    const rows = { music: 170, sounds: 170 + 84 + 100, hints: 170 + (84 + 100) * 2 - 40 };
+    const closeY = rows.hints + 84 + TOUCH_GAP + 8;
+    // Fitted to its rows: Music, Sounds, Seat hints, CLOSE, PAD under it.
+    const fit = closeY + 90 + PAD;
+    if (fit !== H) {
+      this.sheet.resize(MENU_SIZE.width, (fit * this.k) / PPM);
+      this.layoutSettings();
+      return;
+    }
     const buttons: Button[] = [];
     this.stepper(buttons, null, null, 'music', rows.music, 'Music', s.music);
     this.stepper(buttons, null, null, 'sounds', rows.sounds, 'Sounds', s.sounds);
-    buttons.push(this.button(this.sheet, 'close', PAD, rows.sounds + 84 + TOUCH_GAP + 8, W - PAD * 2, 90, 'primary', 'CLOSE'));
+    // Seat hints: a switch, moss when on (the words say On or Off: not by colour alone).
+    const tw = 200;
+    buttons.push(this.button(this.sheet, 'hints', W - PAD - tw, rows.hints, tw, 84, s.hints ? 'primary' : 'secondary', s.hints ? 'On' : 'Off', undefined, false, 34));
+    buttons.push(this.button(this.sheet, 'close', PAD, closeY, W - PAD * 2, 90, 'primary', 'CLOSE'));
     this.sheet.set((ctx) => {
       ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
       ctx.save();
@@ -759,6 +772,8 @@ export class StartMenu {
       text(ctx, 'Settings', W / 2, 74, 56, SKETCH.ink);
       this.stepper([], ctx, rc, 'music', rows.music, 'Music', s.music);
       this.stepper([], ctx, rc, 'sounds', rows.sounds, 'Sounds', s.sounds);
+      text(ctx, 'Seat hints', PAD + 8, rows.hints + 30, 36, SKETCH.ink, 'left');
+      text(ctx, 'Seats that match glow.', PAD + 8, rows.hints + 66, 26, SKETCH.soft, 'left', false);
       ctx.restore();
     }, buttons);
   }

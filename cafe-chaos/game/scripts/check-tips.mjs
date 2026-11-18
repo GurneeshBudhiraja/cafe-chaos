@@ -10,6 +10,10 @@
  *  4. the first pair: "Two friends"; the first dirty table: "Dirty table";
  *     the bank able to pay for a barista: "More hands" under the Shop
  *     button, gone when the shop opens;
+ *  4b. the wish tips (the owner's list of 18 Nov 2026): the first guest
+ *     with a wish ("Read the guest's card."), with other guests, the music
+ *     and quiet, with their own kind, meeting someone, keeping away, and a
+ *     new wish ("A new wish."): each next to its guest, gone once seated;
  *  5. one at a time; each once a save (after a reload none comes back);
  *     no console errors.
  * Usage: dev server running, then `node scripts/check-tips.mjs`.
@@ -23,7 +27,7 @@ const ready = (h) => h.page.waitForFunction(() => window.__cafe?.system.placed &
 const h = await startHeadset({
   async prepare(h) {
     await h.head(SEAT, LOOK);
-    await h.page.evaluate(() => { localStorage.removeItem('cafe-chaos/save/v3'); window.__cafe.system.replace(); });
+    await h.page.evaluate(() => { localStorage.removeItem('cafe-chaos/save/v4'); window.__cafe.system.replace(); });
     await ready(h);
   },
 });
@@ -33,11 +37,11 @@ const check = (name, pass, detail) => { results.push(pass); console.log(`${pass 
 const until = (fn, timeout = 60000, arg = null) => page.waitForFunction(fn, arg, { timeout, polling: 100 }).then(() => true, () => false);
 const send = (m, p) => page.evaluate(([m, p]) => window.IWER_DEVICE.remote.dispatch(m, p), [m, p]);
 const frames = (n) => page.evaluate((n) => new Promise((resolve) => { const info = window.__cafe.world.renderer.info.render; const target = info.frame + n; const t = setInterval(() => { if (info.frame >= target) { clearInterval(t); resolve(); } }, 8); }), n);
-const tip = () => page.evaluate(() => { const { game } = window.__cafe; return { shown: game.tipShown, open: game.tip.panel.open, count: game.tipsShown, saved: JSON.parse(localStorage.getItem('cafe-chaos/save/v3') ?? 'null')?.tips ?? [] }; });
+const tip = () => page.evaluate(() => { const { game } = window.__cafe; return { shown: game.tipShown, open: game.tip.panel.open, count: game.tipsShown, saved: JSON.parse(localStorage.getItem('cafe-chaos/save/v4') ?? 'null')?.tips ?? [] }; });
 for (const k of ['left', 'right']) await send('set_transform', { device: `hand-${k}`, position: { x: k === 'left' ? -1.4 : -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
 
 // 1. The coach card takes the ray: aim at its Skip and pinch.
-await page.evaluate(() => window.__cafe.game.click('new'));
+await page.evaluate(() => window.__cafe.game.click('play-japan'));
 await until(() => window.__cafe.game.phase === 'tutorial' && window.__cafe.game.coach.open, 60000);
 await page.waitForTimeout(800);
 const REST = [SEAT.x - 0.25, SEAT.y - 0.35, SEAT.z - 0.15];
@@ -71,6 +75,15 @@ await until(() => window.__cafe.game.phase === 'run', 20000);
 check('the first run\'s coach card takes the hand ray: Skip pointed at and pinched starts the run', aimed === 'skip' && (await page.evaluate(() => window.__cafe.game.phase)) === 'run', `aimed ${aimed}`);
 await send('set_transform', { device: 'hand-right', position: { x: -0.3, y: 0.4, z: 0.9 }, orientation: { x: 0, y: 0, z: 0, w: 1 } });
 await page.evaluate(() => { const { guests } = window.__cafe; guests.arrivals = false; guests.patienceFrozen = true; guests.clear(); });
+// The guest models load in the background (arrivals wait for them; this check's own guests do not).
+await until(async () => {
+  const { castLoaded } = await import('/src/guests/actor.ts');
+  const { SPECIES } = await import('/src/guests/cast.ts');
+  return SPECIES.every((species) => castLoaded({ species, tint: 0xffffff, tintName: 'plain', outfit: [] }));
+}, 120000);
+// The wish tips have their own part (4b): until then they are taken as seen, so the others come in their order.
+const WISH_TIPS = ['card', 'company', 'music', 'kind', 'meet', 'avoid', 'newwish'];
+await page.evaluate((ids) => window.__cafe.game.save.tips.push(...ids), WISH_TIPS);
 
 // 2. The goal first, under the bar's level count; then the table tip.
 await until(() => window.__cafe.game.tipShown === 'goal', 10000);
@@ -115,7 +128,8 @@ check('seated, the hurry tip goes', (await tip()).shown === null, 'gone');
 // 4. A pair, a dirty table, the shop.
 await page.evaluate(() => { const { guests } = window.__cafe; guests.patienceFrozen = true; guests.level = 6; guests.queueCap = 4; const a = guests.spawn(); const b = guests.spawn(); guests.pair(a, b); });
 await until(() => window.__cafe.game.tipShown === 'pair', 20000);
-check('the first pair: "Two friends"', (await tip()).shown === 'pair', 'shown');
+const pairState = await page.evaluate(() => ({ shown: window.__cafe.game.tipShown, guests: window.__cafe.guests.guests.map((g) => [g.id, g.state, g.friend, g.wishes.join('+')]), line: window.__cafe.guests.line.length, saved: window.__cafe.game.save.tips }));
+check('the first pair: "Two friends"', pairState.shown === 'pair', JSON.stringify(pairState));
 await page.evaluate(() => { const { guests } = window.__cafe; for (const g of guests.guests.filter((x) => x.friend && x.state === 'queued')) { const s = guests.seats.find((x) => x.occupant === 0 && !x.locked && !x.dirty); guests.seatGuest(g.id, s.index); } });
 await until(() => window.__cafe.game.tipShown === null, 15000);
 await page.evaluate(() => window.__cafe.mess.soil(window.__cafe.shop.tables.find((x) => x !== 2 && x !== 8) ?? 8));
@@ -124,21 +138,45 @@ check('the first dirty table: "Dirty table"', (await tip()).shown === 'dirty', '
 await until(() => window.__cafe.game.tipShown === null, 20000);
 await page.evaluate(() => { window.__cafe.score.bank = 80; });
 await until(() => window.__cafe.game.tipShown === 'shop', 20000);
-check('the bank able to pay for a barista: "More hands" under the Shop button', (await tip()).shown === 'shop', 'shown');
+const shopState = await page.evaluate(() => ({ shown: window.__cafe.game.tipShown, bank: window.__cafe.score.bank, price: window.__cafe.shop.price, affordable: window.__cafe.shop.affordable, saved: window.__cafe.game.save.tips }));
+check('the bank able to pay for a barista: "More hands" under the Shop button', shopState.shown === 'shop', JSON.stringify(shopState));
 await h.screenshot('artifacts/tips-3-shop.png');
 await page.evaluate(() => window.__cafe.game.click('bar-shop'));
 await until(() => window.__cafe.game.tipShown === null, 10000);
 check('opening the shop sends it away', (await tip()).shown === null, 'gone');
 await page.evaluate(() => window.__cafe.game.click('shop-close'));
 
+// 4b. The wish tips: each the first time its kind of wish comes, next to that guest; seated, it goes.
+const WISH_CASES = [['card', ['window']], ['company', ['company']], ['music', ['quiet']], ['kind', ['kind']], ['meet', ['meet']], ['avoid', ['calm']], ['newwish', ['big']]];
+const wishTips = [];
+// Every table open: seats for the guests these tips are about.
+await page.evaluate(() => { const { game, shop, system } = window.__cafe; shop.tables = [...system.tables]; game.applyLocks(); });
+for (const [id, wishes] of WISH_CASES) {
+  const gid = await page.evaluate(([id, wishes]) => {
+    const { game, guests } = window.__cafe;
+    game.save.tips = game.save.tips.filter((x) => x !== id);
+    const g = guests.spawn();
+    g.wishes = wishes;
+    g.firstWish = wishes[0];
+    g.link = guests.guests.find((x) => x.state === 'seated')?.id ?? 0;
+    return g.id;
+  }, [id, wishes]);
+  const shown = await until((id) => window.__cafe.game.tipShown === id, 20000, id);
+  const words = await page.evaluate(() => window.__cafe.game.tip.drawn);
+  await page.evaluate((gid) => { const { guests } = window.__cafe; const s = guests.seats.find((x) => x.occupant === 0 && !x.locked && !x.dirty && !x.hidden); guests.seatGuest(gid, s.index); }, gid);
+  const gone = await until(() => window.__cafe.game.tipShown === null, 15000);
+  wishTips.push({ id, shown, gone, words });
+}
+check('each wish tip shows the first time its wish comes, next to that guest, and goes once it is seated', wishTips.every((x) => x.shown && x.gone), JSON.stringify(wishTips));
+
 // 5. Once a save.
 t = await tip();
-check('each tip was shown once, one at a time, and saved', t.count === 5 && ['goal', 'hurry', 'pair', 'dirty', 'shop'].every((x) => t.saved.includes(x)), JSON.stringify(t));
+check('each tip was shown once, one at a time, and saved', t.count === 5 + WISH_CASES.length && ['goal', 'hurry', 'pair', 'dirty', 'shop', ...WISH_TIPS].every((x) => t.saved.includes(x)), JSON.stringify(t));
 await page.evaluate(() => window.__cafe.game.click('bar-pause'));
 await until(() => window.__cafe.game.phase === 'paused');
 await h.reload();
 await ready(h);
-await page.evaluate(() => { const { game } = window.__cafe; game.click('continue'); });
+await page.evaluate(() => { const { game } = window.__cafe; game.click('play-japan'); });
 await until(() => window.__cafe.game.phase === 'run', 60000);
 await page.evaluate(() => { const { guests, score, mess } = window.__cafe; guests.arrivals = false; score.bank = 900; guests.hurryIn(1); guests.spawn(); mess.soil(8); });
 await page.waitForTimeout(6000);
