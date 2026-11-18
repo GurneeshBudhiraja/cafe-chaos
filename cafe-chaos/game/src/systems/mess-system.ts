@@ -220,6 +220,25 @@ export class MessSystem extends createSystem({}) {
   }
 
   /**
+   * A mess as one would be laid, for the shader warm-up (GuestSystem): its
+   * laid-on materials are the ones every mess shares, kept for good, so the
+   * first table left dirty links no shader. Null until the model is loaded.
+   */
+  sample(): Object3D | null {
+    let model: Object3D;
+    try {
+      model = copyModel('table-mess');
+    } catch {
+      return null;
+    }
+    model.traverse((node) => {
+      const mesh = node as Mesh;
+      if (mesh.isMesh && !Array.isArray(mesh.material)) mesh.material = this.laid(mesh.material);
+    });
+    return model;
+  }
+
+  /**
    * One place's mess: at most MESS.fit of its table top's shorter side,
    * times MESS.place where the table has more than one seat (each place
    * gets its share, so a table left by four never looks crowded).

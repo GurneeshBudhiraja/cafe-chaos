@@ -40,7 +40,7 @@
  * with it.
  */
 
-import { createSystem, Group, PerspectiveCamera, Vector3, type Camera, type Sprite } from '@iwsdk/core';
+import { createSystem, Group, PerspectiveCamera, Vector3, type Camera, type Object3D, type Sprite } from '@iwsdk/core';
 import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/actor.js';
 import { Blobs } from '../guests/blobs.js';
 import { CANADA_SPECIES, fullOutfit, randomLook, SPECIES, type Look } from '../guests/cast.js';
@@ -62,7 +62,8 @@ import { BUBBLE, feelingFor, Reactions, type Reacting } from '../guests/reaction
 import { WishCards } from '../ui/wish-card.js';
 import { Popups } from '../guests/popups.js';
 import { SeatGlow } from '../guests/seat-glow.js';
-import { DIAL, PatienceDial } from '../guests/patience-dial.js';
+import { DIAL, DialAtlas, PatienceDial } from '../guests/patience-dial.js';
+import { allAtlases } from '../guests/guest-atlas.js';
 import { collectSeats, LANDING_REACH_M, seatNear, seatUnder, type Seat } from '../guests/seats.js';
 import { SEAT_TAG, SeatTag, type SeatRefusal } from '../ui/seat-tag.js';
 import { Walk, yawDelta } from '../guests/walker.js';
@@ -70,6 +71,7 @@ import { CafeSystem } from './cafe-system.js';
 import { HandleSystem } from './handle-system.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
 import { HoldSystem } from './hold-system.js';
+import { MessSystem } from './mess-system.js';
 
 /**
  * arriving: walking up to the line. queued: in the line. held: in the
@@ -366,6 +368,8 @@ export class GuestSystem extends createSystem({}) {
 
   update(frameDelta: number): void {
     this.frame++;
+    // The dots drawn again last frame go into their cells of the shared texture (a few a frame at most).
+    this.dialAtlas.flush(this.world.renderer);
     const cafe = this.cafeSystem;
     const delta = Math.min(1, frameDelta) * cafe.timeScale;
     if (cafe.rooms !== this.rooms) {
@@ -386,7 +390,7 @@ export class GuestSystem extends createSystem({}) {
       if (!cafe.placed) return;
     }
     if (cafe.arriving) return;
-    this.prewarm();
+    this.warmUp();
     this.spawnTick(delta);
     this.hands(delta);
     this.keepLine();
@@ -728,49 +732,82 @@ export class GuestSystem extends createSystem({}) {
   }
 
   /**
-   * Compile the cast's shaders before the first guest comes: one actor of
-   * each species in the café's clothes, with a patience dot, drawn once
-   * off-screen by `compileAsync`, then thrown away. Without it the first
-   * guest of each kind (and each new face, hat or scarf) compiled its
-   * programs on arrival: a hitch on the headset every few guests in the
-   * first minutes. Once per café (its lights differ, so its programs do).
+   * Compile every shader the café can need before the first guest comes,
+   * and keep them. Once per café (its lights differ, so its programs do),
+   * when the café is up with its lights as they will stay:
+   * - a stage under the plate with one guest of each species in all its
+   *   clothes, lit up, half faded, a patience dot, a name tag, a leaving
+   *   mark, a popup and a dirty table's mess;
+   * - then the whole scene, hidden things too (the cards, the bubbles, the
+   *   seat glow), with `compileAsync`;
+   * - and every species' atlas uploaded.
+   * The stage's materials are kept, never disposed: three.js deletes a
+   * program as soon as no material uses it, so a warm-up thrown away (as
+   * this was before) left the first real guest to link its shaders again,
+   * a long frame on the headset. With these held, a guest arriving,
+   * fading, lit up or leaving never links one.
    */
-  private prewarm(): void {
+  private warmUp(): void {
     const key = `${isCanada() ? 'canada' : 'japan'}|${this.rooms}`;
-    if (this.prewarmed === key || this.prewarming) return;
+    if (this.warmedFor === key || this.warming) return;
     const species = isCanada() ? CANADA_SPECIES : SPECIES;
     const looks: Look[] = species.map((s) => ({ species: s, tint: 0xffffff, tintName: 'plain', outfit: fullOutfit(s) }));
     if (!looks.every(castLoaded)) return;
-    this.prewarming = true;
+    this.warming = true;
     const stage = new Group();
-    stage.name = 'Prewarm';
+    stage.name = 'WarmUp';
     stage.userData.dynamic = true;
     const actors = looks.map((look) => new GuestActor(look));
-    const dials = actors.map(() => new PatienceDial());
-    actors.forEach((actor, i) => {
+    actors.forEach((actor) => {
       actor.setOpacity(0.5);
+      actor.setHighlight(1);
       stage.add(actor.root);
-      dials[i].update(0.5, 10, 2, true, 1, 0, true, true, true, true);
-      stage.add(dials[i].sprite);
     });
-    // Under the plate, out of sight; the compile needs it in the scene for the lights and the fog.
+    const dial = new PatienceDial(this.dialAtlas);
+    dial.update(0.5, 10, 2, true, 1, 0, true, true, true, true);
+    const tag = makeNameTag('Mochi');
+    const mark = makeLeavingMark();
+    const popups = new Popups();
+    popups.show('note', new Vector3(), true);
+    stage.add(dial.sprite, tag, mark, popups.group);
+    // A dirty table's mess (its materials are shared by every mess and kept).
+    const mess = this.world.getSystem(MessSystem)?.sample();
+    if (mess) stage.add(mess);
+    for (const o of [dial.sprite, tag, mark]) o.visible = true;
+    // Under the plate, out of sight; the compile needs it in the scene for the lights.
     stage.position.y = -1;
     this.cafeSystem.cafe.add(stage);
     const renderer = this.world.renderer;
+    for (const atlas of allAtlases()) renderer.initTexture(atlas.texture);
     const camera = (this.world as unknown as { camera?: Camera }).camera ?? new PerspectiveCamera();
     const done = (): void => {
       stage.removeFromParent();
-      for (const actor of actors) actor.dispose();
-      for (const dial of dials) dial.dispose();
-      this.prewarmed = key;
-      this.prewarming = false;
+      // Keep every material the stage compiled (and so its programs); let the last café's go.
+      this.keep?.dispose();
+      this.keep = { dispose: () => {
+        for (const actor of actors) actor.dispose();
+        dial.dispose();
+        disposeTag(tag);
+        disposeTag(mark);
+        popups.clear();
+      } };
+      this.warmedFor = key;
+      this.warming = false;
     };
-    const compile = (renderer as unknown as { compileAsync?: (o: Group, c: Camera, s: unknown) => Promise<unknown> }).compileAsync;
-    if (compile) compile.call(renderer, stage, camera, this.world.scene).then(done, done);
+    const compile = (renderer as unknown as { compileAsync?: (o: Object3D, c: Camera, s: unknown) => Promise<unknown> }).compileAsync;
+    if (compile) compile.call(renderer, this.world.scene, camera, this.world.scene).then(done, done);
     else done();
   }
-  private prewarmed = '';
-  private prewarming = false;
+  /** The café the warm-up was done for ('' none yet); true while it runs; what it keeps alive. */
+  private warmedFor = '';
+  private warming = false;
+  private keep: { dispose: () => void } | null = null;
+  /** True once the warm-up for the café up now is done (for the checks). */
+  get warm(): boolean {
+    return !this.warming && this.warmedFor === `${isCanada() ? 'canada' : 'japan'}|${this.rooms}`;
+  }
+  /** The texture every patience dot draws from. */
+  readonly dialAtlas = new DialAtlas();
 
 
   /**
@@ -802,7 +839,7 @@ export class GuestSystem extends createSystem({}) {
     const hurried = this.forceHurryIn === 0 && this.forcedHurry ? ((this.forcedHurry = false), true) : Math.random() < this.hurryChance;
     const usual = this.patienceSeconds * (1 + (Math.random() * 2 - 1) * PATIENCE_SPREAD);
     let patience = hurried ? Math.max(this.hurry.lineMin, usual * this.hurry.line) : usual;
-    const dial = new PatienceDial();
+    const dial = new PatienceDial(this.dialAtlas);
     dial.sprite.position.set(0, actor.bubbleAnchor.position.y + DIAL.above, 0);
     actor.root.add(dial.sprite);
     // Its name, its wishes, and perhaps a song.

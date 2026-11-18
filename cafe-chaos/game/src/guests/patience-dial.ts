@@ -20,11 +20,15 @@
  *
  * It is a sprite, so it always faces the player. Each dot has its own
  * small canvas, drawn again only when what it shows changes (the second,
- * a step of the ring).
+ * a step of the ring). The dots share one texture on the GPU (`DialAtlas`):
+ * each has a cell in it, and a dot drawn again is copied into its own cell
+ * only (a small upload, not a texture of its own). At most
+ * DialAtlas.PER_FRAME cells are copied in a frame; the rest wait a frame.
  */
 
-import { CanvasTexture, Sprite, SpriteMaterial, SRGBColorSpace } from '@iwsdk/core';
+import { CanvasTexture, Sprite, SpriteMaterial, SRGBColorSpace, Texture, Vector2, type WebGLRenderer } from '@iwsdk/core';
 import { HAND_FONT } from '../ui/sketch.js';
+import { PROBE } from '../lib/probe.js';
 
 /** The dot's size (metres across, café space) and how far above the guest's head anchor it floats. */
 export const DIAL = { size: 0.026, above: 0.013 };
@@ -42,25 +46,104 @@ const THROB = { below: 0.25, rate: 2.4, depth: 0.12 };
 const LIT = { grow: 0.35, ease: 14 };
 const PX = 128;
 
+/**
+ * The texture all the dots draw from: a grid of PX cells. A dot's canvas is
+ * copied into its cell when it changes (`flush`, once a frame).
+ */
+export class DialAtlas {
+  /** Cells across and down. */
+  static readonly COLS = 8;
+  static readonly ROWS = 4;
+  /** Cells copied in one frame at most (the others wait their turn). */
+  static readonly PER_FRAME = 2;
+  readonly texture: CanvasTexture;
+  private readonly free: number[] = [];
+  private readonly dirty = new Set<PatienceDial>();
+  private ready = false;
+  private readonly at = new Vector2();
+
+  constructor() {
+    const canvas = document.createElement('canvas');
+    canvas.width = DialAtlas.COLS * PX;
+    canvas.height = DialAtlas.ROWS * PX;
+    this.texture = new CanvasTexture(canvas);
+    this.texture.colorSpace = SRGBColorSpace;
+    this.texture.name = 'DialAtlas';
+    for (let i = DialAtlas.COLS * DialAtlas.ROWS - 1; i >= 0; i--) this.free.push(i);
+  }
+
+  /** A free cell, or -1 when all are taken (that dot then has a texture of its own). */
+  take(): number {
+    return this.free.pop() ?? -1;
+  }
+
+  give(cell: number, dial: PatienceDial): void {
+    this.dirty.delete(dial);
+    if (cell >= 0) this.free.push(cell);
+  }
+
+  /** The dot's picture changed: copy it in at the next flush. */
+  mark(dial: PatienceDial): void {
+    this.dirty.add(dial);
+  }
+
+  /** How many cells wait to be copied (for the checks). */
+  get waiting(): number {
+    return this.dirty.size;
+  }
+
+  /** Copy the changed cells in, the longest waiting first, at most PER_FRAME. */
+  flush(renderer: WebGLRenderer): void {
+    if (this.dirty.size === 0) return;
+    if (!this.ready) {
+      renderer.initTexture(this.texture);
+      this.ready = true;
+    }
+    let n = 0;
+    for (const dial of this.dirty) {
+      if (n++ >= DialAtlas.PER_FRAME) break;
+      this.dirty.delete(dial);
+      const cell = dial.cell;
+      // Texture space counts rows from the bottom; the copy is turned upright as it goes in (the atlas's flipY).
+      this.at.set((cell % DialAtlas.COLS) * PX, Math.floor(cell / DialAtlas.COLS) * PX);
+      renderer.copyTextureToTexture(dial.source, this.texture, null, this.at);
+    }
+  }
+}
+
 export class PatienceDial {
   readonly sprite: Sprite;
   /** The share of patience it is showing (0 to 1). */
   left = 1;
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly texture: CanvasTexture;
+  /** The texture it draws with: its cell of the atlas (or its own, when the atlas is full). */
+  private readonly texture: Texture;
+  /** Its canvas as a texture the renderer never draws with: only copied into the atlas. */
+  readonly source: Texture;
+  /** Its cell in the atlas (-1: none). */
+  readonly cell: number;
   private readonly material: SpriteMaterial;
   private drawn = '';
   private time = Math.random() * 10;
   /** 0 to 1: how lit it is, eased. */
   private lit = 0;
 
-  constructor() {
+  constructor(private readonly atlas: DialAtlas | null = null) {
     this.canvas = document.createElement('canvas');
     this.canvas.width = this.canvas.height = PX;
     this.ctx = this.canvas.getContext('2d')!;
-    this.texture = new CanvasTexture(this.canvas);
-    this.texture.colorSpace = SRGBColorSpace;
+    this.source = new Texture(this.canvas);
+    this.cell = atlas ? atlas.take() : -1;
+    if (atlas && this.cell >= 0) {
+      // Its cell of the shared texture (a copy of the texture object: the same image on the GPU).
+      this.texture = atlas.texture.clone();
+      this.texture.repeat.set(1 / DialAtlas.COLS, 1 / DialAtlas.ROWS);
+      this.texture.offset.set((this.cell % DialAtlas.COLS) / DialAtlas.COLS, Math.floor(this.cell / DialAtlas.COLS) / DialAtlas.ROWS);
+    } else {
+      this.texture = new CanvasTexture(this.canvas);
+      this.texture.colorSpace = SRGBColorSpace;
+    }
     this.material = new SpriteMaterial({ map: this.texture, transparent: true, depthWrite: false, toneMapped: false });
     this.sprite = new Sprite(this.material);
     this.sprite.name = 'PatienceDot';
@@ -80,7 +163,8 @@ export class PatienceDial {
     this.left = Math.min(1, Math.max(0, left));
     const glow = Math.round(this.lit * 8) / 8;
     const key = `${Math.ceil(this.left * STEPS)}|${Math.max(0, Math.ceil(seconds))}|${pips}|${glow}|${hurried}|${paired}|${cold}`;
-    if (key !== this.drawn) {
+    // `?nodials` (lib/probe.ts): drawn once, never again (no texture uploads for the dots during play).
+    if (key !== this.drawn && !(PROBE.noDials && this.drawn)) {
       this.drawn = key;
       this.draw(Math.ceil(this.left * STEPS) / STEPS, Math.max(0, Math.ceil(seconds)), pips, glow, hurried, paired, cold);
     }
@@ -177,13 +261,15 @@ export class PatienceDial {
     }
     // Cold (the Canadian café): a snowflake over the top of the ring, a shape as the hourglass is (beside it when both).
     if (cold) snowflake(ctx, hurried ? c - 30 : c, hurried ? 19 : 13);
-    this.texture.needsUpdate = true;
+    if (this.atlas && this.cell >= 0) this.atlas.mark(this);
+    else this.texture.needsUpdate = true;
   }
 
   dispose(): void {
     this.sprite.removeFromParent();
     this.material.dispose();
     this.texture.dispose();
+    this.atlas?.give(this.cell, this);
   }
 }
 

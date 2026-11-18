@@ -10,7 +10,8 @@
  *    table;
  * 3. the renderer is set up for the look (filmic tone mapping, shadow maps), with no console errors;
  * 4. the frame budget holds: the furniture is batched and the shadow map
- *    is only redrawn when the café moves;
+ *    is not redrawn while the café is still or only moved (its shadow
+ *    matrix follows), only when it is resized;
  * 5. the theme is loaded, set to loop, and was asked to play when the
  *    session began.
  * Then saves headset-view screenshots: seated, the gate lamps and their
@@ -80,15 +81,26 @@ check('the renderer is set for the look', state.shadowMap && state.toneMapping =
     const before = budget.shadowDraws;
     await wait(4);
     const idle = budget.shadowDraws - before;
-    // Nudge the café: the map must follow.
+    // Nudge the café: the lights move with it, so the map stays right and is not redrawn (a redraw under multiview is
+    // a render-target switch mid-frame); only the house light's shadow matrix follows.
+    const { house } = window.__cafe.lights;
+    const matrixBefore = house.shadow.matrix.elements.slice();
     system.cafe.position.x += 0.01;
     await wait(3);
     const moved = budget.shadowDraws - before - idle;
+    const followed = house.shadow.matrix.elements.some((v, i) => Math.abs(v - matrixBefore[i]) > 1e-6);
     system.cafe.position.x -= 0.01;
     await wait(5);
-    return { idle, moved, batch: system.batch, calls: world.renderer.info.render.calls };
+    // Resized: the map is drawn again.
+    const sized = budget.shadowDraws;
+    system.cafe.scale.multiplyScalar(1.05);
+    await wait(3);
+    const resized = budget.shadowDraws - sized;
+    system.cafe.scale.multiplyScalar(1 / 1.05);
+    await wait(5);
+    return { idle, moved, followed, resized, batch: system.batch, calls: world.renderer.info.render.calls };
   });
-  check('the furniture is batched and the shadow map rests while the café is still', still.batch.merged > 40 && still.batch.batches < 15 && still.idle === 0 && still.moved > 0, `${still.batch.merged} meshes in ${still.batch.batches} batches, ${still.calls} draw calls a frame (both eyes), shadow redraws: ${still.idle} still, ${still.moved} after a move`);
+  check('the furniture is batched and the shadow map rests while the café is still or only moved (its shadow matrix follows), and is redrawn when it is resized', still.batch.merged > 40 && still.batch.batches < 15 && still.idle === 0 && still.moved === 0 && still.followed && still.resized > 0, `${still.batch.merged} meshes in ${still.batch.batches} batches, ${still.calls} draw calls a frame (both eyes), shadow redraws: ${still.idle} still, ${still.moved} after a move (matrix followed ${still.followed}), ${still.resized} after a resize`);
 }
 
 // The theme: the track is there, set to loop quietly, and was asked to play when the session began.

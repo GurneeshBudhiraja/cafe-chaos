@@ -20,6 +20,8 @@
  * plane detection).
  */
 
+// First: the probe wraps the WebGL context before the renderer is made (`?nomultiview`, the link and upload counters).
+import './lib/probe.js';
 import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { playTheme } from './audio/theme.js';
