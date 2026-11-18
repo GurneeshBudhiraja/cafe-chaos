@@ -106,12 +106,17 @@ export class StripSystem extends createSystem({}) {
   celebrations = 0;
   /** The shop, as a drawer under the bar (GameSystem fills and opens it); while it is open the bar rises so it covers none of the café. */
   readonly drawer = new ShopDrawer();
+  /**
+   * How many new things the Shop can buy (GameSystem.shopNews): shown as a
+   * count in a red badge on the Shop button, the way an app icon shows
+   * news (the owner's Quest playtest: no pop-ups in the café).
+   */
+  shopNews = 0;
   /** How far the drawer's room is made (0 to 1, eased): the bar's lowest height rises with it. */
   private drawerRoom = 0;
   /**
    * A moment on the bar (null: the bar as usual): a level just reached
-   * ("LEVEL n!" and the coins it brought) or a table the bank can now open
-   * ("TABLE READY" and its price), for LEVEL_BANNER.seconds. One at a time:
+   * ("LEVEL n!" and the coins it brought), for LEVEL_BANNER.seconds. One at a time:
    * one that comes while another shows waits for it.
    */
   banner: { title: string; amount: number; plus: boolean; left: number } | null = null;
@@ -205,7 +210,7 @@ export class StripSystem extends createSystem({}) {
       moving = true;
     }
     const low = this.live && s.happiness / HAPPINESS.max <= 0.3 && s.happiness > 0;
-    const shopNow = this.shop.price === null ? 'full' : this.shop.affordable ? 'can' : 'not';
+    const shopNow = this.shopNews;
     // What the picture depends on, with its motion in steps (a segment in 12, the pulse in 12 a cycle, the pop and the
     // count-down at 30 a second): the 1536 px canvas is redrawn and uploaded only when a step changes, never every
     // frame (on the headset a redraw every frame under 30 % happiness cost the frame rate just when it mattered).
@@ -242,13 +247,6 @@ export class StripSystem extends createSystem({}) {
     this.celebrate();
   }
 
-  /** The bank can open a table now: "TABLE READY" and its price on the bar for a moment (after a level banner, if one shows). */
-  showTableReady(price: number): void {
-    const next = { title: 'TABLE READY', amount: price, plus: false };
-    if (this.banner) this.banners.push(next);
-    else this.banner = { ...next, left: LEVEL_BANNER.seconds };
-    this.notices++;
-  }
   /** Banners shown that were not levels (the sound system pops for each). */
   notices = 0;
 
@@ -516,8 +514,8 @@ export class StripSystem extends createSystem({}) {
 
   /**
    * Shop: a little shop front (a striped awning over a window and a door);
-   * a lantern dot with + while a hire is affordable, a moss check once all
-   * are hired.
+   * with news (`shopNews`), a red badge with the count in its top right
+   * corner, standing over the button's edge as an app icon's does.
    */
   private drawShop(ctx: CanvasRenderingContext2D, b: Button, hover: boolean, pressed: boolean): void {
     const rc = pen(this.panel.canvas);
@@ -548,15 +546,12 @@ export class StripSystem extends createSystem({}) {
       rc.arc(x + sw / 2, aBottom, sw, sw * 0.8, 0, Math.PI, false, line(90 + i, lw * 0.7, { fill: i % 2 === 0 ? stripe : SKETCH.paper, fillStyle: 'solid', stroke: ink }));
     }
     if (off) return;
-    const r = s * 0.11;
-    const bx = b.x + b.w - r - s * 0.04;
-    const by = b.y + r + s * 0.04 + (pressed ? b.h * 0.04 : 0);
-    if (this.shop.price === null) {
-      rc.circle(bx, by, r * 2, line(92, lw * 0.9, { fill: SKETCH.moss, fillStyle: 'solid', stroke: SKETCH.mossDeep }));
-      rc.linearPath([[bx - r * 0.45, by], [bx - r * 0.1, by + r * 0.4], [bx + r * 0.5, by - r * 0.4]], line(93, lw * 1.1, { stroke: '#f2ebdd' }));
-    } else if (this.shop.affordable) {
-      rc.circle(bx, by, r * 2, line(94, lw * 0.9, { fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber }));
-      scrawl(ctx, '+', bx, by + 2, r * 1.6, { align: 'center' });
-    }
+    if (this.shopNews <= 0) return;
+    // Big enough to see at a glance from the seat (a third of the button), its number in heavy paper-white type.
+    const r = s * 0.17;
+    const bx = b.x + b.w - r * 0.75;
+    const by = b.y + r * 0.75 + (pressed ? b.h * 0.04 : 0);
+    rc.circle(bx, by, r * 2, line(94, lw * 0.9, { fill: SKETCH.red, fillStyle: 'solid', stroke: '#7a2418' }));
+    scrawl(ctx, this.shopNews > 9 ? '9+' : String(this.shopNews), bx, by + 2, r * 1.3, { align: 'center', color: '#fff8ec' });
   }
 }

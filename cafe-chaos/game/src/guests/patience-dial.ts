@@ -28,7 +28,7 @@
 
 import { CanvasTexture, Sprite, SpriteMaterial, SRGBColorSpace, Texture, Vector2, type WebGLRenderer } from '@iwsdk/core';
 import { HAND_FONT } from '../ui/sketch.js';
-import { PROBE } from '../lib/probe.js';
+import { COUNTS, PROBE } from '../lib/probe.js';
 
 /** The dot's size (metres across, café space) and how far above the guest's head anchor it floats. */
 export const DIAL = { size: 0.026, above: 0.013 };
@@ -107,6 +107,7 @@ export class DialAtlas {
       // Texture space counts rows from the bottom; the copy is turned upright as it goes in (the atlas's flipY).
       this.at.set((cell % DialAtlas.COLS) * PX, Math.floor(cell / DialAtlas.COLS) * PX);
       renderer.copyTextureToTexture(dial.source, this.texture, null, this.at);
+      COUNTS.dotCopies++;
     }
   }
 }
@@ -162,11 +163,17 @@ export class PatienceDial {
     if (!this.sprite.visible) return;
     this.left = Math.min(1, Math.max(0, left));
     const glow = Math.round(this.lit * 8) / 8;
-    const key = `${Math.ceil(this.left * STEPS)}|${Math.max(0, Math.ceil(seconds))}|${pips}|${glow}|${hurried}|${paired}|${cold}`;
+    // The ring steps with the seconds shown (the share at that whole second), so a dot is drawn again at most once a
+    // second as its patience runs (not once for the number and again for the ring): each drawing is a copy into the
+    // atlas, and with a full line those copies added up (the probe's upload count, the owner's Quest playtest).
+    const whole = Math.max(0, Math.ceil(seconds));
+    const total = this.left > 0.001 ? seconds / this.left : 0;
+    const ring = total > 0 ? Math.min(1, whole / total) : Math.ceil(this.left * STEPS) / STEPS;
+    const key = `${whole}|${Math.round(ring * 1000)}|${pips}|${glow}|${hurried}|${paired}|${cold}`;
     // `?nodials` (lib/probe.ts): drawn once, never again (no texture uploads for the dots during play).
     if (key !== this.drawn && !(PROBE.noDials && this.drawn)) {
       this.drawn = key;
-      this.draw(Math.ceil(this.left * STEPS) / STEPS, Math.max(0, Math.ceil(seconds)), pips, glow, hurried, paired, cold);
+      this.draw(ring, whole, pips, glow, hurried, paired, cold);
     }
     this.material.opacity = opacity;
     this.time += delta;

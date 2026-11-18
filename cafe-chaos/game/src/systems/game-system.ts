@@ -148,6 +148,13 @@ const SIZE = { min: 60, max: 140, step: 10 };
  */
 /** The notes under the bar: how long each stays (seconds), the gap between two, and how far under the bar's edge (metres). */
 const NOTE = { seconds: 4, gap: 0.4, below: 0.012 };
+/**
+ * Pop-ups in the café: the tip cards (game/tips.ts) and the notes under
+ * the bar. Off: the owner's Quest playtest found them small, in the face
+ * and hard to read. What is new in the Shop shows as a count on the bar's
+ * Shop button instead (`shopNews`); How to play teaches the rest.
+ */
+const POP_UPS = false;
 const MENU_SPOT = { distance: 1, size: 2, top: 4, lowest: 30, follow: 35, glide: 4, shift: 0.12, dwell: 0.6 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
@@ -202,8 +209,6 @@ export class GameSystem extends createSystem({}) {
    */
   readonly note = new TipCard();
   private readonly notes: { title: string; icon: TipId; seconds: number; text: string }[] = [];
-  /** The table price "TABLE READY" was last shown on the bar for (it comes once a price). */
-  private readyAt = -1;
   /** Notes shown (the sound system pops for each). */
   notesShown = 0;
   private noteLeft = 0;
@@ -443,6 +448,7 @@ export class GameSystem extends createSystem({}) {
     this.tendTips(cardDelta);
     this.tendNotes(cardDelta);
     this.strip.controls = this.phase === 'run' || this.phase === 'shopping' ? 'live' : this.phase === 'paused' ? 'paused' : 'off';
+    this.strip.shopNews = this.shopNews();
     if (!cafe.placed || cafe.arriving) {
       for (const hand of HANDS) this.rays.update(hand, null, null, null, cardDelta);
       return;
@@ -552,7 +558,7 @@ export class GameSystem extends createSystem({}) {
       s.tableSeed = newSeed() || 1;
       this.persist();
     }
-    this.readyAt = -1;
+    this.shopSeen = new Set();
     this.applyLocks();
     // The game's wish types met so far, and its guest count (new types come in by count: guests/wish-plan.ts).
     this.guests.gameGuests = s.wishGuests;
@@ -957,16 +963,39 @@ export class GameSystem extends createSystem({}) {
 
   /** The drawer's hires as they stand: the next barista at its price (one row however many), and the janitor. */
   private showShop(): void {
+    const rows = this.shopRows();
+    // Opened: what it can buy now is seen, and the Shop button's count goes (shopNews).
+    this.shopSeen = new Set(rows.filter((r) => r.canPay).map((r) => `${r.id}|${r.price}`));
+    this.strip.drawer.show(rows);
+  }
+
+  /**
+   * The Shop's news: how many things it can buy now that were not there to
+   * buy when it was last opened (the next barista, the janitor, a table,
+   * music, the Canadian café). The bar's Shop button shows the count; open
+   * the Shop and it goes, until something new can be bought.
+   */
+  shopNews(): number {
+    if (this.phase !== 'run' && this.phase !== 'paused') return 0;
+    let n = 0;
+    for (const r of this.shopRows()) if (r.canPay && !this.shopSeen.has(`${r.id}|${r.price}`)) n++;
+    return n;
+  }
+  /** What the Shop could buy when it was last opened (row id and price). */
+  private shopSeen = new Set<string>();
+
+  /** The drawer's rows as they stand. */
+  private shopRows(): DrawerRow[] {
     const price = this.shop.price;
     const table = this.shop.tablePrice;
     const left = this.cafe.lockedTables.size;
-    this.strip.drawer.show([
+    return [
       { kind: 'barista', name: 'Barista', hired: this.shop.staff, most: MAX_STAFF, price, canPay: price !== null && this.score.bank >= price, id: 'hire', word: 'HIRE' },
       this.janitorRow(),
       // The tables: OPEN opens the next (nearest the front first); how many are left beside its name.
       { kind: 'table', name: 'Table', hired: 0, most: 0, price: left > 0 ? table : null, canPay: left > 0 && this.score.bank >= table, id: 'open-table', word: 'OPEN', note: left > 0 ? `${left} left` : undefined },
       ...this.canadaRows(),
-    ]);
+    ];
   }
 
   /** The janitor: one in the Japanese café; in the Canadian café a second (barista-cedar) after the first. */
@@ -1130,6 +1159,10 @@ export class GameSystem extends createSystem({}) {
   private tendNotes(delta: number): void {
     const panel = this.note.panel;
     panel.update(delta, this.head);
+    if (!POP_UPS) {
+      this.notes.length = 0;
+      return;
+    }
     if (this.phase !== 'run') {
       if (panel.open) panel.show(false);
       return;
@@ -1468,19 +1501,9 @@ export class GameSystem extends createSystem({}) {
     return new Set([...this.cafe.lockedTables].filter((t) => t !== next));
   }
 
-  /**
-   * The ghost's look follows the bank (faint, or ready with its price tag);
-   * and when the bank first reaches the next table's price (once a price:
-   * buying one raises it), "TABLE READY" and the price show on the bar for
-   * a moment, as a level does: mid-rush nobody looks anywhere else.
-   */
+  /** The ghost's look follows the bank: faint, or ready with its price tag. (The Shop button's count says a table is ready.) */
   private tendTables(): void {
     this.cafe.setGhostReady(this.shop.tableAffordable, this.shop.tablePrice);
-    if (this.phase !== 'run' || !this.cafe.placed || this.cafe.arriving) return;
-    const price = this.shop.tablePrice;
-    if (!this.shop.tableAffordable || price === this.readyAt || this.nextTable() === null) return;
-    this.readyAt = price;
-    this.strip.showTableReady(price);
   }
 
   /**
@@ -1542,6 +1565,7 @@ export class GameSystem extends createSystem({}) {
   private tendTips(delta: number): void {
     const tip = this.tip;
     tip.panel.update(delta, this.head);
+    if (!POP_UPS) return;
     if (this.tipShown) {
       this.tipAge += delta;
       const done = this.tipDone(this.tipShown);
