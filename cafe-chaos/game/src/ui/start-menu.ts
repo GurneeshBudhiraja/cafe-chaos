@@ -137,7 +137,7 @@ if (typeof Image !== 'undefined') {
     cover = img;
     for (const f of coverListeners) f();
   };
-  img.src = `${import.meta.env.BASE_URL}ui/cover.jpg`;
+  img.src = `${import.meta.env.BASE_URL}ui/logo.png`;   // the brand's 3D logo (assets/meta-store/logo.png, web size)
 }
 
 const font = (size: number, heavy = true): string => hand(size, heavy ? 700 : 400);
@@ -459,28 +459,23 @@ export class StartMenu {
       ctx.scale(this.k, this.k);
       const rc = pen(this.card.canvas);
       this.paper(ctx, rc, 0, H, SW);
-      // The cover art, cropped to fill its column (never stretched), darkened toward the name.
+      // The brand: the 3D logo on flat moss, fitted to its column (never stretched).
       ctx.save();
       ctx.beginPath();
       ctx.rect(ax, ay, aw, ah);
       ctx.clip();
-      ctx.fillStyle = '#2a2420';
+      ctx.fillStyle = SKETCH.moss;
       ctx.fillRect(ax, ay, aw, ah);
       if (cover) {
-        const k = Math.max(aw / cover.width, ah / cover.height);
-        const iw = aw / k;
-        const ih = ah / k;
-        ctx.drawImage(cover, (cover.width - iw) / 2, (cover.height - ih) / 2, iw, ih, ax, ay, aw, ah);
+        const lw = aw * 0.86;
+        const lh = (lw * cover.height) / cover.width;
+        ctx.drawImage(cover, ax + (aw - lw) / 2, ay + (ah - lh) / 2 - ah * 0.08, lw, lh);
+      } else {
+        text(ctx, 'CAFÉ', ax + aw / 2, ay + ah / 2 - 50, 74, '#f0c987');
+        text(ctx, 'CHAOS', ax + aw / 2, ay + ah / 2 + 30, 74, '#f0c987');
       }
-      const g = ctx.createLinearGradient(0, ay + ah * 0.4, 0, ay + ah);
-      g.addColorStop(0, 'rgba(22,23,29,0)');
-      g.addColorStop(1, 'rgba(22,23,29,.88)');
-      ctx.fillStyle = g;
-      ctx.fillRect(ax, ay, aw, ah);
       ctx.restore();
       rc.rectangle(ax, ay, aw, ah, this.o({ strokeWidth: 3, seed: this.seed + 3 }));
-      text(ctx, 'CAFÉ', ax + aw / 2, ay + ah - 150, 74, '#f2ebdd');
-      text(ctx, 'CHAOS', ax + aw / 2, ay + ah - 72, 74, '#f2ebdd');
       // The level the save is on: a lantern-coloured badge.
       if (returning) {
         const word = `${s.level}`;
