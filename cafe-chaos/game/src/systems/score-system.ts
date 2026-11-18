@@ -38,6 +38,14 @@ export class ScoreSystem extends createSystem({}) {
   level = 1;
   levelServed = 0;
   levelGoal = 1;
+  /**
+   * The Canadian café's free trial, as the bar shows it: 'off' (no trial),
+   * 'on' (its levels; the bar reads "Trial · Level n of 3") or 'done' (the
+   * three levels played: the café keeps going, and the bar says it can be
+   * bought in the Shop).
+   */
+  trial: 'off' | 'on' | 'done' = 'off';
+  trialLevels = 3;
   /** True during a shift: outcomes count. */
   running = false;
   /** Every scored outcome this shift, in order (for the checks). */

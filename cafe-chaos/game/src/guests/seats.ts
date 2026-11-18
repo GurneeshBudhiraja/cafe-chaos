@@ -23,6 +23,8 @@ export interface Seat {
   table: number;
   /** Where this seat's order is set down on the table (café space): the table's `Meal-N` anchor for `Seat-N`. Null if the table has none. */
   meal: Vector3 | null;
+  /** The Canadian café's pick-up spot at the counter: not a seat, a place to stand for a coffee to take away (no table). */
+  takeaway?: boolean;
 }
 
 /** A seat with something standing this far above it (metres) is buried in furniture: nobody can sit there. */
@@ -36,12 +38,14 @@ export const LANDING_REACH_M = 0.09;
  * row's four-seaters are, inside the counter) or has nowhere to stand
  * beside it.
  */
-export function collectSeats(cafe: Group, anchors: Object3D[], nav: NavGrid, pieces: Object3D[] = []): Seat[] {
+export function collectSeats(cafe: Group, anchors: Object3D[], navs: NavGrid | ((y: number) => NavGrid), pieces: Object3D[] = []): Seat[] {
+  const navAt = typeof navs === 'function' ? navs : (): NavGrid => navs;
   cafe.updateMatrixWorld(true);
   const seats: Seat[] = [];
   const ahead = new Vector3();
   for (const anchor of anchors) {
     const position = cafe.worldToLocal(anchor.getWorldPosition(new Vector3()));
+    const nav = navAt(position.y);
     if (nav.heightAt(position.x, position.z) > position.y + BURIED_M || !nav.nearest(position.x, position.z, LANDING_REACH_M)) continue;
     // The anchor's +Z, brought into café space: the way the sitter faces.
     cafe.worldToLocal(anchor.localToWorld(ahead.set(0, 0, 1))).sub(position);

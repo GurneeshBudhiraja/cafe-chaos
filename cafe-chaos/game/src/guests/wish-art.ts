@@ -11,6 +11,15 @@
  * - alone: one figure; company: two;
  * - music: a pair of notes; the singer's own mark is an open mouth with
  *   a note.
+ * The Canadian café's:
+ * - socket: a wall socket's face, two slots;
+ * - outside: a snowy spruce;
+ * - takeaway: a paper cup with its lid;
+ * - lake: a red canoe on two waves;
+ * - patio: a bistro table under its umbrella;
+ * - bonfire: a flame over two crossed logs;
+ * - warm: a thermometer, red to the top;
+ * - upstairs: a flight of steps and an arrow up.
  * And how a wish came out: a heart (granted), a shrug (not).
  */
 
@@ -157,6 +166,159 @@ export function drawWish(ctx: CanvasRenderingContext2D, kind: WishPicture, x: nu
       ctx.strokeStyle = AMBER;
       ctx.fillStyle = AMBER;
       note(u * 0.45, -u * 0.35, 0.6);
+      break;
+    case 'socket':
+      ctx.beginPath();
+      ctx.roundRect(-u * 0.62, -u * 0.72, u * 1.24, u * 1.44, u * 0.3);
+      ctx.fillStyle = '#f4ead8';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.roundRect(-u * 0.32, -u * 0.32, u * 0.16, u * 0.5, u * 0.06);
+      ctx.roundRect(u * 0.16, -u * 0.32, u * 0.16, u * 0.5, u * 0.06);
+      ctx.fillStyle = INK;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, u * 0.42, u * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    case 'outside':
+      // A spruce, snow on its tiers.
+      ctx.fillStyle = '#3f7a4a';
+      for (const [ty, tw] of [[-0.8, 0.45], [-0.35, 0.65], [0.1, 0.85]] as const) {
+        ctx.beginPath();
+        ctx.moveTo(0, u * ty);
+        ctx.lineTo(-u * tw, u * (ty + 0.6));
+        ctx.lineTo(u * tw, u * (ty + 0.6));
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(0, -u * 0.8);
+      ctx.lineTo(-u * 0.18, -u * 0.55);
+      ctx.lineTo(u * 0.18, -u * 0.55);
+      ctx.fill();
+      ctx.fillStyle = INK;
+      ctx.fillRect(-u * 0.1, u * 0.7, u * 0.2, u * 0.2);
+      break;
+    case 'takeaway':
+      // A paper cup, its lid and sleeve.
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.45, -u * 0.45);
+      ctx.lineTo(u * 0.45, -u * 0.45);
+      ctx.lineTo(u * 0.32, u * 0.8);
+      ctx.lineTo(-u * 0.32, u * 0.8);
+      ctx.closePath();
+      ctx.fillStyle = '#f4ead8';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.roundRect(-u * 0.56, -u * 0.68, u * 1.12, u * 0.24, u * 0.08);
+      ctx.fillStyle = '#c8322e';
+      ctx.fill();
+      ctx.fillStyle = AMBER;
+      ctx.fillRect(-u * 0.4, u * 0.05, u * 0.8, u * 0.3);
+      break;
+    case 'lake':
+      // A red canoe on the water.
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.85, -u * 0.05);
+      ctx.quadraticCurveTo(0, u * 0.5, u * 0.85, -u * 0.05);
+      ctx.closePath();
+      ctx.fillStyle = '#c8322e';
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#4f8fd0';
+      for (const wy of [0.45, 0.75]) {
+        ctx.beginPath();
+        ctx.moveTo(-u * 0.85, u * wy);
+        ctx.quadraticCurveTo(-u * 0.42, u * (wy - 0.18), 0, u * wy);
+        ctx.quadraticCurveTo(u * 0.42, u * (wy + 0.18), u * 0.85, u * wy);
+        ctx.stroke();
+      }
+      break;
+    case 'patio':
+      // A bistro table under an umbrella.
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.85, -u * 0.25);
+      ctx.quadraticCurveTo(0, -u * 1.0, u * 0.85, -u * 0.25);
+      ctx.closePath();
+      ctx.fillStyle = '#c8322e';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(0, -u * 0.25);
+      ctx.lineTo(0, u * 0.75);
+      ctx.moveTo(-u * 0.45, u * 0.3);
+      ctx.lineTo(u * 0.45, u * 0.3);
+      ctx.moveTo(-u * 0.3, u * 0.75);
+      ctx.lineTo(u * 0.3, u * 0.75);
+      ctx.stroke();
+      break;
+    case 'bonfire':
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.7, u * 0.8);
+      ctx.lineTo(u * 0.7, u * 0.45);
+      ctx.moveTo(u * 0.7, u * 0.8);
+      ctx.lineTo(-u * 0.7, u * 0.45);
+      ctx.lineWidth = s * 0.14;
+      ctx.strokeStyle = '#7a4a2a';
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, -u * 0.85);
+      ctx.bezierCurveTo(u * 0.75, -u * 0.2, u * 0.55, u * 0.5, 0, u * 0.5);
+      ctx.bezierCurveTo(-u * 0.55, u * 0.5, -u * 0.6, -u * 0.1, -u * 0.15, -u * 0.35);
+      ctx.bezierCurveTo(-u * 0.1, -u * 0.55, 0, -u * 0.6, 0, -u * 0.85);
+      ctx.fillStyle = '#f08a2c';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(0, u * 0.22, u * 0.18, u * 0.26, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#f6c445';
+      ctx.fill();
+      break;
+    case 'warm':
+      // A thermometer, red to the top.
+      ctx.beginPath();
+      ctx.roundRect(-u * 0.16, -u * 0.85, u * 0.32, u * 1.2, u * 0.16);
+      ctx.fillStyle = '#f4ead8';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, u * 0.55, u * 0.32, 0, Math.PI * 2);
+      ctx.fillStyle = '#e0443a';
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillRect(-u * 0.07, -u * 0.6, u * 0.14, u * 1.0);
+      ctx.strokeStyle = AMBER;
+      for (const ry of [-0.5, -0.1]) {
+        ctx.beginPath();
+        ctx.moveTo(u * 0.35, u * ry);
+        ctx.lineTo(u * 0.6, u * ry);
+        ctx.stroke();
+      }
+      break;
+    case 'upstairs':
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.8, u * 0.75);
+      ctx.lineTo(-u * 0.8, u * 0.4);
+      ctx.lineTo(-u * 0.35, u * 0.4);
+      ctx.lineTo(-u * 0.35, u * 0.05);
+      ctx.lineTo(u * 0.1, u * 0.05);
+      ctx.lineTo(u * 0.1, -u * 0.3);
+      ctx.lineTo(u * 0.55, -u * 0.3);
+      ctx.lineTo(u * 0.55, u * 0.75);
+      ctx.closePath();
+      ctx.fillStyle = '#b5814f';
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = AMBER;
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.55, -u * 0.25);
+      ctx.lineTo(-u * 0.05, -u * 0.75);
+      ctx.moveTo(-u * 0.4, -u * 0.75);
+      ctx.lineTo(-u * 0.05, -u * 0.75);
+      ctx.lineTo(-u * 0.05, -u * 0.4);
+      ctx.stroke();
       break;
     case 'heart':
       ctx.beginPath();

@@ -21,6 +21,8 @@
  * nothing else has to know about sound.
  */
 
+import { MUTED_HERE } from '../audio/muted.js';
+import { isCanada } from '../cafe/style.js';
 import type { Theme } from '../audio/theme.js';
 import { createSystem, Vector3, type Object3D } from '@iwsdk/core';
 import { bubble, clink, closing, coins, cricket, espresso, furin, grumble, pop, refuse, roomTone, seated, tick, trayDown, trickle, unlock, voice, newBest } from '../audio/voices.js';
@@ -106,7 +108,7 @@ export class SoundSystem extends createSystem({}) {
     if (this.theme) this.theme.level = this.musicLevel / 2;
     const ctx = this.ctx;
     if (ctx && this.master) {
-      const want = SOUND.master * (paused ? PAUSED_SHARE : 1) * (this.soundLevel / 3);
+      const want = MUTED_HERE ? 0 : SOUND.master * (paused ? PAUSED_SHARE : 1) * (this.soundLevel / 3);
       const g = this.master.gain.value;
       this.master.gain.value = g + (want - g) * Math.min(1, frameDelta * 3);
     }
@@ -210,7 +212,8 @@ export class SoundSystem extends createSystem({}) {
       this.emit('clink', seat ? (seat.meal ?? seat.position) : PLACES.room, SOUND.bar * 0.7, 0.4, clink);
     }
     if (due('trickle')) this.emit('trickle', this.cafe.annex ? PLACES.annexPond : PLACES.pond, SOUND.garden, 0.4, trickle);
-    if (due('cricket')) this.emit('cricket', PLACES.crickets[Math.floor(Math.random() * PLACES.crickets.length)], SOUND.garden, 0.4, cricket);
+    // Crickets are the Japanese café's night; the Canadian café is a winter day.
+    if (due('cricket') && !isCanada()) this.emit('cricket', PLACES.crickets[Math.floor(Math.random() * PLACES.crickets.length)], SOUND.garden, 0.4, cricket);
   }
 
   /** What has just happened, read from the other systems' counts. */

@@ -29,3 +29,44 @@ export const CAFE_NAV: NavOptions = {
   seed: { x: 0, z: -0.04 },
   tableCost: 3,
 };
+
+/**
+ * The Canadian café's ground floor: the same plate and the same table round
+ * it. Its front is the cabin's knee-high front wall, the bonfire and the
+ * lake: all open ground, so nothing is barred; the way out is the plate's
+ * left edge past the bonfire (guests/paths.ts CANADA_EXIT_LANES). The upper
+ * deck (y 0.1548) is over head height here, a ceiling; its posts are
+ * thin obstacles.
+ */
+export const CANADA_NAV: NavOptions = {
+  ...CAFE_NAV,
+  barriers: [],
+  // The duckboard behind the counter is a 3 cm strip (the counter top reaches back over it): a character keeps 1.2 cm
+  // clear of anything, not 1.4, so the strip is walked to the way out at the counter's left end.
+  radius: 0.012,
+  // The shell's `FloorTop` is the plate's middle; a little toward the player, clear of the cabin's middle table.
+  seed: { x: -0.05, z: 0.06 },
+};
+
+/**
+ * The Canadian café's upper deck (over the counter, top y 0.1548): a grid
+ * of its own, over the deck and its landing only, with its own head height
+ * (a guest's height over the deck). Nothing below the deck is ground here
+ * (no hop, no table), so nobody walks off its edge; the stairs join it to
+ * the ground floor (CafeSystem.findPath).
+ */
+export const CANADA_UPPER_NAV: NavOptions = {
+  min: { x: -0.44, z: -0.3 },
+  max: { x: 0.13, z: -0.12 },
+  cell: 0.005,
+  top: 0.1548 + 0.1,
+  step: 0.0135,
+  rise: 0.0135,
+  table: -1,
+  hop: -1,
+  radius: 0.012,
+  barriers: [],
+  // The shell's `UpperFloorTop`.
+  seed: { x: -0.19, z: -0.17 },
+  tableCost: 3,
+};

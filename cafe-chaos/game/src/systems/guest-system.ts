@@ -45,14 +45,16 @@ import { castLoaded, GuestActor, WALK_CLIP_SPEED, type Face } from '../guests/ac
 import { Blobs } from '../guests/blobs.js';
 import { randomLook, type Look } from '../guests/cast.js';
 import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
-import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
+import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, CANADA_EXIT_LANES, CANADA_OUTSIDE_X, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
+import { CANADA_FLOOR_TOP_M, CANADA_PLACES } from '../cafe/canada-layout.js';
+import { isCanada } from '../cafe/style.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, PAIR_FOLLOW_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
   PATIENCE_SECONDS, PATIENCE_SPREAD, DROP_MARGIN_M, AIM_SNAP_M, HOVER_EXIT_RADII, HOVER_SWITCH, PICK_MEMORY_S, PICK_RADIUS_M, SIGHT, PICK_RADIUS_WORLD_MIN_M, PICK_STICKY_RADII, PICK_WINDOW_S, RELEASE_HOLD_S, TRACKING_GRACE_S, SEAT_REACH_M, SEATED_SECONDS, FUME_SECONDS, SERVICE_TOPUP_SECONDS, SERVICE_MAX_SECONDS, EAT_SECONDS, SPAWN_SECONDS, SPAWN_STRETCH, SPEED, TURN_SPEED, VANISH_SECONDS, WATCH_RADIUS_M,
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
-import { grants, pickName, pickWishes, tablesOf, WISHES, type Sitter, type WishId, openWishes, type Friendship } from '../guests/wishes.js';
+import { grants, pairPlaces, pickName, pickWishes, TAKEAWAY_CHANCE, tablesOf, wishInfo, type Sitter, type WishId, openWishes, type Friendship } from '../guests/wishes.js';
 import { payFor, wishCount } from '../game/rules.js';
 import { BUBBLE, feelingFor, Reactions, type Reacting } from '../guests/reactions.js';
 import { WishCards } from '../ui/wish-card.js';
@@ -162,6 +164,16 @@ const HOP_HEIGHT_M = 0.014;
 /** Seats that may be added after the start (the annex has ten), for the seat dots' room. */
 const SEAT_HEADROOM = 24;
 const fromLine = (guest: Guest): boolean => !!guest.home && 'line' in guest.home;
+/** A guest with a coffee to take away waits this long at the pick-up spot, then pays and goes (seconds). */
+const TAKEAWAY_SECONDS = 4;
+/** The stairs at the clips' own pace: two steps a second, 12.5 mm of stair a step (m/s along the stair). */
+const STAIR_SPEED = 0.025;
+/** Up (+1), down (-1) or not on the stairs (0): a stretch of a walk that climbs or falls by more than half its run. */
+function stairs(from: Vector3, to: Vector3): number {
+  const rise = to.y - from.y;
+  if (Math.abs(rise) < 0.01 || Math.abs(rise) < Math.hypot(to.x - from.x, to.z - from.z) * 0.5) return 0;
+  return Math.sign(rise);
+}
 
 /**
  * How a visit ended, for the score (systems/score-system.ts). `paid`: it
@@ -298,10 +310,9 @@ export class GuestSystem extends createSystem({}) {
     this.cards = new WishCards(cafe);
     cafe.add(this.popups.group);
     cafe.add(this.reactions.mesh);
-    this.seats = collectSeats(cafe, this.cafeSystem.seats, this.cafeSystem.nav, this.cafeSystem.pieces);
-    this.seatAnchors = this.cafeSystem.seats.length;
-    this.firstSeatCount = this.seats.length;
+    this.readSeats();
     this.furniture = this.cafeSystem.furniture;
+    this.rooms = this.cafeSystem.rooms;
     // Room for the dots of seats that come later (the annex's).
     this.glow = new SeatGlow(cafe, this.seats.length + SEAT_HEADROOM);
     for (const tag of this.seatTags) cafe.add(tag.card.panel.mesh);
@@ -309,10 +320,37 @@ export class GuestSystem extends createSystem({}) {
     this.holdSystem?.claims.push((point) => this.nearestGuest(point, CLAIM_RADII) !== null);
   }
 
+  /** The seats of the café up now, read afresh (at the start, and when the café is swapped for the other). */
+  private readSeats(): void {
+    const cafe = this.cafeSystem;
+    this.seats = collectSeats(cafe.cafe, cafe.seats, (y) => cafe.navAt(y), cafe.pieces);
+    this.seatAnchors = cafe.seats.length;
+    // The Canadian café's pick-up spot (the shell's TakeawaySpot), at the counter's right end, facing the counter.
+    if (isCanada()) {
+      const t = CANADA_PLACES.takeaway;
+      this.seats.push({ index: this.seats.length, position: new Vector3(t.x, CANADA_FLOOR_TOP_M, t.z), yaw: Math.PI, occupant: 0, locked: false, dirty: false, table: -1, meal: null, takeaway: true });
+    }
+    this.firstSeatCount = this.seats.length;
+    this.tables = new Map();
+  }
+
+  /** `rooms` as last seen: when it changes the café was swapped for the other. */
+  private rooms = 0;
+  /** Where the musicians play now (café space; BaristaSystem keeps it), for the `music` wish. */
+  band: Vector3[] = [];
+
   update(frameDelta: number): void {
     this.frame++;
     const cafe = this.cafeSystem;
     const delta = Math.min(1, frameDelta) * cafe.timeScale;
+    if (cafe.rooms !== this.rooms) {
+      // The other café: nobody from this one stays, and its seats are its own.
+      this.rooms = cafe.rooms;
+      this.furniture = cafe.furniture;
+      this.clear();
+      this.readSeats();
+      this.setLockedTables(this.lockedTables);
+    }
     // New furniture (the annex's) is taken in whether or not the café is down yet.
     if (cafe.furniture !== this.furniture) this.takeInSeats();
     if (!cafe.placed || cafe.placements !== this.placement) {
@@ -389,7 +427,7 @@ export class GuestSystem extends createSystem({}) {
   private refusalFor(guest: Guest, own: Seat | null): { seat: Seat; why: SeatRefusal; detail?: string } | null {
     const target = guest.target;
     // A seat that meets none of its wishes: it will not sit there.
-    if (target && !target.dirty && target !== own && this.meetsNone(guest, target)) return { seat: target, why: 'unwanted', detail: `Wants ${WISHES[guest.wishes[0]]?.wants ?? 'another seat'}` };
+    if (target && !target.dirty && target !== own && this.meetsNone(guest, target)) return { seat: target, why: 'unwanted', detail: `Wants ${wishInfo(guest.wishes[0])?.wants ?? 'another seat'}` };
     if (target && !target.dirty) return null;
     const near = seatNear(this.seats, guest.actor.root.position, SEAT_REACH_M);
     if (near && near !== own) {
@@ -420,7 +458,7 @@ export class GuestSystem extends createSystem({}) {
       const waiting = !!friend && (friend.state === 'arriving' || friend.state === 'queued' || friend.state === 'held' || (friend.state === 'hop' && !friend.seat));
       friendship = { friend: guest.friend, free: this.freeSeats(), waiting };
     }
-    return guest.wishes.map((wish) => grants(wish, seat, guest.id, this.sitters, this.tables, this.quietCorner, friendship));
+    return guest.wishes.map((wish) => grants(wish, seat, guest.id, this.sitters, this.tables, this.quietCorner, friendship, this.band));
   }
 
   /** Would this seat meet every one of this guest's wishes? */
@@ -515,14 +553,14 @@ export class GuestSystem extends createSystem({}) {
   private takeInSeats(): void {
     const cafe = this.cafeSystem;
     this.furniture = cafe.furniture;
-    const fresh = collectSeats(cafe.cafe, cafe.seats.slice(this.seatAnchors), cafe.nav, cafe.pieces);
+    const fresh = collectSeats(cafe.cafe, cafe.seats.slice(this.seatAnchors), (y) => cafe.navAt(y), cafe.pieces);
     this.seatAnchors = cafe.seats.length;
     for (const seat of fresh.slice(0, SEAT_HEADROOM - (this.seats.length - this.firstSeatCount))) {
       seat.index = this.seats.length;
       seat.locked = this.lockedTables.has(seat.table);
       this.seats.push(seat);
     }
-    if (this.wishPool) this.wishPool = openWishes(this.seats.filter((x) => !x.locked), this.quietCorner);
+    if (this.wishPool) this.wishPool = openWishes(this.seats.filter((x) => !x.locked), this.quietCorner, this.band);
   }
 
   /**
@@ -534,7 +572,14 @@ export class GuestSystem extends createSystem({}) {
   setLockedTables(locked: ReadonlySet<number>): void {
     this.lockedTables = locked;
     for (const seat of this.seats) seat.locked = locked.has(seat.table);
-    this.wishPool = openWishes(this.seats.filter((s) => !s.locked), this.quietCorner);
+    this.wishPool = openWishes(this.seats.filter((s) => !s.locked), this.quietCorner, this.band);
+  }
+
+  /** A musician has started to play (or stopped): `music` comes into the wishes on offer. */
+  setBand(band: Vector3[]): void {
+    if (band.length === this.band.length) return;
+    this.band = band;
+    this.wishPool = openWishes(this.seats.filter((s) => !s.locked), this.quietCorner, this.band);
   }
   private lockedTables: ReadonlySet<number> = new Set();
   /** The wishes an open seat can meet (all of them until the game says which tables are locked). */
@@ -658,7 +703,9 @@ export class GuestSystem extends createSystem({}) {
     const singerAbout = this.guests.some((g) => g.sings);
     const sings = !singerAbout && Math.random() < this.singerChance;
     // 1 to 3 wishes, more as the evening goes on; a singer wants company (an audience).
-    const wishes: WishId[] = sings ? ['company'] : pickWishes(wishCount(this.level), singerAbout, this.lastWishes, Math.random, this.wishPool ?? undefined);
+    // In the Canadian café now and then a guest wants only a coffee to take away (the pick-up spot at the counter).
+    const takeaway = isCanada() && this.level > 1 && Math.random() < TAKEAWAY_CHANCE;
+    const wishes: WishId[] = takeaway ? ['takeaway'] : sings ? ['company'] : pickWishes(wishCount(this.level), singerAbout, this.lastWishes, Math.random, this.wishPool ?? undefined);
     this.lastWishes = wishes;
     const guest: Guest = {
       id: this.arrived,
@@ -717,7 +764,8 @@ export class GuestSystem extends createSystem({}) {
     // One draw for the pair: the friend wish, and the same other wishes for both (a place, so one table can meet
     // both; never alone, company or quiet, which clash with sharing a table).
     const count = wishCount(this.level);
-    const pool = (this.wishPool ?? ['window', 'door', 'counter']).filter((w) => w === 'window' || w === 'door' || w === 'counter');
+    const places = pairPlaces();
+    const pool = (this.wishPool ?? places).filter((w) => places.includes(w));
     const others = count > 1 && pool.length > 0 ? [pool[Math.floor(Math.random() * pool.length)]] : [];
     for (const g of [a, b]) {
       g.hurried = false;
@@ -819,14 +867,15 @@ export class GuestSystem extends createSystem({}) {
    */
   private startLeaving(guest: Guest): void {
     guest.state = 'leaving';
-    const lanes = this.cafeSystem.annexOpen ? ANNEX_EXIT_LANES : EXIT_LANES;
+    const lanes = isCanada() ? CANADA_EXIT_LANES : this.cafeSystem.annexOpen ? ANNEX_EXIT_LANES : EXIT_LANES;
     const lane = this.nextLane++ % lanes.length;
     guest.side = 'exit';
     guest.lane = lane;
     const nav = this.cafeSystem.nav;
     const from = guest.actor.root.position;
     const end = lanes[lane];
-    const way = nav.findPath(from, new Vector3(end.x, nav.heightAt(end.x, end.z), end.z));
+    // From either floor (down the stairs from the upper deck): CafeSystem finds the way.
+    const way = this.cafeSystem.findPath(from, new Vector3(end.x, nav.heightAt(end.x, end.z), end.z));
     // With no way out (it should not happen) the guest simply fades where it stands.
     guest.walk = new Walk(way ?? [from, from.clone().setX(from.x - FADE_OUT_M)]);
     guest.speed = SPEED.leave;
@@ -1337,8 +1386,10 @@ export class GuestSystem extends createSystem({}) {
       if (seated !== null) guest.patienceFull = seated;
       this.seated++;
       this.judge(guest);
+      // At the pick-up spot the coffee is ready at once: it waits a moment for it, then pays and goes.
+      if (seat.takeaway) guest.served = true;
     }
-    guest.actor.play(fresh ? 'SitHappy' : 'SitIdle');
+    guest.actor.play(seat.takeaway ? 'Idle' : fresh ? 'SitHappy' : 'SitIdle');
   }
 
   /** A seated guest: pleased, then waiting for its order, eating once served, then idle; when its time is up it gets down and leaves. */
@@ -1365,8 +1416,12 @@ export class GuestSystem extends createSystem({}) {
     this.sing(guest, delta);
     // It leaves once its time is up and it has had a fair while to eat (served late, it stays to finish).
     const stayed = guest.seatedFor >= this.seatedSeconds && guest.eaten >= Math.min(EAT_SECONDS, this.seatedSeconds * 0.25);
-    if (guest.served && (stayed || guest.eaten >= this.mealSeconds)) {
+    if (guest.served && (stayed || guest.eaten >= this.mealSeconds || (guest.seat?.takeaway && guest.eaten >= TAKEAWAY_SECONDS))) {
       this.standUp(guest);
+      return;
+    }
+    if (guest.seat?.takeaway) {
+      guest.actor.play('Idle');
       return;
     }
     // Pleased to be seated; then it waits for its order, eats once a server has brought it, and sits back at the end.
@@ -1393,8 +1448,13 @@ export class GuestSystem extends createSystem({}) {
     seat.occupant = 0;
     guest.seat = null;
     this.hoppedOff++;
-    // Down to the nearest place there is room to stand, facing away from the chair.
-    const nav = this.cafeSystem.nav;
+    // A coffee to take away: it is already on its feet, and off it goes.
+    if (seat.takeaway) {
+      this.startLeaving(guest);
+      return;
+    }
+    // Down to the nearest place there is room to stand (on its own floor), facing away from the chair.
+    const nav = this.cafeSystem.navAt(seat.position.y);
     const landing = nav.nearest(seat.position.x, seat.position.z, LANDING_REACH_M) ?? seat.position.clone();
     // In the air it kicks its legs (the Lifted clip), as when carried.
     guest.actor.play('Lifted');
@@ -1438,17 +1498,23 @@ export class GuestSystem extends createSystem({}) {
       let speed = guest.speed;
       if (guest.state === 'leaving') {
         // Once through the exit the walk becomes a march; and nobody treads on the heels of the one ahead.
-        if (root.position.x < (this.cafeSystem.annexOpen ? ANNEX_OUTSIDE_X : OUTSIDE_X)) speed = SPEED.march;
+        if (root.position.x < (isCanada() ? CANADA_OUTSIDE_X : this.cafeSystem.annexOpen ? ANNEX_OUTSIDE_X : OUTSIDE_X)) speed = SPEED.march;
         if (this.crowded(guest)) speed *= 0.35;
       }
+      // On the Canadian café's stairs: the stair clips at their own pace, and no hop (it is a flight of steps, not one).
+      const span = walk.span();
+      const climb = stairs(span.from, span.to);
+      if (climb) speed = STAIR_SPEED;
       const done = walk.advance(speed * delta);
       walk.position(root.position);
       guest.ground = root.position.y;
       // A step down off the plate (or up onto it) is a little hop.
       const { from, to, t } = walk.span();
-      if (Math.abs(to.y - from.y) > HOP_STEP_M) root.position.y += Math.sin(Math.PI * t) * HOP_HEIGHT_M;
+      if (!climb && Math.abs(to.y - from.y) > HOP_STEP_M) root.position.y += Math.sin(Math.PI * t) * HOP_HEIGHT_M;
       guest.targetYaw = walk.heading(guest.targetYaw);
-      guest.actor.play('Walk', speed / WALK_CLIP_SPEED);
+      const clip = climb > 0 ? 'StairsUp' : 'StairsDown';
+      if (climb && guest.actor.has(clip)) guest.actor.play(clip);
+      else guest.actor.play('Walk', speed / WALK_CLIP_SPEED);
       if (done) this.arrive(guest);
     }
     this.turn(guest, delta);

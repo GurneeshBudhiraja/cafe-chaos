@@ -62,6 +62,7 @@ export class MessSystem extends createSystem({}) {
   private guests!: GuestSystem;
   private clock = 0;
   private placement = -1;
+  private rooms = 0;
   private readonly at = new Vector3();
 
   init(): void {
@@ -73,8 +74,9 @@ export class MessSystem extends createSystem({}) {
     const cafe = this.cafe;
     const delta = Math.min(1, frameDelta) * cafe.timeScale;
     this.clock += delta;
-    if (cafe.placed && cafe.placements !== this.placement) {
+    if ((cafe.placed && cafe.placements !== this.placement) || cafe.rooms !== this.rooms) {
       this.placement = cafe.placements;
+      this.rooms = cafe.rooms;
       this.clear();
     }
     for (const [index, mess] of this.messes) {
@@ -101,7 +103,8 @@ export class MessSystem extends createSystem({}) {
     for (const index of this.hadGuests) {
       if (seated.has(index)) continue;
       const seat = this.guests.seats[index];
-      if (seat && this.ate.has(index)) this.soilSeat(seat);
+      // A coffee taken away leaves no table to clean.
+      if (seat && !seat.takeaway && this.ate.has(index)) this.soilSeat(seat);
       this.ate.delete(index);
     }
     this.hadGuests.clear();

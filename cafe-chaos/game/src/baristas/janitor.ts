@@ -8,17 +8,17 @@
  */
 
 import type { Object3D } from '@iwsdk/core';
-import { Barista, baristaLoaded } from './barista.js';
+import { Barista, baristaLoaded, type StaffLook } from './barista.js';
 
-/** True once the janitor's model has loaded. */
-export function janitorLoaded(): boolean {
-  return baristaLoaded('janitor');
+/** True once the janitor's model has loaded (the Japanese café's, or a Canadian one: `birch`, `cedar`). */
+export function janitorLoaded(look: StaffLook = 'janitor'): boolean {
+  return baristaLoaded(look);
 }
 
 /** A janitor on stage, its bucket put away. */
-export function makeJanitor(): Barista {
-  const janitor = new Barista('janitor');
-  janitor.root.name = 'Janitor';
+export function makeJanitor(look: StaffLook = 'janitor'): Barista {
+  const janitor = new Barista(look);
+  janitor.root.name = look === 'janitor' ? 'Janitor' : `Janitor-${look}`;
   setCleaning(janitor, false);
   return janitor;
 }

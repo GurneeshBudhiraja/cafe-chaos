@@ -12,7 +12,7 @@
  */
 
 import { createSystem } from '@iwsdk/core';
-import { HIRE_PRICES, JANITOR_PRICE, MAX_STAFF, START_TABLES, STARTING_STAFF, tablePrice } from '../game/rules.js';
+import { HIRE_PRICES, JANITOR2_PRICE, JANITOR_PRICE, MAX_STAFF, MUSICIAN_PRICES, startTables, STARTING_STAFF, tablePrice } from '../game/rules.js';
 import { BaristaSystem } from './barista-system.js';
 import { ScoreSystem } from './score-system.js';
 
@@ -25,11 +25,14 @@ export class ShopSystem extends createSystem({}) {
   /** Called after each hire or table bought (the game saves). */
   readonly bought: (() => void)[] = [];
   /** The tables open (indices into the café's pieces), the starting ones included. */
-  tables: number[] = [...START_TABLES];
+  tables: number[] = [...startTables()];
   /** Tables bought this session (for the sounds and the checks). */
   tablesBought = 0;
-  /** The janitor (one only): hired or not. */
+  /** The janitor: hired or not; and the Canadian café's second janitor. */
   janitor = false;
+  janitor2 = false;
+  /** The Canadian café's musicians bought (0 to 2: the fiddler, then the pianist). */
+  musicians = 0;
   private baristas!: BaristaSystem;
   private score!: ScoreSystem;
 
@@ -55,14 +58,18 @@ export class ShopSystem extends createSystem({}) {
   }
 
   /** The café as it was saved: this many servers already hired, these tables open (nothing is spent). */
-  restore(hires: number, tables: readonly number[] = START_TABLES, janitor = false): void {
+  restore(hires: number, tables: readonly number[] = startTables(), janitor = false, janitor2 = false, musicians = 0): void {
     this.hires = Math.max(0, Math.min(HIRE_PRICES.length, Math.floor(hires)));
     this.baristas.staffSize = this.staff;
     this.janitor = janitor;
+    this.janitor2 = janitor && janitor2;
+    this.musicians = Math.max(0, Math.min(MUSICIAN_PRICES.length, Math.floor(musicians)));
     this.baristas.janitorHired = janitor;
+    this.baristas.janitor2Hired = this.janitor2;
+    this.baristas.musicians = this.musicians;
     // Staff no longer on the books (a fresh start) leave at once.
     this.baristas.dismiss();
-    this.tables = [...new Set([...START_TABLES, ...tables.filter((t) => Number.isInteger(t) && t >= 0 && t < 32)])];
+    this.tables = [...new Set([...startTables(), ...tables.filter((t) => Number.isInteger(t) && t >= 0 && t < 32)])];
   }
 
   /** What the janitor costs; null once hired. */
@@ -83,9 +90,46 @@ export class ShopSystem extends createSystem({}) {
     return true;
   }
 
+  /** What the second janitor costs (the Canadian café); null once hired. */
+  get janitor2Price(): number | null {
+    return this.janitor2 ? null : JANITOR2_PRICE;
+  }
+
+  /** Hire the second janitor (only after the first); false (and counted as refused) if it cannot be. */
+  hireJanitor2(): boolean {
+    if (!this.janitor || this.janitor2 || !this.score.spend(JANITOR2_PRICE)) {
+      this.refused++;
+      return false;
+    }
+    this.janitor2 = true;
+    this.purchases++;
+    this.baristas.janitor2Hired = true;
+    for (const done of this.bought) done();
+    return true;
+  }
+
+  /** What the next musician costs (the Canadian café); null once both play. */
+  get musicianPrice(): number | null {
+    return this.musicians < MUSICIAN_PRICES.length ? MUSICIAN_PRICES[this.musicians] : null;
+  }
+
+  /** Buy the next musician; false (and counted as refused) if both play or the bank cannot pay. */
+  buyMusician(): boolean {
+    const price = this.musicianPrice;
+    if (price === null || !this.score.spend(price)) {
+      this.refused++;
+      return false;
+    }
+    this.musicians++;
+    this.purchases++;
+    this.baristas.musicians = this.musicians;
+    for (const done of this.bought) done();
+    return true;
+  }
+
   /** How many tables have been bought (the starting ones are not bought). */
   get tablesOwned(): number {
-    return Math.max(0, this.tables.length - START_TABLES.length);
+    return Math.max(0, this.tables.length - startTables().length);
   }
 
   /** What the next table costs. */

@@ -20,9 +20,9 @@
 
 import { AnimationMixer, AssetManager, Color, LoopRepeat, type AnimationAction, type AnimationClip, type Material, type Mesh, type MeshStandardMaterial, type Object3D, type SkinnedMesh } from '@iwsdk/core';
 import { foldParts } from '../lib/fold-parts.js';
-import { GUEST_MODEL, type Look } from './cast.js';
+import { GUEST_MODEL, wardrobeOf, type Look } from './cast.js';
 
-export type ClipName = 'Idle' | 'Impatient' | 'Walk' | 'Lifted' | 'SitIdle' | 'SitHappy' | 'SitEating' | 'SitUnhappy';
+export type ClipName = 'Idle' | 'Impatient' | 'Walk' | 'Lifted' | 'SitIdle' | 'SitHappy' | 'SitEating' | 'SitUnhappy' | 'StairsUp' | 'StairsDown';
 export type Pose = 'standing' | 'seated';
 
 /** Which pose group each clip moves. */
@@ -35,6 +35,8 @@ const POSE_OF: Record<ClipName, Pose> = {
   SitHappy: 'seated',
   SitEating: 'seated',
   SitUnhappy: 'seated',
+  StairsUp: 'standing',
+  StairsDown: 'standing',
 };
 
 /**
@@ -66,7 +68,7 @@ type FaceParts = Record<string, Object3D>;
 
 /** True once every model a guest of this look needs has loaded. */
 export function castLoaded(look: Look): boolean {
-  return !!AssetManager.getGLTF(GUEST_MODEL[look.species], { shared: true }) && !!AssetManager.getGLTF('accessories', { shared: true });
+  return !!AssetManager.getGLTF(GUEST_MODEL[look.species], { shared: true }) && !!AssetManager.getGLTF(wardrobeOf(look.species), { shared: true });
 }
 
 export class GuestActor {
@@ -126,6 +128,11 @@ export class GuestActor {
    * clips switch whole faces by scale, so they are cut, never blended: a
    * blend would show two half-sized faces at once.
    */
+  /** Does the model have this clip (the Canadian guests have the stair clips)? */
+  has(name: ClipName): boolean {
+    return this.clips.has(name);
+  }
+
   play(name: ClipName, timeScale = 1): void {
     if (this.clip === name && this.action) {
       this.action.timeScale = timeScale;
@@ -242,7 +249,7 @@ export class GuestActor {
   /** Hang each accessory on its attach point, on both poses. */
   private dress(outfit: string[]): void {
     if (outfit.length === 0) return;
-    const accessories = AssetManager.getGLTF('accessories', { shared: true })?.scene;
+    const accessories = AssetManager.getGLTF(wardrobeOf(this.look.species), { shared: true })?.scene;
     if (!accessories) return;
     for (const item of outfit) {
       const source = accessories.getObjectByName(item);

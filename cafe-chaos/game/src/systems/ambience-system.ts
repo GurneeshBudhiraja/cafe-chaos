@@ -12,6 +12,7 @@
 import { AnimationMixer, AssetManager, Box3, createSystem, Vector3, type Mesh } from '@iwsdk/core';
 import { PetalFall } from '../ambience/petals.js';
 import { CafeSystem } from './cafe-system.js';
+import { isCanada } from '../cafe/style.js';
 
 /** The shell's steam clip. */
 const STEAM_CLIP = 'Ambient';
@@ -26,8 +27,16 @@ export class AmbienceSystem extends createSystem({}) {
 
   init(): void {
     this.cafeSystem = this.world.getSystem(CafeSystem)!;
+    this.startClip();
+  }
+
+  /** The shell's own clip (the Japanese café's steam; the Canadian café's smoke, flames and waterfall), played on a loop. */
+  private startClip(): void {
+    this.mixer?.stopAllAction();
+    this.mixer = null;
+    this.steaming = false;
     const shell = this.cafeSystem.pieces[0];
-    const clip = AssetManager.getGLTF('cafe-shell', { shared: true })?.animations.find((c) => c.name === STEAM_CLIP);
+    const clip = AssetManager.getGLTF(isCanada() ? 'cafe-canada' : 'cafe-shell', { shared: true })?.animations.find((c) => c.name === STEAM_CLIP);
     if (shell && clip) {
       this.mixer = new AnimationMixer(shell);
       this.mixer.clipAction(clip).play();
@@ -35,9 +44,19 @@ export class AmbienceSystem extends createSystem({}) {
     }
   }
 
+  private rooms = 0;
+
   update(frameDelta: number): void {
     const delta = Math.min(1, frameDelta) * this.cafeSystem.timeScale;
+    if (this.cafeSystem.rooms !== this.rooms) {
+      // The café swapped for the other: its own clip; the petals fall only from the Japanese café's cherry tree.
+      this.rooms = this.cafeSystem.rooms;
+      this.startClip();
+      this.petals?.dispose();
+      this.petals = null;
+    }
     this.mixer?.update(delta);
+    if (isCanada()) return;
     if (!this.petals) this.startPetals();
     this.petals?.update(delta);
   }

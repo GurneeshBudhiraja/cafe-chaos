@@ -20,7 +20,7 @@
 import rough from 'roughjs';
 import { Theme } from './audio/theme.js';
 import { HOW_TO_PLAY } from './game/how-to-play.js';
-import { loadSave, TEST_MODE } from './game/save.js';
+import { SaveBook, TEST_MODE } from './game/save.js';
 
 const STROKES: Record<string, string> = { ink: '#16171d', timber: '#3e2a1c', 'moss-deep': '#2f522d', off: '#b6a993' };
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -138,15 +138,17 @@ addEventListener('load', () =>
 // click, tap or key if it could not start at once. It stops as the headset view opens (the game plays
 // its own) and comes back when the player returns to the page.
 const theme = new Theme(`${import.meta.env.BASE_URL}audio/theme.mp3`);
-theme.level = loadSave().music / 2;
-if (!TEST_MODE) theme.play();
-for (const kind of ['pointerdown', 'keydown', 'touchstart'] as const) addEventListener(kind, () => theme.nudge(), { capture: true });
+theme.level = new SaveBook().load('japan').music / 2;
+/** Off for now (the owner's call): the page stays silent; the game in the headset still plays its theme. Set true to bring it back. */
+const PAGE_MUSIC = false;
+if (PAGE_MUSIC && !TEST_MODE) theme.play();
+if (PAGE_MUSIC) for (const kind of ['pointerdown', 'keydown', 'touchstart'] as const) addEventListener(kind, () => theme.nudge(), { capture: true });
 new MutationObserver(() => {
   if (document.body.classList.contains('in-xr')) {
     theme.stop();
     theme.audio.pause();
     theme.audio.volume = 0;
-  } else if (!TEST_MODE) theme.play();
+  } else if (PAGE_MUSIC && !TEST_MODE) theme.play();
 }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 const tick = (): void => {
   theme.update();
