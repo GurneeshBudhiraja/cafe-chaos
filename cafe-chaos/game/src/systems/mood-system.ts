@@ -9,10 +9,12 @@
 
 import { createSystem, PointLight, Vector3, type Object3D, type Sprite } from '@iwsdk/core';
 import { makeHalo } from '../light/halo.js';
-import { lightAddition, type CafeLights } from '../light/cafe-lights.js';
+import { lightAddition, lightDay, type CafeLights } from '../light/cafe-lights.js';
+import { RenderBudgetSystem } from './render-budget-system.js';
 import { PassthroughDimmer } from '../light/dimmer.js';
 import { fitSpill } from '../light/spill.js';
-import { ANNEX_LAMP, ANNEX_LANTERNS_X, ANNEX_LIGHT, BREATH, DIM_FADE_SECONDS, DIM_LEVEL, HALOS, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS, ROOM_LAMP } from '../light/mood.js';
+import { ANNEX_LAMP, ANNEX_LANTERNS_X, ANNEX_LIGHT, BREATH, DAY, DIM_FADE_SECONDS, DIM_LEVEL, ENVIRONMENT_INTENSITY, FILL, HALOS, LAMPS, LAMPS_UP_DELAY, LAMPS_UP_SECONDS, MOON, ROOM_LAMP } from '../light/mood.js';
+import { isCanada } from '../cafe/style.js';
 import { CafeSystem } from './cafe-system.js';
 
 /** How much the café's lamps go down while the game is paused. */
@@ -52,7 +54,20 @@ export class MoodSystem extends createSystem({}) {
     const delta = frameDelta * (cafe?.timeScale ?? 1);
     this.time += delta;
     const presenting = this.world.renderer.xr.isPresenting;
-    const night = presenting && !!cafe?.placed;
+    // The Canadian café is a sunny day: no dimming, no lamps (light/mood.ts DAY).
+    const day = isCanada();
+    if (day !== this.day) this.setDay(day);
+    // The Canadian café just built: its pieces lit for the day (glow, shadows).
+    if (cafe && cafe.rooms !== this.rooms) {
+      this.rooms = cafe.rooms;
+      if (day) {
+        for (const piece of cafe.pieces) lightDay(piece);
+        const batch = cafe.cafe.children.find((c) => c.name === 'StaticBatch');
+        if (batch) lightDay(batch);
+        this.world.getSystem(RenderBudgetSystem)?.touchShadows();
+      }
+    }
+    const night = presenting && !!cafe?.placed && !day;
 
     // A new placement is a new arrival: the night comes in from clear again.
     if (cafe && cafe.placements !== this.placement) {
@@ -75,7 +90,7 @@ export class MoodSystem extends createSystem({}) {
       this.lampsUp = ease(Math.min(1, Math.max(0, (this.sinceDusk - LAMPS_UP_DELAY) / LAMPS_UP_SECONDS)));
     } else {
       this.sinceDusk = -1;
-      this.lampsUp = presenting ? 0 : 1;
+      this.lampsUp = presenting || day ? 0 : 1;
     }
     this.growLight(cafe);
     // Paused (the café's clock stopped): the lamps go down a little, so the pause is plain to see; eased on real time.
@@ -85,13 +100,56 @@ export class MoodSystem extends createSystem({}) {
     this.light();
   }
 
+  /** The day (the Canadian café) or the night (the Japanese café): the sun or the moon, the fill, the house light and the spill. */
+  private day = false;
+  private rooms = 0;
+  private setDay(day: boolean): void {
+    const lights = this.lights;
+    if (!lights) return;
+    this.day = day;
+    const sun = day ? DAY.sun : MOON;
+    lights.moon.color.set(sun.color);
+    lights.moon.intensity = sun.intensity;
+    lights.moon.position.set(sun.position[0], sun.position[1], sun.position[2]);
+    lights.house.visible = !day;
+    lights.spill.visible = !day;
+    // By day the sun casts the shadows (the house light is off); by night the house light does.
+    const sunLight = lights.moon;
+    sunLight.castShadow = day;
+    if (day) {
+      const d = DAY.shadow;
+      sunLight.shadow.mapSize.set(d.mapSize, d.mapSize);
+      const cam = sunLight.shadow.camera;
+      cam.left = -d.half;
+      cam.right = d.half;
+      cam.top = d.half;
+      cam.bottom = -d.half;
+      cam.near = d.near;
+      cam.far = d.far;
+      cam.updateProjectionMatrix();
+      sunLight.shadow.bias = d.bias;
+      sunLight.shadow.normalBias = d.normalBias;
+      sunLight.shadow.radius = d.radius;
+    }
+    this.world.getSystem(RenderBudgetSystem)?.touchShadows();
+    this.fitKey = '';
+    if (lights.fill) {
+      const fill = day ? DAY.fill : FILL;
+      lights.fill.color.set(fill.sky);
+      lights.fill.groundColor.set(fill.ground);
+      lights.fill.intensity = fill.intensity;
+    }
+    this.world.scene.environmentIntensity = day ? DAY.environment : ENVIRONMENT_INTENSITY;
+  }
+
   /**
    * Keep the light spill to the real table (see light/spill.ts): re-cut when
    * the café or the table has moved, a few times a second at most.
    */
   private fitSpill(cafe: CafeSystem | undefined, frameDelta: number): void {
     const spill = this.lights?.spill;
-    if (!spill || !cafe) return;
+    // By day (the Canadian café) there is no lamp light to spill.
+    if (!spill || !cafe || this.day) return;
     this.sinceFit += frameDelta;
     if (this.sinceFit < SPILL_REFIT_S) return;
     this.sinceFit = 0;

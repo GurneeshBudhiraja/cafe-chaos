@@ -7,15 +7,29 @@
  * Pure data and dice: the actor (actor.ts) builds the guest from a look.
  */
 
-export type Species = 'mochi' | 'onigiri' | 'tofu';
+import { isCanada } from '../cafe/style.js';
+
+export type Species = 'mochi' | 'onigiri' | 'tofu' | 'snowbit' | 'beavertail' | 'nanaimo' | 'doubledouble' | 'buttertart';
 export const SPECIES: readonly Species[] = ['mochi', 'onigiri', 'tofu'];
+/** The Canadian café's guests (models/27-cafe-canada/INTEGRATION.md): a donut hole, a beaver tail, a nanaimo bar, a double-double coffee cup and a butter tart. */
+export const CANADA_SPECIES: readonly Species[] = ['snowbit', 'beavertail', 'nanaimo', 'doubledouble', 'buttertart'];
 
 /** The model each species loads from. */
-export const GUEST_MODEL: Record<Species, 'guest-mochi' | 'guest-onigiri' | 'guest-tofu'> = {
+export const GUEST_MODEL: Record<Species, `guest-${Species}`> = {
   mochi: 'guest-mochi',
   onigiri: 'guest-onigiri',
   tofu: 'guest-tofu',
+  snowbit: 'guest-snowbit',
+  beavertail: 'guest-beavertail',
+  nanaimo: 'guest-nanaimo',
+  doubledouble: 'guest-doubledouble',
+  buttertart: 'guest-buttertart',
 };
+
+/** The file a species' clothes come from: the Canadian guests wear the winter set. */
+export function wardrobeOf(species: Species): 'accessories' | 'accessories-canada' {
+  return CANADA_SPECIES.includes(species) ? 'accessories-canada' : 'accessories';
+}
 
 /**
  * Skin tints (the models ship near-white and are multiplied by one of
@@ -43,6 +57,12 @@ const WARDROBE: readonly { attach: string; chance: number; items: readonly strin
   { attach: 'Neck', chance: 0.25, items: ['Bow'] },
   { attach: 'Chest', chance: 0.3, items: ['Apron-{s}', 'Vest-{s}'] },
 ];
+/** The Canadian guests' winter clothes (accessories-canada.glb; the suggested wardrobe in its notes). */
+const CANADA_WARDROBE: readonly { attach: string; chance: number; items: readonly string[] }[] = [
+  { attach: 'HeadTop', chance: 0.6, items: ['Toque-{s}', 'Earmuffs-{s}'] },
+  { attach: 'Neck', chance: 0.35, items: ['Scarf-{s}'] },
+  { attach: 'Chest', chance: 0.4, items: ['Parka-{s}'] },
+];
 /** Nobody wears more than this many things at once. */
 const MAX_ITEMS = 2;
 
@@ -62,14 +82,18 @@ const pick = <T>(list: readonly T[], random: () => number): T => list[Math.floor
  * line differ.
  */
 export function randomLook(random: () => number = Math.random, avoid?: Look): Look {
-  let species = pick(SPECIES, random);
-  let tint = pick(TINTS, random);
+  // The Canadian guests ship in their own colours (the nanaimo's three layers cannot be a tint): no tint for them.
+  const canada = isCanada();
+  const species_ = canada ? CANADA_SPECIES : SPECIES;
+  const tints = canada ? TINTS.slice(0, 1) : TINTS;
+  let species = pick(species_, random);
+  let tint = pick(tints, random);
   for (let tries = 0; avoid && tries < 6 && species === avoid.species && tint.hex === avoid.tint; tries++) {
-    species = pick(SPECIES, random);
-    tint = pick(TINTS, random);
+    species = pick(species_, random);
+    tint = pick(tints, random);
   }
   const outfit: string[] = [];
-  for (const place of WARDROBE) {
+  for (const place of canada ? CANADA_WARDROBE : WARDROBE) {
     if (outfit.length >= MAX_ITEMS || random() >= place.chance) continue;
     outfit.push(pick(place.items, random).replace('{s}', species));
   }

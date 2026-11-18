@@ -32,6 +32,7 @@ import { LinearFilter, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, V
 import type { RoughCanvas } from 'roughjs/bin/canvas';
 import type { HowToStep } from '../game/how-to-play.js';
 import type { Options } from 'roughjs/bin/core';
+import type { CafeId } from '../cafe/style.js';
 import { Panel, type Button } from './panel.js';
 import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
 
@@ -39,6 +40,8 @@ import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
 export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.21 };
 /** The menu card (start, pause, shop): wide and short (metres), 960 by 600 design units. */
 export const START_SIZE = { width: 0.32, height: 0.2 };
+/** The start card with the two cafés: as wide as the others (960 design units), its height fitted to its rows. */
+export const PICKER_SIZE = { width: 0.32 };
 /**
  * How to play: one step at a time, as on the web page (index.html #how):
  * the step's video (looping, silent) on the left, its title and line on
@@ -71,13 +74,36 @@ const BOIL_HZ = 10;
 /** Volume and size steps. */
 export const LEVELS = 5;
 
-export interface StartState {
-  /** 'first': no save. 'returning': a save to continue. */
-  kind: 'first' | 'returning';
-  coins: number;
-  staff: number;
-  /** The level the save is on. */
+/** One café on the start card. */
+export interface CafeTile {
+  id: CafeId;
+  name: string;
+  /** Its line under the name. */
+  line: string;
+  /** Owned (the Japanese café always); not owned: the free trial and Buy. */
+  owned: boolean;
+  /** A save to continue there (Continue and New game; else Start). */
+  started: boolean;
   level: number;
+  coins: number;
+  /** Chosen, and its models still loading. */
+  loading: boolean;
+}
+/** The start card: the cafés, the one played last first; and the Canadian café's price. */
+export interface StartState {
+  tiles: CafeTile[];
+  price: number;
+  /** The first run's lesson is still ahead (a café not started says so). */
+  lesson: boolean;
+}
+/** The Buy question: the price, the Japanese café's coins, and where it is asked from. */
+export interface BuyCafeState {
+  price: number;
+  coins: number;
+  /** Asked in the trial: what was played there is kept. */
+  trial: boolean;
+  /** Asked in the Japanese café's Shop: the run goes on after. */
+  fromJapan: boolean;
 }
 export interface SettingsState {
   music: number;
@@ -89,15 +115,6 @@ export interface PauseState {
   served: number;
   goal: number;
 }
-/** The buy card: the table pointed at (its name, its picture and seats), what it costs, and the bank. */
-export interface BuyState {
-  name: string;
-  /** Its picture in the icon set (ICONS). */
-  icon: number;
-  seats: number;
-  price: number;
-  coins: number;
-}
 /** The card when the café's happiness ran out: the level, and how far it got. */
 export interface FailState {
   level: number;
@@ -107,37 +124,45 @@ export interface FailState {
   left: number;
 }
 export interface WarnState {
+  /** The café a new game is for. */
+  cafe: string;
   coins: number;
   staff: number;
   level: number;
 }
 
-/**
- * The icon set (public/models/unlock-icons.png, rendered in Blender from
- * the real models in the café's materials): 4 x 2 tiles of 256 px. The
- * staff and the tables are shown by their pictures, not drawings.
- */
-export const ICONS = { barista: 0, table2: 1, table4: 2, bar: 3, quiet: 4, janitor: -1 } as const;
-let icons: HTMLImageElement | null = null;
-const iconListeners: (() => void)[] = [];
-if (typeof Image !== 'undefined') {
-  const img = new Image();
-  img.onload = () => {
-    icons = img;
-    for (const f of iconListeners) f();
-  };
-  img.src = `${import.meta.env.BASE_URL}models/unlock-icons.png`;
-}
 
-let cover: HTMLImageElement | null = null;
+/**
+ * The cafés' pictures on the start card: the Japanese café's cover, and the
+ * Canadian café from a seat (its top strip, a viewer's caption, is cropped
+ * away: `top`, a share of its height).
+ */
+const ART: Record<CafeId, { file: string; top: number }> = {
+  japan: { file: 'ui/cover.jpg', top: 0 },
+  canada: { file: 'ui/canada-cover.jpg', top: 0.07 },
+};
+const covers: Partial<Record<CafeId, HTMLImageElement>> = {};
 const coverListeners: (() => void)[] = [];
 if (typeof Image !== 'undefined') {
+  for (const id of Object.keys(ART) as CafeId[]) {
+    const img = new Image();
+    img.onload = () => {
+      covers[id] = img;
+      for (const f of coverListeners) f();
+    };
+    img.src = `${import.meta.env.BASE_URL}${ART[id].file}`;
+  }
+}
+
+/** The brand's 3D logo (assets/meta-store/logo.png, web size), the start card's title. */
+let logo: HTMLImageElement | null = null;
+if (typeof Image !== 'undefined') {
   const img = new Image();
   img.onload = () => {
-    cover = img;
+    logo = img;
     for (const f of coverListeners) f();
   };
-  img.src = `${import.meta.env.BASE_URL}ui/logo.png`;   // the brand's 3D logo (assets/meta-store/logo.png, web size)
+  img.src = `${import.meta.env.BASE_URL}ui/logo.png`;
 }
 
 const font = (size: number, heavy = true): string => hand(size, heavy ? 700 : 400);
@@ -167,14 +192,14 @@ export class StartMenu {
   /** Players who ask the system for less motion see the still picture, not the clip. */
   private readonly still = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** What the sheet shows ('none' when it is closed). */
-  sheetKind: 'none' | 'settings' | 'warn' | 'quit' = 'none';
+  sheetKind: 'none' | 'settings' | 'warn' | 'quit' | 'buy' | 'leave' = 'none';
   /** What the card shows: the start menu, or (in a run) the pause card or the shop. */
-  cardKind: 'start' | 'pause' | 'failed' | 'buy' = 'start';
+  cardKind: 'start' | 'pause' | 'failed' = 'start';
   private seed = 1;
   private clock = 0;
-  private start: StartState = { kind: 'first', coins: 0, staff: 1, level: 1 };
+  private start: StartState = { tiles: [], price: 0, lesson: true };
   private settings: SettingsState = { music: 2, sounds: 3 };
-  private warn: WarnState = { coins: 0, staff: 1, level: 1 };
+  private warn: WarnState = { cafe: '', coins: 0, staff: 1, level: 1 };
   private readonly k: number;
   /** How to play's scale (metres per design unit). */
   private readonly kh: number;
@@ -188,7 +213,6 @@ export class StartMenu {
     this.k = this.sheet.width / W;
     this.kh = this.how.width / HW;
     coverListeners.push(() => this.card.paint());
-    iconListeners.push(() => this.card.paint());
   }
 
   /** How to play, in front of the eyes where the start card stands (the game hides the card behind), from `index`. */
@@ -283,7 +307,7 @@ export class StartMenu {
   showStart(state: StartState): void {
     this.cardKind = 'start';
     this.start = state;
-    this.card.resize(START_SIZE.width, START_SIZE.height);
+    // Its height is fitted to its rows (layoutStart).
     this.layoutStart();
     this.card.show(true);
   }
@@ -296,13 +320,6 @@ export class StartMenu {
     this.card.show(true);
   }
 
-  /** A locked table pointed at and pinched: buy it, or not now. Shown again if the bank changes. */
-  showBuy(state: BuyState): void {
-    this.cardKind = 'buy';
-    this.card.resize(START_SIZE.width, START_SIZE.height);
-    this.layoutBuy(state);
-    this.card.show(true);
-  }
 
   /** The café's happiness ran out: the level starts again (TRY AGAIN), or back to the menu. */
   showFailed(state: FailState): void {
@@ -315,6 +332,7 @@ export class StartMenu {
 
 
   openSettings(state: SettingsState): void {
+    this.sheet.resize(MENU_SIZE.width, MENU_SIZE.sheetHeight);
     this.settings = state;
     this.sheetKind = 'settings';
     this.layoutSettings();
@@ -334,8 +352,57 @@ export class StartMenu {
     this.sheet.show(true);
   }
 
+  /** The Canadian café's Buy question (or, short of coins, how many more). */
+  openBuy(state: BuyCafeState): void {
+    this.sheetKind = 'buy';
+    const can = state.coins >= state.price;
+    const after = state.trial ? ' You keep your trial progress.' : state.fromJapan ? '' : ' It starts at level 1.';
+    if (can)
+      this.layoutQuestion('Buy the Canadian café?', `It costs ${state.price} coins from the Japanese café. You will have ${(state.coins - state.price).toLocaleString('en')} coins left there.${after}`, [
+        { id: 'buy-yes', kind: 'primary', label: `BUY · ${state.price} COINS` },
+        { id: 'buy-no', kind: 'secondary', label: 'GO BACK' },
+      ]);
+    else
+      this.layoutQuestion('Not enough coins', `The Canadian café costs ${state.price} coins. The Japanese café has ${state.coins.toLocaleString('en')}. Earn ${(state.price - state.coins).toLocaleString('en')} more there.`, [{ id: 'buy-no', kind: 'primary', label: 'GO BACK' }]);
+    this.sheet.show(true);
+  }
+
+  /** Leave the trial? Its progress is not saved. */
+  openLeave(): void {
+    this.sheetKind = 'leave';
+    this.layoutQuestion('Leave the trial?', 'Your trial progress is not saved.', [
+      { id: 'leave-no', kind: 'primary', label: 'KEEP PLAYING' },
+      { id: 'leave-yes', kind: 'danger', label: 'LEAVE' },
+    ]);
+    this.sheet.show(true);
+  }
+
+  /** A question on the sheet: its title, a sentence (wrapped), and one or two wide buttons under it. */
+  private layoutQuestion(title: string, sentence: string, choices: { id: string; kind: 'primary' | 'secondary' | 'danger'; label: string }[]): void {
+    // Fitted to its content: the title, the sentence, then the buttons a block gap under it, PAD at the bottom as at
+    // the sides (a one-line sentence leaves no empty paper above the buttons).
+    const ctx = this.sheet.ctx;
+    // Each sentence starts its own line (one idea a line, ASD-STE100), wrapped only if it is too long for one.
+    const lines = sentence.split(/(?<=\.)\s+/).flatMap((one) => this.wrap(ctx, one, 32, false, W - PAD * 2));
+    const textTop = 150;
+    const top = textTop + (lines.length - 1) * 44 + 22 + 48;
+    const H = top + choices.length * 120 + (choices.length - 1) * TOUCH_GAP + PAD + 14;
+    this.sheet.resize(MENU_SIZE.width, (H * this.k) / PPM);
+    const buttons = choices.map((c, i) => this.button(this.sheet, c.id, PAD, top + i * (120 + TOUCH_GAP), W - PAD * 2, 120, c.kind, c.label));
+    this.sheet.set((c) => {
+      c.clearRect(0, 0, this.sheet.width, this.sheet.height);
+      c.save();
+      c.scale(this.k, this.k);
+      this.paper(c, pen(this.sheet.canvas), 0, H);
+      text(c, title, W / 2, 80, 48, SKETCH.ink);
+      lines.forEach((l, i) => text(c, l, W / 2, textTop + i * 44, 32, SKETCH.soft, 'center', false));
+      c.restore();
+    }, buttons);
+  }
+
   /** Are you sure? before leaving the headset view. */
   openQuit(): void {
+    this.sheet.resize(MENU_SIZE.width, MENU_SIZE.sheetHeight);
     this.sheetKind = 'quit';
     this.layoutQuit();
     this.sheet.show(true);
@@ -396,7 +463,7 @@ export class StartMenu {
    * 'danger' (koi outline), 'off' (pale, cannot go further). It lights from
    * inside when a finger is near and moves down when pressed.
    */
-  private button(panel: Panel, id: string, x: number, y: number, w: number, h: number, kind: 'primary' | 'secondary' | 'danger' | 'off', label: string, sub?: string, glyph = false, size?: number): Button {
+  private button(panel: Panel, id: string, x: number, y: number, w: number, h: number, kind: 'primary' | 'secondary' | 'danger' | 'off' | 'busy', label: string, sub?: string, glyph = false, size?: number): Button {
     const k = panel === this.how ? this.kh : this.k;
     return {
       id, label, x: x * k, y: y * k, w: w * k, h: h * k, bare: true,
@@ -407,11 +474,13 @@ export class StartMenu {
         const dip = pressed ? 6 : 0;
         // Lit (the beam or a finger on it): plain buttons darken to a deeper paper, the red ones take a red tint,
         // the green one keeps its colour and glows (the lantern), so the button about to be pressed is plain to see.
-        const fill = kind === 'primary' ? SKETCH.moss : kind === 'off' ? SKETCH.paper : !hover ? SKETCH.paper : kind === 'danger' ? HOVER.danger : HOVER.plain;
-        const stroke = kind === 'primary' ? SKETCH.mossDeep : kind === 'danger' ? SKETCH.koi : kind === 'off' ? '#b6a993' : SKETCH.ink;
+        // 'busy' (waiting on something, a café still loading): a deeper paper, its words in the soft ink (6:1, readable;
+        // the pale 'off' ink is only for a control that cannot go further, its state shown by the control beside it).
+        const fill = kind === 'primary' ? SKETCH.moss : kind === 'busy' ? SKETCH.paperDeep : kind === 'off' ? SKETCH.paper : !hover ? SKETCH.paper : kind === 'danger' ? HOVER.danger : HOVER.plain;
+        const stroke = kind === 'primary' ? SKETCH.mossDeep : kind === 'danger' ? SKETCH.koi : kind === 'off' ? '#b6a993' : kind === 'busy' ? SKETCH.soft : SKETCH.ink;
         rc.rectangle(x, y + dip, w, h, this.o({ fill, fillStyle: 'solid', stroke, seed: this.seed + Math.round(x + y) }));
-        if (hover && kind !== 'off') this.lantern(ctx, x, y + dip, w, h);
-        const ink = kind === 'primary' ? '#f2ebdd' : kind === 'danger' ? SKETCH.koi : kind === 'off' ? '#b6a993' : SKETCH.ink;
+        if (hover && kind !== 'off' && kind !== 'busy') this.lantern(ctx, x, y + dip, w, h);
+        const ink = kind === 'primary' ? '#f2ebdd' : kind === 'danger' ? SKETCH.koi : kind === 'off' ? '#b6a993' : kind === 'busy' ? SKETCH.soft : SKETCH.ink;
         if (sub) {
           text(ctx, label, x + w / 2, y + h * 0.4 + dip, Math.round(h * 0.34), ink);
           text(ctx, sub, x + w / 2, y + h * 0.73 + dip, 28, kind === 'primary' ? '#f2ebdd' : SKETCH.soft, 'center', false);
@@ -421,75 +490,107 @@ export class StartMenu {
     };
   }
 
+  /**
+   * The start card: the cafés side by side, the same rows at the same
+   * heights in each (picture, name, line, status, the big button, the small
+   * one: an empty slot where a café has none), so the two big buttons line
+   * up. One primary (moss) button on the card: the café to play now (the
+   * one played last; on the first launch the Japanese café). The title alone
+   * at the top; How to play, Settings and Quit in one row under both tiles.
+   * The card's height is fitted to its rows, with PAD on all four sides.
+   *
+   *   ┌───────────────────────────────────────────────┐
+   *   │                 [ the logo ]                   │
+   *   │ ┌──────────────────┐   ┌──────────────────┐   │
+   *   │ │     picture      │   │     picture      │   │
+   *   │ └──────────────────┘   └──────────────────┘   │
+   *   │ Japanese café          Canadian café          │
+   *   │ A cherry-blossom...    A snowy log cabin...   │
+   *   │ New · starts with...   Free trial · progress..│
+   *   │ [      START      ]    [     TRY FREE     ]   │
+   *   │                        [ Buy · 750 coins  ]   │
+   *   │ [? How to play]   [⚙ Settings]   [  Quit  ]   │
+   *   └───────────────────────────────────────────────┘
+   *
+   * Sizes (the card stands a metre away, shown twice its size: a unit is
+   * 0.67 mm there): the big buttons 94 units (3.6 degrees), the small ones
+   * and the bottom row 80 (3.1), at or over the top of Meta's 2.5 to 3
+   * degree minimum for a ray (3 degrees for gaze); 40 units (27 mm) between
+   * things pressed, over Meta's 12 mm and Apple's 16 pt.
+   */
   private layoutStart(): void {
-    const s = this.start;
-    const returning = s.kind === 'returning';
+    const st = this.start;
     const SW = Math.round(this.card.width / this.k);
-    const H = Math.round(this.card.height / this.k);
-    // The cover art: the left column, full height.
-    const ax = PAD;
-    const ay = PAD;
-    const aw = 360;
-    const ah = H - PAD * 2;
-    // The buttons: the right column.
-    const cx = ax + aw + 30;
-    const cw = SW - PAD - cx;
     const buttons: Button[] = [];
-    const rowH = 84;
-    const half = (cw - TOUCH_GAP) / 2;
-    const bottom = H - PAD - rowH;
-    if (returning) {
-      const newY = bottom - TOUCH_GAP - 96;
-      const contY = newY - TOUCH_GAP - 140;
-      buttons.push(this.button(this.card, 'continue', cx, contY, cw, 140, 'primary', 'CONTINUE', `Level ${s.level} · ${s.coins.toLocaleString('en')} coins`));
-      buttons.push(this.button(this.card, 'new', cx, newY, cw, 96, 'secondary', 'NEW GAME'));
-    } else {
-      const h = 200;
-      buttons.push(this.button(this.card, 'new', cx, bottom - TOUCH_GAP - h, cw, h, 'primary', 'NEW GAME'));
-    }
-    // How to play and Settings side by side at the bottom (little reach).
-    buttons.push(this.button(this.card, 'help', cx, bottom, half, rowH, 'secondary', '? How to play', undefined, false, 30));
-    buttons.push(this.button(this.card, 'gear', cx + half + TOUCH_GAP, bottom, half, rowH, 'secondary', '⚙ Settings', undefined, false, 30));
-    // Quit: top right, away from the buttons pressed often (it asks first).
-    const qw = 150;
-    buttons.push(this.button(this.card, 'quit', SW - PAD - qw, PAD, qw, 72, 'secondary', 'Quit'));
+    const ROW = { title: 96, art: 160, name: 34, line: 32, status: 38, main: 94, small: 80, bottom: 80 };
+    // Down the card: the title, then the tiles' rows, then the bottom row; GAP between blocks, TOUCH_GAP between
+    // things pressed.
+    const titleY = PAD;
+    const artY = titleY + ROW.title + 16;
+    const nameY = artY + ROW.art + 14;
+    const lineY = nameY + ROW.name + 6;
+    const statusY = lineY + ROW.line * 2 + 6;
+    const mainY = statusY + ROW.status + 12;
+    const smallY = mainY + ROW.main + TOUCH_GAP;
+    const bottomY = smallY + ROW.small + TOUCH_GAP;
+    const H = bottomY + ROW.bottom + PAD;
+    this.card.resize(PICKER_SIZE.width, (H * this.k) / PPM);
+    const tw = (SW - PAD * 2 - TOUCH_GAP) / 2;
+    const tiles = st.tiles.map((t, i) => {
+      const x = PAD + i * (tw + TOUCH_GAP);
+      const label = t.loading ? 'LOADING…' : !t.owned ? 'TRY FREE' : t.started ? 'CONTINUE' : 'START';
+      buttons.push(this.button(this.card, `play-${t.id}`, x, mainY, tw, ROW.main, t.loading ? 'busy' : i === 0 ? 'primary' : 'secondary', label, undefined, false, 40));
+      if (!t.owned) buttons.push(this.button(this.card, `buy-${t.id}`, x, smallY, tw, ROW.small, 'secondary', `Buy · ${st.price} coins`, undefined, false, 28));
+      else if (t.started) buttons.push(this.button(this.card, `new-${t.id}`, x, smallY, tw, ROW.small, 'secondary', 'New game', undefined, false, 28));
+      const status = t.loading ? 'Loading · it opens when ready' : !t.owned ? 'Free trial · progress not saved' : t.started ? `Level ${t.level} · ${t.coins.toLocaleString('en')} coins` : st.lesson ? 'New · starts with a short lesson' : 'New';
+      return { t, x, status };
+    });
+    // The bottom row: three buttons across both tiles, the same width, evenly spaced.
+    const bw = (SW - PAD * 2 - TOUCH_GAP * 2) / 3;
+    buttons.push(this.button(this.card, 'help', PAD, bottomY, bw, ROW.bottom, 'secondary', '? How to play', undefined, false, 28));
+    buttons.push(this.button(this.card, 'gear', PAD + bw + TOUCH_GAP, bottomY, bw, ROW.bottom, 'secondary', '⚙ Settings', undefined, false, 28));
+    buttons.push(this.button(this.card, 'quit', PAD + (bw + TOUCH_GAP) * 2, bottomY, bw, ROW.bottom, 'secondary', 'Quit', undefined, false, 28));
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
       ctx.scale(this.k, this.k);
       const rc = pen(this.card.canvas);
       this.paper(ctx, rc, 0, H, SW);
-      // The brand: the 3D logo on flat moss, fitted to its column (never stretched).
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(ax, ay, aw, ah);
-      ctx.clip();
-      ctx.fillStyle = SKETCH.moss;
-      ctx.fillRect(ax, ay, aw, ah);
-      if (cover) {
-        const lw = aw * 0.86;
-        const lh = (lw * cover.height) / cover.width;
-        ctx.drawImage(cover, ax + (aw - lw) / 2, ay + (ah - lh) / 2 - ah * 0.08, lw, lh);
+      // The title: the brand's logo, centred over the two cafés (the name in the lettering until it loads).
+      if (logo) {
+        const lh = ROW.title;
+        const lw = (lh * logo.width) / logo.height;
+        ctx.drawImage(logo, (SW - lw) / 2, titleY, lw, lh);
       } else {
-        text(ctx, 'CAFÉ', ax + aw / 2, ay + ah / 2 - 50, 74, '#f0c987');
-        text(ctx, 'CHAOS', ax + aw / 2, ay + ah / 2 + 30, 74, '#f0c987');
+        text(ctx, 'Café Chaos', SW / 2, titleY + ROW.title / 2 + 2, 44, SKETCH.ink);
       }
-      ctx.restore();
-      rc.rectangle(ax, ay, aw, ah, this.o({ strokeWidth: 3, seed: this.seed + 3 }));
-      // The level the save is on: a lantern-coloured badge.
-      if (returning) {
-        const word = `${s.level}`;
-        ctx.font = font(30);
-        const lw = ctx.measureText('LEVEL').width;
-        ctx.font = font(44);
-        const tw = ctx.measureText(word).width;
-        const bx = ax + 18;
-        const by = ay + 18;
-        const bw = 24 + lw + 18 + tw + 24;
-        rc.rectangle(bx, by, bw, 84, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, seed: this.seed + 50 }));
-        text(ctx, 'LEVEL', bx + 24, by + 44, 30, SKETCH.ink, 'left');
-        text(ctx, word, bx + bw - 22, by + 44, 44, SKETCH.ink, 'right');
-      }
+      tiles.forEach(({ t, x, status }, i) => {
+        // The picture: the same frame for both, each cropped to fill it from its middle (never stretched).
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, artY, tw, ROW.art);
+        ctx.clip();
+        ctx.fillStyle = '#2a2420';
+        ctx.fillRect(x, artY, tw, ROW.art);
+        const img = covers[t.id];
+        if (img) {
+          const top = img.height * ART[t.id].top;
+          const ih0 = img.height - top;
+          const k = Math.max(tw / img.width, ROW.art / ih0);
+          const iw = tw / k;
+          const ih = ROW.art / k;
+          ctx.drawImage(img, (img.width - iw) / 2, top + (ih0 - ih) / 2, iw, ih, x, artY, tw, ROW.art);
+        }
+        ctx.restore();
+        rc.rectangle(x, artY, tw, ROW.art, this.o({ strokeWidth: 3, seed: this.seed + 3 + i }));
+        text(ctx, t.name, x + 4, nameY + ROW.name / 2, 40, SKETCH.ink, 'left');
+        // 27 units is 18 mm at the card's metre: a cap height of about 0.65 degrees, inside the comfortable 0.6 to
+        // 0.75 for reading (Microsoft's mixed reality typography).
+        this.wrap(ctx, t.line, 27, false, tw - 8)
+          .slice(0, 2)
+          .forEach((l, j) => text(ctx, l, x + 4, lineY + ROW.line / 2 + j * ROW.line, 27, SKETCH.soft, 'left', false));
+        text(ctx, status, x + 4, statusY + ROW.status / 2, 27, t.owned ? SKETCH.ink : SKETCH.mossDeep, 'left');
+      });
       ctx.restore();
     }, buttons);
   }
@@ -635,36 +736,19 @@ export class StartMenu {
     }, buttons);
   }
 
+  /**
+   * New game: the safe choice first and moss (GO BACK), the one that deletes
+   * under it in koi red, as Leave the trial and Quit (NN/g: a dangerous
+   * action is never the default).
+   */
   private layoutWarn(): void {
     const s = this.warn;
-    const H = Math.round(this.sheet.height / this.k);
     const lost = [`${s.coins.toLocaleString('en')} coins`, `${s.staff} ${s.staff === 1 ? 'barista' : 'baristas'}`].concat(s.level > 1 ? [`level ${s.level}`] : []);
-    const sentence = `This deletes your ${lost.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
-    const buttons: Button[] = [
-      this.button(this.sheet, 'fresh', PAD, 300, W - PAD * 2, 120, 'danger', 'DELETE AND START'),
-      this.button(this.sheet, 'keep', PAD, 300 + 120 + TOUCH_GAP, W - PAD * 2, 120, 'secondary', 'GO BACK'),
-    ];
-    this.sheet.set((ctx) => {
-      ctx.clearRect(0, 0, this.sheet.width, this.sheet.height);
-      ctx.save();
-      ctx.scale(this.k, this.k);
-      const rc = pen(this.sheet.canvas);
-      this.paper(ctx, rc, 0, H);
-      text(ctx, 'Start a new café?', W / 2, 80, 54, SKETCH.ink);
-      ctx.font = font(34, false);
-      const lines: string[] = [];
-      let line = '';
-      for (const word of sentence.split(' ')) {
-        const next = line ? `${line} ${word}` : word;
-        if (ctx.measureText(next).width > W - PAD * 2) {
-          lines.push(line);
-          line = word;
-        } else line = next;
-      }
-      lines.push(line);
-      lines.forEach((l, i) => text(ctx, l, W / 2, 160 + i * 48, 34, SKETCH.soft, 'center', false));
-      ctx.restore();
-    }, buttons);
+    const sentence = `This deletes its ${lost.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
+    this.layoutQuestion(`Start the ${s.cafe} again?`, sentence, [
+      { id: 'keep', kind: 'primary', label: 'GO BACK' },
+      { id: 'fresh', kind: 'danger', label: 'DELETE AND START' },
+    ]);
   }
 
   private layoutQuit(): void {
@@ -782,71 +866,5 @@ export class StartMenu {
       text(ctx, 'Your coins and staff are kept.', mid, H / 2 + 146, 30, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
-  }
-
-  /**
-   * The buy card, wide like the start card: on the left a padlock seal
-   * and what the table is; on the right the price beside the bank, BUY
-   * (moss when the bank can pay; pale, and refused, when it cannot: the
-   * card says how many more coins) and NOT NOW.
-   */
-  private layoutBuy(s: BuyState): void {
-    const SW = Math.round(this.card.width / this.k);
-    const H = Math.round(this.card.height / this.k);
-    const lx = PAD;
-    const lw = 360;
-    const cx = lx + lw + 30;
-    const cw = SW - PAD - cx;
-    const can = s.coins >= s.price;
-    const yNo = H - PAD - 96;
-    const buttons: Button[] = [
-      this.priceButton(this.card, 'buy-yes', cx, yNo - TOUCH_GAP - 150, cw, 150, can ? 'primary' : 'off', 'BUY', s.price),
-      this.button(this.card, 'buy-no', cx, yNo, cw, 96, 'secondary', 'NOT NOW'),
-    ];
-    this.card.set((ctx) => {
-      ctx.clearRect(0, 0, this.card.width, this.card.height);
-      ctx.save();
-      ctx.scale(this.k, this.k);
-      const rc = pen(this.card.canvas);
-      this.paper(ctx, rc, 0, H, SW);
-      const mid = lx + lw / 2;
-      // The table's picture (the real model's render), a small padlock on its frame.
-      const sy = H / 2 - 40;
-      this.iconPortrait(ctx, rc, s.icon, mid, sy, 260, this.seed + 80);
-      const lx2 = mid + 92;
-      const ly2 = sy + 88;
-      rc.circle(lx2, ly2, 64, this.o({ fill: SKETCH.paper, fillStyle: 'solid', stroke: SKETCH.timber, strokeWidth: 3, seed: this.seed + 84 }));
-      rc.rectangle(lx2 - 15, ly2 - 4, 30, 24, this.o({ fill: SKETCH.ink, fillStyle: 'solid', stroke: SKETCH.ink, seed: this.seed + 81 }));
-      rc.arc(lx2, ly2 - 4, 22, 28, Math.PI, Math.PI * 2, false, this.o({ strokeWidth: 4, seed: this.seed + 82 }));
-      text(ctx, s.name, mid, sy + 182, 44, SKETCH.ink);
-      text(ctx, `Seats ${s.seats}`, mid, sy + 230, 32, SKETCH.soft, 'center', false);
-      const tx = cx + cw / 2;
-      text(ctx, 'Open this table?', tx, PAD + 60, 50, SKETCH.ink);
-      const coinsY = PAD + 150;
-      ctx.font = font(38);
-      const word = `You have ${s.coins.toLocaleString('en')}`;
-      const ww = ctx.measureText(word).width;
-      rc.circle(tx - ww / 2 - 30, coinsY, 40, this.o({ fill: SKETCH.lantern, fillStyle: 'solid', stroke: SKETCH.timber, seed: this.seed + 83 }));
-      text(ctx, word, tx + 18, coinsY, 38, SKETCH.ink);
-      if (!can) text(ctx, `Need ${(s.price - s.coins).toLocaleString('en')} more`, tx, coinsY + 56, 30, SKETCH.koi, 'center', false);
-      ctx.restore();
-    }, buttons);
-  }
-
-  /** A model's picture from the icon set in a round paper frame (a blank disc until the set has loaded). */
-  private iconPortrait(ctx: CanvasRenderingContext2D, rc: RoughCanvas, tile: number, x: number, y: number, d: number, seed: number): void {
-    rc.circle(x, y, d, this.o({ seed, strokeWidth: 3, fill: '#e4d9c6', fillStyle: 'solid' }));
-    if (!icons || tile < 0) return;
-    const tw = icons.width / 4;
-    const th = icons.height / 2;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, d / 2 - 4, 0, Math.PI * 2);
-    ctx.clip();
-    // The renders have room round them: the middle of the tile, larger, fills the frame.
-    const crop = 0.18;
-    const s = d * 0.98;
-    ctx.drawImage(icons, (tile % 4) * tw + tw * crop, Math.floor(tile / 4) * th + th * crop * 0.6, tw * (1 - crop * 2), th * (1 - crop * 2), x - s / 2, y - s / 2, s, s);
-    ctx.restore();
   }
 }

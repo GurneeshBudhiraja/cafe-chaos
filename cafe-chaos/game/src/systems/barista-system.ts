@@ -37,9 +37,11 @@
  */
 
 import { AssetManager, createSystem, Vector3, type Material, type Mesh, type Object3D } from '@iwsdk/core';
-import { Barista, BARISTA_NAMES, baristaLoaded, type BaristaName } from '../baristas/barista.js';
+import { Barista, BARISTA_NAMES, baristaLoaded, CANADA_BARISTA_NAMES, CANADA_JANITORS, type BaristaClip, type BaristaName } from '../baristas/barista.js';
+import { CANADA_PLACES } from '../cafe/canada-layout.js';
+import { isCanada } from '../cafe/style.js';
 import { BACK_BAR_YAW, servePointFor, servePointsForPlace, SHUFFLE_M, STATION_X, STATION_YAW, stationPoint, type ServePoint } from '../baristas/routes.js';
-import { CLEAN, MAX_STAFF } from '../game/rules.js';
+import { CANADA_CLEAN_HOMES, CLEAN, MAX_STAFF } from '../game/rules.js';
 import { janitorLoaded, makeJanitor, setCleaning } from '../baristas/janitor.js';
 import { MessSystem } from './mess-system.js';
 import { BACK_BAR_SECONDS, FIDGET_SECONDS, MAX_OUT, REPLAN_SECONDS, SAME_TIME_SECONDS, SET_DOWN_AT, SPEED, SWITCH_GAIN_M, TRAY_FADE_SECONDS, TRAY_SLIDE_SECONDS, TURN_SPEED, WAVE_CHANCE } from '../baristas/rules.js';
@@ -119,6 +121,20 @@ interface Served {
 
 const TRAY_MODELS = ['tray-tea', 'tray-coffee'] as const;
 const between = (range: [number, number]): number => range[0] + Math.random() * (range[1] - range[0]);
+/**
+ * On the Canadian café's stairs: the staff's climb clips at twice their own
+ * pace (INTEGRATION.md: "play the staff's at 2x to keep service brisk"),
+ * and the walk slowed to match them (two steps a second at 1x, 8.7 mm up
+ * and 9 mm along a step: 12.5 mm of stair a step).
+ */
+const STAIRS = { clip: 2, speed: 0.025 * 2, slope: 0.5 };
+/** Is a stretch of a walk on the stairs (it climbs or falls more than `STAIRS.slope` for each metre along)? Up (+1), down (-1) or not (0). */
+export function onStairs(from: Vector3, to: Vector3): number {
+  const run = Math.hypot(to.x - from.x, to.z - from.z);
+  const rise = to.y - from.y;
+  if (Math.abs(rise) < 0.01 || Math.abs(rise) < run * STAIRS.slope) return 0;
+  return Math.sign(rise);
+}
 const lengthOf = (path: Vector3[]): number => path.reduce((sum, p, i) => (i ? sum + p.distanceTo(path[i - 1]) : 0), 0);
 /** How much sooner a hurried guest's order counts as placed (seconds): about one round trip, so it is served next, never at the cost of a guest who has waited longer. */
 const URGENT_HEAD_START = 16;
@@ -145,8 +161,13 @@ export class BaristaSystem extends createSystem({}) {
    * all); the checks and recordings (test mode) keep all three.
    */
   staffSize: number = MAX_STAFF;
-  /** The janitor is on the staff (the shop hires it; the janitor only cleans). */
+  /** The janitor is on the staff (the shop hires it; the janitor only cleans); and the Canadian café's second one. */
   janitorHired = false;
+  janitor2Hired = false;
+  /** The Canadian café's musicians bought (0 to 2): the fiddler on the patio stage, then the pianist on the upper deck. */
+  musicians = 0;
+  /** The musicians playing now (they only play: no orders, no chores). */
+  readonly band: Barista[] = [];
   /** Tables cleaned by the staff, and cleanings broken off for an order (for the checks). */
   cleanedCount = 0;
   cleaningsBrokenOff = 0;
@@ -161,6 +182,7 @@ export class BaristaSystem extends createSystem({}) {
   private cafeSystem!: CafeSystem;
   private guests: GuestSystem | undefined;
   private placement = -1;
+  private rooms = 0;
   private guestsSeen = 0;
   private clock = 0;
   private nextOrder = 1;
@@ -204,7 +226,7 @@ export class BaristaSystem extends createSystem({}) {
       if (!anchor) return;
       const top = cafe.worldToLocal(anchor.getWorldPosition(this.at)).y;
       const centre = cafe.worldToLocal(piece.getWorldPosition(new Vector3()));
-      const point = servePointFor(this.cafeSystem.nav, table, centre, top);
+      const point = servePointFor(this.cafeSystem.navAt(top), table, centre, top);
       if (point) this.servePoints.push(point);
     });
   }
@@ -213,7 +235,13 @@ export class BaristaSystem extends createSystem({}) {
     const cafe = this.cafeSystem;
     const delta = Math.min(1, frameDelta) * cafe.timeScale;
     this.clock += delta;
+    // The café swapped for the other (the start card): its own staff, nobody else.
+    if (cafe.rooms !== this.rooms) {
+      this.rooms = cafe.rooms;
+      this.leaveAll();
+    }
     this.hire();
+    this.tendBand();
     // New furniture (the annex's tables): find where to stand at them too.
     if (cafe.furniture !== this.furniture) {
       this.furniture = cafe.furniture;
@@ -240,6 +268,7 @@ export class BaristaSystem extends createSystem({}) {
       this.move(member, delta);
       member.barista.update(delta);
     }
+    for (const player of this.band) player.update(delta);
     // Which dirty tables someone is seeing to (their signs show a broom).
     if (this.mess) {
       this.mess.coming.clear();
@@ -259,7 +288,8 @@ export class BaristaSystem extends createSystem({}) {
   private hire(): void {
     this.hireJanitor();
     if (this.baristas.length >= this.staffSize) return;
-    BARISTA_NAMES.slice(0, this.staffSize).forEach((name: BaristaName, station) => {
+    const names: readonly BaristaName[] = isCanada() ? CANADA_BARISTA_NAMES : BARISTA_NAMES;
+    names.slice(0, this.staffSize).forEach((name: BaristaName, station) => {
       if (this.staff.some((m) => m.barista.name === name) || !baristaLoaded(name)) return;
       const barista = new Barista(name);
       const home = stationPoint(station);
@@ -280,9 +310,61 @@ export class BaristaSystem extends createSystem({}) {
     return this.staff.filter((m) => m.role === 'barista');
   }
 
-  /** The janitor, once hired and its model is in. */
+  /** The janitor, once hired and its model is in (the first, where there are two). */
   get janitor(): Staff | null {
     return this.staff.find((m) => m.role === 'janitor') ?? null;
+  }
+
+  /** The janitors on the staff (one, or in the Canadian café up to two). */
+  get janitors(): Staff[] {
+    return this.staff.filter((m) => m.role === 'janitor');
+  }
+
+  /** Everyone goes (the café swapped for the other): staff, trays, orders and the band; the new café's come on as they load. */
+  private leaveAll(): void {
+    for (const member of this.staff) member.barista.root.removeFromParent();
+    this.staff.length = 0;
+    for (const player of this.band) player.root.removeFromParent();
+    this.band.length = 0;
+    for (const served of this.served) served.tray.removeFromParent();
+    this.served.length = 0;
+    this.orders.length = 0;
+    this.unreachable.clear();
+    this.seatPoints.clear();
+    this.palette = null;
+    this.cafeSystem.cafe.traverse((node) => {
+      const material = (node as Mesh).material as Material | undefined;
+      if (!this.palette && material && !Array.isArray(material) && material.name === 'CafeBarPalette') this.palette = material;
+    });
+    this.findTables();
+    this.dirty = true;
+  }
+
+  /**
+   * The Canadian café's musicians, once bought and their models are in:
+   * the fiddler on the patio stage, then the pianist at the rooftop piano,
+   * each playing its clip on a loop where the layout puts it
+   * (CANADA_PLACES.musicians). Let go of when no longer bought (a fresh start).
+   */
+  private tendBand(): void {
+    const want = isCanada() ? this.musicians : 0;
+    while (this.band.length > want) this.band.pop()!.root.removeFromParent();
+    this.guests?.setBand(this.bandSpots());
+    if (this.band.length >= want) return;
+    const spot = CANADA_PLACES.musicians[this.band.length];
+    const look = spot.model === 'barista-fiddler' ? 'fiddler' : 'pianist';
+    if (!baristaLoaded(look)) return;
+    const player = new Barista(look);
+    player.root.position.set(spot.x, spot.y, spot.z);
+    player.root.rotation.y = (spot.yawDeg * Math.PI) / 180;
+    this.cafeSystem.cafe.add(player.root);
+    player.play(spot.clip as BaristaClip);
+    this.band.push(player);
+  }
+
+  /** The musicians playing now, where they stand (café space), for the `music` wish. */
+  bandSpots(): Vector3[] {
+    return this.band.map((p) => p.root.position);
   }
 
   /**
@@ -294,7 +376,7 @@ export class BaristaSystem extends createSystem({}) {
     const baristas = this.baristas;
     for (let i = this.staff.length - 1; i >= 0; i--) {
       const member = this.staff[i];
-      const extra = member.role === 'janitor' ? !this.janitorHired : baristas.indexOf(member) >= this.staffSize;
+      const extra = member.role === 'janitor' ? (this.janitors.indexOf(member) === 0 ? !this.janitorHired : !this.janitor2Hired) : baristas.indexOf(member) >= this.staffSize;
       if (!extra) continue;
       if (member.order) member.order.server = null;
       member.barista.root.removeFromParent();
@@ -303,12 +385,17 @@ export class BaristaSystem extends createSystem({}) {
     this.dirty = true;
   }
 
-  /** Bring the janitor on, by the counter's end, once it is hired and its model has loaded. */
+  /** Bring the janitor on, by the counter's end, once it is hired and its model has loaded (in the Canadian café, the second one too). */
   private hireJanitor(): void {
-    if (!this.janitorHired || this.janitor || !janitorLoaded()) return;
+    const want = !this.janitorHired ? 0 : isCanada() && this.janitor2Hired ? 2 : 1;
+    const n = this.janitors.length;
+    if (n >= want) return;
+    const look = isCanada() ? CANADA_JANITORS[n] : 'janitor';
+    if (!janitorLoaded(look)) return;
     const nav = this.cafeSystem.nav;
-    const home = nav.nearest(CLEAN.home.x, CLEAN.home.z, CLEAN.home.reach) ?? stationPoint(STATION_X.length - 1);
-    const janitor = makeJanitor();
+    const spot = isCanada() ? CANADA_CLEAN_HOMES[n] : CLEAN.home;
+    const home = nav.nearest(spot.x, spot.z, spot.reach) ?? stationPoint(STATION_X.length - 1);
+    const janitor = makeJanitor(look);
     janitor.root.position.copy(home);
     janitor.root.rotation.y = STATION_YAW;
     this.cafeSystem.cafe.add(janitor.root);
@@ -374,7 +461,7 @@ export class BaristaSystem extends createSystem({}) {
     let points = this.seatPoints.get(seat.index);
     if (!points) {
       const table = this.servePoints.find((p) => p.table === seat.table);
-      points = seat.meal ? servePointsForPlace(this.cafeSystem.nav, seat.table, seat.meal) : table ? [table] : [];
+      points = seat.meal ? servePointsForPlace(this.cafeSystem.navAt(seat.meal.y), seat.table, seat.meal) : table ? [table] : [];
       this.seatPoints.set(seat.index, points);
     }
     return points;
@@ -388,7 +475,7 @@ export class BaristaSystem extends createSystem({}) {
   private wayTo(from: Vector3, order: Order): { way: Vector3[]; point: ServePoint; length: number } | null {
     let best: { way: Vector3[]; point: ServePoint; length: number } | null = null;
     for (const point of order.points) {
-      const way = this.cafeSystem.nav.findPath(from, point.stand);
+      const way = this.cafeSystem.findPath(from, point.stand);
       if (!way) continue;
       const length = lengthOf(way);
       if (!best || length < best.length) best = { way, point, length };
@@ -540,8 +627,8 @@ export class BaristaSystem extends createSystem({}) {
     if (open.length === 0) return;
     // The janitor: at its post, the longest dirty first (`open` is in that order); on its way back to it, the
     // nearest (a table dirtied as it walks back turns it round). If no way is found to one, the next.
-    const janitor = this.janitor;
-    if (janitor && janitor.chore < 0 && (janitor.state === 'working' || janitor.state === 'back')) {
+    for (const janitor of this.janitors) {
+      if (!(janitor.chore < 0 && (janitor.state === 'working' || janitor.state === 'back'))) continue;
       const near = janitor.state === 'back' ? this.nearestTable(janitor, open, Infinity) : null;
       const order = near !== null ? [near, ...open.filter((t) => t !== near)] : open;
       for (const table of order) {
@@ -606,12 +693,12 @@ export class BaristaSystem extends createSystem({}) {
   private goClean(member: Staff, table: number): boolean {
     const point = this.servePoints.find((p) => p.table === table);
     if (!point) return false;
-    const nav = this.cafeSystem.nav;
+    const nav = this.cafeSystem.navAt(member.barista.root.position.y);
     // From where it stands; or, standing hard by a table (off the walkable squares), from the nearest walkable spot.
-    let way = nav.findPath(member.barista.root.position, point.stand);
+    let way = this.cafeSystem.findPath(member.barista.root.position, point.stand);
     if (!way) {
       const from = nav.nearest(member.barista.root.position.x, member.barista.root.position.z, UNSTICK_REACH_M);
-      way = from ? nav.findPath(from, point.stand) : null;
+      way = from ? this.cafeSystem.findPath(from, point.stand) : null;
       if (way) way.unshift(member.barista.root.position.clone());
     }
     if (!way) {
@@ -693,7 +780,7 @@ export class BaristaSystem extends createSystem({}) {
     member.chore = -1;
     member.state = 'back';
     const home = member.home;
-    const way = this.cafeSystem.nav.findPath(member.barista.root.position, home) ?? [member.barista.root.position.clone()];
+    const way = this.cafeSystem.findPath(member.barista.root.position, home) ?? [member.barista.root.position.clone()];
     member.walk = new Walk([...way, home]);
     member.speed = SPEED.walk;
     member.shift = 0;
@@ -844,11 +931,17 @@ export class BaristaSystem extends createSystem({}) {
     const root = member.barista.root;
     const walk = member.walk;
     if (walk) {
-      const done = walk.advance(member.speed * delta);
+      // On the stairs (the Canadian café): the climb clips, at the stairs' pace.
+      const span = walk.span();
+      const stairs = onStairs(span.from, span.to);
+      const done = walk.advance((stairs ? STAIRS.speed : member.speed) * delta);
       walk.position(root.position);
       // A shuffle along the bar is a sidestep: it keeps facing the counter.
       if (member.state !== 'shuffling') member.targetYaw = walk.heading(member.targetYaw);
-      member.barista.play(member.barista.tray ? 'Carry' : 'Walk');
+      const tray = !!member.barista.tray;
+      const climb: BaristaClip | null = stairs > 0 ? (tray ? 'CarryUp' : 'ClimbUp') : stairs < 0 ? (tray ? 'CarryDown' : 'ClimbDown') : null;
+      if (climb && member.barista.has(climb)) member.barista.play(climb, false, STAIRS.clip);
+      else member.barista.play(tray ? 'Carry' : 'Walk');
       if (done) this.arrive(member);
     }
     const turn = yawDelta(member.yaw, member.targetYaw);

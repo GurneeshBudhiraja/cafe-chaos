@@ -33,17 +33,21 @@
  * tables.
  */
 
-import { AssetManager, Box3, Color, createSystem, Euler, Group, Mesh, MeshBasicMaterial, Quaternion, Vector3, XRPlane as DetectedPlane, type Material, type Object3D } from '@iwsdk/core';
+import { AssetManager, Box3, createSystem, Euler, Group, Mesh, Quaternion, Vector3, XRPlane as DetectedPlane, type Material, type Object3D } from '@iwsdk/core';
 import type { ModelName } from '../assets.js';
 import { DRESSING, FLOOR_TOP_M, OPENING_LAYOUT, type Placement } from '../cafe/layout.js';
+import { CANADA_LAYOUT, CANADA_PLACES, CANADA_UPPER_TOP_M } from '../cafe/canada-layout.js';
+import { current, type CafeId } from '../cafe/style.js';
+import { CANADA_PIECES } from '../assets.js';
 import { dressGreyBox } from '../cafe/materials.js';
 import { copyPart, splitOff, type Box } from '../cafe/split-mesh.js';
 import { ANNEX_LANTERNS_X, LANTERN_BOX } from '../light/mood.js';
 import { batchStatic, unbatchStatic, type BatchReport } from '../cafe/static-batch.js';
 import { distanceToEdge, findSurfaceSpot, fitOnSurface, type DetectedSurface, type Fit, type Footprint } from '../lib/desk-placement.js';
-import { CAFE_NAV } from '../nav/cafe-nav.js';
+import { CAFE_NAV, CANADA_NAV, CANADA_UPPER_NAV } from '../nav/cafe-nav.js';
 import { NavGrid } from '../nav/nav-grid.js';
 import { LandingOutline } from '../cafe/landing-outline.js';
+import { GHOST, GhostTable } from '../cafe/ghost-table.js';
 import { narrowView } from '../lib/view-fit.js';
 
 /**
@@ -93,17 +97,8 @@ const FLOAT_BELOW_M = 0.5;
  * outline fades. Nothing appears suddenly close or large (Meta MR guidance).
  */
 const ARRIVE = { outline: 1.3, draw: 0.9, rise: 0.9, from: 0.86, lift: 0.03 };
-/**
- * A locked table's look: a muted warm grey, see-through (a ghost of the
- * table to come); brighter and gold while the hand points at it, so the
- * hover is plain (Meta: show each visual state). About 42 % opaque: stereo
- * transparent surfaces take longer to read (Tsirlin, Allison and Wilcox),
- * and 30 to 50 % is the range used for see-through panels in headsets;
- * a muted tint rather than flat grey (Nielsen: inactive things in a muted
- * colour). It still casts its shadow: a depth cue (Apple).
- */
-const GHOST = { colour: 0xa89a86, opacity: 0.42, litOpacity: 0.6 };
-const GHOST_LIT_COLOUR = new Color(0xd9b26a);
+/** Over this (café space, metres) a point is on the Canadian café's upper deck. */
+export const UPPER_FLOOR_Y = 0.1;
 /** Where the café stands for the desktop preview (world, metres). */
 const PREVIEW_SPOT = new Vector3(0, 0.78, 0);
 
@@ -118,6 +113,18 @@ export class CafeSystem extends createSystem({
   readonly seats: Object3D[] = [];
   /** The navigation grid, read from the café's geometry (see nav/nav-grid.ts). Call `nav.rebuild()` after changing the furniture. */
   nav!: NavGrid;
+  /**
+   * The Canadian café's upper deck: a grid of its own (the ground grid
+   * takes it for a ceiling), joined to the ground by the stairs, which are
+   * walked in a straight line (`findPath`). Null in the Japanese café.
+   */
+  upperNav: NavGrid | null = null;
+  /**
+   * Goes up by one each time the café is swapped for the other
+   * (`setCafe`): every system that keeps something of the café (its seats,
+   * tables, staff, sounds, light) takes the new one in.
+   */
+  rooms = 0;
   /** What the static batch folded together (see cafe/static-batch.ts). */
   batch: BatchReport = { merged: 0, batches: 0 };
   placed = false;
@@ -140,18 +147,21 @@ export class CafeSystem extends createSystem({
   readonly annexTables: { model: ModelName; piece: Object3D }[] = [];
   /**
    * The tables (indices into `pieces`: every piece with a meal anchor, so
-   * the bar and the quiet corner too), and which are locked. A locked
-   * table stands grey and see-through (`GHOST`), so it reads as not yet
-   * the player's; the game puts a padlock and a price over it. A locked
-   * table stays out of the room's static batch (its ghost is see-through,
-   * drawn on its own); an open one is folded in with the rest of the
-   * furniture, so the room is `rebatch()`ed when the locks change.
+   * the bar and the quiet corner too), and which are not open yet. A table
+   * not open is hidden (not drawn, no seats, not on the walk grid), except
+   * the next one to open, which shows as a ghost (cafe/ghost-table.ts: its
+   * own copy, also off the grid). A hidden table stays out of the room's
+   * static batch; an open one is folded in with the rest of the furniture,
+   * so the room is `rebatch()`ed when the tables change.
    */
   readonly tables: number[] = [];
   private readonly locked = new Set<number>();
-  /** Each locked table's own ghost material (so one can brighten under the hand), and each mesh's real material. */
-  private readonly ghosts = new Map<number, MeshBasicMaterial>();
-  private readonly realMaterials = new Map<Mesh, Material | Material[]>();
+  /** The ghost of the next table (null: none). */
+  ghost: GhostTable | null = null;
+  /** Ghosts fading out (just bought). */
+  private readonly leaving: GhostTable[] = [];
+  /** A table fading in (just bought): its meshes' own materials, and their fading copies, and how far (0 to 1). */
+  private readonly revealing: { index: number; real: Map<Mesh, Material>; t: number }[] = [];
   /** -1 none, -2 waiting for the player (see `hold`), 0.. seconds into the arrival. */
   private arrival = -1;
   /**
@@ -225,16 +235,33 @@ export class CafeSystem extends createSystem({
 
   init(): void {
     this.cafe.name = 'Cafe';
-    for (const placement of OPENING_LAYOUT) this.cafe.add(this.build(placement));
-    this.openExit();
-    for (const dressing of DRESSING) this.dress(dressing.model, this.pieces[dressing.on], dressing.anchor);
-    this.cafe.traverse((node) => {
-      if (/^Seat-\d+$/.test(node.name)) this.seats.push(node);
-    });
-    // What the shell's own clip moves (the steam puffs) stays out of the batch.
-    for (const clip of AssetManager.getGLTF('cafe-shell', { shared: true })?.animations ?? []) {
+    // The Japanese café is built at once (its models load first); the Canadian one when it is chosen (`setCafe`).
+    current.id = 'japan';
+    this.buildRoom();
+    this.world.createTransformEntity(this.cafe);
+    this.world.createTransformEntity(this.outline.group);
+    this.showPreview();
+    this.measureFootprint();
+  }
+
+  /** The shell of the café up now (`current`), its furniture, seats, tables, batch and grids. */
+  private buildRoom(): void {
+    const canada = current.id === 'canada';
+    const shell = canada ? 'cafe-canada' : 'cafe-shell';
+    for (const placement of canada ? CANADA_LAYOUT : OPENING_LAYOUT) this.cafe.add(this.build(placement));
+    if (!canada) {
+      this.openExit();
+      for (const dressing of DRESSING) this.dress(dressing.model, this.pieces[dressing.on], dressing.anchor);
+    }
+    for (const piece of this.pieces) {
+      piece.traverse((node) => {
+        if (/^Seat-\d+$/.test(node.name)) this.seats.push(node);
+      });
+    }
+    // What the shell's own clip moves (the steam puffs; the Canadian café's smoke, flames and waterfall) stays out of the batch.
+    for (const clip of AssetManager.getGLTF(shell, { shared: true })?.animations ?? []) {
       for (const track of clip.tracks) {
-        const node = this.cafe.getObjectByName(track.name.split('.')[0]);
+        const node = this.pieces[0].getObjectByName(track.name.split('.')[0]);
         if (node) node.userData.dynamic = true;
       }
     }
@@ -244,15 +271,91 @@ export class CafeSystem extends createSystem({
     // The furniture as one mesh per material (the game locks its tables and folds the room again, see `rebatch`).
     this.batch = batchStatic(this.cafe);
     // From the café as built, the map the characters find their way by.
-    this.nav = new NavGrid(this.cafe, CAFE_NAV);
-    this.world.createTransformEntity(this.cafe);
-    this.world.createTransformEntity(this.outline.group);
-    this.showPreview();
-    // The café's footprint at full size (it stands unturned at full size in the preview), for fitting it to a table.
+    this.nav = new NavGrid(this.cafe, canada ? CANADA_NAV : CAFE_NAV);
+    this.upperNav = canada ? new NavGrid(this.cafe, CANADA_UPPER_NAV) : null;
+  }
+
+  /** The café's footprint at full size, in its own space, for fitting it to a table (measured with the café unturned). */
+  private measureFootprint(): void {
+    const { position, quaternion, scale } = this.cafe;
+    const was = { p: position.clone(), q: quaternion.clone(), s: scale.clone() };
+    position.set(0, 0, 0);
+    quaternion.identity();
+    scale.setScalar(1);
     this.cafe.updateMatrixWorld(true);
     const box = new Box3();
     for (const piece of this.pieces) box.expandByObject(piece);
-    this.footprint = { minX: box.min.x - this.cafe.position.x, maxX: box.max.x - this.cafe.position.x, minZ: box.min.z - this.cafe.position.z, maxZ: box.max.z - this.cafe.position.z };
+    this.footprint = { minX: box.min.x, maxX: box.max.x, minZ: box.min.z, maxZ: box.max.z };
+    position.copy(was.p);
+    quaternion.copy(was.q);
+    scale.copy(was.s);
+    this.cafe.updateMatrixWorld(true);
+  }
+
+  /** Are the models of this café in (the Canadian café's load in the background)? */
+  cafeLoaded(id: CafeId): boolean {
+    return id === 'japan' || CANADA_PIECES.every((name) => !!AssetManager.getGLTF(name, { shared: true }));
+  }
+
+  /**
+   * Swap the café for the other one (only while it waits hidden behind the
+   * start card): the old room's pieces go, the new one's are built in its
+   * place, on the same spot of the player's table, and `rooms` goes up so
+   * every system takes it in. True when the café is now `id`; false if its
+   * models have not loaded yet (try again shortly).
+   */
+  setCafe(id: CafeId): boolean {
+    if (id === current.id) return true;
+    if (!this.cafeLoaded(id)) return false;
+    unbatchStatic(this.cafe);
+    this.clearTables();
+    for (const piece of this.pieces) piece.removeFromParent();
+    this.annex?.root.removeFromParent();
+    this.annex = null;
+    this.annexTables.length = 0;
+    this.pieces.length = 0;
+    this.seats.length = 0;
+    this.tables.length = 0;
+    current.id = id;
+    this.buildRoom();
+    this.measureFootprint();
+    if (this.placed) this.outline.place(this.footprint, this.landing, this.cafe.rotation.y, this.targetScale);
+    this.rooms++;
+    this.furniture++;
+    return true;
+  }
+
+  /**
+   * The grid for a floor: the upper deck's above the ground floor's head
+   * height (the Canadian café), else the ground's.
+   */
+  navAt(y: number): NavGrid {
+    return this.upperNav && y > UPPER_FLOOR_Y ? this.upperNav : this.nav;
+  }
+
+  /**
+   * A way from one point to another (café space), on either floor: on one
+   * floor, its grid's path; between the floors, to the foot (or the top) of
+   * the stairs, straight up (or down) them, and on from the landing.
+   */
+  findPath(from: Vector3, to: Vector3, reach = 0.12): Vector3[] | null {
+    const up = from.y > UPPER_FLOOR_Y;
+    const upTo = to.y > UPPER_FLOOR_Y;
+    if (!this.upperNav || up === upTo) return this.navAt(from.y).findPath(from, to, reach);
+    const s = CANADA_PLACES.stairs;
+    const bottom = new Vector3(s.bottom.x, s.bottom.y, s.bottom.z);
+    const top = new Vector3(s.top.x, s.top.y, s.top.z);
+    const landing = new Vector3(s.landing.x, CANADA_UPPER_TOP_M, s.landing.z);
+    if (up) {
+      const deck = this.upperNav.findPath(from, landing, reach);
+      const ground = this.nav.findPath(bottom, to, reach);
+      if (!deck || !ground) return null;
+      return [...deck, landing, top, bottom, ...ground.slice(1)];
+    }
+    const ground = this.nav.findPath(from, bottom, reach);
+    const deck = this.upperNav.findPath(landing, to, reach);
+    if (!ground || !deck) return null;
+    return [...ground, bottom, top, landing, ...deck.slice(1)];
   }
 
   update(delta: number): void {
@@ -277,71 +380,151 @@ export class CafeSystem extends createSystem({
     else if (presenting && !this.onDesk && !this.movedByHand && waited < DESK_RETRY_MS) this.place(false);
     this.arrive(delta * this.timeScale);
     this.raiseAnnex(delta);
+    // The ghosts and a table fading in move on real time: a purchase in the Shop (the café stopped) still shows.
+    this.tendTables(Math.min(0.1, delta));
   }
 
-  /** Is the table at `index` locked? */
+  /** Is the table at `index` not open yet (hidden, or the ghost)? */
   isLocked(index: number): boolean {
     return this.locked.has(index);
   }
 
-  /** The locked tables now. */
+  /** The tables not open yet. */
   get lockedTables(): ReadonlySet<number> {
     return this.locked;
   }
 
   /**
-   * Lock or open the table at `index` (into `pieces`). Locked, every mesh
-   * of it takes a shared grey, see-through material; opened, each gets its
-   * own back. True if that changed anything: the caller then `rebatch()`es
-   * the room once all the locks are set (a mesh folded into the batch
-   * shows no change of its own until then).
+   * Set which tables are open (`open`) and which one shows as the ghost
+   * (`next`, or -1); every other table is hidden. Folds the room again and
+   * reads the walk grid again if a table was shown or hidden. A ghost for a
+   * new next table fades in.
    */
-  setTableLocked(index: number, locked: boolean): boolean {
-    const piece = this.pieces[index];
-    if (!piece || this.locked.has(index) === locked) return false;
-    // `keepApart`, not `dynamic`: a locked table stays out of the room's batch but is still an obstacle on the grid.
-    piece.userData.keepApart = locked;
-    if (locked) {
-      this.locked.add(index);
-      const ghost = new MeshBasicMaterial({ color: GHOST.colour, transparent: true, opacity: GHOST.opacity, depthWrite: false, toneMapped: false });
-      ghost.name = `Ghost-${index}`;
-      this.ghosts.set(index, ghost);
-      piece.traverse((node) => {
-        if (!(node instanceof Mesh) || !(node.visible || node.userData.batched)) return;
-        this.realMaterials.set(node, node.material);
-        node.material = ghost;
-      });
-    } else {
-      this.locked.delete(index);
-      this.ghosts.get(index)?.dispose();
-      this.ghosts.delete(index);
-      piece.traverse((node) => {
-        if (!(node instanceof Mesh)) return;
-        const real = this.realMaterials.get(node);
-        if (!real) return;
-        node.material = real;
-        this.realMaterials.delete(node);
-      });
+  setTables(open: readonly number[], next: number): void {
+    let changed = false;
+    for (const index of this.tables) {
+      const piece = this.pieces[index];
+      const shown = open.includes(index);
+      if (shown) this.locked.delete(index);
+      else this.locked.add(index);
+      // A table fading in is shown already, and set right when the fade ends.
+      if (this.revealing.some((r) => r.index === index)) continue;
+      if (piece.visible !== shown) {
+        piece.visible = shown;
+        changed = true;
+      }
+      piece.userData.keepApart = !shown;
     }
-    return true;
+    if (this.ghost && this.ghost.index !== next) {
+      this.ghost.leave();
+      this.leaving.push(this.ghost);
+      this.ghost = null;
+    }
+    if (!this.ghost && next >= 0 && this.pieces[next]) {
+      this.ghost = new GhostTable(this.pieces[next], next);
+      this.cafe.add(this.ghost.root);
+    }
+    if (changed) this.refit();
+  }
+
+  /** Can the bank pay for the ghost's table? (Its look and its price tag.) */
+  setGhostReady(ready: boolean, price: number): void {
+    this.ghost?.setReady(ready, price);
+  }
+
+  /**
+   * A table just bought: the real table fades in where its ghost was (the
+   * ghost fades out), then joins the room's batch. The walk grid is read
+   * again at once (the table is an obstacle from now on). The caller then
+   * names the next ghost (`setTables`), which fades in.
+   */
+  revealTable(index: number): void {
+    const piece = this.pieces[index];
+    if (!piece) return;
+    this.locked.delete(index);
+    if (this.ghost?.index === index) {
+      this.ghost.leave();
+      this.leaving.push(this.ghost);
+      this.ghost = null;
+    }
+    const real = new Map<Mesh, Material>();
+    piece.traverse((node) => {
+      const mesh = node as Mesh;
+      if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+      real.set(mesh, mesh.material);
+      const fading = mesh.material.clone();
+      fading.transparent = true;
+      fading.opacity = 0;
+      fading.depthWrite = false;
+      mesh.material = fading;
+    });
+    piece.visible = true;
+    piece.userData.keepApart = true;
+    this.revealing.push({ index, real, t: 0 });
+    this.refit();
+  }
+
+  /** Every table back to plain (the café swapped for the other): no ghost, nothing fading, nothing hidden. */
+  private clearTables(): void {
+    for (const g of [this.ghost, ...this.leaving]) g?.dispose();
+    this.ghost = null;
+    this.leaving.length = 0;
+    for (const r of this.revealing) for (const [mesh, material] of r.real) mesh.material = material;
+    this.revealing.length = 0;
+    for (const index of this.tables) {
+      const piece = this.pieces[index];
+      if (!piece) continue;
+      piece.visible = true;
+      piece.userData.keepApart = false;
+    }
+    this.locked.clear();
+  }
+
+  /** The ghosts and the tables fading in, each frame. */
+  private tendTables(delta: number): void {
+    this.ghost?.update(delta);
+    for (let i = this.leaving.length - 1; i >= 0; i--) {
+      const g = this.leaving[i];
+      g.update(delta);
+      if (g.gone) {
+        g.dispose();
+        this.leaving.splice(i, 1);
+      }
+    }
+    for (let i = this.revealing.length - 1; i >= 0; i--) {
+      const r = this.revealing[i];
+      r.t = Math.min(1, r.t + delta / GHOST.fade);
+      const a = r.t * r.t * (3 - 2 * r.t);
+      for (const mesh of r.real.keys()) (mesh.material as Material).opacity = a;
+      if (r.t < 1) continue;
+      // In: its own materials back, and folded into the room with the rest.
+      for (const [mesh, material] of r.real) {
+        (mesh.material as Material).dispose();
+        mesh.material = material;
+      }
+      this.pieces[r.index].userData.keepApart = false;
+      this.revealing.splice(i, 1);
+      this.rebatch();
+    }
+  }
+
+  /** Fold the room again and read the walk grids again (a table shown or hidden); `furniture` tells the staff. */
+  private refit(): void {
+    this.rebatch();
+    this.cafe.updateMatrixWorld(true);
+    this.nav.rebuild();
+    this.upperNav?.rebuild();
+    this.furniture++;
   }
 
   /**
    * Fold the room's furniture again after its tables changed (one opened,
-   * or locked at a new start): the old batches go and the open tables join
-   * the rest. A few milliseconds, once a purchase, with the buy card up.
+   * or hidden at a new start): the old batches go and the open tables join
+   * the rest. A few milliseconds, once a purchase.
    */
   rebatch(): void {
     unbatchStatic(this.cafe);
     this.batch = batchStatic(this.cafe);
-  }
-
-  /** A locked table lit under the hand (0 to 1): its ghost brightens. */
-  setTableLit(index: number, lit: number): void {
-    const ghost = this.ghosts.get(index);
-    if (!ghost) return;
-    ghost.opacity = GHOST.opacity + (GHOST.litOpacity - GHOST.opacity) * lit;
-    ghost.color.set(GHOST.colour).lerp(GHOST_LIT_COLOUR, lit);
   }
 
   /** Where a table's top is (café space): its meal anchor's height over its centre. Null if `index` is not a table. */
@@ -620,6 +803,12 @@ export function copyModel(model: ModelName): Object3D {
   if (!scene) throw new Error(`[Cafe] Model ${model} is not loaded.`);
   const root = scene.getObjectByName(model) ?? scene;
   root.name = model;
+  // Blender's duplicate suffixes (`Meal-1.001`; three.js's loader drops the dot: `Meal-11001`... `Meal-1001`): an
+  // export not run through the models' fix_names.py still names the anchors the game reads as it reads them
+  // (`Seat-N` and `Meal-N` with one digit, `TableTop`).
+  root.traverse((node) => {
+    node.name = node.name.replace(/^((?:Seat|Meal)-\d)[._]?\d{3}$/, '$1').replace(/^(TableTop)[._]?\d{3}$/, '$1');
+  });
   dressGreyBox(root);
   return root;
 }

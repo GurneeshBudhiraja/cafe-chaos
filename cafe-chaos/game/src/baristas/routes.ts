@@ -9,6 +9,7 @@
  */
 
 import { Vector3 } from '@iwsdk/core';
+import { isCanada } from '../cafe/style.js';
 import type { NavGrid } from '../nav/nav-grid.js';
 
 /** The duckboard's top, and the line along it the baristas work on. */
@@ -23,9 +24,19 @@ export const BACK_BAR_YAW = Math.PI;
 /** How far along the duckboard a working barista may shuffle from its station (metres). */
 export const SHUFFLE_M = 0.022;
 
+/**
+ * The Canadian café's stations: on the duckboard behind the counter, in the
+ * middle of the strip the walk grid finds there (z -0.222 to -0.175). The
+ * shell's `BaristaSpot-1/2/3` anchors (z -0.159, moved 4.5 cm forward with
+ * the counter on 17 Nov) are on the counter top's back edge (it reaches back
+ * to -0.159), off the ground. The baristas walk along the strip to the way
+ * out at the counter's left end.
+ */
+const CANADA_STATION_Z = -0.185;
+
 const board = (x: number, z: number): Vector3 => new Vector3(x, DUCKBOARD_TOP_M, z);
 
-export const stationPoint = (index: number, shift = 0): Vector3 => board(STATION_X[index] + shift, STATION_Z);
+export const stationPoint = (index: number, shift = 0): Vector3 => board(STATION_X[index] + shift, isCanada() ? CANADA_STATION_Z : STATION_Z);
 
 /** Where a barista stands to serve a table, the way it faces there, and where the tray is set down. */
 export interface ServePoint {

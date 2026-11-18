@@ -18,6 +18,9 @@ export function setUpLighting(world: World, cafe: Group): CafeLights {
   // Plain PCF: the soft kind samples the shadow map many more times on every pixel that receives a shadow.
   renderer.shadowMap.type = PCFShadowMap;
   scene.environmentIntensity = ENVIRONMENT_INTENSITY;
-  world.createTransformEntity(new HemisphereLight(FILL.sky, FILL.ground, FILL.intensity));
-  return lightTheCafe(cafe);
+  const fill = new HemisphereLight(FILL.sky, FILL.ground, FILL.intensity);
+  world.createTransformEntity(fill);
+  const lights = lightTheCafe(cafe);
+  lights.fill = fill;
+  return lights;
 }

@@ -64,6 +64,15 @@ export class PetalFall {
     }
   }
 
+  /** Take the petals away (the café swapped for one with no cherry tree). */
+  dispose(): void {
+    for (const { mesh } of this.kinds) {
+      mesh.removeFromParent();
+      mesh.dispose();
+    }
+    this.kinds.length = 0;
+  }
+
   /** Tell the fall where the roof is, so petals settle on it instead of falling through (its bounds in café space). */
   setRoof(min: Vector3, max: Vector3): void {
     this.roof = { minX: min.x, maxX: max.x, minZ: min.z, maxZ: max.z, back: max.y, eave: min.y };

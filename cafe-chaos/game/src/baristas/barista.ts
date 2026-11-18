@@ -11,12 +11,18 @@
 
 import { AnimationMixer, AssetManager, Color, LoopOnce, LoopRepeat, type AnimationAction, type AnimationClip, type Mesh, type MeshStandardMaterial, type Object3D } from '@iwsdk/core';
 import { foldParts } from '../lib/fold-parts.js';
+import { isCanada } from '../cafe/style.js';
+import { DAY } from '../light/mood.js';
 
 export const BARISTA_NAMES = ['sora', 'momo', 'yuki'] as const;
-export type BaristaName = (typeof BARISTA_NAMES)[number];
-export type BaristaClip = 'Idle' | 'Work' | 'Wave' | 'Bow' | 'Walk' | 'Carry' | 'Serve' | 'Wipe';
-/** The looks on the rig: the baristas, and the janitor (models/18-barista/staff_build.py). */
-export type StaffLook = BaristaName | 'janitor';
+/** The Canadian café's three baristas, its two janitors and its two musicians (models/27-cafe-canada/INTEGRATION.md). */
+export const CANADA_BARISTA_NAMES = ['maple', 'aspen', 'rowan'] as const;
+export const CANADA_JANITORS = ['birch', 'cedar'] as const;
+export type BaristaName = (typeof BARISTA_NAMES)[number] | (typeof CANADA_BARISTA_NAMES)[number];
+/** The stair clips (`ClimbUp`, `CarryUp`...) are the Canadian staff's; the musicians play `Play` (the fiddle) and `PlayPiano`. */
+export type BaristaClip = 'Idle' | 'Work' | 'Wave' | 'Bow' | 'Walk' | 'Carry' | 'Serve' | 'Wipe' | 'ClimbUp' | 'ClimbDown' | 'CarryUp' | 'CarryDown' | 'Play' | 'PlayPiano';
+/** The looks on the rig: the baristas, the janitors (models/18-barista/staff_build.py) and the Canadian musicians. */
+export type StaffLook = BaristaName | 'janitor' | (typeof CANADA_JANITORS)[number] | 'fiddler' | 'pianist';
 
 /** A little light of their own, through their skin, so the pixel art stays crisp in the lamp light. */
 const GLOW = 0.22;
@@ -66,7 +72,8 @@ export class Barista {
       if (skin.map) {
         skin.emissive = new Color(0xffffff);
         skin.emissiveMap = skin.map;
-        skin.emissiveIntensity = GLOW;
+        // Lower by day (the Canadian café's daylight: light/mood.ts DAY).
+        skin.emissiveIntensity = isCanada() ? DAY.characterGlow.staff : GLOW;
       }
       for (const part of parts) part.material = skin;
     }
@@ -81,9 +88,17 @@ export class Barista {
     return this.clips.get(name)?.duration ?? 1;
   }
 
-  /** Play a clip: looping, or once through and held on its last frame. */
-  play(name: BaristaClip, once = false): void {
-    if (this.clip === name && this.action && !once) return;
+  /** Does the model have this clip? */
+  has(name: BaristaClip): boolean {
+    return this.clips.has(name);
+  }
+
+  /** Play a clip: looping, or once through and held on its last frame; `speed` is its pace (1: as made). */
+  play(name: BaristaClip, once = false, speed = 1): void {
+    if (this.clip === name && this.action && !once) {
+      this.action.timeScale = speed;
+      return;
+    }
     // A model from before the Wipe clip (a cached copy) wipes with Work.
     const clip = this.clips.get(name) ?? (name === 'Wipe' ? this.clips.get('Work') : undefined);
     if (!clip) return;
@@ -93,6 +108,7 @@ export class Barista {
     this.action.reset();
     this.action.setLoop(once ? LoopOnce : LoopRepeat, once ? 1 : Infinity);
     this.action.clampWhenFinished = once;
+    this.action.timeScale = speed;
     this.action.play();
     this.mixer.update(0);
   }

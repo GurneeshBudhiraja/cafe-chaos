@@ -23,6 +23,10 @@ export interface Seat {
   table: number;
   /** Where this seat's order is set down on the table (café space): the table's `Meal-N` anchor for `Seat-N`. Null if the table has none. */
   meal: Vector3 | null;
+  /** The Canadian café's pick-up spot at the counter: not a seat, a place to stand for a coffee to take away (no table). */
+  takeaway?: boolean;
+  /** Its table is hidden (not drawn: a table to open later than the next one): as if the seat were not there. */
+  hidden?: boolean;
 }
 
 /** A seat with something standing this far above it (metres) is buried in furniture: nobody can sit there. */
@@ -36,12 +40,14 @@ export const LANDING_REACH_M = 0.09;
  * row's four-seaters are, inside the counter) or has nowhere to stand
  * beside it.
  */
-export function collectSeats(cafe: Group, anchors: Object3D[], nav: NavGrid, pieces: Object3D[] = []): Seat[] {
+export function collectSeats(cafe: Group, anchors: Object3D[], navs: NavGrid | ((y: number) => NavGrid), pieces: Object3D[] = []): Seat[] {
+  const navAt = typeof navs === 'function' ? navs : (): NavGrid => navs;
   cafe.updateMatrixWorld(true);
   const seats: Seat[] = [];
   const ahead = new Vector3();
   for (const anchor of anchors) {
     const position = cafe.worldToLocal(anchor.getWorldPosition(new Vector3()));
+    const nav = navAt(position.y);
     if (nav.heightAt(position.x, position.z) > position.y + BURIED_M || !nav.nearest(position.x, position.z, LANDING_REACH_M)) continue;
     // The anchor's +Z, brought into café space: the way the sitter faces.
     cafe.worldToLocal(anchor.localToWorld(ahead.set(0, 0, 1))).sub(position);
@@ -64,6 +70,7 @@ export function seatNear(seats: Seat[], point: Vector3, reach: number): Seat | n
   let best: Seat | null = null;
   let bestDistance = reach;
   for (const seat of seats) {
+    if (seat.hidden) continue;
     const up = point.y - seat.position.y;
     if (up < -0.03 || up > 0.2) continue;
     const across = Math.hypot(point.x - seat.position.x, point.z - seat.position.z);
@@ -86,7 +93,7 @@ export function seatUnder(seats: Seat[], point: Vector3, reach: number, own: Sea
   let bestDistance = reach;
   for (const seat of seats) {
     // A dirty seat can be aimed at (it glows amber and refuses the guest), so the player sees why it will not sit there.
-    if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked) continue;
+    if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked || seat.hidden) continue;
     const up = point.y - seat.position.y;
     if (up < -0.03 || up > 0.2) continue;
     const across = Math.hypot(point.x - seat.position.x, point.z - seat.position.z);
