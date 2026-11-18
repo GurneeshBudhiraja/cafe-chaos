@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <!-- The app icon (public/icons, the same icon as the store: built by scripts/build-store-art.py) and the manifest, for shortcuts and Add to Home Screen. -->
+    <!-- The app icon (public/icons, the same icon as the store: built by scripts/build-brand-assets.py) and the manifest, for shortcuts and Add to Home Screen. -->
     <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <meta name="theme-color" content="#1f1a17" />
+    <meta name="theme-color" content="#3d6136" />
     <meta name="apple-mobile-web-app-title" content="Café Chaos" />
     <title>Café Chaos</title>
     <style>
@@ -18,14 +18,12 @@
       /* The page before the headset view: the same card as in the headset (src/landing.ts draws its rough lines). */
       #landing { position: fixed; inset: 0; z-index: 10; overflow: auto; display: flex; align-items: center; justify-content: center;
         padding: 24px 16px; box-sizing: border-box; font-family: CafeJost, 'Trebuchet MS', sans-serif; color: var(--ink); }
-      #landing::before { content: ''; position: fixed; inset: -20px; background: var(--night) url(./ui/cover.jpg) center / cover no-repeat;
-        filter: blur(8px) brightness(0.45); }
+      #landing::before { content: ''; position: fixed; inset: -20px; background: var(--moss-deep); }
       .card { position: relative; width: 100%; max-width: 480px; background: var(--timber); padding: 14px; box-sizing: border-box; }
       .card > .inner { position: relative; background: var(--paper); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
-      .art { position: relative; aspect-ratio: 720 / 330; background: #2a2420 url(./ui/cover.jpg) center / cover; overflow: hidden; }
-      .art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(22,23,29,0) 45%, rgba(22,23,29,.85)); }
-      .art h1 { position: absolute; z-index: 1; left: 0; right: 0; bottom: 6%; margin: 0; text-align: center; font-weight: 800;
-        font-size: clamp(34px, 9vw, 52px); color: var(--cream); letter-spacing: 1px; }
+      /* The brand: the 3D logo (public/ui/logo.png) on flat moss. */
+      .art { position: relative; aspect-ratio: 720 / 330; background: var(--moss) url(./ui/logo.png) center / 78% auto no-repeat; overflow: hidden; }
+      .art h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; }
       .btn { position: relative; display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 64px;
         border: 0; background: var(--paper); color: var(--ink); font: 800 24px CafeJost, 'Trebuchet MS', sans-serif; letter-spacing: 1px;
         cursor: pointer; padding: 0 16px; }
@@ -73,7 +71,7 @@
     </style>
   </head>
   <!-- Transparent canvas: in the headset the real room (passthrough) shows behind the café. -->
-  <body style="margin: 0; background: #1f1a17; font-family: CafeJost, 'Trebuchet MS', sans-serif; color: #16171d">
+  <body style="margin: 0; background: #2f522d; font-family: CafeJost, 'Trebuchet MS', sans-serif; color: #16171d">
     <div id="landing">
       <div class="card sketch" data-stroke="timber">
         <div class="inner">

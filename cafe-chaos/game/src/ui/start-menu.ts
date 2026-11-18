@@ -154,6 +154,17 @@ if (typeof Image !== 'undefined') {
   }
 }
 
+/** The brand's 3D logo (assets/meta-store/logo.png, web size), the start card's title. */
+let logo: HTMLImageElement | null = null;
+if (typeof Image !== 'undefined') {
+  const img = new Image();
+  img.onload = () => {
+    logo = img;
+    for (const f of coverListeners) f();
+  };
+  img.src = `${import.meta.env.BASE_URL}ui/logo.png`;
+}
+
 const font = (size: number, heavy = true): string => hand(size, heavy ? 700 : 400);
 
 function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, color: string, align: CanvasTextAlign = 'center', heavy = true): void {
@@ -489,7 +500,7 @@ export class StartMenu {
    * The card's height is fitted to its rows, with PAD on all four sides.
    *
    *   ┌───────────────────────────────────────────────┐
-   *   │ Café Chaos                                     │
+   *   │                 [ the logo ]                   │
    *   │ ┌──────────────────┐   ┌──────────────────┐   │
    *   │ │     picture      │   │     picture      │   │
    *   │ └──────────────────┘   └──────────────────┘   │
@@ -511,7 +522,7 @@ export class StartMenu {
     const st = this.start;
     const SW = Math.round(this.card.width / this.k);
     const buttons: Button[] = [];
-    const ROW = { title: 56, art: 160, name: 34, line: 32, status: 38, main: 94, small: 80, bottom: 80 };
+    const ROW = { title: 96, art: 160, name: 34, line: 32, status: 38, main: 94, small: 80, bottom: 80 };
     // Down the card: the title, then the tiles' rows, then the bottom row; GAP between blocks, TOUCH_GAP between
     // things pressed.
     const titleY = PAD;
@@ -545,7 +556,14 @@ export class StartMenu {
       ctx.scale(this.k, this.k);
       const rc = pen(this.card.canvas);
       this.paper(ctx, rc, 0, H, SW);
-      text(ctx, 'Café Chaos', PAD + 4, titleY + ROW.title / 2 + 2, 44, SKETCH.ink, 'left');
+      // The title: the brand's logo, centred over the two cafés (the name in the lettering until it loads).
+      if (logo) {
+        const lh = ROW.title;
+        const lw = (lh * logo.width) / logo.height;
+        ctx.drawImage(logo, (SW - lw) / 2, titleY, lw, lh);
+      } else {
+        text(ctx, 'Café Chaos', SW / 2, titleY + ROW.title / 2 + 2, 44, SKETCH.ink);
+      }
       tiles.forEach(({ t, x, status }, i) => {
         // The picture: the same frame for both, each cropped to fill it from its middle (never stretched).
         ctx.save();
