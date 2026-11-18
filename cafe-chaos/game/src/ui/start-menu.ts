@@ -29,7 +29,7 @@
  * The pause card and the failed card are the same width, the older shape:
  * their words on the left and the buttons on the right. Settings, the New
  * Game warning and the Quit question open on a second card in front
- * (`sheet`): the card behind is dimmed and takes no presses until the sheet
+ * (`sheet`): the card behind fades out and takes no presses until the sheet
  * closes.
  *
  * Everything is drawn in design units (720 across) and scaled to the panel.
