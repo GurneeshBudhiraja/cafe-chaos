@@ -9,9 +9,11 @@
  * many are hired, the tables how many are left to open. A close square sits at the right end, under the Shop button it
  * came from. Pointed at with the hand ray and pinched, like the bar.
  *
- * Sizes: the drawer is 10 cm tall at about a metre, so a HIRE button is
- * about 4 cm tall and 13 cm wide (over 2 degrees by 7), above Meta's 2.5
- * to 3 degree minimum target; the words are as tall as the bar's.
+ * Sizes: it is drawn at 80 x 10 cm and shown at the bar's scale (MENU_SCALE,
+ * ui/panel.ts: about 52 x 6.5 cm at about a metre). Panel, pictures, words
+ * and buttons shrink together, so nothing is cramped; a HIRE button is then
+ * about 2.7 cm tall and 9 cm wide, and the hand ray's pinch picks it as
+ * before (the hit test is in the panel's own space, so it follows the size).
  * StripSystem places it (and lifts the bar while it is open so it covers
  * nothing of the café); GameSystem fills it and opens and closes it.
  */

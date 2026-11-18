@@ -31,7 +31,7 @@
 
 import { Color, createSystem, DoubleSide, InstancedMesh, Matrix4, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3, Euler } from '@iwsdk/core';
 import { HAPPINESS } from '../game/rules.js';
-import { Panel, type Button } from '../ui/panel.js';
+import { MENU_SCALE, Panel, type Button } from '../ui/panel.js';
 import { DRAWER, ShopDrawer } from '../ui/shop-drawer.js';
 import { hand, line, moodInk, pen, scrawl, SKETCH, sketchCoin, sketchFace, sketchFontReady } from '../ui/sketch.js';
 import { narrowView } from '../lib/view-fit.js';
@@ -50,7 +50,8 @@ import { ShopSystem } from './shop-system.js';
 export const STRIP = { width: 0.64, height: 0.103, below: 0.03, clear: 0.03, back: -0.33, top: 0.405 };
 /** How long a segment takes to drain or fill, and a coin pop lasts (seconds); the pulse under 30 % (times a second); how quickly it follows the eyes' height (per second). */
 const MOTION = { segment: 0.5, pop: 0.3, pulse: 1, follow: 1.2 };
-const SEGMENTS = 10;
+/** The happiness meter's segments: five (a fifth of the happiness each), wide and well apart, so the meter reads at a glance. */
+const SEGMENTS = 5;
 /** How quickly the bar rises to make room for the shop drawer, and settles back (per second). */
 const DRAWER_RISE = 8;
 /** How long coins spent take to count down on the bar (seconds). */
@@ -297,7 +298,7 @@ export class StripSystem extends createSystem({}) {
     const cafe = this.cafe.cafe;
     const scale = cafe.scale.x || 1;
     this.narrow = narrowView(this.world.renderer);
-    this.panel.size = this.narrow ? STRIP_NARROW.size : 1;
+    this.panel.size = (this.narrow ? STRIP_NARROW.size : 1) * MENU_SCALE;
     if (this.narrow) {
       this.panel.mesh.position.set(0, STRIP_NARROW.y, STRIP.back);
       return;
@@ -313,12 +314,13 @@ export class StripSystem extends createSystem({}) {
     // stands still while the Shop is open, so the bar never climbs above the eyes (Meta: UI slightly below the
     // line of sight).
     this.drawerRoom += ((this.drawer.panel.open ? 1 : 0) - this.drawerRoom) * (1 - Math.exp(-DRAWER_RISE * delta));
-    const room = (DRAWER.gap + DRAWER.height + DRAWER.clear - STRIP.clear) * this.drawerRoom;
-    const lowest = STRIP.top + (STRIP.clear + STRIP.height / 2 + room) / scale;
+    const size = this.panel.size;
+    const room = ((DRAWER.gap + DRAWER.height) * size + DRAWER.clear - STRIP.clear) * this.drawerRoom;
+    const lowest = STRIP.top + (STRIP.clear + (STRIP.height / 2) * size + room) / scale;
     this.panel.mesh.position.set(0, STRIP_HEIGHT === 'low' ? lowest : Math.max(lowest, this.spot.y), STRIP.back);
   }
 
-  /** The drawer under the bar: DRAWER.gap below its edge, turned as the bar is, the same size. */
+  /** The drawer under the bar: DRAWER.gap below its edge, turned as the bar is, the same scale. */
   private placeDrawer(delta: number): void {
     const d = this.drawer.panel;
     d.size = this.panel.size;
@@ -370,7 +372,7 @@ export class StripSystem extends createSystem({}) {
     // Happiness: the face and the segments, up to the coins' divider.
     const face = h * 0.4;
     sketchFace(rc, x + face / 2, h * 0.5, face, mood, 31, lw);
-    x += face + inner;
+    x += face + around * 1.4;
     // Shop at the right end, mirroring Pause at the left: the button, a divider `around` before it, then the coins.
     const shopLine = w - h * BAR_BUTTON.pad - btn - around;
     rc.line(shopLine, h * 0.17, shopLine - 2, h * 0.83, line(23, lw * 0.8));
@@ -378,10 +380,11 @@ export class StripSystem extends createSystem({}) {
     rc.line(right, h * 0.17, right - 2, h * 0.83, line(22, lw * 0.8));
     const x0 = x;
     const span = right - around - x0;
-    const gap = span * 0.04;
-    const sw = (span - gap * (SEGMENTS - 1)) / SEGMENTS;
-    const sy = h * 0.27;
-    const sh = h * 0.46;
+    // Clear gaps between the segments (a third of one) and a little air before the coins' divider.
+    const gap = (span - around * 0.4) / (SEGMENTS * 3 + SEGMENTS - 1);
+    const sw = gap * 3;
+    const sy = h * 0.3;
+    const sh = h * 0.4;
     const low = this.live && mood <= 0.3 && mood > 0;
     const pulse = low ? 0.55 + 0.45 * (0.5 + 0.5 * Math.cos(this.time * MOTION.pulse * Math.PI * 2)) : 1;
     for (let i = 0; i < SEGMENTS; i++) {
@@ -394,7 +397,7 @@ export class StripSystem extends createSystem({}) {
         ctx.rect(x - lw, sy + sh * (1 - f), sw + lw * 2, sh * f + lw);
         ctx.clip();
         ctx.globalAlpha = pulse;
-        rc.rectangle(x, sy, sw, sh, line(50 + i, lw * 0.9, { stroke: 'transparent', fill: moodInk(mood), fillStyle: 'hachure', hachureGap: sw * 0.18, fillWeight: lw * 1.1, hachureAngle: -41 + i * 7 }));
+        rc.rectangle(x, sy, sw, sh, line(50 + i, lw * 0.9, { stroke: 'transparent', fill: moodInk(mood), fillStyle: 'hachure', hachureGap: h * 0.06, fillWeight: lw * 1.1, hachureAngle: -41 + i * 7 }));
         ctx.restore();
       }
       rc.rectangle(x, sy, sw, sh, line(60 + i, lw * 0.85, f > 0.005 ? {} : { stroke: SKETCH.empty }));
@@ -452,6 +455,7 @@ export class StripSystem extends createSystem({}) {
     // Above the button; on a narrow view (the bar lower, by the top of the view) below it, over the café's back wall.
     if (b) this.tag.mesh.position.set(((b.x + b.w / 2) / this.panel.width - 0.5) * STRIP.width, (this.narrow ? -1 : 1) * (STRIP.height / 2 + BAR_TAG.above), 0.002);
     this.tag.show(!!b);
+    this.tag.size = this.panel.size;
     this.tag.update(delta, this.head);
   }
 
