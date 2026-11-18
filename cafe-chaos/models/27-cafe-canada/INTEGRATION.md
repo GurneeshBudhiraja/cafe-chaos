@@ -57,8 +57,8 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
   on top at y 0.024 (the same height as the cabin floor and the deck: all walked).
 - **Cabin:** logs (stacked cylinders) x −0.42 … 0.04, z −0.27 … 0.16; the back and left walls nine
   logs high (0.125, top y 0.149: just over the baristas' heads, so the upper deck sits on them), the
-  front and right walls knee high (4 logs) so every table shows from the seat; the door gap in the
-  right wall at z −0.02 … 0.08 (an open gap in the knee-high wall: no frame, no lintel, its posts as high as the wall). A 2 × 2 window in the left wall with green shutters; two wall
+  front wall knee high (4 logs) so every table shows from the seat; no right wall at all (the cabin
+  opens straight onto the patio and the stairs; guests come and go anywhere along x 0.04). A 2 × 2 window in the left wall with green shutters; two wall
   sockets inside (`Socket-1` under the window at z −0.05, `Socket-2` at z 0.09). No roof over the
   tables: the room is open to the hand from above. The tables stand in a grid: three columns 14 cm
   apart (x −0.31 window, −0.17 middle, −0.03 door side) and two rows at z −0.05 and 0.09, either side of the room's middle (0.02, between the
@@ -98,10 +98,10 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
   two columns either side of the piano (`UpperSpot-1/2` at the back, `3/4` in front, from the layout),
   the middle left open so the player sees the pianist and the logo; the aisle between the rows is in
   line with the landing.
-- **Rooftop piano:** a low console piano (4.4 cm) centred under the rooftop logo (x −0.17), its back to
-  the player at z −0.205 and its keys toward the sign; a red runner and a mug on top; the bench behind
-  it on the sign side (`PianoSpot`), so the pianist plays facing the player, face over the piano and
-  the logo over the pianist's head (the seated pianist's bun reaches y 0.235, under the words).
+- **Rooftop piano:** an upright (5.9 cm, under the sign board's bottom at 7 cm) centred under the
+  rooftop logo (x −0.17), its back against the sign at z −0.268 and its keys toward the player; a red
+  runner and a mug on top; the bench in front (`PianoSpot`), so the pianist plays as at any upright,
+  back to the player.
 - **Stairs:** outside the cabin's right wall, from the patio by the door up to a landing level with
   the upper deck: 15 open treads of 9 mm, 8.7 mm up each (under the walk grid's 1.35 cm step, about
   a guest stride each), x 0.050 … 0.112 (6.2 cm wide: a guest with room either side), climbing away
@@ -109,15 +109,15 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
   landing (x 0.04 … 0.112, z −0.24 … −0.147) joins the deck; its posts stand on the snow behind.
 - **Deck:** x 0.06 … 0.40, z −0.12 … 0.17, planks with snow at the edges; a back rail; three light
   poles with two sagging strings of bulbs; a patio heater at (0.235, 0.0).
-- **The bear:** behind the deck where the musician's stage stood, at (0.31, −0.205): a low-poly black
-  bear (about 8 cm tall) sitting in the snow, legs out in front, holding a red takeaway cup with a white
+- **The bear:** behind the deck where the musician's stage stood, at (0.31, −0.205): a big low-poly black
+  bear (about 16 cm tall, x 0.25 … 0.37, z −0.25 … −0.13) sitting in the snow, legs out in front, holding a red takeaway cup with a white
   lid in both paws under its chin, a little snow on its head, turned 15° toward the player (`Bear`,
   `BearMuzzle`, `BearFace`, `BearBlush`, `BearCup`, `BearCupLid`, `BearHeadSnow`; flat-shaded, about 1,900
   triangles; new flat materials `BearFur`, `BearMuzzle`, `CupLid`). The violinist, once bought, stands on
   the snow at its left (`MusicianSpot`).
-- **Lake:** ice x 0.12 … 0.46, z 0.20 … 0.31 at y 0.022 with a deeper skating patch and cracks; the
-  dock out from the deck (x 0.22 … 0.30, z 0.18 … 0.29, top y 0.030) on four posts; the red canoe
-  beside it (0.385, 0.245) with snow and two paddles; a tiny hockey net, stick and puck.
+- **Lake:** ice x 0.12 … 0.46, z 0.20 … 0.31 at y 0.022 with a deeper skating patch and cracks; no dock
+  (the dock bench stands on the ice at `DockSpot`); the red canoe
+  by it (0.385, 0.245) with snow and two paddles; a tiny hockey net, stick and puck.
 - **Bonfire:** a ring of eleven river stones at (−0.27, 0.245), logs, a bed of glowing embers and
   five shaped flame tongues (as the fireplace's, larger); a woodpile against the cabin's front; dark
   stepping slabs from the door round to the fire.
@@ -148,7 +148,7 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
 | Root node | `cafe-canada` |
 | glTF extras on the root | `cafe_model: true`, `cafe_style: "canada"`, `front_edge_z_m: 0.16`, `back_edge_z_m: -0.27`, `floor_top_y_m: 0.024`, `window_side: "-x"`, `entrance_side: "+x"`, `upper_floor_top_y_m: 0.1548`, `stair_steps: 15`, `stair_rise_m: 0.00872`, `stair_run_m: 0.009` |
 | Plate footprint | 0.92 × 0.62 m; the trees stay inside it |
-| Floor / snow / deck top | y = 0.024; dock 0.030; duckboard 0.036 (all under the walk grid's 1.35 cm step); **upper deck 0.1548** |
+| Floor / snow / deck top | y = 0.024; duckboard 0.036 (all under the walk grid's 1.35 cm step); **upper deck 0.1548** |
 | Tallest point | the far range's highest peak, y ≈ 0.37; the rooftop sign's snow 0.297 (all under the Japanese cherry tree's 0.405) |
 | Transparent materials | `Glass` (window, donut case), `Smoke` |
 | Emissive | `Fire`, `FireCore`, `Ember`, `Bulb` (the heater's glow shares `Bulb`), `Water` (faintly, so the waterfall reads). The flames are cel-shaded: a 64 px three-tone band map (`toon-Fire`, `toon-FireCore`, nearest-neighbour) as the emissive map at strength 1 and, at a third, as the base colour, on UVs where u is how much a point faces the light and v its height: a dark tone on the shadow side and round the foot, the flame's own tone, a light streak up the lit side (deep red-orange / orange / amber outside, amber / yellow / pale yellow in the core) |
@@ -165,16 +165,17 @@ its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −9
 | `BaristaSpot-1/2/3` | (−0.235 / −0.115 / 0.005, 0.036, −0.159) | the three stations behind the counter |
 | `TakeawaySpot` | (0.0, 0.024, −0.085), facing −Z | where a takeaway guest stands at the counter's right end (3 cm off its front, clear of `TableSpot-4`) |
 | `TableSpot-1/2/3/4/5` | (−0.31, −0.05), (−0.31, 0.09), (−0.17, 0.02), (−0.03, −0.05), (−0.03, 0.09) | the cabin's tables: two by the window-wall sockets (either side of the fireplace), the long one in the middle, two on the door side mirroring the window pair |
+| `TableSpot-6` | (−0.31, 0.024, 0.02) | new: a log table (`patio-table.glb`) right in front of the hearth, between the window tables: `warm` |
 | `Socket-1/2` | the left wall at z −0.05 and 0.09, y 0.052 | the `socket` wish: met at TableSpot-1 and 2 |
 | `FireplaceSpot` | (−0.383, 0.024, 0.02), facing +X | the hearth: the `warm` wish (TableSpot-1 and 2 are beside it) |
 | `UpperFloorTop` | (−0.19, 0.1548, −0.17) | the upper floor's sample (for its own walk grid) |
 | `UpperSpot-1/2/3/4` | (−0.32, 0.1548, −0.2225), (−0.03, 0.1548, −0.2225), (−0.32, 0.1548, −0.1375), (−0.03, 0.1548, −0.1375) | the upper deck's four bistro tables, either side of the piano, back row then front: `upstairs`, `outside` |
-| `PianoSpot` | (−0.17, 0.1548, −0.261), facing +Z (the keys and the player) | where the pianist sits (barista-pianist.glb, clip `PlayPiano`); seats in earshot meet `music` |
+| `PianoSpot` | (−0.17, 0.1548, −0.212), facing −Z (the keys; back to the player) | where the pianist sits (barista-pianist.glb, clip `PlayPiano`); seats in earshot meet `music` |
 | `StairBottom` | (0.081, 0.024, −0.002), facing −Z | the foot of the stairs, on the patio by the door |
 | `StairTop` | (0.081, 0.1548, −0.153), facing −Z | the top: the first spot on the landing |
 | `UpperLanding` | (0.076, 0.1548, −0.19), facing −X | on the landing, turned toward the deck |
-| `PatioSpot-1/2` | (0.16, 0.08), (0.31, 0.06) | the deck's tables: `patio` and `outside` |
-| `DockSpot` | (0.26, 0.030, 0.25) | the dock bench: `lake`, `outside` |
+| `PatioSpot-1/2` | (0.15, 0.11), (0.31, 0.11) (the deck's front half, either side of the heater, clear of the way from the gate) | the deck's tables: `patio` and `outside` |
+| `DockSpot` | (0.26, 0.022, 0.25) | the dock bench, on the ice (the dock is gone): `lake`, `outside` |
 | `FireSpot-1/2/3` | round the ring at radius 8.5 cm, each facing the fire | the Muskoka chairs: `bonfire`, `outside` |
 | `MusicianSpot` | (0.205, 0.024, −0.19), facing −Z | the violinist once bought; seats within earshot meet `music` |
 | `Exit` | (0.06, 0.024, 0.295), facing +Z | the foot of the exit walkway at the plate's front edge: where guests leave the café (new; the game still sends them out by the gate until `canada-layout.ts` uses it) |
@@ -182,8 +183,8 @@ its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −9
 
 ## Walkways
 
-From the gate (x 0.39) across the deck to the cabin door (x 0.04, z 0.03); from the door round the
-cabin's front corner to the bonfire (the stepping slabs); from the deck onto the dock; out: from the door
+From the gate (x 0.39) across the deck into the cabin (its right side is open along x 0.04); from the door round the
+cabin's front corner to the bonfire (the stepping slabs); onto the ice to the lake bench; out: from the door
 along the doorstep to the deck's front edge and down the exit walkway to `Exit`. The lake's ice
 is at walking height: a guest who crosses it is no harm (cute, even), but a path over it is 2 mm
 below the snow, so the grid's nearest-walkable logic treats it as floor.
@@ -214,8 +215,8 @@ Materials from `kit.py`, textured by `textures.py` with a 512 px occlusion atlas
 |---|---|---|---|---|
 | `table-ca-2.glb` | square maple table on a pedestal, two slat-back chairs with red cushions, a napkin holder | 9.3 × 3.9 × 4.2 | 1–2 (chairs at x ±3.3) | the cabin's window wall, `TableSpot-1/2` (under the sockets), and the door side, `TableSpot-4/5` |
 | `table-ca-4.glb` | long maple table, a plaid-cushioned bench either side, a candle | 7.0 × 3.8 × 10.3 | 1–2 front bench, 3–4 back | the cabin's middle, `TableSpot-3`, turned 90° |
-| `patio-table.glb` | red steel bistro table with snow on it, two red bistro chairs | 9.0 × 3.7 × 4.4 | 1–2 | the deck, `PatioSpot-1/2`; and the upper deck, `UpperSpot-1/2/3/4` (y 0.1548) |
-| `dock-bench.glb` | pine bench for two facing +Z (the lake and the player), plaid cushion, snow on its back, a mug shelf on each arm (the meal spots) | 8.7 × 4.0 × 2.6 | 1–2 | the dock, `DockSpot` (y 0.030) |
+| `patio-table.glb` | log-cabin table: a round pine slab with its bark rim on a log pedestal and three log feet, two log chairs with red buffalo-plaid cushions and a rail back (no snow: it also stands inside) | about 9 × 3.7 × 4.5 | 1–2 | the deck, `PatioSpot-1/2`; the upper deck, `UpperSpot-1/2/3/4` (y 0.1548); in front of the fireplace, `TableSpot-6` |
+| `dock-bench.glb` | pine bench for two facing +Z (the lake and the player), plaid cushion, snow on its back, a mug shelf on each arm (the meal spots) | 8.7 × 4.0 × 2.6 | 1–2 | on the ice, `DockSpot` (y 0.022) |
 | `fire-chair.glb` | red Muskoka chair with a log stump beside it (the meal spot), snow on both | 5.7 × 4.7 × 3.5 | 1 | round the fire, `FireSpot-1/2/3`, each turned to face it |
 
 ## The characters (phase 3): `staff_canada_build.py`, `guests_canada_build.py`
@@ -306,7 +307,7 @@ bodies too if ever wanted; the per-species ones (Hachimaki, Apron, Vest) do not 
 
 **Moved in the layout pass of 17 Nov (the game's `canada-layout.ts` and `routes.ts` must follow):**
 `BaristaSpot-1/2/3` and `TakeawaySpot` 4.5 cm forward, `TableSpot-1..5`, `Socket-1/2` and `FireplaceSpot` (see the table),
-`UpperSpot-1/2` moved and `3/4` new, `PianoSpot` (centred in front of the rooftop sign, now facing +Z), `MusicianSpot` off the removed stage, `Exit` new.
+`UpperSpot-1/2` moved and `3/4` new, `PianoSpot` (centred against the rooftop sign, facing −Z), `PatioSpot-1/2`, `DockSpot` (y), `TableSpot-6` new, `MusicianSpot` off the removed stage, `Exit` new.
 
 Phase 4 (game): the café picker, the five guest species (snowbit, beavertail, nanaimo, doubledouble, buttertart), registering these files in `assets.ts`, the Canadian layout
 (`canada-layout.ts`: 25 seats on two floors, with `TableSpot-4/5`), the upper floor's walk grid and the stair walk (above),

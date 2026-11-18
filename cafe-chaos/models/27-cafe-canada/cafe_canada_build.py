@@ -290,8 +290,8 @@ log_wall(walls, [(CAB['x0'], CAB['x1'])], z=CAB['z0'])
 log_wall(walls, [(CAB['z0'], CAB['z1'])], x=CAB['x0'], gap=(-0.17, -0.03, 3, 7))
 # Front wall: a knee-high half wall (4 logs), so the player sees every table; a front window frame stands on it (below).
 log_wall(walls, [(CAB['x0'], CAB['x1'])], z=CAB['z1'], logs=4)
-# Right wall: a half wall each side of the door (the door at z -0.02..0.08), 4 logs.
-log_wall(walls, [(CAB['z0'], -0.02), (0.08, CAB['z1'])], x=CAB['x1'], logs=4)
+# Right side: no wall. The cabin opens straight onto the patio and the stairs (the half walls either side of the
+# old door were in the way and served nothing).
 walls.done()
 # Log ends: a darker disc at each wall corner (the crossed logs of a cabin).
 ends = Part('CabinLogEnds', 'PineDark', smooth=True)
@@ -305,10 +305,9 @@ for k in range(WALL_LOGS):
         ends.cyl((CAB['x1'] + 0.006, y, CAB['z1']), LOG_R * 0.95, 0.012, axis='x', seg=8)
         ends.cyl((CAB['x0'], y, CAB['z1'] + 0.006), LOG_R * 0.95, 0.012, axis='z', seg=8)
 ends.done()
-# Corner posts: square posts at the four corners and either side of the door gap. The door has no frame
-# (no tall posts, no lintel): the gap is just an opening in the knee-high wall, its posts as high as the wall.
+# Corner posts: square posts at the four corners (the right side is open: no wall, no door frame).
 posts = Part('CabinPosts', 'PineDark')
-for px, pz in ((CAB['x0'], CAB['z0']), (CAB['x1'], CAB['z0']), (CAB['x0'], CAB['z1']), (CAB['x1'], CAB['z1']), (CAB['x1'], -0.02), (CAB['x1'], 0.08)):
+for px, pz in ((CAB['x0'], CAB['z0']), (CAB['x1'], CAB['z0']), (CAB['x0'], CAB['z1']), (CAB['x1'], CAB['z1'])):
     tall = H if pz == CAB['z0'] else 4 * (2 * LOG_R - 0.0006) + 0.01
     posts.boxb((px, FLOOR, pz), (0.016, tall, 0.016))
 posts.done()
@@ -545,7 +544,7 @@ for i in range(12):
 dg.done()
 # Snow dusting on the deck: thin soft patches along its edges.
 dust = Part('DeckSnow', 'Snow', smooth=True)
-for x, z, sx, sz in ((0.15, -0.10, 0.035, 0.02), (0.36, -0.10, 0.06, 0.02), (0.38, 0.14, 0.04, 0.03), (0.09, 0.14, 0.04, 0.03), (0.22, 0.165, 0.10, 0.015)):
+for x, z, sx, sz in ((0.15, -0.10, 0.035, 0.02), (0.36, -0.10, 0.06, 0.02), (0.23, 0.165, 0.05, 0.012)):
     dust.sphere((x, 0.024, z), 1.0, seg=10, rings=6, scale=(sx, 0.0035, sz))
 dust.done()
 # The deck's back rail (toward the stage) with snow on it, and its corner posts.
@@ -590,9 +589,15 @@ Part('HeaterBase', 'Steel', smooth=True).cyl((0.235, FLOOR + 0.004, 0.0), 0.018,
 Part('HeaterHood', 'Steel', smooth=True).cyl((0.235, FLOOR + 0.102, 0.0), 0.022, 0.012, seg=12, r2=0.006).done()
 Part('HeaterGlow', 'Bulb', smooth=True).cyl((0.235, FLOOR + 0.094, 0.0), 0.009, 0.01, seg=10).done()
 Part('HeaterSnow', 'Snow').cyl((0.235, FLOOR + 0.110, 0.0), 0.012, 0.004, seg=10).done()
-# The bear, behind the deck where the musician's stage stood: a low-poly black bear sitting in the snow, legs out
+# The bear, behind the deck where the musician's stage stood: a big (16 cm) low-poly black bear sitting in the snow, legs out
 # in front, holding a red takeaway cup with a white lid in both paws under its chin, turned toward the player.
-BEX, BEZ, BYAW = 0.31, -0.205, math.radians(-15)
+BEX, BEZ, BYAW = 0.31, -0.20, math.radians(-15)
+BS = 2.0            # the bear is modelled 8 cm tall and built at twice that (16 cm), so it reads from the seat
+def bdone(part):
+    """Scale a bear part by BS about the bear's seat on the snow, then make it."""
+    c = G(BEX, FLOOR, BEZ)
+    bmesh.ops.transform(part.bm, matrix=Matrix.Translation(c) @ Matrix.Scale(BS, 4) @ Matrix.Translation(-c), verts=part.bm.verts[:])
+    return part.done()
 def bp(x, y, z):
     """A point in the bear's own frame (+z its front) to game space."""
     return (BEX + x * math.cos(BYAW) + z * math.sin(BYAW), FLOOR + y, BEZ - x * math.sin(BYAW) + z * math.cos(BYAW))
@@ -613,32 +618,34 @@ for sx in (1, -1):
     fur.sphere(bp(sx * 0.019, 0.0085, 0.030), 1.0, seg=8, rings=6, scale=(0.0085, 0.0085, 0.0065))  # feet
     limb(fur, bp(sx * 0.021, 0.038, 0.004), bp(sx * 0.011, 0.030, 0.024), 0.0062)                    # arms round to the cup
     fur.sphere(bp(sx * 0.0105, 0.030, 0.0255), 1.0, seg=8, rings=6, scale=(0.0058, 0.0058, 0.0055)) # paws on the cup
-fur.done()
+bdone(fur)
 tan = Part('BearMuzzle', 'BearMuzzle')
 tan.sphere(bp(0, 0.052, 0.0175), 1.0, seg=8, rings=6, scale=(0.0095, 0.0072, 0.0072))   # muzzle
 tan.sphere(bp(0, 0.020, 0.0205), 1.0, seg=8, rings=6, scale=(0.014, 0.012, 0.005))      # belly patch, under the cup
 for sx in (1, -1):
     tan.sphere(bp(sx * 0.0135, 0.0715, 0.0032), 1.0, seg=8, rings=5, scale=(0.0038, 0.0038, 0.0018))   # inner ears
     tan.sphere(bp(sx * 0.019, 0.0085, 0.0355), 1.0, seg=8, rings=5, scale=(0.0055, 0.0058, 0.0016))    # foot pads, soles to the player
-tan.done()
+bdone(tan)
 face = Part('BearFace', 'PianoBlack')
 face.sphere(bp(0, 0.0555, 0.0245), 1.0, seg=8, rings=5, scale=(0.0038, 0.0027, 0.0025))  # nose
 for sx in (1, -1):
     face.sphere(bp(sx * 0.0075, 0.0615, 0.0165), 1.0, seg=6, rings=4, scale=(0.0021, 0.0024, 0.0016))   # eyes
-face.done()
+bdone(face)
 blush = Part('BearBlush', 'IcingPink')
 for sx in (1, -1):
     blush.sphere(bp(sx * 0.0125, 0.0525, 0.0145), 1.0, seg=6, rings=4, scale=(0.0028, 0.0018, 0.0012))
-blush.done()
+bdone(blush)
 cup = bp(0, 0.0305, 0.028)
-Part('BearCup', 'Red').cyl(cup, 0.0066, 0.017, seg=12, r2=0.0082).done()                     # a red takeaway cup, wider at the top
-Part('BearCupLid', 'CupLid').cyl((cup[0], cup[1] + 0.0098, cup[2]), 0.0088, 0.0026, seg=12).cyl((cup[0], cup[1] + 0.0118, cup[2]), 0.0068, 0.0016, seg=12, r2=0.0055).done()
-Part('BearHeadSnow', 'Snow', smooth=True).sphere(bp(0, 0.0725, 0.0), 1.0, seg=8, rings=5, scale=(0.009, 0.0022, 0.008)).done()   # a little snow on its head
+bdone(Part('BearCup', 'Red').cyl(cup, 0.0066, 0.017, seg=12, r2=0.0082))                     # a red takeaway cup, wider at the top
+bdone(Part('BearCupLid', 'CupLid').cyl((cup[0], cup[1] + 0.0098, cup[2]), 0.0088, 0.0026, seg=12).cyl((cup[0], cup[1] + 0.0118, cup[2]), 0.0068, 0.0016, seg=12, r2=0.0055))
+bdone(Part('BearHeadSnow', 'Snow', smooth=True).sphere(bp(0, 0.0725, 0.0), 1.0, seg=8, rings=5, scale=(0.009, 0.0022, 0.008)))   # a little snow on its head
 # The violinist (once bought) stands on the snow at the bear's left, by the deck's back rail.
 anchor('MusicianSpot', (0.205, FLOOR, -0.19), rot_y=180)
 # Patio table spots and the deck's seats are furniture pieces (phase 2); marked for the layout.
-anchor('PatioSpot-1', (0.16, FLOOR, 0.08))
-anchor('PatioSpot-2', (0.31, FLOOR, 0.06))
+# Two tables on the deck's front half, either side of the heater: the way from the gate to the cabin and the
+# stairs runs behind them (z -0.1 .. 0.08), clear.
+anchor('PatioSpot-1', (0.15, FLOOR, 0.11))
+anchor('PatioSpot-2', (0.31, FLOOR, 0.11))
 
 # ------------------------------------------------------------------ the upper deck (the rooftop patio)
 # A pine deck on the cabin's back half, over the counter and the back bar (the part of the room the player never
@@ -723,18 +730,17 @@ Part('SignOval', 'Red', smooth=True).ellipse((-0.17, SGY, UZ0 + 0.0125), 0.125, 
 text_mesh('SignWords', "Hoser's", 0.026, 'Cream', (-0.17, SGY + 0.0035, UZ0 + 0.0145), extrude=0.0008)
 text_mesh('SignSub', 'COFFEE & DONUTS', 0.0085, 'Cream', (-0.17, SGY - 0.015, UZ0 + 0.0145), extrude=0.0006)
 
-# The rooftop piano, centred under the logo in front of the rooftop sign: an upright with its back to the player
-# and its keys toward the sign, so the pianist (barista-pianist.glb, bought in the game) sits between the sign and
-# the piano facing the player over its top (a console piano, 4.4 cm high, so the pianist's face shows over it
-# and the logo over the pianist's head). A red runner
-# and a mug on top; the bench behind, on the sign side. `PianoSpot` is the bench, facing +Z.
+# The rooftop piano, centred under the logo against the rooftop sign: an upright with its back to the sign and its
+# keys toward the player; the pianist (barista-pianist.glb, bought in the game) sits on the bench in front of it,
+# playing with their back to the player, as at any upright. A red runner and a mug on top. `PianoSpot` is the
+# bench, facing -Z (the keys). The upright (5.9 cm) stands under the sign board (its bottom 7 cm up).
 PXC = -0.17                                         # under the oval's middle
-PB = -0.205                                         # the piano's back (toward the player)
+PB = -0.268                                         # the piano's back, against the sign board's front face
 def pz(d):
-    """Depth into the piano from its back (+ toward the keys and the sign) to game z."""
-    return PB - d
-Part('PianoBody', 'PianoBlack').boxb((PXC, UY, pz(0.012)), (0.065, 0.040, 0.024)).done()
-Part('PianoLid', 'PianoBlack').box((PXC, UY + 0.0415, pz(0.012)), (0.068, 0.003, 0.027)).done()
+    """Depth into the piano from its back (+ toward the keys and the player) to game z."""
+    return PB + d
+Part('PianoBody', 'PianoBlack').boxb((PXC, UY, pz(0.012)), (0.065, 0.054, 0.024)).done()
+Part('PianoLid', 'PianoBlack').box((PXC, UY + 0.0555, pz(0.012)), (0.068, 0.003, 0.027)).done()
 Part('PianoShelf', 'PianoBlack').box((PXC, UY + 0.028, pz(0.0295)), (0.061, 0.004, 0.011)).done()
 Part('PianoLegs', 'PianoBlack').boxb((PXC - 0.027, UY, pz(0.032)), (0.003, 0.026, 0.003)).boxb((PXC + 0.027, UY, pz(0.032)), (0.003, 0.026, 0.003)).done()
 Part('PianoKeys', 'PianoKeys').box((PXC, UY + 0.0306, pz(0.0295)), (0.057, 0.0012, 0.009)).done()
@@ -744,13 +750,13 @@ for k in range(14):
         continue
     black.box((PXC + 0.026 - k * 0.004, UY + 0.0318, pz(0.0275)), (0.0022, 0.0014, 0.005))
 black.done()
-Part('PianoMusicStand', 'PianoBlack').box((PXC, UY + 0.0365, pz(0.0255)), (0.026, 0.008, 0.002), rot_x=12).done()
-Part('PianoSheet', 'PianoKeys').box((PXC, UY + 0.0365, pz(0.0268)), (0.022, 0.0065, 0.0005), rot_x=12).done()
-Part('PianoRunner', 'Red').box((PXC, UY + 0.0432, pz(0.012)), (0.06, 0.0006, 0.02)).done()
-Part('PianoMug', 'Mug', smooth=True).cyl((PXC + 0.022, UY + 0.048, pz(0.012)), 0.004, 0.008, seg=10).done()
+Part('PianoMusicStand', 'PianoBlack').box((PXC, UY + 0.040, pz(0.0255)), (0.026, 0.012, 0.002), rot_x=-12).done()
+Part('PianoSheet', 'PianoKeys').box((PXC, UY + 0.040, pz(0.0268)), (0.022, 0.010, 0.0005), rot_x=-12).done()
+Part('PianoRunner', 'Red').box((PXC, UY + 0.0572, pz(0.012)), (0.06, 0.0006, 0.02)).done()
+Part('PianoMug', 'Mug', smooth=True).cyl((PXC + 0.022, UY + 0.0620, pz(0.012)), 0.004, 0.008, seg=10).done()
 Part('PianoBench', 'PianoBlack').boxb((PXC, UY, pz(0.054)), (0.03, 0.0095, 0.014)).done()
 Part('PianoBenchCushion', 'Red').box((PXC, UY + 0.010, pz(0.054)), (0.028, 0.0012, 0.013)).done()
-anchor('PianoSpot', (PXC, UY, pz(0.056)), rot_y=0)           # facing +Z: the keys and the player
+anchor('PianoSpot', (PXC, UY, pz(0.056)), rot_y=180)         # facing -Z: the keys (back to the player)
 anchor('UpperFloorTop', (-0.19, UY, -0.17))
 # Four bistro tables in two columns either side of the piano (two rows, 8.5 cm apart, the aisle between them in
 # line with the landing), leaving the middle open so the player sees the pianist and the logo.
@@ -816,20 +822,8 @@ cracks = Part('IceCracks', 'SnowShade')
 for x, z, l, a in ((0.20, 0.26, 0.05, 20), (0.34, 0.235, 0.06, -35), (0.41, 0.28, 0.035, 60)):
     cracks.box((x, 0.0222, z), (0.0012, 0.0004, l), rot_y=a)
 cracks.done()
-# The dock: planks out from the deck over the ice, on posts, with a snow dusting; the bench on it is a piece (phase 2).
-Part('Dock', 'Deck').boxb((0.26, 0.026, 0.235), (0.08, 0.004, 0.11)).done()
-dgr = Part('DockGrooves', 'PineDark')
-for i in range(7):
-    dgr.boxb((0.26, 0.0301, 0.19 + i * 0.015), (0.08, 0.0004, 0.0012))
-dgr.done()
-dp = Part('DockPosts', 'PineDark')
-for x in (0.225, 0.295):
-    for z in (0.20, 0.285):
-        dp.boxb((x, 0.02, z), (0.008, 0.028, 0.008))
-dp.done()
-Part('DockPostSnow', 'Snow').box((0.225, 0.05, 0.285), (0.01, 0.004, 0.01)).box((0.295, 0.05, 0.285), (0.01, 0.004, 0.01)).done()
-Part('DockSnow', 'Snow', smooth=True).sphere((0.235, 0.030, 0.21), 1.0, seg=8, rings=5, scale=(0.02, 0.003, 0.014)).sphere((0.285, 0.030, 0.27), 1.0, seg=8, rings=5, scale=(0.018, 0.003, 0.016)).done()
-anchor('DockSpot', (0.26, 0.030, 0.25))
+# No dock: the dock bench (a piece) stands on the ice itself at `DockSpot`, by the canoe.
+anchor('DockSpot', (0.26, 0.022, 0.25))
 # The red canoe pulled up on the ice beside the dock, snow in it, two paddles across.
 canoe = Part('Canoe', 'Red', smooth=True)
 g = bmesh.ops.create_uvsphere(canoe.bm, u_segments=14, v_segments=8, radius=1.0)
@@ -1153,6 +1147,8 @@ anchor('TableSpot-2', (-0.31, FLOOR, 0.09))
 anchor('TableSpot-3', (-0.17, FLOOR, 0.02))
 anchor('TableSpot-4', (-0.03, FLOOR, -0.05))
 anchor('TableSpot-5', (-0.03, FLOOR, 0.09))
+# A sixth table (patio-table.glb, the log table) right in front of the hearth, between the two window tables.
+anchor('TableSpot-6', (-0.31, FLOOR, 0.02))
 
 # ------------------------------------------------------------------ the Ambient clip: the smoke puffs rise, the flames flicker
 def fcurves_of(o):
@@ -1281,5 +1277,5 @@ shot('fireplace', (-0.22, 0.16, 0.34), (-0.39, 0.06, 0.12), lens=55)
 shot('backdrop', (0.05, 0.30, 0.62), (0.05, 0.15, -0.29), lens=40)
 shot('exit-walk', (0.16, 0.24, 0.58), (0.04, 0.04, 0.16), lens=50)
 shot('door', (0.26, 0.20, 0.30), (0.03, 0.06, 0.03), lens=50)
-shot('bear', (0.36, 0.13, 0.05), (0.31, 0.06, -0.20), lens=55)
+shot('bear', (0.40, 0.20, 0.12), (0.31, 0.09, -0.20), lens=50)
 shot('rooftop-sign', (-0.17, 0.30, 0.40), (-0.17, 0.22, -0.27), lens=45)
