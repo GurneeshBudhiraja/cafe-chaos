@@ -50,6 +50,21 @@ export const OPENING_LAYOUT: Placement[] = [
   { model: 'quiet-corner', x: 0.24, z: -0.215 },
 ];
 
+/**
+ * The tables still to open, in rings by reach from the player's seat
+ * (indices into OPENING_LAYOUT; game/table-order.ts shuffles inside each
+ * ring): the front, the two front-row tables beside the starting one and the
+ * bar (about 31 to 36 cm from the front edge's middle); the middle, the
+ * front corners and the back row's middle (39 to 46 cm); the back, the back
+ * corners and the quiet corner (52 to 58 cm). The starting tables (2 and 8,
+ * game/rules.ts START_TABLES) are in none.
+ */
+export const TABLE_RINGS: number[][] = [
+  [7, 9, 11],
+  [6, 10, 3, 4],
+  [1, 5, 12],
+];
+
 /** Something set out on a piece of furniture: `model` goes on the named anchor of the piece at `on` (an index into the layout). */
 export interface Dressing {
   model: ModelName;

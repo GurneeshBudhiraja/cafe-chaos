@@ -57,6 +57,13 @@ export const CANADA_LAYOUT: Placement[] = [
  */
 export { CANADA_START_TABLES } from '../game/rules.js';
 
+/**
+ * The tables still to open, in rings (indices into CANADA_LAYOUT; the window
+ * tables 1 and 2 are open from the start): the cabin's middle table; the
+ * patio; the dock and the bonfire; upstairs.
+ */
+export const CANADA_TABLE_RINGS: number[][] = [[3], [4, 5], [6, 7, 8], [9, 10]];
+
 /** The wishes the Canadian café can meet, by piece (the game's wish logic reads these; CANADA-PLAN.md). */
 export const CANADA_PLACES = {
   /** Seats whose table stands under a wall socket. */

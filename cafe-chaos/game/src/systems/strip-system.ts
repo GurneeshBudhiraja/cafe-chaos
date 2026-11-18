@@ -53,6 +53,8 @@ const MOTION = { segment: 0.5, pop: 0.3, pulse: 1, follow: 1.2 };
 const SEGMENTS = 10;
 /** How quickly the bar rises to make room for the shop drawer, and settles back (per second). */
 const DRAWER_RISE = 8;
+/** How long coins spent take to count down on the bar (seconds). */
+const COUNT_DOWN = 0.6;
 /** The level banner: how long the bar shows a level just reached (seconds), and its warmer paper. */
 export const LEVEL_BANNER = { seconds: 3, paper: '#f6e7b8' };
 /**
@@ -129,6 +131,8 @@ export class StripSystem extends createSystem({}) {
   /** Each segment's fill as shown (0 to 1), eased toward what the happiness says. */
   private readonly fill: number[] = Array.from({ length: SEGMENTS }, () => 1);
   private bank = 0;
+  /** The bank as the bar shows it: it counts down to a lower bank (a purchase). */
+  private shownBank = 0;
   private popAge = Infinity;
   private time = 0;
   private shown = '';
@@ -185,7 +189,15 @@ export class StripSystem extends createSystem({}) {
       }
     }
     if (s.bank > this.bank) this.popAge = 0;
-    this.bank = s.bank;
+    // Coins spent count down on the bar (a table, a hire) over COUNT_DOWN seconds; coins earned show at once, with the pop.
+    if (s.bank < this.shownBank) {
+      this.shownBank = Math.max(s.bank, this.shownBank - Math.max(1, (this.bank - s.bank) / COUNT_DOWN) * delta);
+      if (this.shownBank > s.bank) moving = true;
+    } else {
+      this.shownBank = s.bank;
+      this.bank = s.bank;
+    }
+    if (this.shownBank <= s.bank) this.bank = s.bank;
     if (this.popAge < MOTION.pop) {
       this.popAge += delta;
       moving = true;
@@ -204,6 +216,7 @@ export class StripSystem extends createSystem({}) {
     const want = (this.score.happiness / HAPPINESS.max) * SEGMENTS;
     for (let i = 0; i < SEGMENTS; i++) this.fill[i] = Math.max(0, Math.min(1, want - i));
     this.bank = this.score.bank;
+    this.shownBank = this.score.bank;
     this.popAge = Infinity;
     this.height = NaN;
   }
@@ -340,7 +353,7 @@ export class StripSystem extends createSystem({}) {
     const trialSub = s.trial === 'done' ? 'Buy it in the Shop' : '';
     const timeW = Math.max(levelW, ctx.measureText('60/60 served').width, s.trial !== 'off' ? Math.max(ctx.measureText(trialTop).width * 1.1, ctx.measureText(trialSub).width) : 0);
     ctx.font = hand(bankSize, 700);
-    const bankW = ctx.measureText(`${s.bank}`.padStart(2, '0')).width;
+    const bankW = ctx.measureText(`${Math.max(s.bank, Math.round(this.shownBank))}`.padStart(2, '0')).width;
     // Pause at the left end: the level starts after it and a divider.
     const btn = h * BAR_BUTTON.size;
     let x = h * BAR_BUTTON.pad + btn + around;
@@ -390,7 +403,7 @@ export class StripSystem extends createSystem({}) {
     const pop = this.popAge < MOTION.pop ? 1 + 0.22 * Math.sin((this.popAge / MOTION.pop) * Math.PI) : 1;
     const coinX = right + around + icon / 2;
     sketchCoin(rc, coinX, h * 0.5, icon * pop, 41, lw);
-    scrawl(ctx, `${s.bank}`, coinX + icon / 2 + inner, h * 0.53, bankSize * pop);
+    scrawl(ctx, `${Math.round(this.shownBank)}`, coinX + icon / 2 + inner, h * 0.53, bankSize * pop);
   }
 
   /**

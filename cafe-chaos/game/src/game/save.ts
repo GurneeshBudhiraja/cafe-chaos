@@ -43,6 +43,8 @@ export interface Progress {
   metHurry: boolean;
   metPair: boolean;
   runs: number;
+  /** The seed of this game's table order (game/table-order.ts): drawn once a new game, so Continue shows the same next table. 0: none yet. */
+  tableSeed: number;
 }
 
 /** What both cafés share. */
@@ -82,7 +84,7 @@ const V2_KEY = 'cafe-chaos/save/v2';
 export const TEST_MODE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('test');
 
 export function freshProgress(id: CafeId): Progress {
-  return { bank: 0, tables: [...startTables(id)], hires: 0, janitor: false, janitor2: false, musicians: 0, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, metHurry: false, metPair: false, runs: 0 };
+  return { bank: 0, tables: [...startTables(id)], hires: 0, janitor: false, janitor2: false, musicians: 0, level: 1, levelServed: 0, happiness: 100, bestLevel: 1, metHurry: false, metPair: false, runs: 0, tableSeed: 0 };
 }
 
 function freshShared(): Shared {

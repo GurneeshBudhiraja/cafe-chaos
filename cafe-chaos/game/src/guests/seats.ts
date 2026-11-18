@@ -25,6 +25,8 @@ export interface Seat {
   meal: Vector3 | null;
   /** The Canadian café's pick-up spot at the counter: not a seat, a place to stand for a coffee to take away (no table). */
   takeaway?: boolean;
+  /** Its table is hidden (not drawn: a table to open later than the next one): as if the seat were not there. */
+  hidden?: boolean;
 }
 
 /** A seat with something standing this far above it (metres) is buried in furniture: nobody can sit there. */
@@ -68,6 +70,7 @@ export function seatNear(seats: Seat[], point: Vector3, reach: number): Seat | n
   let best: Seat | null = null;
   let bestDistance = reach;
   for (const seat of seats) {
+    if (seat.hidden) continue;
     const up = point.y - seat.position.y;
     if (up < -0.03 || up > 0.2) continue;
     const across = Math.hypot(point.x - seat.position.x, point.z - seat.position.z);
@@ -90,7 +93,7 @@ export function seatUnder(seats: Seat[], point: Vector3, reach: number, own: Sea
   let bestDistance = reach;
   for (const seat of seats) {
     // A dirty seat can be aimed at (it glows amber and refuses the guest), so the player sees why it will not sit there.
-    if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked) continue;
+    if ((seat.occupant !== 0 && seat !== own) || seat === spoken || seat.locked || seat.hidden) continue;
     const up = point.y - seat.position.y;
     if (up < -0.03 || up > 0.2) continue;
     const across = Math.hypot(point.x - seat.position.x, point.z - seat.position.z);
