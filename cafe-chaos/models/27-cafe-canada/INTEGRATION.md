@@ -173,7 +173,7 @@ its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −9
 | `DockSpot` | (0.26, 0.030, 0.25) | the dock bench: `lake`, `outside` |
 | `FireSpot-1/2/3` | round the ring at radius 8.5 cm, each facing the fire | the Muskoka chairs: `bonfire`, `outside` |
 | `MusicianSpot` | (0.205, 0.024, −0.19), facing −Z | the violinist once bought; seats within earshot meet `music` |
-| `Exit` | (0.06, 0.024, 0.295), facing +Z | the foot of the exit walkway at the plate's front edge: where guests leave the café (new; the game still sends them out by the gate until `canada-layout.ts` uses it) |
+| `Exit` | (0.06, 0.024, 0.295), facing +Z | the foot of the exit walkway at the plate's front edge: where guests leave the café (new; the game's `guests/paths.ts` CANADA_EXIT_LANES) |
 | `BenchSpot` | (0.235, 0.024, 0.165) | kept for compatibility (unused: the queue stands outside) |
 
 ## Walkways

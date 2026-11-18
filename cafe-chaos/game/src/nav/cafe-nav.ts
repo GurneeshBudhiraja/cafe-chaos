@@ -33,8 +33,9 @@ export const CAFE_NAV: NavOptions = {
 /**
  * The Canadian café's ground floor: the same plate and the same table round
  * it. Its front is the cabin's knee-high front wall, the bonfire and the
- * lake: all open ground, so nothing is barred; the way out is the plate's
- * left edge past the bonfire (guests/paths.ts CANADA_EXIT_LANES). The upper
+ * lake: all open ground, so nothing is barred; the way out is the stone
+ * walkway from the deck to the plate's front edge (guests/paths.ts
+ * CANADA_EXIT_LANES, at the shell's `Exit`). The upper
  * deck (y 0.1548) is over head height here, a ceiling; its posts are
  * thin obstacles.
  */
@@ -57,7 +58,8 @@ export const CANADA_NAV: NavOptions = {
  */
 export const CANADA_UPPER_NAV: NavOptions = {
   min: { x: -0.44, z: -0.3 },
-  max: { x: 0.13, z: -0.12 },
+  // The deck runs forward to z -0.090 (its front rail) since the layout pass of 17 Nov: two rows of tables.
+  max: { x: 0.13, z: -0.085 },
   cell: 0.005,
   top: 0.1548 + 0.1,
   step: 0.0135,
