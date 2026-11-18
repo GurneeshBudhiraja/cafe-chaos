@@ -1,4 +1,4 @@
-"""Every brand asset from the 3D logo (scripts/build-logo-3d.py): the logo on the brand's moss field with a lantern glow,
+"""Every brand asset from the 3D logo (scripts/build-logo-3d.py): the logo on the brand's flat moss field,
 at each place's exact size. See docs/STORE-ART.md.
 
 Runs in a background Blender (it reads and writes images with Blender's own image library, so no
@@ -97,15 +97,11 @@ def over(base, logo, width_frac, cx, top):
     return base
 
 
-def field(w, h=None, glow=0.40):
-    """The brand field: moss, with a soft lantern glow in the middle (the café's lamplight)."""
+def field(w, h=None, colour=None):
+    """The brand field: flat moss (or another flat colour)."""
     h = w if h is None else h
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    m = min(w, h)
-    r = np.sqrt(((xx - w / 2) / m) ** 2 + ((yy - h / 2) / m) ** 2)
-    t = np.clip(1 - r / glow, 0, 1) ** 2 * 0.55
     out = np.ones((h, w, 4), np.float32)
-    out[..., :3] = MOSS * (1 - t[..., None]) + LANTERN * t[..., None]
+    out[..., :3] = MOSS if colour is None else colour
     return out
 
 
@@ -122,6 +118,11 @@ ys, xs = np.where(raw[..., 3] > 0.02)
 pad = 24
 LOGO = raw[max(0, ys.min() - pad):ys.max() + pad + 1, max(0, xs.min() - pad):xs.max() + pad + 1].copy()
 save(LOGO, os.path.join(OUT, 'meta-store', 'logo.png'), alpha=True)
+# The logo on white, for light backgrounds (print, documents, press).
+WHITE = np.array([1.0, 1.0, 1.0], np.float32)
+_wh, _ww = int(LOGO.shape[0] * 1.25), int(LOGO.shape[1] * 1.15)
+_white = np.ones((_wh, _ww, 4), np.float32)
+save(over(_white, LOGO, 1 / 1.15, 0.5, (1 - 1 / 1.25) / 2), os.path.join(OUT, 'meta-store', 'logo-on-white.png'))
 
 # The C of CHAOS alone, for the favicon (48 px and less: the name does not read there). The letters touch,
 # so the C is cut by width: CHAOS fills the lower part of the logo, the C is its first fifth.

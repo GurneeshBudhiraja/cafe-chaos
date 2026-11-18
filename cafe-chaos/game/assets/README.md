@@ -1,8 +1,8 @@
 # Assets: store, Devpost and social images
 
 One file for each place it is used, each at that place's exact size. Every
-image is the 3D logo centred on the brand's moss field with a soft lantern
-glow (no game screenshots). Built by Blender scripts (run from `game/`):
+image is the 3D logo centred on the brand's moss field, flat
+(no game screenshots). Built by Blender scripts (run from `game/`):
 
 1. The logo: `Blender --background --factory-startup --python scripts/build-logo-3d.py -- assets/source/logo`
    (then rename `logo-3d-plain.png` to `logo-3d.png`).
@@ -12,7 +12,8 @@ glow (no game screenshots). Built by Blender scripts (run from `game/`):
 | File | Where it goes |
 |---|---|
 | `meta-store/logo.png` | Meta store: Logo (transparent PNG). The one logo for every use. |
-| `meta-store/icon-512x512.png` | Meta store: Icon. The logo on moss; the app's icons (`public/icons`) are the same. |
+| `meta-store/logo-on-white.png` | The logo on white, for light backgrounds (print, documents, press). |
+| `meta-store/icon-512x512.png` | Meta store: Icon. The logo on flat moss; the app's icons (`public/icons`) are the same. |
 | `meta-store/hero-3000x900.png` | Meta store: Hero cover. |
 | `meta-store/cover-landscape-2560x1440.png` | Meta store: Landscape cover. |
 | `meta-store/cover-square-1440x1440.png` | Meta store: Square cover. Also a square social post. |
