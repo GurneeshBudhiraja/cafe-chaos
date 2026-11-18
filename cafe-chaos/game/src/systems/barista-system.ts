@@ -43,6 +43,7 @@ import { isCanada } from '../cafe/style.js';
 import { BACK_BAR_YAW, servePointFor, servePointsForPlace, SHUFFLE_M, STATION_X, STATION_YAW, stationPoint, type ServePoint } from '../baristas/routes.js';
 import { CANADA_CLEAN_HOMES, CLEAN, MAX_STAFF } from '../game/rules.js';
 import { janitorLoaded, makeJanitor, setCleaning } from '../baristas/janitor.js';
+import { MusicNotes, musicNotesLoaded } from '../baristas/music-notes.js';
 import { MessSystem } from './mess-system.js';
 import { BACK_BAR_SECONDS, FIDGET_SECONDS, MAX_OUT, REPLAN_SECONDS, SAME_TIME_SECONDS, SET_DOWN_AT, SPEED, SWITCH_GAIN_M, TRAY_FADE_SECONDS, TRAY_SLIDE_SECONDS, TURN_SPEED, WAVE_CHANCE } from '../baristas/rules.js';
 import type { Seat } from '../guests/seats.js';
@@ -168,6 +169,8 @@ export class BaristaSystem extends createSystem({}) {
   musicians = 0;
   /** The musicians playing now (they only play: no orders, no chores). */
   readonly band: Barista[] = [];
+  /** The pianist's music notes, on the pianist's root while it plays. */
+  private notes: MusicNotes | null = null;
   /** Tables cleaned by the staff, and cleanings broken off for an order (for the checks). */
   cleanedCount = 0;
   cleaningsBrokenOff = 0;
@@ -269,6 +272,7 @@ export class BaristaSystem extends createSystem({}) {
       member.barista.update(delta);
     }
     for (const player of this.band) player.update(delta);
+    this.notes?.update(delta);
     // Which dirty tables someone is seeing to (their signs show a broom).
     if (this.mess) {
       this.mess.coming.clear();
@@ -326,6 +330,7 @@ export class BaristaSystem extends createSystem({}) {
     this.staff.length = 0;
     for (const player of this.band) player.root.removeFromParent();
     this.band.length = 0;
+    this.notes = null;
     for (const served of this.served) served.tray.removeFromParent();
     this.served.length = 0;
     this.orders.length = 0;
@@ -349,6 +354,7 @@ export class BaristaSystem extends createSystem({}) {
   private tendBand(): void {
     const want = isCanada() ? this.musicians : 0;
     while (this.band.length > want) this.band.pop()!.root.removeFromParent();
+    this.tendNotes();
     this.guests?.setBand(this.bandSpots());
     if (this.band.length >= want) return;
     const spot = CANADA_PLACES.musicians[this.band.length];
@@ -360,6 +366,18 @@ export class BaristaSystem extends createSystem({}) {
     this.cafeSystem.cafe.add(player.root);
     player.play(spot.clip as BaristaClip);
     this.band.push(player);
+  }
+
+  /** Music notes over the piano while the pianist plays (they ride on its root, so they go with it). */
+  private tendNotes(): void {
+    const pianist = this.band.find((p) => p.name === 'pianist') ?? null;
+    if (!pianist) {
+      this.notes = null;
+      return;
+    }
+    if (this.notes?.root.parent === pianist.root || !musicNotesLoaded()) return;
+    this.notes = new MusicNotes();
+    pianist.root.add(this.notes.root);
   }
 
   /** The musicians playing now, where they stand (café space), for the `music` wish. */
