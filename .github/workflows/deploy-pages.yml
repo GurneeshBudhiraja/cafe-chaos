@@ -1,6 +1,5 @@
-# Builds both apps and publishes them to GitHub Pages on every push to main.
-#   Meta Notes  -> https://<owner>.github.io/meta-hack/
-#   Café Chaos  -> https://<owner>.github.io/meta-hack/cafe-chaos/
+# Builds Café Chaos and publishes it to GitHub Pages on every push to main.
+#   https://<owner>.github.io/cafe-chaos/
 name: Deploy to GitHub Pages
 
 on:
@@ -21,6 +20,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cafe-chaos/game
     steps:
       - uses: actions/checkout@v4
 
@@ -28,34 +30,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            app/package-lock.json
-            cafe-chaos/game/package-lock.json
+          cache-dependency-path: cafe-chaos/game/package-lock.json
 
       # --ignore-scripts skips onnxruntime-node's CUDA download (a dev-only
       # dependency of the IWSDK tooling); the Vite build does not need it.
-      - name: Build Meta Notes
-        working-directory: app
-        run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          NODE_ENV=production npm run build
-
       - name: Build Café Chaos
-        working-directory: cafe-chaos/game
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           NODE_ENV=production npm run build
-
-      - name: Assemble site
-        run: |
-          mkdir -p site/cafe-chaos
-          cp -r app/dist/. site/
-          cp -r cafe-chaos/game/dist/. site/cafe-chaos/
-          touch site/.nojekyll
+          touch dist/.nojekyll
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: cafe-chaos/game/dist
 
   deploy:
     needs: build
