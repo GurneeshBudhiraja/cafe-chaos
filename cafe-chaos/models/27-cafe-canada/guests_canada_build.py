@@ -1,5 +1,5 @@
 """The Canadian café's guests on the guest rig (base/guest_build.py + guest_anim.py +
-guest_accessories.py): three new snack species and a winter wardrobe. Exports
+guest_accessories.py): five snack species and a winter wardrobe. Exports
 guest-<species>.glb (same nodes, attach points and 10 clips as the Japanese guests, plus StairsUp and
 StairsDown for the stairs to the upper deck) and
 accessories-canada.glb (every item carries its `attach` extra, as accessories.glb).
@@ -10,6 +10,8 @@ Species (each a shape the rig is built on; the game names the guests):
 - snowbit:    a round donut hole, golden with a cap of powdered sugar (snow) on top.
 - beavertail: a tall flat oval of fried dough, cinnamon-sugar skin, a red maple leaf on its head.
 - nanaimo:    a square bar in three layers (chocolate top, custard, coconut crumb), a chocolate curl.
+- doubledouble: a takeaway coffee cup, cream paper with a red sleeve, a white lid with a sip hole and steam.
+- buttertart: a squat fluted pastry shell, glossy caramel filling level with the rim, a pecan on top.
 These ship in their own colours (the Japanese guests ship white and are tinted at runtime):
 tint them white, or only with very light pastels, or the layers go muddy.
 
@@ -72,6 +74,33 @@ ACCENTS = '''
         capsule(bm, c + Vector((0.0030, -0.0014, 0)), c + Vector((-0.0026, -0.0034, 0.0040)), 0.0012, seg=8)
         cyl_uv(bm)
         P["Curl"] = (bm, [M["choc"]], tuple(c), True)
+    elif S["accent"] == "steam":
+        # the double-double's lid detail and its steam: a dark sip hole at the front of the lid, and a wisp of
+        # steam curling up from it in three shrinking puffs (a capsule chain), so the cup reads hot from above
+        bm = bmesh.new()
+        c = Vector((0.0, -0.0105, ztop - 0.0012))
+        hole = set(blob(bm, c + Vector((0, 0, 0.0004)), (0.0026, 0.0011, 0.0005), seg=12, rings=5))
+        pts = [c + Vector(d) for d in ((0, 0, 0.0010), (0.0016, 0.0006, 0.0042), (-0.0010, 0.0012, 0.0074), (0.0012, 0.0016, 0.0104), (0.0002, 0.0018, 0.0124))]
+        for k, (p0, p1) in enumerate(zip(pts, pts[1:])):
+            capsule(bm, p0, p1, 0.0013 - 0.0002 * k, seg=8)
+        for f in bm.faces:
+            f.material_index = 1 if all(v in hole for v in f.verts) else 0
+        cyl_uv(bm)
+        P["Steam"] = (bm, [M["steam"], M["choc"]], tuple(c), True)
+    elif S["accent"] == "pecan":
+        # the butter tart's glossy caramel filling, level with the fluted rim, and a pecan half lying on it
+        bm = bmesh.new()
+        c = Vector((0.0, 0.0, ztop - 0.0034))
+        fill = set(blob(bm, c, (0.0171, 0.0171, 0.0030), seg=28, rings=8))
+        blob(bm, c + Vector((0.0018, -0.0022, 0.0031)), (0.0044, 0.0026, 0.0013), seg=10, rings=6)
+        for v in bm.verts:                                  # the pecan's long axis turned a little
+            if v not in fill:
+                d = v.co - c; a = math.radians(-24)
+                v.co = c + Vector((d.x * math.cos(a) - d.y * math.sin(a), d.x * math.sin(a) + d.y * math.cos(a), d.z))
+        for f in bm.faces:
+            f.material_index = 0 if all(v in fill for v in f.verts) else 1
+        cyl_uv(bm)
+        P["Pecan"] = (bm, [M["caramel"], M["pecan"]], tuple(c), True)
 '''
 hook = '    elif S["accent"] == "sprout":'
 assert hook in src
@@ -99,7 +128,52 @@ SPECIES["beavertail"] = dict(body=body_oval, EX=0.0078, EZ=0.0395, ERX=0.0025, E
 SPECIES["nanaimo"] = dict(body=lambda: gb["body_cube"](hw=0.0190, hd=0.0140, zt=0.0430, r=0.0075), EX=0.0074, EZ=0.0300, ERX=0.0023, ERZ=0.0032, MZ=0.0238, BLZ=0.0258, BLX=0.0128,
                           shoulder=(0.0172, -0.001, 0.0238), arm_len=0.0062, hip_x=0.0062, accent="curl",
                           skin_rough=0.45, grip=0.031, bubble=0.0620)
-KINDS = ["snowbit", "beavertail", "nanaimo"]
+def body_revolve(profile, seg=32, flute=None):
+    """A body turned on a lathe: `profile` is (radius, z) from the bottom centre up to the top centre. The
+    front (-y) is angle 0, as the skin's cylindrical UV has it (u 0.5 at the front). `flute` = (lobes, depth,
+    z_lo, z_hi) ripples the radius round the walls (the butter tart's crimped pastry), smooth across the face."""
+    bm = bmesh.new()
+    rings = []
+    for r, z in profile:
+        if r <= 0:
+            rings.append([bm.verts.new((0, 0, z))]); continue
+        ring = []
+        for i in range(seg):
+            a = 2 * math.pi * i / seg
+            f = 1.0
+            if flute and flute[2] <= z <= flute[3]:
+                # no flutes across the face (within ~30° of the front): the eye and mouth decals buckle on the ridges
+                off = min(a, 2 * math.pi - a); w = min(1.0, max(0.0, (off - 0.50) / 0.45)); w = w * w * (3 - 2 * w)
+                f = 1 + flute[1] * math.cos(flute[0] * a) * w
+            ring.append(bm.verts.new((r * f * math.sin(a), -r * f * math.cos(a), z)))
+        rings.append(ring)
+    for lo, hi in zip(rings, rings[1:]):
+        if len(lo) == 1:
+            for i in range(seg): bm.faces.new((lo[0], hi[(i + 1) % seg], hi[i]))
+        elif len(hi) == 1:
+            for i in range(seg): bm.faces.new((lo[i], lo[(i + 1) % seg], hi[0]))
+        else:
+            for i in range(seg): bm.faces.new((lo[i], lo[(i + 1) % seg], hi[(i + 1) % seg], hi[i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return bm, max(z for _, z in profile)
+
+# The double-double: a takeaway cup (cream paper, a red corrugated sleeve low down, the face above it), its
+# white lid with a lip the top of the head; tall and round, the lid a natural thing to pinch.
+CUP_PROFILE = [(0, ZB), (0.0150, ZB), (0.0158, ZB + 0.0008), (0.0163, 0.0120), (0.0176, 0.0250), (0.0188, 0.0385),
+               (0.0192, 0.0400), (0.0201, 0.0403), (0.0203, 0.0417), (0.0197, 0.0427), (0.0187, 0.0431), (0.0181, 0.0446),
+               (0.0168, 0.0456), (0.0120, 0.0461), (0, 0.0463)]
+# The butter tart: a squat pastry shell crimped into fourteen flutes, flaring to a rounded rim; its caramel
+# filling (the `Pecan` accent) sits inside, level with the rim. Wide and low: easy to spot from above.
+TART_PROFILE = [(0, ZB), (0.0160, ZB), (0.0170, ZB + 0.0012), (0.0178, 0.0160), (0.0192, 0.0260), (0.0201, 0.0315),
+                (0.0204, 0.0335), (0.0199, 0.0352), (0.0189, 0.0358), (0.0177, 0.0352), (0.0170, 0.0336), (0.0150, 0.0322),
+                (0, 0.0318)]
+SPECIES["doubledouble"] = dict(body=lambda: body_revolve(CUP_PROFILE), EX=0.0072, EZ=0.0335, ERX=0.0024, ERZ=0.0032, MZ=0.0268, BLZ=0.0289, BLX=0.0124,
+                               shoulder=(0.0176, -0.001, 0.0262), arm_len=0.0062, hip_x=0.0060, accent="steam",
+                               skin_rough=0.70, grip=0.035, bubble=0.0720)
+SPECIES["buttertart"] = dict(body=lambda: body_revolve(TART_PROFILE, flute=(14, 0.055, ZB + 0.0006, 0.0359)), EX=0.0072, EZ=0.0262, ERX=0.0024, ERZ=0.0030, MZ=0.0205, BLZ=0.0222, BLX=0.0126,
+                             shoulder=(0.0186, -0.001, 0.0212), arm_len=0.0060, hip_x=0.0062, accent="pecan",
+                             skin_rough=0.60, grip=0.027, bubble=0.0580)
+KINDS = ["snowbit", "beavertail", "nanaimo", "doubledouble", "buttertart"]
 
 _base_materials = gb["materials"]
 def materials():
@@ -107,6 +181,9 @@ def materials():
     M["sugar"] = flat_mat("GuestSugar", (0.985, 0.985, 0.995), 0.85)
     M["maple"] = flat_mat("GuestMapleLeaf", (0.80, 0.12, 0.12), 0.6)
     M["choc"] = flat_mat("GuestChoc", (0.26, 0.15, 0.09), 0.5)
+    M["steam"] = flat_mat("GuestSteam", (0.93, 0.95, 0.97), 0.9)
+    M["caramel"] = flat_mat("GuestCaramel", (0.40, 0.18, 0.05), 0.25)
+    M["pecan"] = flat_mat("GuestPecan", (0.26, 0.12, 0.05), 0.6)
     return M
 gb["materials"] = materials
 
@@ -115,7 +192,7 @@ def make_skin(name, kind, seed=1, size=256):
     """Skins for the Canadian species (the base paints the Japanese ones). Real colours, not white."""
     if kind not in KINDS:
         return _base_make_skin(name, kind, seed, size)
-    rng = np.random.default_rng({"snowbit": 21, "beavertail": 22, "nanaimo": 23}[kind])
+    rng = np.random.default_rng({"snowbit": 21, "beavertail": 22, "nanaimo": 23, "doubledouble": 24, "buttertart": 25}[kind])
     H = W = size
     v = np.linspace(0, 1, H)[:, None] * np.ones((1, W))
     u = np.ones((H, 1)) * np.linspace(0, 1, W)[None, :]
@@ -146,6 +223,39 @@ def make_skin(name, kind, seed=1, size=256):
         col = col * (1 - 0.8 * cin[..., None]) + np.array([0.42, 0.22, 0.10]) * 0.8 * cin[..., None]
         col = col * (1 - 0.85 * sug[..., None]) + np.array([0.99, 0.98, 0.96]) * 0.85 * sug[..., None]
         col += (0.04 * np.clip(v - 0.65, 0, 1) * front)[..., None]
+    elif kind == "doubledouble":
+        # cream paper with a faint seam at the back; the red corrugated sleeve low down (z 1.15–2.15 cm) with
+        # cream edges and a cream maple leaf on the front; the white lid above z 4.0 cm with a grey lip line
+        z = 0.006 + v * 0.05
+        paper = np.array([0.95, 0.92, 0.84]) * (0.97 + 0.04 * n1 + 0.02 * n2)[..., None]
+        seam = np.exp(-((np.minimum(u, 1 - u)) / 0.012) ** 2)
+        col = paper * (1 - 0.08 * seam[..., None])
+        red = np.array([0.78, 0.14, 0.15]) * (0.90 + 0.10 * (0.5 + 0.5 * np.sin(u * 2 * math.pi * 56)))[..., None]
+        sleeve = (z > 0.0115) & (z < 0.0215)
+        edge = sleeve & ((z < 0.0123) | (z > 0.0207))
+        col = np.where(sleeve[..., None], red, col)
+        col = np.where(edge[..., None], np.array([0.96, 0.93, 0.86]), col)
+        # the leaf: polar star in the sleeve's front (u around 0.5, z 1.65 cm), 7 points
+        du = (u - 0.5) * 2 * math.pi * 0.0172; dz = z - 0.0165
+        rr = np.sqrt(du ** 2 + dz ** 2); th = np.arctan2(du, dz)
+        leaf = rr < 0.0034 * (0.55 + 0.45 * np.abs(np.cos(3.5 * th)))
+        col = np.where((leaf & sleeve & ~edge)[..., None], np.array([0.97, 0.94, 0.88]), col)
+        lid = z > 0.0400
+        col = np.where(lid[..., None], np.array([0.97, 0.97, 0.96]) * (0.97 + 0.03 * n1)[..., None], col)
+        col = np.where(((z > 0.0425) & (z < 0.0433))[..., None], np.array([0.80, 0.81, 0.82]), col)
+    elif kind == "buttertart":
+        # golden shortcrust, browned on the crimp ridges and the rim, paler toward the base, flecked with flour
+        z = 0.006 + v * 0.05
+        gold = np.array([0.91, 0.70, 0.40]); brown = np.array([0.72, 0.45, 0.19])
+        ridge = (0.5 + 0.5 * np.cos(14 * 2 * math.pi * (u - 0.5))) * np.clip((np.abs(u - 0.5) * 2 * math.pi - 0.50) / 0.45, 0, 1)
+        rim = np.clip((z - 0.0300) / 0.0045, 0, 1)
+        t = np.clip(0.45 * ridge ** 2 + 0.55 * rim + 0.25 * (n2 - 0.5), 0, 1)
+        col = gold * (1 - t[..., None]) + brown * t[..., None]
+        col *= (0.95 + 0.08 * n1)[..., None]
+        base = np.clip((0.0135 - z) / 0.004, 0, 1)
+        col = col * (1 - 0.25 * base[..., None]) + np.array([0.96, 0.86, 0.66]) * 0.25 * base[..., None]
+        flour = (rng.random((H, W)) > 0.985).astype(float)
+        col = col * (1 - 0.6 * flour[..., None]) + np.array([0.98, 0.95, 0.88]) * 0.6 * flour[..., None]
     else:
         # the three layers: chocolate on top, yellow custard, coconut-and-crumb base; wobbly edges
         choc = np.array([0.25, 0.14, 0.09]); custard = np.array([0.97, 0.85, 0.46]); crumb = np.array([0.48, 0.32, 0.18])
@@ -178,7 +288,7 @@ exec(open(os.path.join(BASE, 'guest_accessories.py')).read(), gc)
 sc = bpy.data.scenes[0]
 for o in list(sc.collection.all_objects):
     bpy.data.objects.remove(o, do_unlink=True)
-rigs, M = gb["build_all"](sc, kinds=tuple(KINDS), spacing=0.08)
+rigs, M = gb["build_all"](sc, kinds=tuple(KINDS), spacing=0.075)
 gb["RIGS"] = rigs
 
 # Stairs (the upper deck): 1 s, two steps a loop, in place; the game moves the root up or down the stair's slope
@@ -392,27 +502,27 @@ for k in KINDS:
 hide = [o for o in sc.collection.all_objects if o.name.startswith("Toque") or o.name.startswith("Earmuffs") or o.name.startswith("Scarf") or o.name.startswith("Parka")]
 for o in hide: o.hide_render = True
 gb["preview"](["Idle"], 1)
-shot("guests-lineup.png", (0, 0, 0.03), 0.42, elev=10, azim=-6)
+shot("guests-lineup.png", (0, 0, 0.03), 0.72, elev=10, azim=-6)
 for k in KINDS:
     rigs[k]["seated"].location = (0, 0, 0.0)
     rigs[k]["standing"].location = (0, 0.06, 0.0)
 gb["preview"](["SitHappy"], 9)
-shot("guests-seated.png", (0, 0, 0.03), 0.42, elev=16, azim=8)
+shot("guests-seated.png", (0, 0, 0.03), 0.72, elev=16, azim=8)
 for k in KINDS:
     rigs[k]["standing"].location = (0, 0, 0.0); rigs[k]["seated"].location = (0, 0.06, 0.0)
-prev = gb["dress"](rigs, made, {"snowbit": ["Toque-snowbit", "Scarf-snowbit"], "beavertail": ["Earmuffs-beavertail", "Parka-beavertail"], "nanaimo": ["Toque-nanaimo", "Parka-nanaimo"]})
+prev = gb["dress"](rigs, made, {"snowbit": ["Toque-snowbit", "Scarf-snowbit"], "beavertail": ["Earmuffs-beavertail", "Parka-beavertail"], "nanaimo": ["Toque-nanaimo", "Parka-nanaimo"], "doubledouble": ["Earmuffs-doubledouble", "Scarf-doubledouble"], "buttertart": ["Toque-buttertart", "Scarf-buttertart"]})
 gb["preview"](["Idle"], 1)
-shot("guests-dressed.png", (0, 0, 0.032), 0.40, elev=10, azim=-6)
+shot("guests-dressed.png", (0, 0, 0.032), 0.70, elev=10, azim=-6)
 gb["preview"](["Walk"], 7)
-shot("guests-walk.png", (0, 0, 0.03), 0.40, elev=8, azim=-40)
+shot("guests-walk.png", (0, 0, 0.03), 0.70, elev=8, azim=-40)
 gb["undress"]()
-prev = gb["dress"](rigs, made, {"snowbit": ["Earmuffs-snowbit", "Parka-snowbit"], "beavertail": ["Toque-beavertail", "Scarf-beavertail"], "nanaimo": ["Scarf-nanaimo", "Earmuffs-nanaimo"]})
+prev = gb["dress"](rigs, made, {"snowbit": ["Earmuffs-snowbit", "Parka-snowbit"], "beavertail": ["Toque-beavertail", "Scarf-beavertail"], "nanaimo": ["Scarf-nanaimo", "Earmuffs-nanaimo"], "doubledouble": ["Toque-doubledouble", "Parka-doubledouble"], "buttertart": ["Earmuffs-buttertart", "Parka-buttertart"]})
 gb["preview"](["Impatient"], 13)
-shot("guests-dressed-2.png", (0, 0, 0.032), 0.40, elev=10, azim=14)
+shot("guests-dressed-2.png", (0, 0, 0.032), 0.70, elev=10, azim=14)
 gb["preview"](["StairsUp"], 8)
-shot("guests-stairs-up.png", (0, 0, 0.03), 0.40, elev=8, azim=-75)
+shot("guests-stairs-up.png", (0, 0, 0.03), 0.70, elev=8, azim=-75)
 gb["preview"](["StairsDown"], 8)
-shot("guests-stairs-down.png", (0, 0, 0.03), 0.40, elev=8, azim=-75)
+shot("guests-stairs-down.png", (0, 0, 0.03), 0.70, elev=8, azim=-75)
 gb["undress"]()
 for k in KINDS:
     rigs[k]["seated"].location = (0, 0, 0.0)
@@ -427,7 +537,9 @@ for k in KINDS:
     select_tree(root)
     path = os.path.join(OUT, f"guest-{k}.glb")
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_animations=True, export_animation_mode='NLA_TRACKS',
-                              export_force_sampling=True, export_optimize_animation_size=False, export_extras=True, export_yup=True, export_apply=False, export_image_format='AUTO')
+                              export_force_sampling=True, export_optimize_animation_size=True,   # drops only repeated keys (lossless)
+                              export_optimize_animation_keep_anim_object=True,   # keep a part a clip holds still, or three.js leaves it where the last clip put it
+                              export_extras=True, export_yup=True, export_apply=False, export_image_format='AUTO')
     root.location = keep
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in root.children_recursive if o.type == 'MESH' and o.name.startswith("St-"))
     report[k] = {"tris_per_pose": tris, "kb": os.path.getsize(path) // 1024}

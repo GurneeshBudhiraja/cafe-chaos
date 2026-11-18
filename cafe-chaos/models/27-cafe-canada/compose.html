@@ -54,7 +54,8 @@ async function place(name, x, y, z, yawDeg = 0, clip = null, opts = {}) {
 // The layout (game/src/cafe/canada-layout.ts), three.js yaw.
 const UY = 0.1548, F = 0.024;
 const layout = [
-  ['cafe-canada', 0, 0, 0, 0], ['table-ca-2', -0.31, F, -0.10, 0], ['table-ca-2', -0.31, F, 0.10, 0], ['table-ca-4', -0.17, F, -0.03, 90],
+  ['cafe-canada', 0, 0, 0, 0], ['table-ca-2', -0.31, F, -0.09, 0], ['table-ca-2', -0.31, F, 0.09, 0], ['table-ca-4', -0.17, F, 0.0, 90],
+  ['table-ca-2', -0.03, F, -0.09, 0], ['table-ca-2', -0.03, F, 0.09, 0],
   ['patio-table', 0.16, F, 0.08, 0], ['patio-table', 0.31, F, 0.06, 0], ['dock-bench', 0.26, 0.030, 0.25, 0],
   ...[205, 270, 335].map((a) => ['fire-chair', -0.27 + 0.085 * Math.cos(a * Math.PI / 180), F, 0.245 - 0.085 * Math.sin(a * Math.PI / 180), a - 90]),
   ['patio-table', -0.27, UY, -0.2125, 0], ['patio-table', -0.11, UY, -0.2125, 0],
@@ -81,10 +82,10 @@ for (const si of sitOn) {
 const step = (n) => [0.081, F + n * ((UY - F) / 15), -0.012 - (n - 0.5) * 0.009];
 await place('guest-snowbit', ...step(4), 180, 'StairsUp', { seated: false, wear: wear[0] });
 await place('barista-maple', ...step(11), 180, 'CarryUp');
-// Staff: two baristas at their stations, the janitor by the counter's end, both musicians playing.
+// Staff: two baristas at their stations, the janitor at the counter's way out, both musicians playing.
 await place('barista-aspen', -0.115, 0.036, -0.204, 0, 'Work', { t: 0.5 });
 await place('barista-rowan', -0.235, 0.036, -0.204, 0, 'Work', { t: 1.1 });
-await place('barista-birch', 0.0, F, -0.12, 0, 'Idle');
+await place('barista-birch', -0.39, F, -0.13, 90, 'Idle');   // at the counter's way out (the door-side tables fill the till's corner)
 await place('barista-fiddler', 0.30, 0.035, -0.21, 180, 'Play');
 await place('barista-pianist', -0.365, UY, -0.2125, -90, 'PlayPiano');
 // Two guests waiting at the gate (outside the right edge, as the queue does).
