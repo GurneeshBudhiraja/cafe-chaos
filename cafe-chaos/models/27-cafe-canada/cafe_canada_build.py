@@ -723,32 +723,38 @@ Part('SignOval', 'Red', smooth=True).ellipse((-0.17, SGY, UZ0 + 0.0125), 0.125, 
 text_mesh('SignWords', "Hoser's", 0.026, 'Cream', (-0.17, SGY + 0.0035, UZ0 + 0.0145), extrude=0.0008)
 text_mesh('SignSub', 'COFFEE & DONUTS', 0.0085, 'Cream', (-0.17, SGY - 0.015, UZ0 + 0.0145), extrude=0.0006)
 
-# The rooftop piano at the deck's left end, side on to the player: an upright, black, a red runner and a mug on
-# top, its keys toward the deck; the bench in front of it. The pianist (barista-pianist.glb, bought in the game)
-# sits on the bench at `PianoSpot`, facing the keys.
-PZ = -0.2125
-PX = UX0 + 0.004                                    # the piano's back, against the end rail
-Part('PianoBody', 'PianoBlack').boxb((PX + 0.012, UY, PZ), (0.024, 0.054, 0.065)).done()
-Part('PianoLid', 'PianoBlack').box((PX + 0.012, UY + 0.0555, PZ), (0.027, 0.003, 0.068)).done()
-Part('PianoShelf', 'PianoBlack').box((PX + 0.0295, UY + 0.028, PZ), (0.011, 0.004, 0.061)).done()
-Part('PianoLegs', 'PianoBlack').boxb((PX + 0.032, UY, PZ - 0.027), (0.003, 0.026, 0.003)).boxb((PX + 0.032, UY, PZ + 0.027), (0.003, 0.026, 0.003)).done()
-Part('PianoKeys', 'PianoKeys').box((PX + 0.0295, UY + 0.0306, PZ), (0.009, 0.0012, 0.057)).done()
+# The rooftop piano, centred under the logo in front of the rooftop sign: an upright with its back to the player
+# and its keys toward the sign, so the pianist (barista-pianist.glb, bought in the game) sits between the sign and
+# the piano facing the player over its top (a console piano, 4.4 cm high, so the pianist's face shows over it
+# and the logo over the pianist's head). A red runner
+# and a mug on top; the bench behind, on the sign side. `PianoSpot` is the bench, facing +Z.
+PXC = -0.17                                         # under the oval's middle
+PB = -0.205                                         # the piano's back (toward the player)
+def pz(d):
+    """Depth into the piano from its back (+ toward the keys and the sign) to game z."""
+    return PB - d
+Part('PianoBody', 'PianoBlack').boxb((PXC, UY, pz(0.012)), (0.065, 0.040, 0.024)).done()
+Part('PianoLid', 'PianoBlack').box((PXC, UY + 0.0415, pz(0.012)), (0.068, 0.003, 0.027)).done()
+Part('PianoShelf', 'PianoBlack').box((PXC, UY + 0.028, pz(0.0295)), (0.061, 0.004, 0.011)).done()
+Part('PianoLegs', 'PianoBlack').boxb((PXC - 0.027, UY, pz(0.032)), (0.003, 0.026, 0.003)).boxb((PXC + 0.027, UY, pz(0.032)), (0.003, 0.026, 0.003)).done()
+Part('PianoKeys', 'PianoKeys').box((PXC, UY + 0.0306, pz(0.0295)), (0.057, 0.0012, 0.009)).done()
 black = Part('PianoBlackKeys', 'PianoBlack')
 for k in range(14):
     if k % 7 in (2, 6):
         continue
-    black.box((PX + 0.0275, UY + 0.0318, PZ - 0.026 + k * 0.004), (0.005, 0.0014, 0.0022))
+    black.box((PXC + 0.026 - k * 0.004, UY + 0.0318, pz(0.0275)), (0.0022, 0.0014, 0.005))
 black.done()
-Part('PianoMusicStand', 'PianoBlack').box((PX + 0.0255, UY + 0.040, PZ), (0.002, 0.012, 0.026), rot_z=-12).done()
-Part('PianoSheet', 'PianoKeys').box((PX + 0.0268, UY + 0.040, PZ), (0.0005, 0.010, 0.022), rot_z=-12).done()
-Part('PianoRunner', 'Red').box((PX + 0.012, UY + 0.0572, PZ), (0.02, 0.0006, 0.06)).done()
-Part('PianoMug', 'Mug', smooth=True).cyl((PX + 0.012, UY + 0.0620, PZ + 0.022), 0.004, 0.008, seg=10).done()
-Part('PianoBench', 'PianoBlack').boxb((PX + 0.054, UY, PZ), (0.014, 0.0095, 0.03)).done()
-Part('PianoBenchCushion', 'Red').box((PX + 0.054, UY + 0.010, PZ), (0.013, 0.0012, 0.028)).done()
-anchor('PianoSpot', (PX + 0.056, UY, PZ), rot_y=90)          # facing -X, the keys
+Part('PianoMusicStand', 'PianoBlack').box((PXC, UY + 0.0365, pz(0.0255)), (0.026, 0.008, 0.002), rot_x=12).done()
+Part('PianoSheet', 'PianoKeys').box((PXC, UY + 0.0365, pz(0.0268)), (0.022, 0.0065, 0.0005), rot_x=12).done()
+Part('PianoRunner', 'Red').box((PXC, UY + 0.0432, pz(0.012)), (0.06, 0.0006, 0.02)).done()
+Part('PianoMug', 'Mug', smooth=True).cyl((PXC + 0.022, UY + 0.048, pz(0.012)), 0.004, 0.008, seg=10).done()
+Part('PianoBench', 'PianoBlack').boxb((PXC, UY, pz(0.054)), (0.03, 0.0095, 0.014)).done()
+Part('PianoBenchCushion', 'Red').box((PXC, UY + 0.010, pz(0.054)), (0.028, 0.0012, 0.013)).done()
+anchor('PianoSpot', (PXC, UY, pz(0.056)), rot_y=0)           # facing +Z: the keys and the player
 anchor('UpperFloorTop', (-0.19, UY, -0.17))
-# Four bistro tables in two rows of two: the back row where the two stood, the front row 8.5 cm nearer the player.
-for i, (x, z) in enumerate(((-0.27, -0.2225), (-0.11, -0.2225), (-0.27, -0.1375), (-0.11, -0.1375))):
+# Four bistro tables in two columns either side of the piano (two rows, 8.5 cm apart, the aisle between them in
+# line with the landing), leaving the middle open so the player sees the pianist and the logo.
+for i, (x, z) in enumerate(((-0.32, -0.2225), (-0.03, -0.2225), (-0.32, -0.1375), (-0.03, -0.1375))):
     anchor(f'UpperSpot-{i + 1}', (x, UY, z))
 
 # ------------------------------------------------------------------ the stairs up to it, outside the cabin's right wall
