@@ -38,17 +38,13 @@ jobs:
         working-directory: app
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
-          npm run build
-        env:
-          NODE_ENV: production
+          NODE_ENV=production npm run build
 
       - name: Build Café Chaos
         working-directory: cafe-chaos/game
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
-          npm run build
-        env:
-          NODE_ENV: production
+          NODE_ENV=production npm run build
 
       - name: Assemble site
         run: |
