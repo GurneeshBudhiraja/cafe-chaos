@@ -25,7 +25,7 @@ export const LATER_PIECES = ['cafe-annex', 'unlock-plaque', 'window-booth', 'tab
  * winter clothes, its staff and the two musicians. All load in the background, after the Japanese café's: the start
  * card's Try free waits for them if they are not in yet.
  */
-export const CANADA_PIECES = ['cafe-canada', 'table-ca-2', 'table-ca-4', 'patio-table', 'dock-bench', 'fire-chair'] as const;
+export const CANADA_PIECES = ['cafe-canada', 'table-ca-2', 'table-ca-4', 'patio-table', 'fire-chair'] as const;
 export const CANADA_GUESTS = ['guest-snowbit', 'guest-beavertail', 'guest-nanaimo', 'accessories-canada'] as const;
 export const CANADA_STAFF = ['barista-maple', 'barista-aspen', 'barista-rowan', 'barista-birch', 'barista-cedar', 'barista-fiddler', 'barista-pianist'] as const;
 

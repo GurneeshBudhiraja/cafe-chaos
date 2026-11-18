@@ -6,13 +6,12 @@
  *
  * Two floors. Downstairs, inside the cabin (the left half, open along its
  * right side): two tables for two along the window wall, each under a wall
- * socket, a log table for two in front of the fireplace between them, and
- * a table for four in the middle. On the deck (the patio): two log tables.
- * On the lake's ice: a bench for two facing the lake.
- * Round the bonfire: two Muskoka chairs facing the fire. Upstairs, on the
+ * socket either side of the fireplace, and a table for four in the middle.
+ * On the deck (the patio): two log tables.
+ * Round the bonfire: three Muskoka chairs facing the fire. Upstairs, on the
  * upper deck over the counter (reached by the stairs outside the cabin's
  * right wall): four bistro tables, two either side of the rooftop piano.
- * Twenty-six seats in all; the game opens them table by table as the Japanese café's (the
+ * Twenty-three seats in all; the game opens them table by table as the Japanese café's (the
  * first two inside tables at the start).
  *
  * CafeSystem builds it when the Canadian café is chosen on the start card;
@@ -36,25 +35,18 @@ export const CANADA_LAYOUT: Placement[] = [
   // 4-5. The deck's front half: two log tables, either side of the heater (PatioSpot-1/2).
   { model: 'patio-table' as const, x: 0.15, z: 0.11 },
   { model: 'patio-table' as const, x: 0.31, z: 0.11 },
-  // 6. The lake: the bench on the ice (the dock is gone), its sitters facing the lake (and the player) (DockSpot).
-  { model: 'dock-bench' as const, x: 0.26, z: 0.25, y: 0.022 },
-  // 7-8. The bonfire: two chairs either side of the ring at (-0.27, 0.245), each turned to face it. The shell's third
-  // spot (FireSpot-2, in front of the ring at z 0.33) is past the plate's front edge (0.31): a chair there would hang
-  // over the player's real table, and behind the ring the cabin's front wall and the way out leave no room.
-  ...[180, 0].map((a) => {
-    const r = 0.085;
-    const rad = (a * Math.PI) / 180;
-    return { model: 'fire-chair' as const, x: -0.27 + r * Math.cos(rad), z: 0.245 - r * Math.sin(rad), yawDeg: a - 90 };
-  }),
+  // 6-8. The bonfire: three chairs round the ring at (-0.27, 0.245), radius 8.5 cm, each turned to face it (the
+  // shell's FireSpot-3 behind the ring, then FireSpot-1/2 either side in front; yaws as the glb's). The one behind
+  // the ring takes slot 6, the lake bench's until it was cut, so every other table keeps its index (and a save its tables).
+  { model: 'fire-chair' as const, x: -0.27, z: 0.16, yawDeg: 0 },
+  { model: 'fire-chair' as const, x: -0.3436, z: 0.2875, yawDeg: 120 },
+  { model: 'fire-chair' as const, x: -0.1964, z: 0.2875, yawDeg: -120 },
   // 9-12. Upstairs: the upper deck's four bistro tables (the shell's UpperSpot-1..4), back row then front, in two
   // columns either side of the piano; the aisle between the rows (z -0.18) lines up with the stairs' landing.
   { model: 'patio-table' as const, x: -0.32, z: -0.2225, y: CANADA_UPPER_TOP_M },
   { model: 'patio-table' as const, x: -0.03, z: -0.2225, y: CANADA_UPPER_TOP_M },
   { model: 'patio-table' as const, x: -0.32, z: -0.1375, y: CANADA_UPPER_TOP_M },
   { model: 'patio-table' as const, x: -0.03, z: -0.1375, y: CANADA_UPPER_TOP_M },
-  // 13. Inside again: a log table for two right in front of the hearth, between the window tables (TableSpot-6). Last,
-  // so every other table keeps its index (and a save its tables).
-  { model: 'patio-table' as const, x: -0.31, z: 0.02 },
 ];
 
 /**
@@ -68,13 +60,12 @@ export { CANADA_START_TABLES } from '../game/rules.js';
 export const CANADA_PLACES = {
   /** Seats whose table stands under a wall socket. */
   socketTables: [1, 2],
-  /** By the fireplace inside (the `warm` wish): both window tables, either side of the hearth, and the one in front of it. */
-  warmTables: [1, 2, 13],
+  /** By the fireplace inside (the `warm` wish): both window tables, either side of the hearth. */
+  warmTables: [1, 2],
   /** Everything not inside the cabin (the upper deck is outside too: it is open to the sky). */
   outsideTables: [4, 5, 6, 7, 8, 9, 10, 11, 12],
   patioTables: [4, 5],
-  lakeTables: [6],
-  bonfireTables: [7, 8],
+  bonfireTables: [6, 7, 8],
   /** Upstairs (the `upstairs` wish: a view over the café). */
   upperTables: [9, 10, 11, 12],
   /** Where a takeaway guest stands (the shell's `TakeawaySpot`). */

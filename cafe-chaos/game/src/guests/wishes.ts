@@ -40,7 +40,7 @@ import type { Seat } from './seats.js';
  * The Canadian café's wishes (docs/CANADA-PLAN.md) are places of its own:
  * `socket` (a table under a wall socket), `outside` (any seat not in the
  * cabin), `takeaway` (no table: carried to the counter's pick-up spot),
- * `lake` (the dock), `patio` (the deck), `bonfire` (the chairs round the
+ * `patio` (the deck), `bonfire` (the chairs round the
  * fire), `warm` (the tables by the fireplace), `upstairs` (the upper deck);
  * and `music` there is a seat in earshot of a musician the player has
  * bought (no guest sings there).
@@ -108,11 +108,10 @@ export function wishShort(wish: WishId): string {
 }
 
 /** The Canadian café's place wishes, and the ones that go together (both inside tables are by a socket and the fire; every outdoor place is outside). */
-const CANADA_PLACE_WISHES: WishId[] = ['socket', 'warm', 'outside', 'patio', 'lake', 'bonfire', 'upstairs'];
+const CANADA_PLACE_WISHES: WishId[] = ['socket', 'warm', 'outside', 'patio', 'bonfire', 'upstairs'];
 const CANADA_TOGETHER: [WishId, WishId][] = [
   ['socket', 'warm'],
   ['outside', 'patio'],
-  ['outside', 'lake'],
   ['outside', 'bonfire'],
   ['outside', 'upstairs'],
 ];
@@ -199,7 +198,8 @@ export function grants(wish: WishId, seat: Seat, self: number, sitters: Sitter[]
     case 'patio':
       return CANADA_PLACES.patioTables.includes(at);
     case 'lake':
-      return CANADA_PLACES.lakeTables.includes(at);
+      // The lake bench was cut from the Canadian café (model round 4): no seat is by the lake, and nobody wishes for it.
+      return false;
     case 'bonfire':
       return CANADA_PLACES.bonfireTables.includes(at);
     case 'upstairs':
@@ -251,7 +251,6 @@ export function openWishes(open: readonly Seat[], quietCorner: number, band: rea
     if (has(P.warmTables)) out.push('warm');
     if (has(P.outsideTables)) out.push('outside');
     if (has(P.patioTables)) out.push('patio');
-    if (has(P.lakeTables)) out.push('lake');
     if (has(P.bonfireTables)) out.push('bonfire');
     if (has(P.upperTables)) out.push('upstairs');
     // Music once a musician plays in earshot of an open seat.
