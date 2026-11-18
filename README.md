@@ -232,8 +232,7 @@ they were sized.
 - Theme music: "Tokyo Sunset (Lofi, Peaceful, Soft)" by HoliznaCC0, CC0 1.0
   ([details](cafe-chaos/game/public/audio/CREDITS.md)). Every other sound is
   made in code with the Web Audio API.
-- Fonts, all under the SIL Open Font License 1.1: Jost for the game's text
-  ([licence](cafe-chaos/game/public/fonts/OFL-Jost.txt)), Kalam
-  ([licence](cafe-chaos/game/public/fonts/OFL.txt)), and Fredoka for the logo
-  ([licence](cafe-chaos/game/assets/source/fonts/OFL.txt)).
+- Fonts, both under the SIL Open Font License 1.1: Jost for the game's text
+  ([licence](cafe-chaos/game/public/fonts/OFL-Jost.txt)) and Fredoka for the
+  logo ([licence](cafe-chaos/game/assets/source/fonts/OFL.txt)).
 - The models, the textures and the art were made for this game.
