@@ -91,6 +91,9 @@ mat('PianoBlack', (0.08, 0.07, 0.08), 0.35)
 mat('PianoKeys', (0.97, 0.96, 0.92), 0.4)
 mat('Plaid', (0.62, 0.16, 0.18), 0.9)
 mat('Mug', (0.97, 0.95, 0.90), 0.6)
+mat('BearFur', (0.10, 0.085, 0.08), 0.9)            # the black bear
+mat('BearMuzzle', (0.74, 0.56, 0.38), 0.85)
+mat('CupLid', (0.98, 0.98, 0.97), 0.5)
 
 # ------------------------------------------------------------------ helpers
 ROOT = bpy.data.objects.new('cafe-canada', None)
@@ -166,6 +169,29 @@ class Part:
 
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'textures.py')).read())   # textures + UVs onto the palette
 
+# Cel-shaded flames: three flat tones with hard edges, keeping the flat 2D look. A flame's UVs (made in
+# `flame_tongue`) carry u = how much a point faces the light (0 the shadow side, 1 the lit side) and v = height
+# (0 the foot, 1 the tip), so a 64 px band map gives it a dark tone on its shadow side and round its foot, its
+# own tone in the middle, and a light streak up the lit side. The bands go in as the emissive map at strength 1
+# (the colour the eye sees) and, at a third, as the base colour, so the sun's light on top of the glow cannot
+# wash the bands out to beige as the flat emissive did.
+def toon_flame(name, dark, mid, light):
+    n = 64
+    u = np.linspace(0, 1, n)[None, :].repeat(n, 0)
+    v = np.linspace(0, 1, n)[:, None].repeat(n, 1)          # row 0 is the image's bottom: v = 0, the foot
+    arr = np.empty((n, n, 3)); arr[:] = mid
+    arr[(u > 0.66) & (v > 0.16) & (v < 0.82)] = light
+    arr[(u < 0.30) | (v < 0.12)] = dark
+    m = MATS[name]; nt = m.node_tree; bsdf = nt.nodes['Principled BSDF']
+    te = nt.nodes.new('ShaderNodeTexImage'); te.image = _image(f'toon-{name}', arr); te.interpolation = 'Closest'
+    tb = nt.nodes.new('ShaderNodeTexImage'); tb.image = _image(f'toon-{name}-base', arr * 0.32); tb.interpolation = 'Closest'
+    nt.links.new(te.outputs['Color'], bsdf.inputs['Emission Color'])
+    nt.links.new(tb.outputs['Color'], bsdf.inputs['Base Color'])
+    bsdf.inputs['Emission Strength'].default_value = 1.0
+toon_flame('Fire', (0.80, 0.17, 0.04), (0.98, 0.42, 0.07), (1.0, 0.68, 0.24))        # deep red-orange / orange / amber
+toon_flame('FireCore', (1.0, 0.60, 0.14), (1.0, 0.80, 0.30), (1.0, 0.95, 0.66))      # amber / yellow / pale yellow
+FLAME_LIGHT = math.atan2(-0.6, -0.8)        # the lit side, in a tongue's own xy (Blender): toward the player's left-front
+
 def flat_ellipse(name, material, at, rx, rz, thick, seg=24, parent=ROOT):
     """A flat disc rx by rz (game x by z) of thickness `thick`, lying level, centred at `at`."""
     part = Part(name, material, smooth=True)
@@ -222,7 +248,7 @@ snow.boxb((0.04, 0.02, -0.055), (0.04, 0.004, 0.43))         # the cabin's doors
 # Every bank stays inside the plate (x ±0.46). The lake's back bank is two pieces, either side of the
 # dock (x 0.22 … 0.30): one long piece ran under the dock and 11 cm past the plate's right edge, its thin
 # tapered end a spike in the air. Long banks get more segments so their ends stay round, not pointed.
-for x, z, sx, sz in ((0.06, 0.19, 0.08, 0.02), (0.165, 0.19, 0.05, 0.018), (0.375, 0.19, 0.075, 0.018), (0.428, 0.255, 0.028, 0.055), (-0.075, 0.285, 0.035, 0.022), (0.0, 0.215, 0.028, 0.018)):
+for x, z, sx, sz in ((-0.01, 0.19, 0.03, 0.016), (0.165, 0.19, 0.05, 0.018), (0.375, 0.19, 0.075, 0.018), (0.428, 0.255, 0.028, 0.055), (-0.075, 0.285, 0.035, 0.022)):
     snow.sphere((x, 0.024, z), 1.0, seg=16 if sx > 2 * sz else 10, rings=6, scale=(sx, 0.008, sz))   # low round drifts (a long one pointed at the player read as a boulder)
 for i in range(7):
     x = -0.40 + i * 0.13
@@ -279,13 +305,12 @@ for k in range(WALL_LOGS):
         ends.cyl((CAB['x1'] + 0.006, y, CAB['z1']), LOG_R * 0.95, 0.012, axis='x', seg=8)
         ends.cyl((CAB['x0'], y, CAB['z1'] + 0.006), LOG_R * 0.95, 0.012, axis='z', seg=8)
 ends.done()
-# Corner posts: cream-trimmed square posts at the four corners and either side of the door.
+# Corner posts: square posts at the four corners and either side of the door gap. The door has no frame
+# (no tall posts, no lintel): the gap is just an opening in the knee-high wall, its posts as high as the wall.
 posts = Part('CabinPosts', 'PineDark')
 for px, pz in ((CAB['x0'], CAB['z0']), (CAB['x1'], CAB['z0']), (CAB['x0'], CAB['z1']), (CAB['x1'], CAB['z1']), (CAB['x1'], -0.02), (CAB['x1'], 0.08)):
-    tall = H if pz == CAB['z0'] or px == CAB['x1'] and pz in (-0.02, 0.08) else 4 * (2 * LOG_R - 0.0006) + 0.01
+    tall = H if pz == CAB['z0'] else 4 * (2 * LOG_R - 0.0006) + 0.01
     posts.boxb((px, FLOOR, pz), (0.016, tall, 0.016))
-# The door's lintel, and a top rail along the front half wall.
-posts.box((CAB['x1'], FLOOR + 4 * (2 * LOG_R - 0.0006) + 0.07, 0.03), (0.016, 0.014, 0.13))
 posts.done()
 # The left window: frame, glass, cross bar; the front window over the half wall, glass only in its upper half.
 frames = Part('WindowFrames', 'Cream')
@@ -305,16 +330,16 @@ shutters.done()
 Part('WindowGlass', 'Glass').box((wx, (wy0 + wy1) / 2, (wz0 + wz1) / 2), (0.003, wy1 - wy0, wz1 - wz0)).done()
 # Window sockets inside: two white plates on the left wall's inner face, one over each window table.
 sockets = Part('Sockets', 'Cream')
-for z in (-0.10, 0.10):
+for z in (-0.05, 0.09):
     sockets.box((wx + 0.009, FLOOR + 0.028, z), (0.003, 0.012, 0.012))
 sockets.done()
 slots = Part('SocketSlots', 'Wire')
-for z in (-0.10, 0.10):
+for z in (-0.05, 0.09):
     for dz in (-0.0025, 0.0025):
         slots.box((wx + 0.0108, FLOOR + 0.028, z + dz), (0.001, 0.004, 0.0012))
 slots.done()
-anchor('Socket-1', (wx + 0.01, FLOOR + 0.028, -0.10))
-anchor('Socket-2', (wx + 0.01, FLOOR + 0.028, 0.10))
+anchor('Socket-1', (wx + 0.01, FLOOR + 0.028, -0.05))
+anchor('Socket-2', (wx + 0.01, FLOOR + 0.028, 0.09))
 
 # Fire: tongues of flame shaped like real ones (a teardrop that swells near its foot, narrows to a licking tip
 # and curls a little), an orange outer flame round a yellow core, on a bed of glowing embers. Each tongue is its
@@ -322,6 +347,12 @@ anchor('Socket-2', (wx + 0.01, FLOOR + 0.028, 0.10))
 def flame_tongue(name, material, at, h, r, lean=(0.0, 0.0), curl=0.0, phase=0.0):
     part = Part(name, material, smooth=True)
     g = bmesh.ops.create_uvsphere(part.bm, u_segments=9, v_segments=8, radius=1.0)
+    uvl = part.bm.loops.layers.uv.verify()
+    for f in part.bm.faces:                                    # the band map's coordinates, from the round sphere (see toon_flame)
+        for l in f.loops:
+            c = l.vert.co
+            lit = (math.cos(math.atan2(c.y, c.x) - FLAME_LIGHT) * math.hypot(c.x, c.y) + 1) / 2
+            l[uvl].uv = (min(max(lit, 0.0), 1.0), (c.z + 1) / 2)
     for v in g['verts']:
         t = (v.co.z + 1) / 2                                   # 0 at the foot, 1 at the tip
         ang = math.atan2(v.co.y, v.co.x)
@@ -346,7 +377,7 @@ def fire(prefix, at, scale, tongues, parent_list):
 # beam mantel on corbels with a spruce garland, berries, two mugs and two stockings; the chimney breast
 # narrowing at a shoulder into the stack, up past the wall top, a cap, a clay pot and smoke. A fire-tool stand
 # and a plaid rug in front. Seats near it are warm.
-FPX, FPZ = CAB['x0'] + 0.0072, 0.015               # the wall's inner face and the hearth's middle (between the window and table 2: in sight over the half wall)
+FPX, FPZ = CAB['x0'] + 0.0072, 0.020               # the wall's inner face and the hearth's middle (between the window and table 2: in sight over the half wall)
 FO = 0.018                                          # half the firebox opening (along z)
 hearth = Part('Hearth', 'Stone')
 hearth.boxb((FPX + 0.006, FLOOR + 0.004, FPZ), (0.012, 0.042, 0.072))                     # back of the firebox
@@ -435,7 +466,8 @@ for i in range(SMOKE_N):
     smoke_objs.append(sm)
 
 # ------------------------------------------------------------------ the counter and the back bar
-CZ0, CZ1 = -0.20, -0.16      # the counter's back and front faces (the baristas stand behind, at z -0.204)
+CF = 0.045                   # the counter and the baristas came 4.5 cm forward (a deeper barista zone under a deeper upper deck)
+CZ0, CZ1 = -0.20 + CF, -0.16 + CF      # the counter's back and front faces (the baristas stand behind, at z -0.159)
 counter = Part('Counter', 'Red')
 counter.boxb((-0.1625, FLOOR, (CZ0 + CZ1) / 2), (0.385, 0.058, CZ1 - CZ0))   # x -0.355..0.03: a way out at the left end
 counter.done()
@@ -446,7 +478,7 @@ panels.done()
 Part('CounterTop', 'Cream').box((-0.1625, FLOOR + 0.061, (CZ0 + CZ1) / 2 + 0.004), (0.405, 0.006, CZ1 - CZ0 + 0.016)).done()
 Part('CounterTopEdge', 'PineDark').box((-0.1625, FLOOR + 0.058, CZ1 + 0.010), (0.405, 0.004, 0.006)).done()
 # The duckboard the baristas stand on (y 0.036: a 1.2 cm step, walked).
-Part('Duckboard', 'Deck').boxb((-0.19, FLOOR, -0.235), (0.44, 0.012, 0.07)).done()
+Part('Duckboard', 'Deck').boxb((-0.19, FLOOR, (-0.27 + CZ0) / 2), (0.44, 0.012, CZ0 - (-0.27))).done()
 # The back bar: a pine shelf unit against the back wall, coffee urns, cups, a donut tower.
 Part('BackBar', 'Pine').boxb((-0.19, FLOOR, -0.255), (0.42, 0.075, 0.03)).done()
 Part('BackBarTop', 'PineDark').box((-0.19, FLOOR + 0.077, -0.255), (0.43, 0.004, 0.034)).done()
@@ -476,14 +508,14 @@ Part('ShelfTins', 'Red').box((-0.095, FLOOR + 0.079 + 0.009, -0.258), (0.03, 0.0
 Part('ShelfTinLid', 'Cream').box((-0.095, FLOOR + 0.0985, -0.258), (0.032, 0.003, 0.018)).done()
 Part('ShelfMugs', 'Spruce', smooth=True).cyl((-0.055, FLOOR + 0.086, -0.255), 0.007, 0.014, seg=10).cyl((-0.035, FLOOR + 0.086, -0.255), 0.007, 0.014, seg=10).done()
 # The donut case at the counter's right end: a glass box of donuts, a till beside it.
-Part('DonutCaseBase', 'Cream').boxb((-0.02, FLOOR + 0.064, -0.18), (0.10, 0.004, 0.034)).done()
-Part('DonutCaseGlass', 'Glass').boxb((-0.02, FLOOR + 0.068, -0.18), (0.10, 0.03, 0.034)).done()
-Part('DonutCaseTop', 'PineDark').box((-0.02, FLOOR + 0.099, -0.18), (0.104, 0.003, 0.038)).done()
+Part('DonutCaseBase', 'Cream').boxb((-0.02, FLOOR + 0.064, -0.18 + CF), (0.10, 0.004, 0.034)).done()
+Part('DonutCaseGlass', 'Glass').boxb((-0.02, FLOOR + 0.068, -0.18 + CF), (0.10, 0.03, 0.034)).done()
+Part('DonutCaseTop', 'PineDark').box((-0.02, FLOOR + 0.099, -0.18 + CF), (0.104, 0.003, 0.038)).done()
 donuts = Part('Donuts', 'Donut', smooth=True)
 icings = {'IcingPink': Part('DonutIcingPink', 'IcingPink', smooth=True), 'IcingChoc': Part('DonutIcingChoc', 'IcingChoc', smooth=True), 'IcingMaple': Part('DonutIcingMaple', 'IcingMaple', smooth=True)}
 for i in range(6):
     x = -0.06 + (i % 3) * 0.032
-    z = -0.188 + (i // 3) * 0.016
+    z = -0.188 + CF + (i // 3) * 0.016
     y = FLOOR + 0.0705 + (i // 3) * 0.009
     g = bmesh.ops.create_cone(donuts.bm, cap_ends=True, segments=12, radius1=0.0095, radius2=0.0095, depth=0.006)
     bmesh.ops.transform(donuts.bm, matrix=Matrix.Translation(G(x, y, z)), verts=g['verts'])
@@ -493,16 +525,16 @@ for i in range(6):
 donuts.done()
 for p in icings.values():
     p.done()
-Part('Till', 'Cream').boxb((0.0, FLOOR + 0.064, -0.19), (0.028, 0.02, 0.022), rot_y=-12).done()
-Part('TillScreen', 'Wire').box((0.0, FLOOR + 0.084, -0.19), (0.026, 0.014, 0.004), rot_y=-12, rot_x=-20).done()
+Part('Till', 'Cream').boxb((0.0, FLOOR + 0.064, -0.19 + CF), (0.028, 0.02, 0.022), rot_y=-12).done()
+Part('TillScreen', 'Wire').box((0.0, FLOOR + 0.084, -0.19 + CF), (0.026, 0.014, 0.004), rot_y=-12, rot_x=-20).done()
 # A "pick up here" tag at the counter's right end, for takeaway.
 Part('TakeawayTag', 'Red').box((0.012, FLOOR + 0.072, CZ1 + 0.003), (0.02, 0.0005, 0.001)).done()
 text_mesh('TakeawayWords', 'PICK UP', 0.0056, 'Cream', (0.012, FLOOR + 0.0745, CZ1 + 0.0036), extrude=0.0003)
 Part('TakeawayTagBoard', 'Red').box((0.012, FLOOR + 0.0745, CZ1 + 0.002), (0.028, 0.01, 0.002)).done()
-anchor('TakeawaySpot', (0.0, FLOOR, -0.13), rot_y=180)   # 3 cm off the counter's front (z -0.16), clear of TableSpot-4
-anchor('BaristaSpot-1', (-0.235, 0.036, -0.204), rot_y=180)
-anchor('BaristaSpot-2', (-0.115, 0.036, -0.204), rot_y=180)
-anchor('BaristaSpot-3', (0.005, 0.036, -0.204), rot_y=180)
+anchor('TakeawaySpot', (0.0, FLOOR, -0.13 + CF), rot_y=180)   # 3 cm off the counter's front (z -0.115), clear of TableSpot-4
+anchor('BaristaSpot-1', (-0.235, 0.036, -0.204 + CF), rot_y=180)
+anchor('BaristaSpot-2', (-0.115, 0.036, -0.204 + CF), rot_y=180)
+anchor('BaristaSpot-3', (0.005, 0.036, -0.204 + CF), rot_y=180)
 
 # ------------------------------------------------------------------ the deck (the patio)
 DX0, DX1, DZ0, DZ1 = 0.06, 0.40, -0.12, 0.17
@@ -550,7 +582,6 @@ def string(a, b, n=7, sag=0.025):
 TOP = FLOOR + 0.125
 string((DX1, TOP, DZ0), (DX1, TOP, DZ1))
 string((DX1, TOP, DZ1), (DX0, TOP, DZ1))
-string((DX0, TOP, DZ1), (CAB['x1'], FLOOR + 0.10, 0.08), n=4, sag=0.012)
 wire.done()
 bulbs.done()
 # A patio heater: a steel pole with a mushroom top, snow on the top.
@@ -559,20 +590,52 @@ Part('HeaterBase', 'Steel', smooth=True).cyl((0.235, FLOOR + 0.004, 0.0), 0.018,
 Part('HeaterHood', 'Steel', smooth=True).cyl((0.235, FLOOR + 0.102, 0.0), 0.022, 0.012, seg=12, r2=0.006).done()
 Part('HeaterGlow', 'Bulb', smooth=True).cyl((0.235, FLOOR + 0.094, 0.0), 0.009, 0.01, seg=10).done()
 Part('HeaterSnow', 'Snow').cyl((0.235, FLOOR + 0.110, 0.0), 0.012, 0.004, seg=10).done()
-# The musician's stage, back of the deck: a round low platform, two posts and a snow-capped awning.
-Part('Stage', 'PineDark', smooth=True).cyl((0.30, FLOOR + 0.005, -0.21), 0.045, 0.01, seg=16).done()
-Part('StageTop', 'Deck', smooth=True).cyl((0.30, FLOOR + 0.0105, -0.21), 0.044, 0.001, seg=16).done()
-sp = Part('StagePosts', 'PineDark')
-for x in (0.262, 0.338):
-    sp.boxb((x, FLOOR + 0.01, -0.245), (0.008, 0.11, 0.008))
-sp.done()
-Part('StageAwning', 'Red').box((0.30, FLOOR + 0.122, -0.215), (0.10, 0.006, 0.075), rot_x=10).done()
-Part('StageAwningSnow', 'Snow').box((0.30, FLOOR + 0.128, -0.215), (0.102, 0.006, 0.077), rot_x=10).done()
-scallops = Part('AwningScallops', 'Cream', smooth=True)
-for i in range(6):
-    scallops.cyl((0.258 + i * 0.0168, FLOOR + 0.118 - 0.0065, -0.1785), 0.0084, 0.004, axis='z', seg=10)
-scallops.done()
-anchor('MusicianSpot', (0.30, FLOOR + 0.011, -0.21), rot_y=180)
+# The bear, behind the deck where the musician's stage stood: a low-poly black bear sitting in the snow, legs out
+# in front, holding a red takeaway cup with a white lid in both paws under its chin, turned toward the player.
+BEX, BEZ, BYAW = 0.31, -0.205, math.radians(-15)
+def bp(x, y, z):
+    """A point in the bear's own frame (+z its front) to game space."""
+    return (BEX + x * math.cos(BYAW) + z * math.sin(BYAW), FLOOR + y, BEZ - x * math.sin(BYAW) + z * math.cos(BYAW))
+def limb(part, a, b, r, seg=8):
+    """An ellipsoid from a to b (game space), r thick."""
+    a, b = G(*a), G(*b)
+    d = b - a
+    g = bmesh.ops.create_uvsphere(part.bm, u_segments=seg, v_segments=6, radius=1.0)
+    M = Matrix.Translation((a + b) / 2) @ d.to_track_quat('Z', 'Y').to_matrix().to_4x4() @ Matrix.Diagonal(Vector((r, r, d.length / 2 + r * 0.5, 1)))
+    bmesh.ops.transform(part.bm, matrix=M, verts=g['verts'])
+fur = Part('Bear', 'BearFur')
+fur.sphere(bp(0, 0.016, 0.002), 1.0, seg=10, rings=7, scale=(0.028, 0.017, 0.024))       # seat and belly
+fur.sphere(bp(0, 0.030, -0.001), 1.0, seg=10, rings=7, scale=(0.024, 0.022, 0.020))      # chest
+fur.sphere(bp(0, 0.057, 0.003), 1.0, seg=10, rings=7, scale=(0.019, 0.017, 0.017))      # head
+for sx in (1, -1):
+    fur.sphere(bp(sx * 0.0135, 0.0715, 0.0), 1.0, seg=8, rings=5, scale=(0.0065, 0.0065, 0.004))     # ears
+    limb(fur, bp(sx * 0.014, 0.010, 0.006), bp(sx * 0.019, 0.008, 0.026), 0.0095)                    # legs out in front
+    fur.sphere(bp(sx * 0.019, 0.0085, 0.030), 1.0, seg=8, rings=6, scale=(0.0085, 0.0085, 0.0065))  # feet
+    limb(fur, bp(sx * 0.021, 0.038, 0.004), bp(sx * 0.011, 0.030, 0.024), 0.0062)                    # arms round to the cup
+    fur.sphere(bp(sx * 0.0105, 0.030, 0.0255), 1.0, seg=8, rings=6, scale=(0.0058, 0.0058, 0.0055)) # paws on the cup
+fur.done()
+tan = Part('BearMuzzle', 'BearMuzzle')
+tan.sphere(bp(0, 0.052, 0.0175), 1.0, seg=8, rings=6, scale=(0.0095, 0.0072, 0.0072))   # muzzle
+tan.sphere(bp(0, 0.020, 0.0205), 1.0, seg=8, rings=6, scale=(0.014, 0.012, 0.005))      # belly patch, under the cup
+for sx in (1, -1):
+    tan.sphere(bp(sx * 0.0135, 0.0715, 0.0032), 1.0, seg=8, rings=5, scale=(0.0038, 0.0038, 0.0018))   # inner ears
+    tan.sphere(bp(sx * 0.019, 0.0085, 0.0355), 1.0, seg=8, rings=5, scale=(0.0055, 0.0058, 0.0016))    # foot pads, soles to the player
+tan.done()
+face = Part('BearFace', 'PianoBlack')
+face.sphere(bp(0, 0.0555, 0.0245), 1.0, seg=8, rings=5, scale=(0.0038, 0.0027, 0.0025))  # nose
+for sx in (1, -1):
+    face.sphere(bp(sx * 0.0075, 0.0615, 0.0165), 1.0, seg=6, rings=4, scale=(0.0021, 0.0024, 0.0016))   # eyes
+face.done()
+blush = Part('BearBlush', 'IcingPink')
+for sx in (1, -1):
+    blush.sphere(bp(sx * 0.0125, 0.0525, 0.0145), 1.0, seg=6, rings=4, scale=(0.0028, 0.0018, 0.0012))
+blush.done()
+cup = bp(0, 0.0305, 0.028)
+Part('BearCup', 'Red').cyl(cup, 0.0066, 0.017, seg=12, r2=0.0082).done()                     # a red takeaway cup, wider at the top
+Part('BearCupLid', 'CupLid').cyl((cup[0], cup[1] + 0.0098, cup[2]), 0.0088, 0.0026, seg=12).cyl((cup[0], cup[1] + 0.0118, cup[2]), 0.0068, 0.0016, seg=12, r2=0.0055).done()
+Part('BearHeadSnow', 'Snow', smooth=True).sphere(bp(0, 0.0725, 0.0), 1.0, seg=8, rings=5, scale=(0.009, 0.0022, 0.008)).done()   # a little snow on its head
+# The violinist (once bought) stands on the snow at the bear's left, by the deck's back rail.
+anchor('MusicianSpot', (0.205, FLOOR, -0.19), rot_y=180)
 # Patio table spots and the deck's seats are furniture pieces (phase 2); marked for the layout.
 anchor('PatioSpot-1', (0.16, FLOOR, 0.08))
 anchor('PatioSpot-2', (0.31, FLOOR, 0.06))
@@ -585,12 +648,12 @@ anchor('PatioSpot-2', (0.31, FLOOR, 0.06))
 # from it; the rooftop sign stands at its back. Guests reach it by the stairs outside the cabin's right wall, from
 # the patio. Everything on this floor is named Upper* / Stair* / Landing* / Piano* / RoofSign*.
 UY = FLOOR + H + 0.006                              # the upper floor's top (0.155)
-UX0, UX1, UZ0, UZ1 = CAB['x0'] - 0.005, CAB['x1'], CAB['z0'] - 0.005, -0.150
+UX0, UX1, UZ0, UZ1 = CAB['x0'] - 0.005, CAB['x1'], CAB['z0'] - 0.005, -0.090   # 18.5 cm deep: two rows of two tables
 ROOT['upper_floor_top_y_m'] = round(UY, 4)
 Part('UpperDeckFloor', 'Deck').box(((UX0 + UX1) / 2, UY - 0.003, (UZ0 + UZ1) / 2), (UX1 - UX0, 0.006, UZ1 - UZ0)).done()
 ug = Part('UpperDeckGrooves', 'PineDark')
-for i in range(1, 9):
-    ug.boxb(((UX0 + UX1) / 2, UY + 0.0001, UZ0 + i * (UZ1 - UZ0) / 9), (UX1 - UX0, 0.0005, 0.0015))
+for i in range(1, 13):
+    ug.boxb(((UX0 + UX1) / 2, UY + 0.0001, UZ0 + i * (UZ1 - UZ0) / 13), (UX1 - UX0, 0.0005, 0.0015))
 ug.done()
 Part('UpperFascia', 'Cream').box(((UX0 + UX1) / 2, UY - 0.005, UZ1 + 0.001), (UX1 - UX0, 0.012, 0.003)).done()
 up = Part('UpperPosts', 'PineDark')
@@ -603,7 +666,7 @@ RAIL_H = 0.022
 rail_u = Part('UpperRail', 'PineDark')
 for x in (UX0 + 0.003, -0.30, -0.19, -0.08, UX1 - 0.006):
     rail_u.boxb((x, UY, UZ1 - 0.003), (0.005, RAIL_H, 0.005))
-for z in (UZ0 + 0.004, -0.21):
+for z in (UZ0 + 0.004, -0.21, -0.15):
     rail_u.boxb((UX0 + 0.003, UY, z), (0.005, RAIL_H, 0.005))
 for y in (RAIL_H, RAIL_H / 2):
     rail_u.box(((UX0 + UX1) / 2, UY + y, UZ1 - 0.003), (UX1 - UX0, 0.003, 0.003))
@@ -648,9 +711,10 @@ for i, line in enumerate(('2x2 COFFEE  2', 'SNOWBITS  3', 'BEAVER TAIL  4', 'MAP
     text_mesh(f'Menu-{i}', line, 0.0050, 'ChalkText', (MBX, MBY + 0.0062 - i * 0.0062, MBZ + 0.0018), extrude=0.0003)
 
 # The rooftop sign: the cream board with the red oval and the words, on two legs at the deck's back, its bottom
-# 3 cm up so the seated guests in front of it do not hide it; the mountains rise behind it.
-SGY = UY + 0.062
-Part('RoofSignLegs', 'PineDark').boxb((-0.31, UY, UZ0 + 0.006), (0.006, 0.03, 0.006)).boxb((-0.03, UY, UZ0 + 0.006), (0.006, 0.03, 0.006)).done()
+# 7 cm up so the seated guests and the pianist in front of it do not hide it; the mountains rise behind it.
+SIGN_LIFT = 0.04    # raised 4 cm so the seated pianist does not hide the logo; the legs grow by the same
+SGY = UY + 0.062 + SIGN_LIFT
+Part('RoofSignLegs', 'PineDark').boxb((-0.31, UY, UZ0 + 0.006), (0.006, 0.03 + SIGN_LIFT, 0.006)).boxb((-0.03, UY, UZ0 + 0.006), (0.006, 0.03 + SIGN_LIFT, 0.006)).done()
 Part('RoofSignBoard', 'Cream').box((-0.17, SGY, UZ0 + 0.006), (0.30, 0.064, 0.008)).done()
 Part('RoofSignTrim', 'PineDark').box((-0.17, SGY + 0.034, UZ0 + 0.006), (0.31, 0.006, 0.012)).done()
 Part('RoofSignSnow', 'Snow', smooth=True).box((-0.17, SGY + 0.039, UZ0 + 0.006), (0.31, 0.005, 0.014)).done()
@@ -683,8 +747,9 @@ Part('PianoBench', 'PianoBlack').boxb((PX + 0.054, UY, PZ), (0.014, 0.0095, 0.03
 Part('PianoBenchCushion', 'Red').box((PX + 0.054, UY + 0.010, PZ), (0.013, 0.0012, 0.028)).done()
 anchor('PianoSpot', (PX + 0.056, UY, PZ), rot_y=90)          # facing -X, the keys
 anchor('UpperFloorTop', (-0.19, UY, -0.17))
-anchor('UpperSpot-1', (-0.27, UY, PZ))
-anchor('UpperSpot-2', (-0.11, UY, PZ))
+# Four bistro tables in two rows of two: the back row where the two stood, the front row 8.5 cm nearer the player.
+for i, (x, z) in enumerate(((-0.27, -0.2225), (-0.11, -0.2225), (-0.27, -0.1375), (-0.11, -0.1375))):
+    anchor(f'UpperSpot-{i + 1}', (x, UY, z))
 
 # ------------------------------------------------------------------ the stairs up to it, outside the cabin's right wall
 # Fifteen 8.7 mm steps of 9 mm (under the walk grid's 1.35 cm step, and about one guest stride each), climbing
@@ -830,6 +895,21 @@ pavers = Part('Pavers', 'StoneDark')
 for i, (x, z) in enumerate(((0.02, 0.19), (-0.05, 0.215), (-0.12, 0.235), (-0.18, 0.25))):
     pavers.boxb((x, 0.0241, z), (0.04, 0.0006, 0.035), rot_y=20 - i * 10)
 pavers.done()
+# The exit walkway: a flagstone path from the deck's front edge by the cabin door straight to the plate's front
+# edge, between the bonfire's snow and the lake. Guests leave the café along it (`Exit`, at its foot). Irregular
+# flat stones, two staggered per row, their tops 1.5 mm proud of the snow (a guest steps over nothing).
+walk = Part('ExitWalk', 'Stone', smooth=True)
+WKX, WKZ0, WKZ1 = 0.06, 0.182, 0.300
+rows = 7
+for r in range(rows):
+    z = WKZ0 + (WKZ1 - WKZ0) * r / (rows - 1)
+    for k, dx in enumerate((-0.0135, 0.0135) if r % 2 == 0 else (-0.019, 0.004, 0.024)):
+        j = math.sin(r * 12.9898 + k * 78.233) * 43758.5453 % 1.0      # a repeatable jitter per stone
+        sx = (0.0115 if r % 2 == 0 else 0.0085) * (0.9 + 0.2 * j)
+        sz = 0.0085 * (0.92 + 0.16 * ((j * 7.0) % 1.0))
+        walk.sphere((WKX + dx + 0.002 * (j - 0.5), FLOOR, z + 0.002 * (0.5 - j)), 1.0, seg=9, rings=4, scale=(sx, 0.0015, sz))
+walk.done()
+anchor('Exit', (WKX, FLOOR, 0.295))   # the walkway's foot at the plate's front edge, facing +Z (away from the café)
 
 # ------------------------------------------------------------------ the gate, the mailbox, the trees
 GX = 0.42
@@ -1060,10 +1140,12 @@ anchor('BenchSpot', (0.235, FLOOR, 0.165))     # kept for compatibility; the que
 # columns are tables for two (the window ones under the sockets), the middle one the long table for four
 # (turned 90°, centred on the axis), so each aisle beside it is 4.2 cm. The rows sit 1 cm in from the
 # sockets so the door column's back table clears a takeaway guest at the till (`TakeawaySpot`).
-anchor('TableSpot-1', (-0.31, FLOOR, -0.09))
+# Since the counter came forward the room runs z -0.115 .. 0.153; the rows sit either side of its middle (0.02),
+# which is also the fireplace's, so the window pair frames the hearth and the long table lines up with it.
+anchor('TableSpot-1', (-0.31, FLOOR, -0.05))
 anchor('TableSpot-2', (-0.31, FLOOR, 0.09))
-anchor('TableSpot-3', (-0.17, FLOOR, 0.0))
-anchor('TableSpot-4', (-0.03, FLOOR, -0.09))
+anchor('TableSpot-3', (-0.17, FLOOR, 0.02))
+anchor('TableSpot-4', (-0.03, FLOOR, -0.05))
 anchor('TableSpot-5', (-0.03, FLOOR, 0.09))
 
 # ------------------------------------------------------------------ the Ambient clip: the smoke puffs rise, the flames flicker
@@ -1191,3 +1273,7 @@ shot('upper-deck', (0.10, 0.36, 0.30), (-0.17, 0.16, -0.21), lens=45)
 shot('stairs', (0.30, 0.22, 0.16), (0.07, 0.09, -0.09), lens=50)
 shot('fireplace', (-0.22, 0.16, 0.34), (-0.39, 0.06, 0.12), lens=55)
 shot('backdrop', (0.05, 0.30, 0.62), (0.05, 0.15, -0.29), lens=40)
+shot('exit-walk', (0.16, 0.24, 0.58), (0.04, 0.04, 0.16), lens=50)
+shot('door', (0.26, 0.20, 0.30), (0.03, 0.06, 0.03), lens=50)
+shot('bear', (0.36, 0.13, 0.05), (0.31, 0.06, -0.20), lens=55)
+shot('rooftop-sign', (-0.17, 0.30, 0.40), (-0.17, 0.22, -0.27), lens=45)
