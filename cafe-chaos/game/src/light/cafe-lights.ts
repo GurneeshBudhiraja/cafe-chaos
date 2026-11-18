@@ -8,7 +8,7 @@
 
 import { Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, Object3D, PointLight, SpotLight, type HemisphereLight, type Material, type Sprite } from '@iwsdk/core';
 import { makeHalo } from './halo.js';
-import { GLOW, HALOS, HOUSE, LAMPS, MOON } from './mood.js';
+import { DAY, GLOW, HALOS, HOUSE, LAMPS, MOON } from './mood.js';
 import { makeSpill } from './spill.js';
 
 export interface CafeLights {
@@ -91,13 +91,23 @@ function setShadowFlags(root: Object3D): void {
   });
 }
 
-/** Turn the glowing papers up for the night (shared materials: once is enough). */
-function brightenGlow(root: Object3D): void {
+/**
+ * Light the Canadian café's pieces as it is built (CafeSystem.setCafe): their
+ * glow set for the day (DAY.glow) and their opaque meshes casting and taking
+ * shadows from the sun.
+ */
+export function lightDay(root: Object3D): void {
+  brightenGlow(root, DAY.glow);
+  setShadowFlags(root);
+}
+
+/** Turn the glowing papers up for the night (shared materials: once is enough); `table` names each material's glow. */
+function brightenGlow(root: Object3D, table: Record<string, { strength: number; color?: number }> = GLOW): void {
   const done = new Set<Material>();
   root.traverse((node) => {
     if (!(node instanceof Mesh)) return;
     for (const m of Array.isArray(node.material) ? node.material : [node.material]) {
-      const glow = GLOW[m.name];
+      const glow = table[m.name];
       if (!glow || done.has(m) || !('emissiveIntensity' in m)) continue;
       const lit = m as MeshStandardMaterial;
       lit.emissiveIntensity = glow.strength;

@@ -139,15 +139,16 @@ export const OUTSIDE_X = -0.345;
 export const ANNEX_OUTSIDE_X = -0.645;
 
 /**
- * The Canadian café's way out: from the cabin door round its front corner,
- * along the stepping slabs past the bonfire, and off the plate's left edge
- * between the cabin's front wall and the fire chairs, where leavers fade.
- * (models/27-cafe-canada/INTEGRATION.md, "Walkways".)
+ * The Canadian café's way out: from the cabin's door along the doorstep to
+ * the deck's front edge and down the exit walkway to the shell's `Exit`
+ * anchor (0.06, 0.295) at the plate's front edge, where leavers fade
+ * (models/27-cafe-canada/INTEGRATION.md, "Walkways"). Three spots side by
+ * side across the walkway's foot.
  */
 export const CANADA_EXIT_LANES: { x: number; z: number }[] = [
-  { x: -0.452, z: 0.19 },
-  { x: -0.456, z: 0.205 },
-  { x: -0.452, z: 0.22 },
+  { x: 0.045, z: 0.298 },
+  { x: 0.06, z: 0.302 },
+  { x: 0.075, z: 0.298 },
 ];
-/** Leavers march once they are past the cabin's front-left corner (x below this, café space). */
-export const CANADA_OUTSIDE_X = -0.4;
+/** Leavers march once they are on the exit walkway, in front of the cabin and the deck (z over this, café space). */
+export const CANADA_OUTSIDE_Z = 0.2;

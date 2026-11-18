@@ -24,10 +24,11 @@ export const OUT_DIR = 'artifacts';
  * about 96 degrees per eye), `record` (a video name, or none),
  * `maxSpeedUp` (how far the session may be slowed to gather frames: the
  * video plays back at measured fps x speed-up, so a slow scene wants a
- * higher cap at the cost of recording time), and `prepare(h)`, run
- * before the first kept frame.
+ * higher cap at the cost of recording time), `prepare(h)`, run
+ * before the first kept frame, and `sound` (the checks that test the music
+ * and sounds: on localhost the game is silent without it).
  */
-export async function startHeadset({ size = { width: 1032, height: 800 }, fovDeg = 96, record = null, maxSpeedUp = 4, prepare } = {}) {
+export async function startHeadset({ size = { width: 1032, height: 800 }, fovDeg = 96, record = null, maxSpeedUp = 4, prepare, sound = false } = {}) {
   mkdirSync(OUT_DIR, { recursive: true });
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args: ['--ignore-certificate-errors', '--autoplay-policy=no-user-gesture-required'] });
   const startedAt = Date.now();
@@ -42,7 +43,7 @@ export async function startHeadset({ size = { width: 1032, height: 800 }, fovDeg
   page.on('pageerror', (e) => errors.push(e.message));
   // On localhost the game is silent (src/audio/muted.ts); a recording keeps its sound (`sound` in the address).
   const url = new URL(APP_URL);
-  if (record) url.searchParams.set('sound', '');
+  if (record || sound) url.searchParams.set('sound', '');
   await page.goto(url.toString(), { waitUntil: 'load' });
   await page.waitForFunction(() => window.__cafe?.world && window.IWER_DEVICE, null, { timeout: 30000 });
   await page.evaluate(installHelpers);
