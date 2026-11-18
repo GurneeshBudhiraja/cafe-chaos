@@ -36,7 +36,7 @@
 import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 import { HandRays } from '../hands/hand-ray.js';
 import { arrivalGap, COLD, coldChance, HAPPINESS, HURRY, hurryChance, STORM, JANITOR2_PRICE, JANITOR_PRICE, pairChance, PAIRS, LEVEL, levelBonus, levelGoal, linePatience, MAX_STAFF, MEAL_SECONDS, queueCap, startTables } from '../game/rules.js';
-import { CAFE_NAMES, CANADA_PRICE, current, TRIAL_LEVELS, type CafeId } from '../cafe/style.js';
+import { CAFE_NAMES, CANADA_PRICE, current, isCanada, TRIAL_LEVELS, type CafeId } from '../cafe/style.js';
 import { howToPlay } from '../game/how-to-play.js';
 import { forecastFor } from '../game/forecast.js';
 import { CafeEvents } from '../game/events.js';
@@ -45,7 +45,7 @@ import type { Forecast } from '../game/rules.js';
 import { TABLE_RINGS } from '../cafe/layout.js';
 import { CANADA_TABLE_RINGS } from '../cafe/canada-layout.js';
 import { newSeed, tableOrder } from '../game/table-order.js';
-import { PLACES } from '../guests/wishes.js';
+import { PLACES, type WishId } from '../guests/wishes.js';
 import { freshProgress, SaveBook, TEST_MODE, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS, SPAWN_SECONDS } from '../guests/rules.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
@@ -60,7 +60,7 @@ import { SoundSystem } from './sound-system.js';
 import { LEVELS, StartMenu, type CafeTile } from '../ui/start-menu.js';
 import type { DrawerRow } from '../ui/shop-drawer.js';
 import { TipCard, TIP } from '../ui/tip-card.js';
-import { TIP_GAP, TIP_ORDER, TIPS, tipIcon, type TipId } from '../game/tips.js';
+import { TIP_GAP, TIP_ORDER, TIPS, tipIcon, WISH_TIPS, type TipId } from '../game/tips.js';
 import { CafeSystem } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
 import { HandleSystem } from './handle-system.js';
@@ -543,6 +543,10 @@ export class GameSystem extends createSystem({}) {
     }
     this.readyAt = -1;
     this.applyLocks();
+    // The game's wish types met so far, and its guest count (new types come in by count: guests/wish-plan.ts).
+    this.guests.gameGuests = s.wishGuests;
+    this.guests.seenWishes = new Set(s.wishSeen as WishId[]);
+    this.guests.seatHints = s.seatHints;
     this.score.trial = this.trial ? (s.level > TRIAL_LEVELS ? 'done' : 'on') : 'off';
     this.score.trialLevels = TRIAL_LEVELS;
   }
@@ -698,8 +702,8 @@ export class GameSystem extends createSystem({}) {
   }
 
   /** Settings as the menu shows them. */
-  private settingsState(): { music: number; sounds: number } {
-    return { music: this.save.music, sounds: this.save.sounds };
+  private settingsState(): { music: number; sounds: number; hints: boolean } {
+    return { music: this.save.music, sounds: this.save.sounds, hints: this.save.seatHints };
   }
 
   private openSettings(from: 'title' | 'pause'): void {
@@ -847,6 +851,7 @@ export class GameSystem extends createSystem({}) {
     this.mess.clear();
     this.mess.enabled = true;
     this.score.startRun();
+    this.guests.startRun();
     this.calm();
     this.forecast = forecastFor();
     this.level = Math.max(1, Math.floor(this.save.level));
@@ -1161,6 +1166,11 @@ export class GameSystem extends createSystem({}) {
       this.save.metHurry = true;
       g.hurryIn(3);
     }
+    // The first singer too (the Japanese café, from level 3): the music and quiet wishes need one to come in.
+    if (this.phase === 'run' && !isCanada() && this.level >= LEVEL.singerFrom && !this.save.metSinger) {
+      this.save.metSinger = true;
+      g.forceSinger = true;
+    }
     if (this.phase === 'run' && this.level >= PAIRS.from && !this.save.metPair) {
       this.save.metPair = true;
       g.forcePair = true;
@@ -1183,6 +1193,8 @@ export class GameSystem extends createSystem({}) {
     this.save.janitor2 = this.shop.janitor2;
     this.save.musicians = this.shop.musicians;
     this.save.tables = [...this.shop.tables];
+    this.save.wishGuests = this.guests.gameGuests;
+    this.save.wishSeen = [...this.guests.seenWishes];
     if (this.phase === 'run' || this.phase === 'paused' || this.phase === 'shopping' || this.phase === 'closed') {
       this.save.level = this.level;
       this.save.levelServed = this.levelServed;
@@ -1253,7 +1265,7 @@ export class GameSystem extends createSystem({}) {
       const look = randomLook(Math.random);
       if (castLoaded(look)) {
         // The first run teaches the pinch and the seat, not wishes: its guest is happy anywhere.
-        this.guests.spawn(look).wishes = [];
+        this.guests.spawn(look, true);
         this.needGuest = false;
       }
     }
@@ -1479,6 +1491,9 @@ export class GameSystem extends createSystem({}) {
   }
 
   /** Is this tip's moment here (and is there something to put it next to)? */
+  /** The guest the card tip was shown next to (it does not get the "new wish" tip as well). */
+  private cardGuest = 0;
+
   private tipDue(id: TipId): boolean {
     const guests = this.guests.guests;
     switch (id) {
@@ -1499,6 +1514,29 @@ export class GameSystem extends createSystem({}) {
       case 'storm':
         // Not a tip: the storm's note (tendEvents).
         return false;
+      case 'card': {
+        // The first guest with a wish: read its card.
+        const g = guests.find((x) => x.state === 'queued' && x.wishes.length > 0);
+        this.tipAt = g ? { guest: g.id } : {};
+        return !!g;
+      }
+      case 'company':
+      case 'music':
+      case 'kind':
+      case 'meet':
+      case 'avoid': {
+        const kinds = WISH_TIPS[id] ?? [];
+        const g = guests.find((x) => x.state === 'queued' && x.wishes.some((w) => kinds.includes(w)));
+        this.tipAt = g ? { guest: g.id } : {};
+        return !!g;
+      }
+      case 'newwish': {
+        // A guest bringing any other wish type for the first time (a new place, a hat): "A new wish. Read the card."
+        const covered = Object.values(WISH_TIPS).flat();
+        const g = guests.find((x) => x.state === 'queued' && x.firstWish && x.firstWish !== 'friend' && !covered.includes(x.firstWish) && this.save.tips.includes('card') && x.id !== this.cardGuest);
+        this.tipAt = g ? { guest: g.id } : {};
+        return !!g;
+      }
       case 'pair': {
         const g = guests.find((x) => x.friend && x.state === 'queued' && guests.some((y) => y.id === x.friend && y.state === 'queued'));
         this.tipAt = g ? { guest: g.id } : {};
@@ -1532,7 +1570,14 @@ export class GameSystem extends createSystem({}) {
         return true;
       case 'hurry':
       case 'cold':
-      case 'pair': {
+      case 'pair':
+      case 'card':
+      case 'company':
+      case 'music':
+      case 'kind':
+      case 'meet':
+      case 'avoid':
+      case 'newwish': {
         const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
         // Picked up is enough: the player has it in hand (the card would hang over the hand).
         return !g || g.state === 'seated' || g.state === 'leaving' || g.state === 'held' || g.state === 'hop';
@@ -1548,6 +1593,7 @@ export class GameSystem extends createSystem({}) {
     this.tipsShown++;
     if (this.sound) this.sound.tips = this.tipsShown;
     this.save.tips.push(id);
+    if (id === 'card') this.cardGuest = this.tipAt.guest ?? 0;
     this.tipMark = id === 'table' ? this.shop.tablesBought : id === 'shop' ? this.shop.purchases : 0;
     const t = TIPS[id];
     this.tip.show(t.title.replace('{n}', `${levelGoal(this.level)}`), t.text, tipIcon(id));
@@ -1811,6 +1857,13 @@ export class GameSystem extends createSystem({}) {
         break;
       case 'close':
         this.closeSheet();
+        break;
+      case 'hints':
+        // Seat hints (Settings): the seats meeting a carried guest's wishes glow.
+        this.save.seatHints = !this.save.seatHints;
+        this.guests.seatHints = this.save.seatHints;
+        this.persist();
+        this.menu.updateSettings(this.settingsState());
         break;
       case 'music-':
       case 'music+':

@@ -28,12 +28,12 @@
  */
 
 import { Vector3, type Object3D } from '@iwsdk/core';
-import { WISH_SHORT, type WishId } from '../guests/wishes.js';
+import { wishShort, type WishId } from '../guests/wishes.js';
 import { Panel } from './panel.js';
 import { hand, pen } from './sketch.js';
 
 /** The card's size (real metres: room for three wishes), and where it stands from the guest's head: this far to the side and above. */
-export const WISH_CARD = { width: 0.15, height: 0.125, side: 0.115, above: 0.045 };
+export const WISH_CARD = { width: 0.15, height: 0.16, side: 0.115, above: 0.045 };
 /** Design units across (the drawing is scaled to the card). */
 const W = 330;
 const C = { paper: '#d9cfbe', paperHi: '#e4d9c6', timber: '#66462f', band: '#2a2420', ink: '#16171d', soft: '#5a4030', moss: '#3d6136', mossDeep: '#2f522d', mossPale: '#cfe0c8', koi: '#9a2208', amber: '#c98a1e', amberDeep: '#8a5c10', koiDeep: '#6e1806', empty: '#cfc3ae', emptyLine: '#b6a993', cream: '#f2ebdd' };
@@ -49,6 +49,11 @@ export interface CardSubject {
   /** In a hurry (the card says so), and the friend it came with (a pair), if any. */
   hurried?: boolean;
   friend?: string | null;
+  /** The guest its named wish names (meet, avoid), and its own shape's name (kind). */
+  other?: string | null;
+  shape?: string;
+  /** A line in its own words (its first wish's), under its name. */
+  line?: string;
   /** Its patience: the share left (0 to 1) and the seconds left. */
   left: number;
   seconds: number;
@@ -84,7 +89,7 @@ export class WishCards {
     const card = this.cards[i];
     if (subject && at) {
       const steps = Math.ceil(subject.left * SEGMENTS * 4);
-      const key = `${subject.id}|${subject.wishes.join()}|${subject.sings}|${subject.hurried ?? ''}|${subject.friend ?? ''}|${Math.max(0, Math.ceil(subject.seconds))}|${steps}|${subject.preview?.join() ?? ''}`;
+      const key = `${subject.id}|${subject.wishes.join()}|${subject.sings}|${subject.hurried ?? ''}|${subject.friend ?? ''}|${subject.other ?? ''}|${subject.line ?? ''}|${Math.max(0, Math.ceil(subject.seconds))}|${steps}|${subject.preview?.join() ?? ''}`;
       if (key !== this.shown[i]) {
         this.shown[i] = key;
         card.set((ctx, w, h) => draw(ctx, w, h, card.canvas, subject));
@@ -100,6 +105,22 @@ export class WishCards {
     card.show(!!subject && !!at);
     card.update(delta, headWorld);
   }
+}
+
+/** `s` in lines that fit `width` at `size` (the hand font, regular). */
+function wrap(ctx: CanvasRenderingContext2D, s: string, size: number, width: number): string[] {
+  ctx.font = hand(size, 400);
+  const out: string[] = [];
+  let line = '';
+  for (const word of s.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > width) {
+      out.push(line);
+      line = word;
+    } else line = next;
+  }
+  if (line) out.push(line);
+  return out;
 }
 
 /** Text in the café's lettering, in design units. */
@@ -127,7 +148,12 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, canvas: HTMLC
   const rowGap = 8;
   const segH = 22;
   const rows = Math.max(1, g.wishes.length);
-  const cardH = frame + bandH + pad + rows * (rowH + rowGap) - rowGap + pad + segH + pad + frame;
+  // Its line in its own words, under the name: up to two lines.
+  const lineSize = 19;
+  const lineH = 24;
+  const lines = g.line ? wrap(ctx, g.line, lineSize, W - (frame + pad) * 2).slice(0, 2) : [];
+  const saysH = lines.length ? lines.length * lineH + 6 : 0;
+  const cardH = frame + bandH + saysH + pad + rows * (rowH + rowGap) - rowGap + pad + segH + pad + frame;
   const top = Math.max(0, H - cardH);
   ctx.clearRect(0, 0, w, h);
   ctx.save();
@@ -162,8 +188,10 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, canvas: HTMLC
     ctx.closePath();
     ctx.fill();
   }
+  // Its line, in its own words.
+  lines.forEach((l, i) => text(ctx, l, frame + pad, top + frame + bandH + 8 + lineH / 2 + i * lineH, lineSize, C.soft, 'left', false));
   // The wishes, a row each.
-  let y = top + frame + bandH + pad;
+  let y = top + frame + bandH + saysH + pad;
   if (g.wishes.length === 0) {
     // No wishes: one quiet row.
     rc.rectangle(frame + pad, y, W - (frame + pad) * 2, rowH, o(10, { fill: C.paperHi, fillStyle: 'solid', stroke: C.emptyLine }));
@@ -180,7 +208,7 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, canvas: HTMLC
     const mark = met === true ? '✓' : met === false ? '✕' : `${i + 1}`;
     const ink = met === true ? C.mossDeep : met === false ? C.koi : C.ink;
     text(ctx, mark, x + 22, y + rowH / 2 + 1, 23, met === undefined ? C.soft : ink, 'center');
-    text(ctx, wish === 'friend' && g.friend ? `With ${g.friend}` : WISH_SHORT[wish], x + 44, y + rowH / 2 + 1, 24, ink);
+    text(ctx, wish === 'friend' && g.friend ? `With ${g.friend}` : wishShort(wish, { other: g.other ?? undefined, shape: g.shape }), x + 44, y + rowH / 2 + 1, 24, ink);
     y += rowH + rowGap;
   });
   y += pad - rowGap;

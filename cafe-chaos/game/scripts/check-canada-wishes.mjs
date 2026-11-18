@@ -4,8 +4,10 @@
  * 1. every card drawn can be met by one open seat, at every level, with
  *    only the starting tables and with all open, with and without the
  *    musicians, in a snowstorm, and for a cold guest (its `warm` always);
- * 2. each difficulty comes at its level (easy 1, medium 2, hard 3);
- * 3. `inside`, `board` and `lake` are met at their tables, `patio` is gone;
+ * 2. the wishes the owner's list of 18 Nov 2026 removed (socket, takeaway,
+ *    menu board) are never offered;
+ * 3. `inside`, `patio` and `lake` are met at their tables (the lake: the
+ *    deck table at the lake's middle, the dock being gone);
  * 4. the bonfire's three chairs are one table (company, alone, quiet);
  * 5. a cold guest at a bonfire chair is warm, at a deck table it is not,
  *    and it waits less there; a storm drains the deck faster;
@@ -31,7 +33,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 await page.goto(APP_URL);
 await page.waitForFunction(() => window.__cafe?.system.nav && window.__cafe.guests.seats.length > 0, null, { timeout: 90000 });
 await page.waitForFunction(() => window.__cafe.system.setCafe('canada'), null, { timeout: 240000, polling: 1000 });
-await page.waitForFunction(() => window.__cafe.guests.seats.some((s) => s.takeaway), null, { timeout: 30000 });
+await page.waitForFunction(() => window.__cafe.guests.seats.length > 20 && window.__cafe.guests.seats.every((s) => !s.takeaway), null, { timeout: 30000 });
 
 const r = await page.evaluate(async () => {
   const { guests } = window.__cafe;
@@ -52,6 +54,8 @@ const r = await page.evaluate(async () => {
   const scenarios = [];
   for (const open of [[1, 2], [1, 2, 3, 4, 5, 6, 7], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]])
     for (const musicians of [0, 1, 2]) for (const storm of [false, true]) for (const cold of [false, true]) scenarios.push({ open, musicians, storm, cold });
+  // Every type seen and well into a game: the cards drawn from all of them (the plan's own order is check-wish-rules).
+  g.seenWishes = new Set(['inside', 'warm', 'alone', 'outside', 'patio', 'company', 'bonfire', 'lake', 'upstairs', 'kind', 'hat', 'friend', 'quiet', 'meet', 'avoid', 'calm', 'music']);
   for (const sc of scenarios) {
     g.setBand(band(sc.musicians));
     g.setLockedTables(allLocked(sc.open));
@@ -60,20 +64,22 @@ const r = await page.evaluate(async () => {
       g.level = level;
       for (let i = 0; i < 60; i++) {
         const look = looks[i % looks.length];
-        const wishes = g.canadaWishes(look, sc.cold);
+        g.gameGuests = 100;
+        g.runGuests = 100;
+        g.seatedNow();
+        const plan = g.planFor(look.species, sc.cold, false, 30);
+        const wishes = plan.wishes;
         for (const w of wishes) {
           seen[w] ??= 99;
           seen[w] = Math.min(seen[w], level);
         }
         if (sc.cold && !wishes.includes('warm')) problems.push(`cold without warm ${JSON.stringify(sc)} ${wishes}`);
-        if (sc.storm && wishes.some((w) => ['outside', 'lake', 'upstairs'].includes(w))) problems.push(`storm outdoor ${wishes}`);
-        if (wishes.includes('patio')) problems.push('patio');
+        if (sc.storm && wishes.some((w) => ['outside', 'patio', 'lake', 'upstairs'].includes(w))) problems.push(`storm outdoor ${wishes}`);
+        if (wishes.some((w) => ['socket', 'takeaway', 'board'].includes(w))) problems.push(`removed wish ${wishes}`);
         if (new Set(wishes).size !== wishes.length) problems.push(`duplicate ${wishes}`);
         if (!W.compatible(wishes)) problems.push(`clash ${wishes}`);
-        // Met all at once by one open seat (the social wishes on an empty café: an empty table meets quiet and alone; company needs another guest).
-        const places = wishes.filter(W.isPlaceWish);
-        const open = g.seats.filter((s) => !s.locked && !s.takeaway);
-        if (places.length && !open.some((s) => places.every((w) => W.grants(w, s, -1, [], g.tables, g.quietCorner, null, g.band, sc.cold)))) problems.push(`unmeetable ${wishes} ${JSON.stringify(sc)} L${level}`);
+        // Met all at once by one seat before its patience runs out (the plan's own test, asked again).
+        if (!g.meetableSoon(wishes, { id: -1, species: look.species, cold: sc.cold, link: plan.link }, 30)) problems.push(`unmeetable ${wishes} ${JSON.stringify(sc)} L${level}`);
       }
     }
   }
@@ -81,11 +87,12 @@ const r = await page.evaluate(async () => {
   g.setBand([]);
   g.setLockedTables(new Set());
   const at = (t) => seats.find((s) => s.table === t);
-  const grant = (w, t, opts = {}) => W.grants(w, at(t), -1, opts.sitters ?? [], g.tables, g.quietCorner, null, opts.band ?? [], opts.cold ?? false);
+  const ctx = (opts = {}) => ({ self: -1, species: 'snowbit', link: 0, cold: opts.cold ?? false, sitters: opts.sitters ?? [], tables: g.tables, quietCorner: g.quietCorner, bigTables: [], band: opts.band ?? [], friendship: null });
+  const grant = (w, t, opts = {}) => W.grants(w, at(t), ctx(opts));
   const tables = [...new Set(seats.map((s) => s.table))].sort((a, b) => a - b);
   const meets = (w) => tables.filter((t) => grant(w, t));
   const fire = seats.filter((s) => CANADA_PLACES.bonfireTables.includes(s.table));
-  const sitterAt = (t) => [{ id: 7, seat: at(t), sings: false }];
+  const sitterAt = (t) => [{ id: 7, seat: at(t), sings: false, species: 'nanaimo', hat: false, hurried: false }];
   // Cold drain.
   const fake = (t, cold) => ({ seat: at(t), cold });
   g.storm = false;
@@ -100,21 +107,21 @@ const r = await page.evaluate(async () => {
     problems: problems.slice(0, 10),
     nproblems: problems.length,
     seen,
-    meets: { inside: meets('inside'), board: meets('board'), lake: meets('lake'), warm: meets('warm'), outside: meets('outside') },
+    meets: { inside: meets('inside'), patio: meets('patio'), lake: meets('lake'), warm: meets('warm'), outside: meets('outside') },
     coldWarm: { fire: grant('warm', 8, { cold: true }) && grant('warm', 10, { cold: true }), deck: grant('warm', 6, { cold: true }), notColdFire: grant('warm', 9) },
     fireOneTable: new Set(fire.map((s) => g.tables.get(s.index))).size === 1,
     fireCompany: grant('company', 9, { sitters: sitterAt(10) }) && !grant('alone', 9, { sitters: sitterAt(10) }) && !grant('quiet', 9, { sitters: sitterAt(8) }),
-    fiddler: tables.filter((t) => seats.filter((s) => s.table === t).every((s) => W.grants('music', s, -1, [], g.tables, -1, null, fiddler))),
-    fiddlerAny: tables.filter((t) => seats.some((s) => s.table === t && W.grants('music', s, -1, [], g.tables, -1, null, fiddler))),
-    pianist: tables.filter((t) => seats.filter((s) => s.table === t).every((s) => W.grants('music', s, -1, [], g.tables, -1, null, [new V(9, 9, 9), both[1]]))),
+    fiddler: tables.filter((t) => seats.filter((s) => s.table === t).every((s) => W.grants('music', s, { ...ctx({ band: fiddler }), quietCorner: -1 }))),
+    fiddlerAny: tables.filter((t) => seats.some((s) => s.table === t && W.grants('music', s, { ...ctx({ band: fiddler }), quietCorner: -1 }))),
+    pianist: tables.filter((t) => seats.filter((s) => s.table === t).every((s) => W.grants('music', s, { ...ctx({ band: [new V(9, 9, 9), both[1]] }), quietCorner: -1 }))),
     quietUnderMusic: [6, 7, 11, 12, 13, 14].filter((t) => grant('quiet', t, { band: both })),
     drains,
   };
 });
 
 check('every card can be met by one open seat', r.nproblems === 0, r.nproblems ? r.problems.join(' | ') : 'all scenarios, levels 1-8');
-check('difficulty by level', r.seen.lake >= 2 && r.seen.bonfire >= 2 && r.seen.board >= 2 && r.seen.upstairs >= 2 && r.seen.quiet >= 3 && r.seen.music >= 3 && r.seen.inside === 1 && r.seen.warm === 1, JSON.stringify(r.seen));
-check('inside, board, lake at their tables', r.meets.inside.join() === '1,2,3,4,5' && r.meets.board.join() === '3' && r.meets.lake.join() === '6,7', JSON.stringify(r.meets));
+check('the removed wishes (socket, takeaway, menu board) never come', !('socket' in r.seen) && !('takeaway' in r.seen) && !('board' in r.seen), JSON.stringify(r.seen));
+check('inside, patio, lake at their tables', r.meets.inside.join() === '1,2,3,4,5' && r.meets.patio.join() === '6,7' && r.meets.lake.join() === '7', JSON.stringify(r.meets));
 check('bonfire chairs are one table', r.fireOneTable && r.fireCompany, `one ${r.fireOneTable}, company/alone/quiet ${r.fireCompany}`);
 check('a cold guest is warm at the bonfire, not on the deck', r.coldWarm.fire && !r.coldWarm.deck && !r.coldWarm.notColdFire, JSON.stringify(r.coldWarm));
 check('cold and storm drain outside, not at the fire', Math.abs(r.drains.coldDeck - 1 / 0.75) < 1e-6 && r.drains.coldFire === 1 && r.drains.coldCabin === 1 && r.drains.warmDeck === 1 && Math.abs(r.drains.stormDeck - 1.3) < 1e-6 && r.drains.stormFire === 1, JSON.stringify(r.drains));

@@ -168,21 +168,6 @@ export function drawWish(ctx: CanvasRenderingContext2D, kind: WishPicture, x: nu
       ctx.fillStyle = AMBER;
       note(u * 0.45, -u * 0.35, 0.6);
       break;
-    case 'socket':
-      ctx.beginPath();
-      ctx.roundRect(-u * 0.62, -u * 0.72, u * 1.24, u * 1.44, u * 0.3);
-      ctx.fillStyle = '#f4ead8';
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.roundRect(-u * 0.32, -u * 0.32, u * 0.16, u * 0.5, u * 0.06);
-      ctx.roundRect(u * 0.16, -u * 0.32, u * 0.16, u * 0.5, u * 0.06);
-      ctx.fillStyle = INK;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(0, u * 0.42, u * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-      break;
     case 'outside':
       // A spruce, snow on its tiers.
       ctx.fillStyle = '#3f7a4a';
@@ -202,24 +187,6 @@ export function drawWish(ctx: CanvasRenderingContext2D, kind: WishPicture, x: nu
       ctx.fill();
       ctx.fillStyle = INK;
       ctx.fillRect(-u * 0.1, u * 0.7, u * 0.2, u * 0.2);
-      break;
-    case 'takeaway':
-      // A paper cup, its lid and sleeve.
-      ctx.beginPath();
-      ctx.moveTo(-u * 0.45, -u * 0.45);
-      ctx.lineTo(u * 0.45, -u * 0.45);
-      ctx.lineTo(u * 0.32, u * 0.8);
-      ctx.lineTo(-u * 0.32, u * 0.8);
-      ctx.closePath();
-      ctx.fillStyle = '#f4ead8';
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.roundRect(-u * 0.56, -u * 0.68, u * 1.12, u * 0.24, u * 0.08);
-      ctx.fillStyle = '#c8322e';
-      ctx.fill();
-      ctx.fillStyle = AMBER;
-      ctx.fillRect(-u * 0.4, u * 0.05, u * 0.8, u * 0.3);
       break;
     case 'lake':
       // A red canoe on the water.
@@ -266,35 +233,6 @@ export function drawWish(ctx: CanvasRenderingContext2D, kind: WishPicture, x: nu
         ctx.moveTo(u * 0.28, u * ly);
         ctx.lineTo(u * 0.6, u * ly);
       }
-      ctx.stroke();
-      break;
-    case 'board':
-      // The chalk menu board on its easel, a line of chalk and a cup.
-      ctx.beginPath();
-      ctx.moveTo(-u * 0.55, u * 0.85);
-      ctx.lineTo(-u * 0.3, u * 0.35);
-      ctx.moveTo(u * 0.55, u * 0.85);
-      ctx.lineTo(u * 0.3, u * 0.35);
-      ctx.strokeStyle = '#7a4a2a';
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.roundRect(-u * 0.8, -u * 0.75, u * 1.6, u * 1.15, u * 0.1);
-      ctx.fillStyle = '#2f3b33';
-      ctx.fill();
-      ctx.strokeStyle = '#7a4a2a';
-      ctx.stroke();
-      ctx.strokeStyle = '#f4ead8';
-      ctx.lineWidth = s * 0.05;
-      ctx.beginPath();
-      ctx.moveTo(-u * 0.55, -u * 0.45);
-      ctx.lineTo(u * 0.55, -u * 0.45);
-      ctx.moveTo(-u * 0.55, -u * 0.2);
-      ctx.lineTo(u * 0.2, -u * 0.2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.roundRect(-u * 0.2, u * 0.0, u * 0.32, u * 0.26, u * 0.06);
-      ctx.moveTo(u * 0.12, u * 0.06);
-      ctx.arc(u * 0.17, u * 0.12, u * 0.07, -Math.PI / 2, Math.PI / 2);
       ctx.stroke();
       break;
     case 'bonfire':
@@ -360,6 +298,109 @@ export function drawWish(ctx: CanvasRenderingContext2D, kind: WishPicture, x: nu
       ctx.moveTo(-u * 0.4, -u * 0.75);
       ctx.lineTo(-u * 0.05, -u * 0.75);
       ctx.lineTo(-u * 0.05, -u * 0.4);
+      ctx.stroke();
+      break;
+    case 'big':
+      // A long table and four chairs round it.
+      ctx.fillStyle = '#b5814f';
+      ctx.beginPath();
+      ctx.roundRect(-u * 0.5, -u * 0.32, u * 1.0, u * 0.64, u * 0.1);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = INK;
+      for (const [cx, cy] of [[-0.25, -0.62], [0.25, -0.62], [-0.25, 0.62], [0.25, 0.62]] as const) ctx.fillRect(u * cx - u * 0.12, u * cy - u * 0.1, u * 0.24, u * 0.2);
+      break;
+    case 'patio':
+      // A string of lights over a round table.
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.85, -u * 0.7);
+      ctx.quadraticCurveTo(0, -u * 0.3, u * 0.85, -u * 0.7);
+      ctx.stroke();
+      ctx.fillStyle = '#f6c445';
+      for (const bx of [-0.5, 0, 0.5]) {
+        ctx.beginPath();
+        ctx.arc(u * bx, -u * (bx === 0 ? 0.4 : 0.52), u * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#b5814f';
+      ctx.beginPath();
+      ctx.ellipse(0, u * 0.25, u * 0.6, u * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, u * 0.43);
+      ctx.lineTo(0, u * 0.8);
+      ctx.stroke();
+      break;
+    case 'kind':
+      // Two of the same shape, side by side.
+      ctx.fillStyle = AMBER;
+      for (const kx of [-0.38, 0.38]) {
+        ctx.beginPath();
+        ctx.roundRect(u * kx - u * 0.3, -u * 0.3, u * 0.6, u * 0.7, u * 0.28);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.fillStyle = INK;
+      for (const kx of [-0.38, 0.38]) for (const ex of [-0.1, 0.1]) {
+        ctx.beginPath();
+        ctx.arc(u * (kx + ex), u * 0.02, u * 0.05, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    case 'meet':
+      // Two figures, an arrow from one to the other.
+      figure(-u * 0.42, 0.8);
+      ctx.fillStyle = AMBER;
+      figure(u * 0.42, 0.8);
+      ctx.strokeStyle = AMBER;
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.12, -u * 0.72);
+      ctx.lineTo(u * 0.22, -u * 0.72);
+      ctx.moveTo(u * 0.08, -u * 0.86);
+      ctx.lineTo(u * 0.22, -u * 0.72);
+      ctx.lineTo(u * 0.08, -u * 0.58);
+      ctx.stroke();
+      break;
+    case 'hat':
+      // A top hat.
+      ctx.fillStyle = INK;
+      ctx.fillRect(-u * 0.38, -u * 0.7, u * 0.76, u * 0.95);
+      ctx.beginPath();
+      ctx.ellipse(0, u * 0.3, u * 0.75, u * 0.17, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#c8322e';
+      ctx.fillRect(-u * 0.38, u * 0.02, u * 0.76, u * 0.16);
+      break;
+    case 'avoid':
+      // Two figures, apart, a cross between them.
+      figure(-u * 0.5, 0.75);
+      figure(u * 0.5, 0.75);
+      ctx.strokeStyle = '#c8322e';
+      ctx.lineWidth = s * 0.11;
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.18, -u * 0.25);
+      ctx.lineTo(u * 0.18, u * 0.11);
+      ctx.moveTo(u * 0.18, -u * 0.25);
+      ctx.lineTo(-u * 0.18, u * 0.11);
+      ctx.stroke();
+      break;
+    case 'calm':
+      // An hourglass, crossed out: no hurry near me.
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.4, -u * 0.62);
+      ctx.lineTo(u * 0.4, -u * 0.62);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(u * 0.4, u * 0.62);
+      ctx.lineTo(-u * 0.4, u * 0.62);
+      ctx.lineTo(0, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#c8322e';
+      ctx.lineWidth = s * 0.11;
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.7, -u * 0.7);
+      ctx.lineTo(u * 0.7, u * 0.7);
       ctx.stroke();
       break;
     case 'heart':

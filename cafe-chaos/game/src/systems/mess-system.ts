@@ -68,6 +68,8 @@ export class MessSystem extends createSystem({}) {
   init(): void {
     this.cafe = this.world.getSystem(CafeSystem)!;
     this.guests = this.world.getSystem(GuestSystem)!;
+    // A dirty table someone is on the way to clean frees up soon (the wish plan counts its seats: GuestSystem.meetableSoon).
+    this.guests.cleaningSoon = (table) => this.coming.has(table);
   }
 
   update(frameDelta: number): void {

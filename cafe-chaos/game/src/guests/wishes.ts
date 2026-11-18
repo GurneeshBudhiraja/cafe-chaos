@@ -37,148 +37,139 @@ import { isCanada } from '../cafe/style.js';
 import type { Seat } from './seats.js';
 
 /**
- * The Canadian café's wishes (docs/CANADA-PLAN.md) are places of its own:
- * `socket` (a table under a wall socket), `outside` (any seat not in the
- * cabin), `inside` (any table in the cabin), `board` (the long table facing
- * the chalk menu board), `takeaway` (no table: carried to the counter's
- * pick-up spot), `lake` (the deck over the lake), `bonfire` (the chairs
- * round the fire), `warm` (the tables by the fireplace; a cold guest is
- * warmed by the bonfire too), `upstairs` (the upper deck); and `music`
- * there is a seat in earshot of a musician the player has bought (no guest
- * sings there). docs/CANADA-CHALLENGES.md has the design.
+ * The wishes, both cafés (the owner's list of 18 Nov 2026). Each has a
+ * short label for the card's row and a line in the guest's own words; a
+ * guest-linked one (`meet`, `avoid`, `kind`) names the other guest or its
+ * shape in its words.
+ *
+ * Japanese café: window, door (by the gate), counter (by the baristas: the
+ * back row, not the quiet corner), alone, company, big (a four-seater),
+ * music (near the singer), quiet, friend, kind (with another guest of its
+ * shape), meet (at a named guest's table), hat (with someone in a hat),
+ * avoid (away from a named guest), calm (away from hurried guests).
+ *
+ * Canadian café: inside, warm (by the fireplace), alone, outside, patio,
+ * company, bonfire, lake (the deck table by the lake: the dock was
+ * removed), upstairs, kind, hat, friend, quiet, meet, avoid, calm, music
+ * (near a musician the player has bought).
+ *
+ * The order each café lists them in is the order they come in
+ * (guests/wish-plan.ts): the easy ones for the first guests, then a new
+ * one with almost every guest.
  */
-export type WishId = 'window' | 'door' | 'counter' | 'quiet' | 'alone' | 'company' | 'music' | 'friend' | 'socket' | 'outside' | 'takeaway' | 'lake' | 'bonfire' | 'warm' | 'upstairs' | 'inside' | 'board';
+export type WishId =
+  | 'window' | 'door' | 'counter' | 'big'
+  | 'inside' | 'warm' | 'outside' | 'patio' | 'bonfire' | 'lake' | 'upstairs'
+  | 'alone' | 'company' | 'music' | 'quiet' | 'friend' | 'kind' | 'meet' | 'hat' | 'avoid' | 'calm';
 
 export interface WishInfo {
   id: WishId;
-  /** On the card, after the name: "Miso wants ..." */
+  /** On a refusal tag: "Wants ..." */
   wants: string;
   /** In its own words, for the card's second line. */
   says: string;
 }
 
-export const WISHES: Record<WishId, WishInfo> = {
-  window: { id: 'window', wants: 'a window seat', says: 'I like to watch the garden.' },
-  door: { id: 'door', wants: 'a seat by the gate', says: "I can't stay long!" },
-  counter: { id: 'counter', wants: 'a seat by the counter', says: 'I love watching the baristas.' },
-  quiet: { id: 'quiet', wants: 'somewhere quiet', says: 'Shh... I have a book.' },
-  alone: { id: 'alone', wants: 'a table to itself', says: 'Just me today, please.' },
-  company: { id: 'company', wants: 'some company', says: "Don't sit me on my own!" },
-  music: { id: 'music', wants: 'to sit near the singer', says: 'I love a good tune.' },
-  friend: { id: 'friend', wants: 'to sit with its friend', says: 'We came together!' },
-  socket: { id: 'socket', wants: 'a seat by a socket', says: "My laptop's at 2 %." },
-  outside: { id: 'outside', wants: 'a seat outside', says: 'Fresh mountain air!' },
-  takeaway: { id: 'takeaway', wants: 'a coffee to go', says: 'No table, thanks!' },
-  lake: { id: 'lake', wants: 'a lake view', says: 'I want to see the ice.' },
-  bonfire: { id: 'bonfire', wants: 'a seat at the bonfire', says: "S'mores weather!" },
-  warm: { id: 'warm', wants: 'a seat by the fireplace', says: "I'm frozen!" },
-  upstairs: { id: 'upstairs', wants: 'a seat upstairs', says: 'The best view in town.' },
-  inside: { id: 'inside', wants: 'a seat inside', says: 'Out of the cold, please.' },
-  board: { id: 'board', wants: 'a seat by the menu board', says: "What's today's special?" },
-};
-
-/** The Canadian café's own words for the wishes both cafés share (`music` there is a musician, not a singing guest). */
-const CANADA_WORDS: Partial<Record<WishId, WishInfo>> = {
-  music: { id: 'music', wants: 'to sit near the music', says: 'I love live music.' },
-  quiet: { id: 'quiet', wants: 'somewhere quiet', says: "Shh, I'm reading." },
-  alone: { id: 'alone', wants: 'a table to itself', says: 'Just me today.' },
-  company: { id: 'company', wants: 'some company', says: "Don't sit me alone!" },
-};
-
-/** A wish's words in the café up now. */
-export function wishInfo(wish: WishId): WishInfo {
-  return (isCanada() && CANADA_WORDS[wish]) || WISHES[wish];
+/** What a guest-linked wish names: the other guest's name, and the guest's own shape (`kind`). */
+export interface WishWords {
+  other?: string;
+  shape?: string;
 }
 
-/** Each wish in a few words, for the request card's rows (ui/wish-card.ts). */
-export const WISH_SHORT: Record<WishId, string> = {
-  window: 'Window seat',
-  door: 'By the gate',
-  counter: 'By the counter',
-  quiet: 'Somewhere quiet',
-  alone: 'Table to itself',
-  company: 'Some company',
-  music: 'Near the singer',
-  friend: 'With my friend',
-  socket: 'By a socket',
-  outside: 'Outside',
-  takeaway: 'Coffee to go',
-  lake: 'Lake view',
-  bonfire: 'At the bonfire',
-  warm: 'By the fireplace',
-  upstairs: 'Upstairs',
-  inside: 'Inside',
-  board: 'By the menu board',
+/** Each wish: its label (the card's row), what a refusal tag says it wants, and its line (`{o}` the named guest, `{s}` its shape). */
+interface WishText {
+  label: string;
+  wants: string;
+  line: string;
+}
+
+const JAPAN_TEXT: Partial<Record<WishId, WishText>> = {
+  window: { label: 'Window seat', wants: 'a window seat', line: 'I like to watch the garden through the window.' },
+  door: { label: 'By the gate', wants: 'a seat by the gate', line: "Sit me by the gate. I can't stay long." },
+  counter: { label: 'By the baristas', wants: 'a seat by the baristas', line: 'I love to watch the baristas work.' },
+  alone: { label: 'Table to myself', wants: 'a table to itself', line: 'Just me at my own table, please.' },
+  company: { label: 'With other guests', wants: 'to sit with other guests', line: 'Sit me with someone. I like to chat.' },
+  big: { label: 'Big table', wants: 'a big table', line: 'Sit me at a big table. I like space.' },
+  music: { label: 'Near the singer', wants: 'to sit near the singer', line: 'Sit me near the singer. I love a good tune.' },
+  quiet: { label: 'Quiet seat', wants: 'a quiet seat', line: 'A quiet table, far from the singer. I have a book.' },
+  friend: { label: 'With my friend', wants: 'to sit with its friend', line: 'We came together. Sit us at the same table.' },
+  kind: { label: 'With my kind', wants: 'to sit with its kind', line: 'Sit me with another {s}. We get along.' },
+  meet: { label: 'Meet {o}', wants: 'to sit with {o}', line: "I came to meet {o}. Sit me at {o}'s table." },
+  hat: { label: 'With a hat', wants: 'to sit with someone in a hat', line: 'Sit me with someone in a hat. I like hats.' },
+  avoid: { label: 'Not with {o}', wants: 'to keep away from {o}', line: "{o} and I don't get along. Keep me away." },
+  calm: { label: 'Not near the hurried', wants: 'to keep away from hurried guests', line: 'Hurried guests make me nervous. Keep me away.' },
 };
 
-/** A wish in a few words, in the café up now. */
-export function wishShort(wish: WishId): string {
-  return wish === 'music' && isCanada() ? 'Near the music' : WISH_SHORT[wish];
-}
-
-/**
- * The Canadian café's place wishes, and the pairs that go together
- * (docs/CANADA-CHALLENGES.md): the window tables are by a socket, the fire
- * and inside; the long table is inside by the menu board; every outdoor
- * place is outside; the music reaches the roof and the deck. `music` is a
- * place here (a musician's earshot), so it pairs only with the places it
- * reaches; whether a musician reaching them plays is checked when the
- * wishes are picked (`meetable`).
- */
-const CANADA_PLACE_WISHES: WishId[] = ['socket', 'warm', 'outside', 'lake', 'bonfire', 'upstairs', 'inside', 'board', 'music'];
-const CANADA_TOGETHER: [WishId, WishId][] = [
-  ['socket', 'warm'],
-  ['warm', 'inside'],
-  ['socket', 'inside'],
-  ['board', 'inside'],
-  ['outside', 'lake'],
-  ['outside', 'bonfire'],
-  ['outside', 'upstairs'],
-  ['upstairs', 'music'],
-  ['outside', 'music'],
-  ['lake', 'music'],
-];
-
-/**
- * How hard each Canadian wish is to meet, and the level it first comes at
- * (docs/CANADA-CHALLENGES.md, "Difficulty"). Easy: a place the starting
- * tables (or the pick-up spot) meet, or one about the table alone. Medium:
- * one place, few seats, a table to open first. Hard: it depends on the
- * other guests or a musician, and can stop being true after it sits.
- */
-export type Difficulty = 'easy' | 'medium' | 'hard';
-export const CANADA_DIFFICULTY: Record<Difficulty, { from: number; wishes: WishId[] }> = {
-  easy: { from: 1, wishes: ['inside', 'outside', 'warm', 'socket', 'alone', 'company', 'takeaway'] },
-  medium: { from: 2, wishes: ['lake', 'bonfire', 'board', 'upstairs'] },
-  hard: { from: 3, wishes: ['quiet', 'music', 'friend'] },
+const CANADA_TEXT: Partial<Record<WishId, WishText>> = {
+  inside: { label: 'Inside', wants: 'a seat inside', line: 'Too cold out there. Sit me inside the cabin.' },
+  warm: { label: 'By the fireplace', wants: 'a seat by the fireplace', line: "I'm cold. Sit me by the fireplace." },
+  alone: JAPAN_TEXT.alone,
+  outside: { label: 'Outside', wants: 'a seat outside', line: 'I want fresh air. Sit me outside.' },
+  patio: { label: 'On the patio', wants: 'a seat on the patio', line: 'Sit me on the patio, under the lights.' },
+  company: JAPAN_TEXT.company,
+  bonfire: { label: 'At the bonfire', wants: 'a seat at the bonfire', line: "Sit me at the bonfire. I'll warm my hands." },
+  lake: { label: 'By the lake', wants: 'a seat by the lake', line: 'Sit me by the lake. I like to see the ice.' },
+  upstairs: { label: 'Upstairs', wants: 'a seat upstairs', line: 'Sit me upstairs. I like the mountain view.' },
+  kind: JAPAN_TEXT.kind,
+  hat: JAPAN_TEXT.hat,
+  friend: JAPAN_TEXT.friend,
+  quiet: { label: 'Quiet seat', wants: 'a quiet seat', line: 'A quiet table, far from the music. I have a book.' },
+  meet: JAPAN_TEXT.meet,
+  avoid: JAPAN_TEXT.avoid,
+  calm: JAPAN_TEXT.calm,
+  music: { label: 'Near the music', wants: 'to sit near the music', line: 'Sit me near the music. I love live tunes.' },
 };
-/** A Canadian wish's difficulty. */
-export function difficultyOf(wish: WishId): Difficulty {
-  return (Object.keys(CANADA_DIFFICULTY) as Difficulty[]).find((d) => CANADA_DIFFICULTY[d].wishes.includes(wish)) ?? 'easy';
+
+/** Each café's wishes, in the order they come in (the first ones are its easy ones, `EASY`). */
+export const JAPAN_ORDER: WishId[] = ['window', 'door', 'counter', 'alone', 'company', 'big', 'music', 'quiet', 'friend', 'kind', 'meet', 'hat', 'avoid', 'calm'];
+export const CANADA_ORDER: WishId[] = ['inside', 'warm', 'alone', 'outside', 'patio', 'company', 'bonfire', 'lake', 'upstairs', 'kind', 'hat', 'friend', 'quiet', 'meet', 'avoid', 'calm', 'music'];
+/** The easy wishes, for a game's first guests (the Canadian café's starting tables meet all three). */
+export const JAPAN_EASY: WishId[] = ['window', 'door', 'counter', 'alone'];
+export const CANADA_EASY: WishId[] = ['inside', 'warm', 'alone'];
+
+/** The café up now's wishes in order, and its easy ones. */
+export const wishOrder = (): WishId[] => (isCanada() ? CANADA_ORDER : JAPAN_ORDER);
+export const easyWishes = (): WishId[] => (isCanada() ? CANADA_EASY : JAPAN_EASY);
+
+/** Place wishes (met by where the seat is): a guest has at most one. */
+export const PLACE_WISHES: WishId[] = ['window', 'door', 'counter', 'big', 'inside', 'warm', 'outside', 'patio', 'bonfire', 'lake', 'upstairs'];
+/** Guest-named wishes (they name another guest): a guest has at most one. */
+export const NAMED_WISHES: WishId[] = ['meet', 'avoid'];
+/** Wishes about another guest at the table (it must be seated there: meet, kind, hat), and ones about guests away (avoid, calm). */
+export const LINKED_WISHES: WishId[] = ['kind', 'meet', 'hat', 'avoid', 'calm'];
+
+function text(wish: WishId): WishText {
+  return (isCanada() ? CANADA_TEXT[wish] : JAPAN_TEXT[wish]) ?? JAPAN_TEXT[wish] ?? CANADA_TEXT[wish] ?? { label: wish, wants: wish, line: '' };
 }
-/** May a Canadian guest wish for this at `level`? (Pairs keep their own level, rules.ts PAIRS.) */
-export function canadaWishAllowed(wish: WishId, level: number): boolean {
-  return wish === 'friend' || level >= CANADA_DIFFICULTY[difficultyOf(wish)].from;
+const fill = (s: string, w: WishWords): string => s.split('{o}').join(w.other ?? 'a guest').split('{s}').join(w.shape ?? 'guest');
+
+/** A wish's words in the café up now: what a refusal tag says it wants, and its own line. */
+export function wishInfo(wish: WishId, words: WishWords = {}): WishInfo {
+  const t = text(wish);
+  return { id: wish, wants: fill(t.wants, words), says: fill(t.line, words) };
 }
+
+/** A wish's label for the card's row, in the café up now. */
+export function wishShort(wish: WishId, words: WishWords = {}): string {
+  return fill(text(wish).label, words);
+}
+
+/** What a guest's shape is called in a line ("Sit me with another onigiri"): its species, as people say it. */
+export const SHAPE_NAMES: Record<string, string> = {
+  mochi: 'mochi', onigiri: 'onigiri', tofu: 'tofu', snowbit: 'snowbit', beavertail: 'beaver tail', nanaimo: 'nanaimo bar', doubledouble: 'double-double', buttertart: 'butter tart',
+};
 
 /**
  * What each Canadian species leans toward: these come twice as often on its
- * card, so a player learns to read a guest by its shape. Keyed by species
- * name; the double-double and the butter tart are in the design but have no
- * model yet.
+ * card (PR #21), so a player learns to read a guest by its shape.
  */
 export const SPECIES_LEAN: Record<string, WishId[]> = {
   snowbit: ['warm', 'inside'],
   beavertail: ['outside', 'lake', 'bonfire'],
-  nanaimo: ['board', 'company'],
-  doubledouble: ['takeaway', 'socket'],
+  nanaimo: ['company', 'kind'],
+  doubledouble: ['patio', 'upstairs'],
   buttertart: ['quiet', 'alone', 'upstairs'],
 };
-/** How often a Canadian guest wants only a coffee to take away (it then has no other wish). */
-export const TAKEAWAY_CHANCE = 0.12;
-
-/** The wishes a guest may be given when nobody on stage sings (`music` needs a singer). */
-const ALWAYS: WishId[] = ['window', 'door', 'counter', 'quiet', 'alone', 'company'];
 
 /** The guests' names: short, soft, the café's own; none is a barista's. */
 export const NAMES = [
@@ -203,6 +194,10 @@ export interface Sitter {
   id: number;
   seat: Seat;
   sings: boolean;
+  /** Its shape (species), whether it wears a hat, and whether it is in a hurry. */
+  species: string;
+  hat: boolean;
+  hurried: boolean;
 }
 
 /**
@@ -240,57 +235,79 @@ export function tablesOf(seats: Seat[], pieces: { name: string; position: Vector
 /** The one table the bonfire's chairs make together (tablesOf); no piece has this index. */
 export const BONFIRE_TABLE = -100;
 
-/**
- * Would `seat` grant `wish` to guest `self` now, with `sitters` seated as
- * they are? `tables` is from `tablesOf`; `quietCorner` is the table index
- * of the quiet corner (-1 if the café has none).
- */
-export function grants(wish: WishId, seat: Seat, self: number, sitters: Sitter[], tables: Map<number, number>, quietCorner: number, friendship: Friendship | null = null, band: readonly Vector3[] = [], cold = false): boolean {
-  // The takeaway spot meets the takeaway wish and nothing else; no other seat meets it.
-  if (seat.takeaway || wish === 'takeaway') return !!seat.takeaway && wish === 'takeaway';
-  const table = tables.get(seat.index) ?? -1;
-  const mates = sitters.filter((s) => s.id !== self && (tables.get(s.seat.index) ?? -2) === table).length;
-  const singerNear = sitters.some((s) => s.id !== self && s.sings && Math.hypot(s.seat.position.x - seat.position.x, s.seat.position.z - seat.position.z) <= PLACES.earshot) || bandNear(seat, band);
+/** Everything a seat is judged against for one guest. */
+export interface GrantContext {
+  /** The guest's own id, shape, the guest its named wish names (0: none), and whether it is cold. */
+  self: number;
+  species: string;
+  link: number;
+  cold: boolean;
+  /** Who sits where now, and which table each seat is at. */
+  sitters: readonly Sitter[];
+  tables: Map<number, number>;
+  /** The quiet corner's table (-1: none), the big tables (four-seaters), and where the musicians play. */
+  quietCorner: number;
+  bigTables: readonly number[];
+  band: readonly Vector3[];
+  friendship: Friendship | null;
+}
+
+/** Would `seat` grant `wish` now, for this guest, with the others seated as they are? */
+export function grants(wish: WishId, seat: Seat, c: GrantContext): boolean {
+  const table = c.tables.get(seat.index) ?? -1;
+  const mates = c.sitters.filter((s) => s.id !== c.self && (c.tables.get(s.seat.index) ?? -2) === table);
+  const singerNear = c.sitters.some((s) => s.id !== c.self && s.sings && Math.hypot(s.seat.position.x - seat.position.x, s.seat.position.z - seat.position.z) <= PLACES.earshot) || bandNear(seat, c.band);
   const at = seat.table;
   switch (wish) {
-    case 'socket':
-      return CANADA_PLACES.socketTables.includes(at);
-    case 'warm':
-      // A cold guest is warmed by the bonfire as well as the fireplace.
-      return CANADA_PLACES.warmTables.includes(at) || (cold && CANADA_PLACES.bonfireTables.includes(at));
-    case 'outside':
-      return CANADA_PLACES.outsideTables.includes(at);
-    case 'inside':
-      return CANADA_PLACES.insideTables.includes(at);
-    case 'board':
-      return CANADA_PLACES.boardTables.includes(at);
-    case 'lake':
-      return CANADA_PLACES.lakeTables.includes(at);
-    case 'bonfire':
-      return CANADA_PLACES.bonfireTables.includes(at);
-    case 'upstairs':
-      return CANADA_PLACES.upperTables.includes(at);
     case 'window':
       return seat.position.x < PLACES.windowX;
     case 'door':
       return seat.position.x > PLACES.doorX;
     case 'counter':
-      return seat.position.z < PLACES.counterZ && table !== quietCorner;
+      return seat.position.z < PLACES.counterZ && table !== c.quietCorner;
+    case 'big':
+      return c.bigTables.includes(at);
+    case 'inside':
+      return CANADA_PLACES.insideTables.includes(at);
+    case 'warm':
+      // A cold guest is warmed by the bonfire as well as the fireplace (PR #21).
+      return CANADA_PLACES.warmTables.includes(at) || (c.cold && CANADA_PLACES.bonfireTables.includes(at));
+    case 'outside':
+      return CANADA_PLACES.outsideTables.includes(at);
+    case 'patio':
+      return CANADA_PLACES.patioTables.includes(at);
+    case 'bonfire':
+      return CANADA_PLACES.bonfireTables.includes(at);
+    case 'lake':
+      return CANADA_PLACES.lakeTables.includes(at);
+    case 'upstairs':
+      return CANADA_PLACES.upperTables.includes(at);
     case 'quiet':
-      return !singerNear && (table === quietCorner || mates === 0);
+      return !singerNear && (table === c.quietCorner || mates.length === 0);
     case 'alone':
-      return mates === 0;
+      return mates.length === 0;
     case 'company':
-      return mates > 0;
+      return mates.length > 0;
     case 'music':
       return singerNear;
+    case 'kind':
+      return mates.some((s) => s.species === c.species);
+    case 'hat':
+      return mates.some((s) => s.hat);
+    case 'meet':
+      return mates.some((s) => s.id === c.link);
+    case 'avoid':
+      return !mates.some((s) => s.id === c.link);
+    case 'calm':
+      return !mates.some((s) => s.hurried);
     case 'friend': {
-      if (!friendship) return false;
-      const friend = sitters.find((s) => s.id === friendship.friend);
-      if (friend) return (tables.get(friend.seat.index) ?? -2) === table;
+      const f = c.friendship;
+      if (!f) return false;
+      const friend = c.sitters.find((s) => s.id === f.friend);
+      if (friend) return (c.tables.get(friend.seat.index) ?? -2) === table;
       // The friend is not seated yet: this table must have another free seat for it. Gone (or fuming): never.
-      if (!friendship.waiting) return false;
-      return friendship.free.some((s) => s !== seat && (tables.get(s.index) ?? -2) === table);
+      if (!f.waiting) return false;
+      return f.free.some((s) => s !== seat && (c.tables.get(s.index) ?? -2) === table);
     }
   }
 }
@@ -298,37 +315,6 @@ export function grants(wish: WishId, seat: Seat, self: number, sitters: Sitter[]
 /** Is a seat in earshot of a musician playing (the Canadian café; `band` is where they stand, in the layout's order)? */
 export function bandNear(seat: Seat, band: readonly Vector3[]): boolean {
   return band.some((p, i) => p.distanceTo(seat.position) <= (CANADA_PLACES.musicians[i]?.earshot ?? PLACES.earshot));
-}
-
-/**
- * The wishes some open seat could meet, given the seats that are open
- * (not on a locked table): a place wish only if a seat is in that place;
- * company and alone always (every table seats two or more, or stands
- * alone); quiet always (an empty table is quiet). With only the two
- * starting tables open, nobody wishes for the window.
- */
-export function openWishes(open: readonly Seat[], quietCorner: number, band: readonly Vector3[] = []): WishId[] {
-  const out: WishId[] = ['quiet', 'alone', 'company'];
-  if (isCanada()) {
-    const tables = open.filter((s) => !s.takeaway).map((s) => s.table);
-    const has = (list: number[]): boolean => tables.some((t) => list.includes(t));
-    const P = CANADA_PLACES;
-    if (has(P.socketTables)) out.push('socket');
-    if (has(P.warmTables)) out.push('warm');
-    if (has(P.outsideTables)) out.push('outside');
-    if (has(P.lakeTables)) out.push('lake');
-    if (has(P.insideTables)) out.push('inside');
-    if (has(P.boardTables)) out.push('board');
-    if (has(P.bonfireTables)) out.push('bonfire');
-    if (has(P.upperTables)) out.push('upstairs');
-    // Music once a musician plays in earshot of an open seat.
-    if (open.some((s) => !s.takeaway && bandNear(s, band))) out.push('music');
-    return out;
-  }
-  if (open.some((s) => s.position.x < PLACES.windowX)) out.push('window');
-  if (open.some((s) => s.position.x > PLACES.doorX)) out.push('door');
-  if (open.some((s) => s.position.z < PLACES.counterZ && s.table !== quietCorner)) out.push('counter');
-  return out;
 }
 
 /** The Canadian café's guests' names: none a barista's (Maple, Aspen, Rowan, Birch, Cedar). */
@@ -346,77 +332,42 @@ export function pickName(taken: Set<string>, random: () => number = Math.random)
 }
 
 /**
- * Wishes that cannot both be met, or make no sense together: at most one
- * place (window, gate, counter); never alone with company; never quiet
- * with the singer or with company.
+ * Wishes that contradict each other (the owner's rule 6): besides at most
+ * one place wish (PLACE_WISHES) and at most one guest-named wish
+ * (NAMED_WISHES), never alone with company; never quiet with the music or
+ * company; never the friend with alone, company or quiet; never meeting
+ * someone at a table to itself. And what can never be met together: a
+ * table to itself with anyone else at it (kind, hat); quiet (a table to
+ * itself, or the quiet corner's one chair) with anyone at it either.
  */
 const CLASHES: [WishId, WishId][] = [
-  ['window', 'door'],
-  ['window', 'counter'],
-  ['door', 'counter'],
   ['alone', 'company'],
   ['quiet', 'music'],
   ['quiet', 'company'],
   ['friend', 'alone'],
   ['friend', 'company'],
   ['friend', 'quiet'],
+  ['meet', 'alone'],
+  ['kind', 'alone'],
+  ['hat', 'alone'],
+  ['kind', 'quiet'],
+  ['hat', 'quiet'],
+  ['meet', 'quiet'],
 ];
 
-/** Can these wishes all be met together? (In the Canadian café, at most one place, or two that go together.) */
-export function compatible(wishes: WishId[]): boolean {
-  if (!CLASHES.every(([a, b]) => !(wishes.includes(a) && wishes.includes(b)))) return false;
-  const places = wishes.filter((w) => CANADA_PLACE_WISHES.includes(w));
-  if (places.length > 2) return false;
-  if (places.length === 2 && !CANADA_TOGETHER.some(([a, b]) => places.includes(a) && places.includes(b))) return false;
-  return !wishes.includes('takeaway') || wishes.length === 1;
+/** Can these wishes all go on one guest (rule 6)? */
+export function compatible(wishes: readonly WishId[]): boolean {
+  if (wishes.filter((w) => PLACE_WISHES.includes(w)).length > 1) return false;
+  if (wishes.filter((w) => NAMED_WISHES.includes(w)).length > 1) return false;
+  return CLASHES.every(([a, b]) => !(wishes.includes(a) && wishes.includes(b)));
 }
 
-/** Is this one of the Canadian café's place wishes (met by where the seat is, or which musician is in earshot)? */
+/** Is this a place wish (met by where the seat is)? */
 export function isPlaceWish(wish: WishId): boolean {
-  return CANADA_PLACE_WISHES.includes(wish);
+  return PLACE_WISHES.includes(wish);
 }
 
-/** The place wishes a pair can share (a table meets both): the Japanese café's three, or the Canadian café's. */
+/** The place wishes a pair can share (a table meets both): the café's own places. */
 export function pairPlaces(): WishId[] {
-  return isCanada() ? CANADA_PLACE_WISHES.filter((w) => w !== 'music') : ['window', 'door', 'counter'];
-}
-
-/**
- * `count` wishes (1 to 3) for a new guest, all compatible, `music` among
- * the choices only while someone on stage sings, and not the very same
- * set the last guest had (so the line is a mix). Every set it makes can be
- * met by some seat in the café: at most one place wish, and the rest about
- * company and quiet, which any table can grant.
- */
-export interface PickOptions {
-  /** Wishes that come twice as often (a species' leanings, the day's forecast); only those in the pool count. */
-  lean?: readonly WishId[];
-  /** A wish the guest always has (a cold guest's `warm`); it must be in the pool. */
-  must?: WishId;
-  /** Can some open seat meet all of these places at once? (The Canadian café: which musician plays, which tables are open.) */
-  meetable?: (wishes: WishId[]) => boolean;
-}
-
-export function pickWishes(count: number, singerAbout: boolean, last: WishId[], random: () => number = Math.random, open: readonly WishId[] = ALWAYS, options: PickOptions = {}): WishId[] {
-  const pool: WishId[] = singerAbout ? [...open, 'music' as const] : [...open];
-  const { lean = [], meetable } = options;
-  const must = options.must && pool.includes(options.must) ? options.must : undefined;
-  // The leanings: one more copy of each favourite in the pool, so it is drawn twice as often.
-  const draw: WishId[] = [...pool, ...lean.filter((w) => pool.includes(w))];
-  const want = Math.max(1, Math.min(3, Math.round(count)));
-  for (let attempt = 0; attempt < 24; attempt++) {
-    const picked: WishId[] = must ? [must] : [];
-    const left = [...draw];
-    while (picked.length < want && left.length > 0) {
-      const wish = left.splice(Math.floor(random() * left.length), 1)[0];
-      if (picked.includes(wish)) continue;
-      const next = [...picked, wish];
-      if (compatible(next) && (!meetable || meetable(next))) picked.push(wish);
-    }
-    if (picked.length === 0) continue;
-    const same = picked.length === last.length && picked.every((w) => last.includes(w));
-    if (!same || attempt > 12) return picked;
-  }
-  if (must) return [must];
-  return [pool[Math.floor(random() * pool.length)]];
+  return wishOrder().filter(isPlaceWish);
 }
