@@ -5,22 +5,26 @@
  * round shoji paper, and its lines boil (redrawn with a new seed ten times
  * a second) while it is up.
  *
- * The start card is one rounded box with a margin, and nothing is drawn
- * past its edge: three small square buttons in its top corners (Quit on
- * the left; How to play and Settings on the right), the logo between them,
- * and a row of café cards across the middle that scrolls sideways (pinch
- * and drag it, or press the arrows at its ends). A card is the café's
- * picture with its name over a dark shadow at the bottom; pinching it plays
- * there. The last card is a café still to come, and cannot be picked.
+ * The start card is one square-cornered box with a margin, and nothing is
+ * drawn past its edge: three small square buttons in its top corners (Quit
+ * on the left; How to play and Settings on the right), the logo centred
+ * between them, and a row of café cards across the middle (centred while
+ * they all fit; it scrolls sideways once there are more: pinch and drag
+ * it, or press the arrows at its ends). A card is the café's picture with
+ * its name over a dark shadow at the bottom; pinching it plays there.
+ * Under the Canadian café's card while it is a trial, one short line says
+ * what the trial is.
  *
- *   ╭──────────────────────────────────────────────╮
+ *   ┌──────────────────────────────────────────────┐
  *   │ [⏻]           CAFÉ CHAOS            [?] [⚙] │
- *   │ ╭──────────╮  ╭──────────╮  ╭────╌╌╌         │
- *   │ │ picture  │  │ picture  │  │ Brazil  (→)    │
- *   │ │▒Japanese▒│  │▒Canadian▒│  │▒Coming         │
- *   │ ╰──────────╯  ╰──────────╯  ╰────╌╌╌         │
- *   │       Pinch a café to play · drag for more    │
- *   ╰──────────────────────────────────────────────╯
+ *   │      ┌──────────────┐  ┌──────────────┐      │
+ *   │      │   picture    │  │   picture    │      │
+ *   │      │▒Japanese▒▒▒▒▒│  │▒Canadian▒▒▒▒▒│      │
+ *   │      └──────────────┘  └──────────────┘      │
+ *   │                     Free trial: 3 levels.     │
+ *   │                     Buy it to keep your ...   │
+ *   │               Pinch a café to play            │
+ *   └──────────────────────────────────────────────┘
  *
  * The pause card and the failed card are the same width, the older shape:
  * their words on the left and the buttons on the right. Settings, the New
@@ -52,20 +56,23 @@ export const START_SIZE = { width: 0.32, height: 0.2 };
  */
 const START = {
   W: 960,
-  H: 556,
+  // The owner's playtest (18 Nov 2026): more room above and below, square corners, the card larger (MENU_SPOT.size).
+  H: 676,
   margin: 14,
-  radius: 40,
+  radius: 0,
   rim: 10,
   corner: 84,
-  cornerX: 44,
-  cornerY: 32,
+  cornerX: 52,
+  cornerY: 52,
   label: 22,
-  view: { x: 44, y: 172, w: 872, h: 318 },
-  cardW: 356,
-  cardGap: 32,
-  cardRadius: 26,
+  view: { x: 52, y: 202, w: 856, h: 330 },
+  cardW: 380,
+  cardGap: 40,
+  cardRadius: 0,
   arrow: 84,
-  hintY: 520,
+  /** A café's line under its card (the Canadian café's trial), and the hint at the bottom. */
+  captionY: 562,
+  hintY: 626,
 } as const;
 /** The start card's size (metres). */
 export const PICKER_SIZE = { width: 0.32, height: (START.H * 0.32) / START.W };
@@ -101,6 +108,10 @@ const HOW_VIDEO = { width: 520, height: 293 };
 const HOVER = { plain: '#c4b397', danger: '#e8b2a2' };
 /** Design units across. */
 const W = 720;
+/** A question's words keep this far in from each side of its paper (design units). */
+const INSET = 72;
+/** Under the Canadian café's card while it is a trial (the owner's playtest: say why the progress is not kept). */
+const TRIAL_LINE = 'Free trial: 3 levels. Buy it to keep your progress.';
 const PAD = 36;
 const GAP = 24;
 /** Between two things you press: 40 design units (about 13 mm), over Meta's 12 mm. */
@@ -123,8 +134,6 @@ export interface CafeTile {
   coins: number;
   /** Chosen, and its models still loading. */
   loading: boolean;
-  /** Today's forecast (the Canadian café): its icon and one line, over the foot of its picture. */
-  forecast?: { id: 'sunny' | 'snap' | 'snow'; line: string };
 }
 /** The start card: the cafés, the one played last first; and the Canadian café's price. */
 export interface StartState {
@@ -453,11 +462,15 @@ export class StartMenu {
     // Fitted to its content: the title, the sentence, then the buttons a block gap under it, PAD at the bottom as at
     // the sides (a one-line sentence leaves no empty paper above the buttons).
     const ctx = this.sheet.ctx;
-    // Each sentence starts its own line (one idea a line, ASD-STE100), wrapped only if it is too long for one.
-    const lines = sentence.split(/(?<=\.)\s+/).flatMap((one) => this.wrap(ctx, one, 32, false, W - PAD * 2));
-    const textTop = 150;
-    const top = textTop + (lines.length - 1) * 44 + 22 + 48;
-    const H = top + choices.length * 120 + (choices.length - 1) * TOUCH_GAP + PAD + 14;
+    // The words keep INSET clear of the paper's edge on each side (the owner's playtest: a word touched the frame);
+    // the title wraps too. Each sentence starts its own line (one idea a line, ASD-STE100), wrapped if too long.
+    const inner = W - INSET * 2;
+    const titles = this.wrap(ctx, title, 44, true, inner);
+    const lines = sentence.split(/(?<=\.)\s+/).flatMap((one) => this.wrap(ctx, one, 32, false, inner));
+    const titleTop = 84;
+    const textTop = titleTop + (titles.length - 1) * 54 + 72;
+    const top = textTop + (lines.length - 1) * 44 + 22 + 56;
+    const H = top + choices.length * 120 + (choices.length - 1) * TOUCH_GAP + PAD + 24;
     this.sheet.resize(MENU_SIZE.width, (H * this.k) / PPM);
     const buttons = choices.map((c, i) => this.button(this.sheet, c.id, PAD, top + i * (120 + TOUCH_GAP), W - PAD * 2, 120, c.kind, c.label));
     this.sheet.set((c) => {
@@ -465,7 +478,7 @@ export class StartMenu {
       c.save();
       c.scale(this.k, this.k);
       this.paper(c, pen(this.sheet.canvas), 0, H);
-      text(c, title, W / 2, 80, 48, SKETCH.ink);
+      titles.forEach((l, i) => text(c, l, W / 2, titleTop + i * 54, 44, SKETCH.ink));
       lines.forEach((l, i) => text(c, l, W / 2, textTop + i * 44, 32, SKETCH.soft, 'center', false));
       c.restore();
     }, buttons);
@@ -583,8 +596,11 @@ export class StartMenu {
     const st = this.start;
     const { W: SW, H, view } = START;
     const step = START.cardW + START.cardGap;
-    const entries: (CafeTile | null)[] = [...st.tiles, null];
-    this.scrollMax = Math.max(0, entries.length * step - START.cardGap - view.w);
+    // The cafés only (no café-to-come card: the owner's playtest), centred in the window while they all fit.
+    const entries: (CafeTile | null)[] = [...st.tiles];
+    const rowW = entries.length * step - START.cardGap;
+    this.rowInset = Math.max(0, (view.w - rowW) / 2);
+    this.scrollMax = Math.max(0, rowW - view.w);
     this.scrollTo = this.clampScroll(this.scrollTo);
     this.scroll = this.clampScroll(this.scroll);
     const buttons: Button[] = [];
@@ -641,23 +657,24 @@ export class StartMenu {
       roundRect(ctx, m, m, SW - m * 2, H - m * 2, START.radius);
       ctx.fillStyle = SKETCH.timber;
       ctx.fill();
-      roundRect(ctx, m + START.rim, m + START.rim, SW - (m + START.rim) * 2, H - (m + START.rim) * 2, START.radius - START.rim);
+      roundRect(ctx, m + START.rim, m + START.rim, SW - (m + START.rim) * 2, H - (m + START.rim) * 2, Math.max(0, START.radius - START.rim));
       ctx.fillStyle = SKETCH.paper;
       ctx.fill();
-      // The logo between the corner buttons (the name in the lettering until it loads).
-      const lh = 104;
+      // The logo between the corner buttons: centred across the card and on the buttons' row, as large as fits the
+      // space between them with a touch gap either side (the name in the lettering until it loads).
+      const room = right - TOUCH_GAP - c - (START.cornerX + c) - TOUCH_GAP * 2;
       if (logo) {
+        const lh = Math.min(112, (room * logo.height) / logo.width);
         const lw = (lh * logo.width) / logo.height;
-        ctx.drawImage(logo, (SW - lw) / 2, START.cornerY - 8, lw, lh);
+        ctx.drawImage(logo, (SW - lw) / 2, START.cornerY + c / 2 - lh / 2, lw, lh);
       } else text(ctx, 'Café Chaos', SW / 2, START.cornerY + c / 2, 44, SKETCH.ink);
       // The corner buttons' names, under each.
       const ly = START.cornerY + c + 22;
       text(ctx, 'Quit', START.cornerX + c / 2, ly, START.label, SKETCH.soft);
       text(ctx, 'How to play', right - TOUCH_GAP - c / 2, ly, START.label, SKETCH.soft);
       text(ctx, 'Settings', right + c / 2, ly, START.label, SKETCH.soft);
-      // The café to come (no button: it cannot be picked).
-      const soon = entries.length - 1;
-      this.drawRowCard(ctx, soon * step, null, false, false);
+      // Under the row while a café is not owned: its trial, said once, on one line across the row.
+      if (entries.some((t) => t && !t.owned)) text(ctx, TRIAL_LINE, SW / 2, START.captionY, 26, SKETCH.soft, 'center', false);
       text(ctx, this.scrollMax > 0 ? 'Pinch a café to play  ·  drag the row for more' : 'Pinch a café to play', SW / 2, START.hintY, 24, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
@@ -665,6 +682,8 @@ export class StartMenu {
 
   /** How far the row can scroll (design units): its cards' width past the window. */
   private scrollMax = 0;
+  /** How far in from the window's left edge the row starts (it is centred while it all fits). */
+  private rowInset = 0;
 
   private clampScroll(v: number): number {
     return Math.max(0, Math.min(this.scrollMax, v));
@@ -688,7 +707,7 @@ export class StartMenu {
     const { view } = START;
     const k = this.k;
     for (const r of this.rowButtons) {
-      const x = view.x + r.x - this.scroll;
+      const x = view.x + this.rowInset + r.x - this.scroll;
       const l = Math.max(x, view.x);
       const rr = Math.min(x + r.w, view.x + view.w);
       const show = r.whole ? l === x && rr === x + r.w : rr - l > 8;
@@ -771,7 +790,7 @@ export class StartMenu {
     const { view } = START;
     const w = START.cardW;
     const h = view.h;
-    const x = view.x + x0 - this.scroll;
+    const x = view.x + this.rowInset + x0 - this.scroll;
     if (x + w < view.x || x > view.x + view.w) return;
     const dip = pressed ? 6 : 0;
     const y = view.y + dip;
@@ -803,8 +822,6 @@ export class StartMenu {
     g.addColorStop(1, 'rgba(18, 12, 8, 0.9)');
     ctx.fillStyle = g;
     ctx.fillRect(x, y, w, h);
-    // Today's forecast (the Canadian café), a paper band above the name.
-    if (t?.forecast) this.forecastBand(ctx, t.forecast, x, y + h - 104, w);
     if (t?.loading) {
       ctx.fillStyle = 'rgba(18, 12, 8, 0.45)';
       ctx.fillRect(x, y, w, h);
@@ -889,7 +906,7 @@ export class StartMenu {
   /** A tag on a café's picture (New game, Buy): paper, ink, a lantern glow when lit. Clipped to the window. */
   private drawTag(ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number, label: string, hover: boolean, pressed: boolean): void {
     const { view } = START;
-    const x = view.x + x0 - this.scroll;
+    const x = view.x + this.rowInset + x0 - this.scroll;
     if (x + w < view.x || x > view.x + view.w) return;
     const y = y0 + (pressed ? 6 : 0);
     ctx.save();
@@ -897,7 +914,8 @@ export class StartMenu {
     ctx.beginPath();
     ctx.rect(view.x, view.y - 4, view.w, view.h + 12);
     ctx.clip();
-    roundRect(ctx, x, y, w, h, 18);
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
     ctx.fillStyle = hover ? HOVER.plain : 'rgba(217, 207, 190, 0.94)';
     ctx.fill();
     ctx.lineWidth = 3;
@@ -955,7 +973,8 @@ export class StartMenu {
         ctx.save();
         ctx.scale(k, k);
         const dy = y + (pressed ? 5 : 0);
-        roundRect(ctx, x, dy, s, s, 20);
+        ctx.beginPath();
+        ctx.rect(x, dy, s, s);
         ctx.fillStyle = hover ? c.lit : c.fill;
         ctx.fill();
         ctx.lineWidth = hover ? 6 : 3.5;
@@ -995,32 +1014,6 @@ export class StartMenu {
         ctx.restore();
       },
     };
-  }
-
-  /**
-   * Today's forecast over the foot of a café's picture (docs/CANADA-CHALLENGES.md):
-   * a paper band, the weather's icon and its one line, `bottom` the picture's foot.
-   */
-  private forecastBand(ctx: CanvasRenderingContext2D, f: { id: 'sunny' | 'snap' | 'snow'; line: string }, x: number, bottom: number, w: number): void {
-    const H = 44;
-    const y = bottom - H;
-    ctx.save();
-    ctx.fillStyle = 'rgba(244, 236, 220, 0.92)';
-    ctx.fillRect(x, y, w, H);
-    const r = 15;
-    const cx = x + 10 + r;
-    const cy = y + H / 2;
-    weatherIcon(ctx, f.id, cx, cy, r);
-    // 27 units at most (the card's smallest reading size), smaller only if the line would not fit.
-    let size = 27;
-    const room = w - (cx + r + 10 - x) - 8;
-    ctx.font = font(size, false);
-    while (size > 22 && ctx.measureText(f.line).width > room) ctx.font = font(--size, false);
-    // Still too long (the start card's narrower café cards): cut at a word, with an ellipsis.
-    let line = f.line;
-    while (ctx.measureText(line).width > room && line.includes(' ')) line = `${line.slice(0, line.lastIndexOf(' ')).replace(/[.,;:]$/, '')}…`.replace(/……$/, '…');
-    text(ctx, line, cx + r + 10, cy + 1, size, SKETCH.ink, 'left', false);
-    ctx.restore();
   }
 
   /** Lines of `s` that fit `width` (design units) at this size. */
@@ -1310,41 +1303,3 @@ export class StartMenu {
   }
 }
 
-/** The forecast's icon, centred at (x, y), radius r: a sun, a snowflake on blue (cold snap), a snow cloud. */
-function weatherIcon(ctx: CanvasRenderingContext2D, id: 'sunny' | 'snap' | 'snow', x: number, y: number, r: number): void {
-  ctx.save();
-  ctx.lineCap = 'round';
-  if (id === 'sunny') {
-    ctx.strokeStyle = '#d9822b';
-    ctx.lineWidth = r * 0.16;
-    for (let i = 0; i < 8; i++) {
-      const a = (i * Math.PI) / 4;
-      ctx.beginPath();
-      ctx.moveTo(x + Math.cos(a) * r * 0.62, y + Math.sin(a) * r * 0.62);
-      ctx.lineTo(x + Math.cos(a) * r * 0.95, y + Math.sin(a) * r * 0.95);
-      ctx.stroke();
-    }
-    ctx.beginPath();
-    ctx.arc(x, y, r * 0.45, 0, Math.PI * 2);
-    ctx.fillStyle = '#f2b62e';
-    ctx.fill();
-  } else if (id === 'snap') {
-    snowflake(ctx, x, y - 1, r);
-  } else {
-    // A grey cloud and three flakes under it.
-    ctx.fillStyle = '#8c98a6';
-    ctx.beginPath();
-    ctx.arc(x - r * 0.4, y - r * 0.15, r * 0.38, 0, Math.PI * 2);
-    ctx.arc(x + r * 0.05, y - r * 0.35, r * 0.48, 0, Math.PI * 2);
-    ctx.arc(x + r * 0.5, y - r * 0.12, r * 0.36, 0, Math.PI * 2);
-    ctx.rect(x - r * 0.75, y - r * 0.15, r * 1.6, r * 0.38);
-    ctx.fill();
-    ctx.fillStyle = '#3f86c9';
-    for (const dx of [-0.45, 0, 0.45]) {
-      ctx.beginPath();
-      ctx.arc(x + dx * r, y + r * 0.62 + (dx === 0 ? r * 0.15 : 0), r * 0.13, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  ctx.restore();
-}

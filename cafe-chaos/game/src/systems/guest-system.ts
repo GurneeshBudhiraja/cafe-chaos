@@ -245,8 +245,6 @@ export class GuestSystem extends createSystem({}) {
   /** A snowstorm is blowing (game/events.ts): nobody new wishes for outside, the lake or upstairs, and guests seated outside (not at the bonfire) lose patience `stormOutside` times as fast. */
   storm = false;
   stormOutside = 1;
-  /** The day's forecast's leanings (game/forecast.ts): these come twice as often on the cards. */
-  forecastLean: WishId[] = [];
   /** How much the gap between arrivals grows as the café fills (the game, which sets the gaps itself, turns it off with 1). */
   spawnStretch = SPAWN_STRETCH;
   /**
@@ -943,7 +941,7 @@ export class GuestSystem extends createSystem({}) {
       },
       candidates: () => seated.map((g) => g.id),
       meetable: (wishes, link) => this.meetableSoon(wishes, { ...self, link }, patience),
-      lean: isCanada() ? [...(SPECIES_LEAN[species] ?? []), ...this.forecastLean] : [],
+      lean: isCanada() ? [...(SPECIES_LEAN[species] ?? [])] : [],
       must: cold ? 'warm' : undefined,
       random: Math.random,
     });

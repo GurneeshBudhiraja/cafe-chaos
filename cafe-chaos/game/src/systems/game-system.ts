@@ -38,10 +38,8 @@ import { HandRays } from '../hands/hand-ray.js';
 import { arrivalGap, COLD, coldChance, HAPPINESS, HURRY, hurryChance, STORM, JANITOR2_PRICE, JANITOR_PRICE, pairChance, PAIRS, LEVEL, levelBonus, levelGoal, linePatience, MAX_STAFF, MEAL_SECONDS, queueCap, startTables } from '../game/rules.js';
 import { CAFE_NAMES, CANADA_PRICE, current, isCanada, TRIAL_LEVELS, type CafeId } from '../cafe/style.js';
 import { howToPlay } from '../game/how-to-play.js';
-import { forecastFor } from '../game/forecast.js';
 import { CafeEvents } from '../game/events.js';
 import { Snow } from '../ambience/snow.js';
-import type { Forecast } from '../game/rules.js';
 import { TABLE_RINGS } from '../cafe/layout.js';
 import { CANADA_TABLE_RINGS } from '../cafe/canada-layout.js';
 import { newSeed, tableOrder } from '../game/table-order.js';
@@ -122,10 +120,12 @@ const SIZE = { min: 60, max: 140, step: 10 };
  * - `distance`: 1 m from the eyes. Meta places objects "at a roughly 1
  *   meter distance slightly below the user's line of sight", and indirect
  *   (ray) panels no nearer than 0.8 m.
- * - `size`: the cards stand 2 x MENU_SCALE (1.3 times) as big as made, so
- *   at 1 m they look the size they would at about 77 cm: first made twice
- *   as big, they read as too big in the headset. A card's main buttons
- *   stay near 3 degrees for the ray.
+ * - `size`: the menu cards (start, pause, How to play, the questions)
+ *   stand twice as big as made, so at 1 m they look the size they would at
+ *   50 cm: made a third smaller (MENU_SCALE) they read as too small and
+ *   cramped in the owner's playtest of 18 Nov 2026, and coming nearer is
+ *   not the answer (Meta: about 1 m for ray panels). Buttons 3 degrees
+ *   and up for the ray. The bar and the Shop drawer stay at MENU_SCALE.
  * - `top`: the top edge 4 degrees under the level line of sight, so the
  *   card hangs just under where the eyes look and never covers them (the
  *   eyes rest 10 to 20 degrees down, Microsoft). A taller card hangs lower,
@@ -138,7 +138,7 @@ const SIZE = { min: 60, max: 140, step: 10 };
  */
 /** The notes under the bar: how long each stays (seconds), the gap between two, and how far under the bar's edge (metres). */
 const NOTE = { seconds: 4, gap: 0.4, below: 0.012 };
-const MENU_SPOT = { distance: 1, size: 2 * MENU_SCALE, top: 4, lowest: 30, follow: 35, glide: 4, shift: 0.12, dwell: 0.6 };
+const MENU_SPOT = { distance: 1, size: 2, top: 4, lowest: 30, follow: 35, glide: 4, shift: 0.12, dwell: 0.6 };
 /** Canvas pixels per millimetre of card (ui/panel.ts draws at 2400 px a metre). */
 const MM = 2.4;
 
@@ -439,22 +439,20 @@ export class GameSystem extends createSystem({}) {
     }
     this.press(cardDelta);
     if (this.phase === 'tutorial') this.coachTick();
-    if (this.phase === 'run') this.runTick(delta);
+    if (this.running) this.runTick(delta);
     // The storm's snow: it falls while the storm blows (held still in a pause), and fades when it ends or the café is left.
     if (this.events.storming && (current.id !== 'canada' || this.phase === 'title' || this.phase === 'tutorial')) this.calm();
     this.snow.update(delta, this.events.storming, delta > 0);
   }
 
-  /** The Canadian café's events (game/events.ts): the snowstorm. Today's forecast, from the local date. */
+  /** The Canadian café's events (game/events.ts): the snowstorm. */
   readonly events = new CafeEvents();
   readonly snow = new Snow();
-  /** Today's forecast for the Canadian café (read again at each run's start: the date may have turned). */
-  forecast: Forecast = forecastFor();
 
   /** One frame of a run's events: a storm blows in (a note, snow, cold guests, nobody wishes for outdoors) and out. */
   private tendEvents(delta: number): void {
     if (current.id !== 'canada') return;
-    const change = this.events.update(delta, this.level, this.levelServed / levelGoal(this.level), this.forecast);
+    const change = this.events.update(delta, this.level, this.levelServed / levelGoal(this.level));
     if (change === 'stormStart') {
       const t = TIPS.storm;
       this.notes.unshift({ title: t.title, icon: 'storm', seconds: t.seconds, text: t.text });
@@ -519,8 +517,6 @@ export class GameSystem extends createSystem({}) {
         level: p.level,
         coins: p.bank,
         loading: this.pending?.id === id,
-        // Today's weather at the Canadian café (read afresh each time the card shows: the date may have turned).
-        forecast: id === 'canada' ? { id: forecastFor().id, line: forecastFor().line } : undefined,
       };
     });
     this.menu.showStart({ tiles, price: CANADA_PRICE, lesson: !this.save.tutorialDone });
@@ -756,6 +752,13 @@ export class GameSystem extends createSystem({}) {
   /** The Canadian café's Buy question: what it costs, and what the Japanese café has left after. */
   private askBuy(from: 'title' | 'shop'): void {
     this.buyFrom = from;
+    // The question stands where the café is (it goes away under it): the run waits while it is up.
+    if (from === 'shop' && this.running && !this.buyHold) {
+      this.buyHold = true;
+      this.speed = this.cafe.timeScale || this.speed;
+      this.cafe.timeScale = 0;
+      this.guests.handsOff = true;
+    }
     const coins = current.id === 'japan' && !this.trial && this.phase !== 'title' ? this.score.bank : this.book.bank('japan');
     if (from === 'title') this.menu.card.dimmed = true;
     else this.strip.drawer.hide();
@@ -814,6 +817,11 @@ export class GameSystem extends createSystem({}) {
   /** From the Buy question back to the Shop drawer (the run still stopped under it). */
   private backToShop(): void {
     this.closeSheet();
+    if (this.buyHold) {
+      this.buyHold = false;
+      this.cafe.timeScale = this.speed;
+      this.guests.handsOff = false;
+    }
     if (this.phase === 'shopping') this.showShop();
   }
 
@@ -864,7 +872,6 @@ export class GameSystem extends createSystem({}) {
     this.score.startRun();
     this.guests.startRun();
     this.calm();
-    this.forecast = forecastFor();
     this.level = Math.max(1, Math.floor(this.save.level));
     this.levelServed = again ? 0 : Math.max(0, Math.min(levelGoal(this.level) - 1, Math.floor(this.save.levelServed)));
     this.servedMark = this.score.servedGuests - this.levelServed;
@@ -918,13 +925,17 @@ export class GameSystem extends createSystem({}) {
       this.closeShop();
       return;
     }
-    if (this.phase === 'run' || (this.phase === 'tutorial' && this.tableLesson)) {
-      this.shopFrom = this.phase === 'run' ? 'run' : 'tutorial';
+    if (this.phase === 'run') {
+      // From a run the Shop does not pause it (the owner's playtest): the clock and the guests go on, and the hands
+      // still pick guests up and seat them while the drawer is down.
+      this.shopFrom = 'run';
+    } else if (this.phase === 'tutorial' && this.tableLesson) {
+      this.shopFrom = 'tutorial';
       this.speed = this.cafe.timeScale || this.speed;
       this.cafe.timeScale = 0;
       this.guests.handsOff = true;
       // The coach card steps aside while the drawer is down.
-      if (this.shopFrom === 'tutorial') this.coach.show(false);
+      this.coach.show(false);
     } else if (this.phase === 'paused') {
       this.shopFrom = 'paused';
       this.closeSheet();
@@ -976,16 +987,24 @@ export class GameSystem extends createSystem({}) {
   private closeShop(): void {
     if (this.phase !== 'shopping') return;
     this.strip.drawer.hide();
-    if (this.shopFrom === 'run' || this.shopFrom === 'tutorial') {
-      this.phase = this.shopFrom;
+    if (this.shopFrom === 'run') this.phase = 'run';
+    else if (this.shopFrom === 'tutorial') {
+      this.phase = 'tutorial';
       this.cafe.timeScale = this.speed;
       this.guests.handsOff = false;
-      if (this.phase === 'tutorial') this.coach.show(true);
+      this.coach.show(true);
     } else {
       this.phase = 'paused';
       this.showPauseCard();
     }
   }
+
+  /** A run is on: in the run, or in the Shop opened from it (it does not pause the run). */
+  private get running(): boolean {
+    return this.phase === 'run' || (this.phase === 'shopping' && this.shopFrom === 'run');
+  }
+  /** The run waits while the Buy question asked from the Shop is up. */
+  private buyHold = false;
 
   /** Carry on from a pause: the café shows and moves again at once. */
   resume(): void {
@@ -1164,14 +1183,13 @@ export class GameSystem extends createSystem({}) {
     g.hurryChance = hurryChance(this.level);
     g.pairChance = pairChance(this.level);
     g.hurry = { line: HURRY.line, lineMin: HURRY.lineMin, seated: HURRY.seated };
-    // The Canadian café's cold guests, the storm and the day's leanings (docs/CANADA-CHALLENGES.md; none in the Japanese café).
+    // The Canadian café's cold guests, and the storm (docs/CANADA-CHALLENGES.md; none in the Japanese café).
     const canada = current.id === 'canada';
     const storm = canada && this.events.storming;
     g.storm = storm;
     g.stormOutside = STORM.outside;
-    g.coldChance = !canada ? 0 : storm ? STORM.cold : coldChance(this.level, this.forecast);
+    g.coldChance = !canada ? 0 : storm ? STORM.cold : coldChance(this.level);
     g.cold = { line: COLD.line, outside: COLD.outside };
-    g.forecastLean = canada ? [...this.forecast.lean] : [];
     // The first hurried guest and the first pair come on cue, so every player meets them early (the competition's
     // "satisfying in 10 minutes"): the third arrival once hurried guests begin, the first arrival once pairs do.
     if (this.phase === 'run' && this.level >= HURRY.from && !this.save.metHurry) {

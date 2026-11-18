@@ -7,8 +7,9 @@
  *    eyes (RESUME, How to play, Settings, END THE EVENING; no Hire);
  * 3. paused, the café (and the bar) are hidden behind the card; RESUME on
  *    the card, pointed at and pinched: the run goes on at once;
- * 4. with the coins, Shop pauses and opens the shop; HIRE hires the next
- *    barista (the price taken); CLOSE carries on with the run;
+ * 4. with the coins, Shop opens the shop and the run goes on (the clock,
+ *    the guests, the hands); HIRE hires the next barista (the price
+ *    taken); CLOSE closes it;
  * 5. a hand over the café has no ray, and its pinch presses nothing;
  * 6. nothing on the console.
  *
@@ -112,7 +113,8 @@ await tap();
 s = await state();
 const drawer = () => page.evaluate(() => { const { strip, system } = window.__cafe; const V = system.cafe.position.constructor; const d = strip.drawer.panel; d.mesh.updateWorldMatrix(true, false); return { open: d.open, buttons: d.buttons.map((b) => b.id), speed: system.timeScale, cafe: system.cafe.visible, card: window.__cafe.game.menu.card.open, bottom: d.mesh.localToWorld(new V(0, -0.05, 0)).y, top: system.cafe.localToWorld(new V(0, 0.405, -0.33)).y }; });
 let dr = await drawer();
-check('Shop: the drawer comes down under the bar, the café still and in view (no card), clear of the café\'s top', s.phase === 'shopping' && dr.open && dr.buttons.includes('hire') && dr.buttons.includes('shop-close') && dr.speed === 0 && dr.cafe && !dr.card && dr.bottom > dr.top && badge, JSON.stringify({ phase: s.phase, ...dr, affordable: badge }));
+const handsOn = await page.evaluate(() => !window.__cafe.guests.handsOff);
+check('Shop: the drawer comes down under the bar, the café going on and in view (no card), hands still on the guests, clear of the café\'s top', s.phase === 'shopping' && dr.open && dr.buttons.includes('hire') && dr.buttons.includes('shop-close') && dr.speed === 1 && handsOn && dr.cafe && !dr.card && dr.bottom > dr.top && badge, JSON.stringify({ phase: s.phase, ...dr, affordable: badge }));
 await page.waitForTimeout(600);
 await page.screenshot({ path: 'artifacts/bar-shop.png' });
 // HIRE pointed at and pinched in the drawer.

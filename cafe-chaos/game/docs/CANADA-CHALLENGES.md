@@ -113,7 +113,7 @@ a guest by its shape:
   **At the bonfire** also meets it (warm is fireplace or fire). It waits
   0.75 × as long in the line. Seated outside anywhere but the bonfire, it
   also waits 0.75 × as long for its food.
-- **When:** from level 2; 12 % of guests (by forecast and storm, below).
+- **When:** from level 2; 12 % of guests (more in a storm, below).
 - `COLD = { from: 2, chance: 0.12, line: 0.75, outside: 0.75 }`
 
 ### Snowstorm (the café's first-five-minutes moment)
@@ -124,20 +124,12 @@ a guest by its shape:
   outside, lake view or upstairs (inside and the bonfire still come);
   guests already seated outside (not at the bonfire) wait 1 / 1.3 as long
   for their food.
-- **When:** always a third of the way into level 2, then every few levels
-  by the forecast; never with another event.
+- **When:** a third of the way into level 2, once a run; never with
+  another event.
 - `STORM = { level: 2, at: 0.33, seconds: 60, cold: 0.6, outside: 1.3 }`
 
-### Today's forecast (the reason to come back)
-
-On the start card under the Canadian café, an icon and one line, picked
-from the local date (no save needed):
-
-| Forecast | Days a week | Cold guests | Storms after level 2 | Leans the cards toward |
-|---|---|---|---|---|
-| Sunny | 3 | 8 % | none | outside, lake view, upstairs |
-| Cold snap | 2 | 25 % | every 4 levels | fireplace, bonfire, inside |
-| Snow day | 2 | 15 % | every 2 levels, 75 s | inside |
+The owner's playtest took the daily forecast out (no weather on the
+start card, the same café every day).
 
 ### Stretch: Morning commute
 
@@ -164,9 +156,9 @@ at a time.
   (`tablesOf` today makes each chair a table of its own).
 - **Species leanings:** a weight per species in `pickWishes`
   (`guests/cast.ts` knows the species).
-- **Cold, storm, forecast:** `rules.ts` (COLD, STORM, FORECASTS), a new
+- **Cold and storm:** `rules.ts` (COLD, STORM), a new
   `game/events.ts` (one event at a time), `guests/patience-dial.ts` (the
-  snowflake), `ui/start-menu.ts` (the forecast line), one tip in
+  snowflake), one tip in
   `game/how-to-play.ts`: "A snowflake: the guest is cold. Sit it by a
   fire."
 
@@ -181,17 +173,14 @@ at a time.
 | Shovel the stairs (after a storm) | Snow shuts the roof until the janitor shovels (one tap) | Drifts on the steps (Blender) |
 | Golden hour on the roof | Upstairs pays double for 45 s | Game code only |
 | Hoser's passport | Stamps for goals (every place in one run, the team together) | Game code and UI |
-| More forecasts | Chinook (everyone wants outside), Hockey night | The events above |
 
 ## Checks before submitting
 
-- Every card shown can be met by an open seat, at every level, in a storm
-  and on every forecast (the two starting tables meet every level-1
-  card).
+- Every card shown can be met by an open seat, at every level and in a
+  storm (the two starting tables meet every level-1 card).
 - A cold guest at a bonfire chair counts as warm; at a deck table it
   does not, and waits less there.
 - With the fiddler bought, the deck tables meet **Near the music**; with
   the pianist, the roof tables do, and none of them is **quiet**.
 - The level-2 storm starts, shows its tip, snows and ends on time.
 - The snow keeps the frame rate on the headset.
-- The forecast line changes with the date.
