@@ -35,13 +35,17 @@
 
 import { createSystem, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 import { HandRays } from '../hands/hand-ray.js';
-import { arrivalGap, HAPPINESS, HURRY, hurryChance, JANITOR2_PRICE, JANITOR_PRICE, pairChance, PAIRS, LEVEL, levelBonus, levelGoal, linePatience, MAX_STAFF, MEAL_SECONDS, queueCap, startTables } from '../game/rules.js';
+import { arrivalGap, COLD, coldChance, HAPPINESS, HURRY, hurryChance, STORM, JANITOR2_PRICE, JANITOR_PRICE, pairChance, PAIRS, LEVEL, levelBonus, levelGoal, linePatience, MAX_STAFF, MEAL_SECONDS, queueCap, startTables } from '../game/rules.js';
 import { CAFE_NAMES, CANADA_PRICE, current, TRIAL_LEVELS, type CafeId } from '../cafe/style.js';
+import { howToPlay } from '../game/how-to-play.js';
+import { forecastFor } from '../game/forecast.js';
+import { CafeEvents } from '../game/events.js';
+import { Snow } from '../ambience/snow.js';
+import type { Forecast } from '../game/rules.js';
 import { TABLE_RINGS } from '../cafe/layout.js';
 import { CANADA_TABLE_RINGS } from '../cafe/canada-layout.js';
 import { newSeed, tableOrder } from '../game/table-order.js';
 import { PLACES } from '../guests/wishes.js';
-import { HOW_TO_PLAY } from '../game/how-to-play.js';
 import { freshProgress, SaveBook, TEST_MODE, type Save } from '../game/save.js';
 import { PATIENCE_SECONDS, SPAWN_SECONDS } from '../guests/rules.js';
 import { HANDS, type Hand } from '../lib/hand-pinch.js';
@@ -312,6 +316,7 @@ export class GameSystem extends createSystem({}) {
     this.hold = this.world.getSystem(HoldSystem) ?? null;
     this.handles = this.world.getSystem(HandleSystem) ?? null;
     for (const panel of [this.card, this.coach]) this.cafe.cafe.add(panel.mesh);
+    this.cafe.cafe.add(this.snow.points);
     this.world.createTransformEntity(this.how.mesh);
     this.card.mesh.position.set(...CARD.position);
     MOVES.forEach((move, i) => {
@@ -373,7 +378,7 @@ export class GameSystem extends createSystem({}) {
       if (this.phase === 'paused') this.showPauseCard();
       if (this.phase === 'closed') this.showFailedCard();
       // How to play was up (opened from the pause card): back, so there is something to press.
-      if (this.phase === 'rules') this.menu.showHow(HOW_TO_PLAY, this.menu.howIndex);
+      if (this.phase === 'rules') this.menu.showHow(howToPlay(current.id), this.menu.howIndex);
     });
     xr.addEventListener('sessionend', () => {
       this.pause();
@@ -429,6 +434,35 @@ export class GameSystem extends createSystem({}) {
     this.press(cardDelta);
     if (this.phase === 'tutorial') this.coachTick();
     if (this.phase === 'run') this.runTick(delta);
+    // The storm's snow: it falls while the storm blows (held still in a pause), and fades when it ends or the café is left.
+    if (this.events.storming && (current.id !== 'canada' || this.phase === 'title' || this.phase === 'tutorial')) this.calm();
+    this.snow.update(delta, this.events.storming, delta > 0);
+  }
+
+  /** The Canadian café's events (game/events.ts): the snowstorm. Today's forecast, from the local date. */
+  readonly events = new CafeEvents();
+  readonly snow = new Snow();
+  /** Today's forecast for the Canadian café (read again at each run's start: the date may have turned). */
+  forecast: Forecast = forecastFor();
+
+  /** One frame of a run's events: a storm blows in (a note, snow, cold guests, nobody wishes for outdoors) and out. */
+  private tendEvents(delta: number): void {
+    if (current.id !== 'canada') return;
+    const change = this.events.update(delta, this.level, this.levelServed / levelGoal(this.level), this.forecast);
+    if (change === 'stormStart') {
+      const t = TIPS.storm;
+      this.notes.unshift({ title: t.title, icon: 'storm', seconds: t.seconds, text: t.text });
+      this.pace();
+    } else if (change === 'stormEnd') {
+      this.addNote('The storm has passed', 'storm', NOTE.seconds * 0.6);
+      this.pace();
+    }
+  }
+
+  /** End a storm at once (the café left, or a fresh run). */
+  private calm(): void {
+    this.events.reset();
+    this.guests.storm = false;
   }
 
   // ------------------------------------------------------------- the phases
@@ -480,6 +514,8 @@ export class GameSystem extends createSystem({}) {
         level: p.level,
         coins: p.bank,
         loading: this.pending?.id === id,
+        // Today's weather at the Canadian café (read afresh each time the card shows: the date may have turned).
+        forecast: id === 'canada' ? { id: forecastFor().id, line: forecastFor().line } : undefined,
       };
     });
     this.menu.showStart({ tiles, price: CANADA_PRICE, lesson: !this.save.tutorialDone });
@@ -772,7 +808,7 @@ export class GameSystem extends createSystem({}) {
     this.phase = 'rules';
     this.card.show(false);
     this.menu.hideAll();
-    this.menu.showHow(HOW_TO_PLAY);
+    this.menu.showHow(howToPlay(current.id));
   }
 
   /** The first run's teaching: a guest waits at the gate, its patience held, and the coach card says what to do. */
@@ -811,6 +847,8 @@ export class GameSystem extends createSystem({}) {
     this.mess.clear();
     this.mess.enabled = true;
     this.score.startRun();
+    this.calm();
+    this.forecast = forecastFor();
     this.level = Math.max(1, Math.floor(this.save.level));
     this.levelServed = again ? 0 : Math.max(0, Math.min(levelGoal(this.level) - 1, Math.floor(this.save.levelServed)));
     this.servedMark = this.score.servedGuests - this.levelServed;
@@ -975,6 +1013,7 @@ export class GameSystem extends createSystem({}) {
 
   private runTick(delta: number): void {
     this.clock += delta;
+    this.tendEvents(delta);
     const served = this.score.servedGuests - this.servedMark;
     if (served !== this.levelServed) {
       // A guest served: counted, the pace moved on, and saved (a level left part-way is carried on from here).
@@ -1108,6 +1147,14 @@ export class GameSystem extends createSystem({}) {
     g.hurryChance = hurryChance(this.level);
     g.pairChance = pairChance(this.level);
     g.hurry = { line: HURRY.line, lineMin: HURRY.lineMin, seated: HURRY.seated };
+    // The Canadian café's cold guests, the storm and the day's leanings (docs/CANADA-CHALLENGES.md; none in the Japanese café).
+    const canada = current.id === 'canada';
+    const storm = canada && this.events.storming;
+    g.storm = storm;
+    g.stormOutside = STORM.outside;
+    g.coldChance = !canada ? 0 : storm ? STORM.cold : coldChance(this.level, this.forecast);
+    g.cold = { line: COLD.line, outside: COLD.outside };
+    g.forecastLean = canada ? [...this.forecast.lean] : [];
     // The first hurried guest and the first pair come on cue, so every player meets them early (the competition's
     // "satisfying in 10 minutes"): the third arrival once hurried guests begin, the first arrival once pairs do.
     if (this.phase === 'run' && this.level >= HURRY.from && !this.save.metHurry) {
@@ -1444,6 +1491,14 @@ export class GameSystem extends createSystem({}) {
         this.tipAt = g ? { guest: g.id } : {};
         return !!g;
       }
+      case 'cold': {
+        const g = guests.find((x) => x.cold && x.state === 'queued');
+        this.tipAt = g ? { guest: g.id } : {};
+        return !!g;
+      }
+      case 'storm':
+        // Not a tip: the storm's note (tendEvents).
+        return false;
       case 'pair': {
         const g = guests.find((x) => x.friend && x.state === 'queued' && guests.some((y) => y.id === x.friend && y.state === 'queued'));
         this.tipAt = g ? { guest: g.id } : {};
@@ -1473,7 +1528,10 @@ export class GameSystem extends createSystem({}) {
         return this.shop.tablesBought > this.tipMark;
       case 'shop':
         return this.shop.purchases > this.tipMark || this.phase === 'shopping';
+      case 'storm':
+        return true;
       case 'hurry':
+      case 'cold':
       case 'pair': {
         const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
         // Picked up is enough: the player has it in hand (the card would hang over the hand).
@@ -1494,7 +1552,7 @@ export class GameSystem extends createSystem({}) {
     const t = TIPS[id];
     this.tip.show(t.title.replace('{n}', `${levelGoal(this.level)}`), t.text, tipIcon(id));
     // Reading the tip costs a hurried guest nothing: its clock is held while the tip is up.
-    if (id === 'hurry' && this.tipAt.guest) {
+    if ((id === 'hurry' || id === 'cold') && this.tipAt.guest) {
       const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
       if (g) g.clockHeld = true;
     }
@@ -1504,7 +1562,7 @@ export class GameSystem extends createSystem({}) {
   }
 
   private endTip(): void {
-    if (this.tipShown === 'hurry' && this.tipAt.guest) {
+    if ((this.tipShown === 'hurry' || this.tipShown === 'cold') && this.tipAt.guest) {
       const g = this.guests.guests.find((x) => x.id === this.tipAt.guest);
       if (g) g.clockHeld = false;
     }

@@ -19,7 +19,9 @@
 
 import rough from 'roughjs';
 import { Theme } from './audio/theme.js';
-import { HOW_TO_PLAY } from './game/how-to-play.js';
+import { howToPlay } from './game/how-to-play.js';
+
+const HOW_TO_PLAY = howToPlay(null);
 import { SaveBook, TEST_MODE } from './game/save.js';
 
 const STROKES: Record<string, string> = { ink: '#16171d', timber: '#3e2a1c', 'moss-deep': '#2f522d', off: '#b6a993' };

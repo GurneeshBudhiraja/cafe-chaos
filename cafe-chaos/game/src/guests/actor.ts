@@ -27,6 +27,10 @@ import { DAY } from '../light/mood.js';
 export type ClipName = 'Idle' | 'Impatient' | 'Walk' | 'Lifted' | 'SitIdle' | 'SitHappy' | 'SitEating' | 'SitUnhappy' | 'StairsUp' | 'StairsDown';
 export type Pose = 'standing' | 'seated';
 
+/** A cold guest's tint (multiplied into its colours) and its shiver: every `every` seconds, `seconds` of swaying `angle` radians at `rate` a second. */
+const COLD_TINT = new Color(0xb9d8ff);
+const SHIVER = { every: 1.6, seconds: 0.5, rate: 11, angle: 0.06 };
+
 /** Which pose group each clip moves. */
 const POSE_OF: Record<ClipName, Pose> = {
   Idle: 'standing',
@@ -199,9 +203,36 @@ export class GuestActor {
     }
   }
 
+  /**
+   * Cold (the Canadian café): the skin and clothes take a pale ice-blue
+   * tint and the body shivers, a small quick sway of the pose group.
+   */
+  setCold(cold: boolean): void {
+    if (cold === this.cold) return;
+    this.cold = cold;
+    for (const material of this.materials) {
+      const standard = material as MeshStandardMaterial;
+      if (!standard.color) continue;
+      if (!material.userData.warmColor) material.userData.warmColor = standard.color.clone();
+      standard.color.copy(material.userData.warmColor as Color);
+      if (cold) standard.color.multiply(COLD_TINT);
+      if (standard.emissiveMap && standard.emissive) standard.emissive.copy(standard.color);
+    }
+    if (!cold) for (const g of [this.groups.standing, this.groups.seated]) g.rotation.z = 0;
+  }
+  private cold = false;
+  private shiverTime = 0;
+
   /** Advance the clip and tidy the face. */
   update(delta: number): void {
     this.mixer.update(delta);
+    if (this.cold) {
+      // A shiver: a few quick sways, then a rest, so it reads as a shiver and not a wobble.
+      this.shiverTime += delta;
+      const phase = this.shiverTime % SHIVER.every;
+      const sway = phase < SHIVER.seconds ? Math.sin(phase * SHIVER.rate * Math.PI * 2) * SHIVER.angle * (1 - phase / SHIVER.seconds) : 0;
+      this.groups[this.pose].rotation.z = sway;
+    }
     this.showFaces();
   }
 

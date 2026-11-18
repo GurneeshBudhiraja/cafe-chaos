@@ -54,7 +54,7 @@ import {
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
-import { grants, pairPlaces, pickName, pickWishes, TAKEAWAY_CHANCE, tablesOf, wishInfo, type Sitter, type WishId, openWishes, type Friendship } from '../guests/wishes.js';
+import { canadaWishAllowed, grants, isPlaceWish, pairPlaces, pickName, pickWishes, SPECIES_LEAN, TAKEAWAY_CHANCE, tablesOf, wishInfo, type Sitter, type WishId, openWishes, type Friendship } from '../guests/wishes.js';
 import { payFor, wishCount } from '../game/rules.js';
 import { BUBBLE, feelingFor, Reactions, type Reacting } from '../guests/reactions.js';
 import { WishCards } from '../ui/wish-card.js';
@@ -132,6 +132,8 @@ export interface Guest {
   anger: Sprite | null;
   /** In a hurry (game/rules.ts HURRY): a shorter wait, served first, pays more; an hourglass on its dot. */
   hurried: boolean;
+  /** Cold (the Canadian café, game/rules.ts COLD): always wants `warm` (the fireplace or the bonfire), a shorter wait, and less patience for its food outside; pale blue, a snowflake on its dot, a shiver. */
+  cold: boolean;
   /** Its clock is held (a tip about it is up): its patience does not run in the line or the hand. */
   clockHeld: boolean;
   /** The friend it came with (a pair: each wishes to share a table with the other); 0 if none. */
@@ -216,6 +218,14 @@ export class GuestSystem extends createSystem({}) {
   pairChance = 0;
   /** A hurried guest's patience in the line as a share of the others', its floor, and its seconds for its food (the game sets them). */
   hurry = { line: 1, lineMin: 0, seated: 0 };
+  /** The Canadian café's cold guests (game/rules.ts COLD): the share of new guests who are cold, their patience in the line as a share of the others', and how much longer than that their food takes to feel outside (a drain rate). The game sets them. */
+  coldChance = 0;
+  cold = { line: 1, outside: 1 };
+  /** A snowstorm is blowing (game/events.ts): nobody new wishes for outside, the lake or upstairs, and guests seated outside (not at the bonfire) lose patience `stormOutside` times as fast. */
+  storm = false;
+  stormOutside = 1;
+  /** The day's forecast's leanings (game/forecast.ts): these come twice as often on the cards. */
+  forecastLean: WishId[] = [];
   /** How much the gap between arrivals grows as the café fills (the game, which sets the gaps itself, turns it off with 1). */
   spawnStretch = SPAWN_STRETCH;
   /**
@@ -458,7 +468,7 @@ export class GuestSystem extends createSystem({}) {
       const waiting = !!friend && (friend.state === 'arriving' || friend.state === 'queued' || friend.state === 'held' || (friend.state === 'hop' && !friend.seat));
       friendship = { friend: guest.friend, free: this.freeSeats(), waiting };
     }
-    return guest.wishes.map((wish) => grants(wish, seat, guest.id, this.sitters, this.tables, this.quietCorner, friendship, this.band));
+    return guest.wishes.map((wish) => grants(wish, seat, guest.id, this.sitters, this.tables, this.quietCorner, friendship, this.band, guest.cold));
   }
 
   /** Would this seat meet every one of this guest's wishes? */
@@ -701,7 +711,7 @@ export class GuestSystem extends createSystem({}) {
     if (this.forceHurryIn > 0) this.forceHurryIn--;
     const hurried = this.forceHurryIn === 0 && this.forcedHurry ? ((this.forcedHurry = false), true) : Math.random() < this.hurryChance;
     const usual = this.patienceSeconds * (1 + (Math.random() * 2 - 1) * PATIENCE_SPREAD);
-    const patience = hurried ? Math.max(this.hurry.lineMin, usual * this.hurry.line) : usual;
+    let patience = hurried ? Math.max(this.hurry.lineMin, usual * this.hurry.line) : usual;
     const dial = new PatienceDial();
     dial.sprite.position.set(0, actor.bubbleAnchor.position.y + DIAL.above, 0);
     actor.root.add(dial.sprite);
@@ -711,8 +721,14 @@ export class GuestSystem extends createSystem({}) {
     const sings = !singerAbout && Math.random() < this.singerChance;
     // 1 to 3 wishes, more as the evening goes on; a singer wants company (an audience).
     // In the Canadian café now and then a guest wants only a coffee to take away (the pick-up spot at the counter).
-    const takeaway = isCanada() && this.level > 1 && Math.random() < TAKEAWAY_CHANCE;
-    const wishes: WishId[] = takeaway ? ['takeaway'] : sings ? ['company'] : pickWishes(wishCount(this.level), singerAbout, this.lastWishes, Math.random, this.wishPool ?? undefined);
+    const canada = isCanada();
+    const cold = canada && Math.random() < this.coldChance;
+    const takeaway = canada && !cold && this.level > 1 && Math.random() < TAKEAWAY_CHANCE;
+    const wishes: WishId[] = takeaway ? ['takeaway'] : sings ? ['company'] : canada ? this.canadaWishes(look, cold) : pickWishes(wishCount(this.level), singerAbout, this.lastWishes, Math.random, this.wishPool ?? undefined);
+    if (cold) {
+      patience *= this.cold.line;
+      actor.setCold(true);
+    }
     this.lastWishes = wishes;
     const guest: Guest = {
       id: this.arrived,
@@ -741,6 +757,7 @@ export class GuestSystem extends createSystem({}) {
       fuming: -1,
       anger: null,
       hurried,
+      cold,
       clockHeld: false,
       friend: 0,
       name: pickName(taken),
@@ -776,6 +793,8 @@ export class GuestSystem extends createSystem({}) {
     const others = count > 1 && pool.length > 0 ? [pool[Math.floor(Math.random() * pool.length)]] : [];
     for (const g of [a, b]) {
       g.hurried = false;
+      g.cold = false;
+      g.actor.setCold(false);
       g.sings = false;
       g.wishes = ['friend', ...others];
     }
@@ -783,6 +802,27 @@ export class GuestSystem extends createSystem({}) {
     // Their own usual wait (not a hurried one), the same for both.
     b.patience = b.patienceFull = a.patienceFull = a.patience = this.patienceSeconds;
   }
+  /**
+   * A Canadian guest's wishes (docs/CANADA-CHALLENGES.md): from the wishes
+   * an open seat can meet, those of its level's difficulty
+   * (CANADA_DIFFICULTY), none outdoors in a snowstorm; its species' and the
+   * day's leanings twice as often; `warm` always when it is cold; and only
+   * places one open seat can meet together (which musician plays, which
+   * tables are open).
+   */
+  private canadaWishes(look: Look, cold: boolean): WishId[] {
+    const STORM_OUT: WishId[] = ['outside', 'lake', 'upstairs'];
+    const pool = (this.wishPool ?? openWishes(this.seats, this.quietCorner, this.band)).filter((w) => canadaWishAllowed(w, this.level) && !(this.storm && STORM_OUT.includes(w)));
+    if (pool.length === 0) return [];
+    const lean = [...(SPECIES_LEAN[look.species] ?? []), ...this.forecastLean];
+    const open = this.seats.filter((s) => !s.locked && !s.takeaway);
+    const meetable = (wishes: WishId[]): boolean => {
+      const places = wishes.filter(isPlaceWish);
+      return places.length === 0 || open.some((seat) => places.every((w) => grants(w, seat, -1, [], this.tables, this.quietCorner, null, this.band, cold)));
+    };
+    return pickWishes(wishCount(this.level), false, this.lastWishes, Math.random, pool, { lean, must: cold ? 'warm' : undefined, meetable });
+  }
+
   /** A pair's first guest, whose friend arrives next (0: none waiting); and the gap that friend's arrival put off. */
   private pendingFriend = 0;
   private lastGap = 0;
@@ -869,7 +909,8 @@ export class GuestSystem extends createSystem({}) {
   /**
    * Send a guest who has eaten away: out through the exit in the left
    * wall and down the walkout path to the plate's edge (on through the
-   * annex and out of its exit, once it is open). The way there is
+   * annex and out of its exit, once it is open; in the Canadian café, down
+   * the stone exit walkway to the plate's front edge). The way there is
    * whatever the navigation grid finds from where the guest is.
    */
   private startLeaving(guest: Guest): void {
@@ -1399,6 +1440,18 @@ export class GuestSystem extends createSystem({}) {
     guest.actor.play(seat.takeaway ? 'Idle' : fresh ? 'SitHappy' : 'SitIdle');
   }
 
+  /**
+   * How fast a seated guest's wait for its food runs, against the usual
+   * (the Canadian café): seated outside but not at the bonfire, a cold guest
+   * waits COLD.outside as long, and in a snowstorm everyone there 1 /
+   * STORM.outside as long.
+   */
+  private coldDrain(guest: Guest): number {
+    const at = guest.seat?.table ?? -1;
+    if (!isCanada() || !CANADA_PLACES.outsideTables.includes(at) || CANADA_PLACES.bonfireTables.includes(at)) return 1;
+    return (guest.cold ? 1 / this.cold.outside : 1) * (this.storm ? this.stormOutside : 1);
+  }
+
   /** A seated guest: pleased, then waiting for its order, eating once served, then idle; when its time is up it gets down and leaves. */
   private sitting(guest: Guest, delta: number): void {
     if (guest.fuming >= 0) {
@@ -1407,7 +1460,7 @@ export class GuestSystem extends createSystem({}) {
     }
     // Waiting for its food: its patience runs on, and if it runs out the guest loses its temper.
     if (!guest.served) {
-      if (!this.patienceFrozen) guest.patience -= delta;
+      if (!this.patienceFrozen) guest.patience -= delta * this.coldDrain(guest);
       if (guest.patience <= 0) {
         guest.fuming = 0;
         guest.actor.play('SitUnhappy');
@@ -1578,7 +1631,7 @@ export class GuestSystem extends createSystem({}) {
     // comes, so a full café shows who is still waiting (plan: one dot, two stages).
     const waiting = guest.state === 'queued' || guest.state === 'vanishing' || ((guest.state === 'held' || guest.state === 'hop') && fromLine(guest))
       || (this.seatedPatience !== null && guest.state === 'seated' && !guest.served && guest.fuming < 0);
-    guest.dial.update(guest.patience / guest.patienceFull, guest.patience, guest.wishes.length, waiting, opacity, delta, this.hovered.includes(guest) || guest.state === 'held', guest.hurried, guest.friend !== 0);
+    guest.dial.update(guest.patience / guest.patienceFull, guest.patience, guest.wishes.length, waiting, opacity, delta, this.hovered.includes(guest) || guest.state === 'held', guest.hurried, guest.friend !== 0, guest.cold);
     // A blob under everyone on their feet (not the seated, nor the carried).
     const p = guest.actor.root.position;
     if (guest.state !== 'seated' && guest.state !== 'held' && guest.state !== 'vanishing') this.blobs.add(p.x, guest.ground, p.z, opacity);

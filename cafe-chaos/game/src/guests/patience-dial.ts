@@ -73,16 +73,16 @@ export class PatienceDial {
    * Show `left` (0 to 1) of the patience and `seconds` left, with `pips`
    * wishes, at `opacity`; hidden when `shown` is false.
    */
-  update(left: number, seconds: number, pips: number, shown: boolean, opacity: number, delta: number, lit = false, hurried = false, paired = false): void {
+  update(left: number, seconds: number, pips: number, shown: boolean, opacity: number, delta: number, lit = false, hurried = false, paired = false, cold = false): void {
     this.sprite.visible = shown && opacity > 0.02;
     this.lit += ((lit ? 1 : 0) - this.lit) * Math.min(1, LIT.ease * delta);
     if (!this.sprite.visible) return;
     this.left = Math.min(1, Math.max(0, left));
     const glow = Math.round(this.lit * 8) / 8;
-    const key = `${Math.ceil(this.left * STEPS)}|${Math.max(0, Math.ceil(seconds))}|${pips}|${glow}|${hurried}|${paired}`;
+    const key = `${Math.ceil(this.left * STEPS)}|${Math.max(0, Math.ceil(seconds))}|${pips}|${glow}|${hurried}|${paired}|${cold}`;
     if (key !== this.drawn) {
       this.drawn = key;
-      this.draw(Math.ceil(this.left * STEPS) / STEPS, Math.max(0, Math.ceil(seconds)), pips, glow, hurried, paired);
+      this.draw(Math.ceil(this.left * STEPS) / STEPS, Math.max(0, Math.ceil(seconds)), pips, glow, hurried, paired, cold);
     }
     this.material.opacity = opacity;
     this.time += delta;
@@ -92,7 +92,7 @@ export class PatienceDial {
     this.sprite.renderOrder = this.lit > 0.5 ? 31 : 30;
   }
 
-  private draw(left: number, seconds: number, pips: number, glow: number, hurried = false, paired = false): void {
+  private draw(left: number, seconds: number, pips: number, glow: number, hurried = false, paired = false, cold = false): void {
     const ctx = this.ctx;
     const c = PX / 2;
     const colour = COLOURS.find(([share]) => left <= share)![1];
@@ -175,6 +175,8 @@ export class PatienceDial {
       ctx.fillStyle = '#fbf2e1';
       ctx.fill();
     }
+    // Cold (the Canadian café): a snowflake over the top of the ring, a shape as the hourglass is (beside it when both).
+    if (cold) snowflake(ctx, hurried ? c - 30 : c, hurried ? 19 : 13);
     this.texture.needsUpdate = true;
   }
 
@@ -183,4 +185,35 @@ export class PatienceDial {
     this.material.dispose();
     this.texture.dispose();
   }
+}
+
+/** A white six-armed snowflake on an ice-blue disc, centred at (x, y): the cold guest's mark. */
+export function snowflake(ctx: CanvasRenderingContext2D, x: number, y: number, r = 14): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y + 1, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#3f86c9';
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineCap = 'round';
+  ctx.lineWidth = r * 0.17;
+  const arm = r * 0.68;
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    const dx = Math.sin(a);
+    const dy = -Math.cos(a);
+    ctx.beginPath();
+    ctx.moveTo(x, y + 1);
+    ctx.lineTo(x + dx * arm, y + 1 + dy * arm);
+    // A small V near each tip.
+    const bx = x + dx * arm * 0.6;
+    const by = y + 1 + dy * arm * 0.6;
+    for (const side of [-1, 1]) {
+      const b = a + side * 0.7;
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + Math.sin(b) * arm * 0.35, by - Math.cos(b) * arm * 0.35);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
 }

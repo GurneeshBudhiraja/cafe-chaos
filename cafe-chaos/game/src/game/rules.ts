@@ -182,6 +182,55 @@ export function hurryChance(level: number): number {
 }
 
 /**
+ * The Canadian café's cold guests (docs/CANADA-CHALLENGES.md), from level
+ * `from`: a share of new guests (`chance`, or the day's forecast's) who
+ * always wish to sit by the fireplace (the bonfire warms them too), wait
+ * `line` times as long in the line, and seated outside anywhere but the
+ * bonfire `outside` times as long for their food. A snowflake on the dot,
+ * a pale blue tint and a shiver. (estimate)
+ */
+export const COLD = { from: 2, chance: 0.12, line: 0.75, outside: 0.75 };
+
+/**
+ * The snowstorm (game/events.ts): always `at` of the way into level
+ * `level`, then every few levels by the forecast. For `seconds`, a share
+ * `cold` of new guests are cold, nobody new wishes for outside, the lake
+ * or upstairs, and guests seated outside (not at the bonfire) lose patience
+ * `outside` times as fast. Snow drifts over the plate. (estimate)
+ */
+export const STORM = { level: 2, at: 0.33, seconds: 60, cold: 0.6, outside: 1.3 };
+
+/**
+ * Today's forecast (game/forecast.ts), picked from the local date: how
+ * many days a week each comes, its share of cold guests, how often a storm
+ * blows in after level 2 (every `stormEvery` levels; 0 never) and for how
+ * long, and the wishes it leans the cards toward (twice as often).
+ */
+export type ForecastId = 'sunny' | 'snap' | 'snow';
+export interface Forecast {
+  id: ForecastId;
+  name: string;
+  /** One line on the start card. */
+  line: string;
+  days: number;
+  cold: number;
+  stormEvery: number;
+  stormSeconds: number;
+  lean: ('outside' | 'lake' | 'upstairs' | 'warm' | 'bonfire' | 'inside')[];
+}
+export const FORECASTS: Record<ForecastId, Forecast> = {
+  sunny: { id: 'sunny', name: 'Sunny', line: 'Today: sunny. Guests want outside.', days: 3, cold: 0.08, stormEvery: 0, stormSeconds: 0, lean: ['outside', 'lake', 'upstairs'] },
+  snap: { id: 'snap', name: 'Cold snap', line: 'Today: cold snap. Many cold guests.', days: 2, cold: 0.25, stormEvery: 4, stormSeconds: 60, lean: ['warm', 'bonfire', 'inside'] },
+  snow: { id: 'snow', name: 'Snow day', line: 'Today: snow day. Storms blow in.', days: 2, cold: 0.15, stormEvery: 2, stormSeconds: 75, lean: ['inside'] },
+};
+
+/** The share of new guests who are cold in `level` on this forecast (none before COLD.from). */
+export function coldChance(level: number, forecast: Forecast | null): number {
+  if (level < COLD.from) return 0;
+  return forecast ? forecast.cold : COLD.chance;
+}
+
+/**
  * Pairs (from level `from`): two friends arrive together and wish to sit
  * at the same table (each has the `friend` wish, besides its others). A
  * new arrival is a pair with `chance`, rising by `perLevel` a level to

@@ -515,6 +515,17 @@ room has a desk-height table), from a running dev server:
   line, the card beside the hand, the mint seats that grant a carried
   guest's wish, the heart and the shrug, a loner put out and a
   company-seeker pleased, and what each pays.
+- `node scripts/check-canada-wishes.mjs`: the Canadian café's conditions
+  (docs/CANADA-CHALLENGES.md): every card can be met by one open seat
+  at every level, with any tables open, either musician, in a storm and
+  for a cold guest; each difficulty comes at its level; inside, menu
+  board and lake view at their tables; the bonfire chairs are one table;
+  the musicians' earshot (10 checks).
+- `node scripts/check-canada-twists.mjs` (the real game): cold guests
+  from level 2 (the fireplace wish, a shorter wait, the tint and the
+  snowflake, the tip once), the level-2 snowstorm (its note, the snow, no
+  outdoor wishes, its end), the forecast by date, and none of it in the
+  Japanese café (12 checks), with screenshots.
 - `node scripts/sim-run.mjs`: whole runs played by scripted players
   (quick, average and slow hands), to tune the pace and the money.
 - `node scripts/probe-pinch.mjs`: a fixed set of reaches with a shaking
