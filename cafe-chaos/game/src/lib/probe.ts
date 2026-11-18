@@ -44,6 +44,8 @@ export const COUNTS = {
   links: 0,
   /** Textures uploaded from a canvas, image or bitmap (whole or part). */
   uploads: 0,
+  /** Of those, the patience dots' small copies into their shared texture (guests/patience-dial.ts DialAtlas), 128 px each. */
+  dotCopies: 0,
   /** Whether the renderer got the multiview extension (set once the context exists; null until then). */
   multiview: null as boolean | null,
 };
@@ -57,20 +59,32 @@ function isImageSource(source: unknown): boolean {
   return false;
 }
 
+/**
+ * The game's own context, once the renderer has one (`ownContext`): from
+ * then on only its calls are counted, not another context's on the page
+ * (the desktop emulator draws its own scene with a renderer of its own,
+ * and its shader links were counted as the game's).
+ */
+let game: WebGL2RenderingContext | null = null;
+export function ownContext(gl: WebGL2RenderingContext): void {
+  game = gl;
+}
+const counted = (gl: WebGL2RenderingContext): boolean => game === null || gl === game;
+
 /** Wrap the context's calls (once, at load). */
 function instrument(): void {
   if (typeof WebGL2RenderingContext === 'undefined') return;
   const proto = WebGL2RenderingContext.prototype as unknown as Record<string, (...args: unknown[]) => unknown>;
   const link = proto.linkProgram;
   proto.linkProgram = function (this: WebGL2RenderingContext, ...args: unknown[]) {
-    COUNTS.links++;
+    if (counted(this)) COUNTS.links++;
     return link.apply(this, args);
   };
   for (const name of ['texImage2D', 'texSubImage2D']) {
     const upload = proto[name];
     proto[name] = function (this: WebGL2RenderingContext, ...args: unknown[]) {
       // The source is the last argument in every overload that takes an image.
-      if (isImageSource(args[args.length - 1])) COUNTS.uploads++;
+      if (isImageSource(args[args.length - 1]) && counted(this)) COUNTS.uploads++;
       return upload.apply(this, args);
     };
   }

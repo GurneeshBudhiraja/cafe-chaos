@@ -26,7 +26,7 @@
  */
 
 import { CanvasTexture, createSystem, Matrix4, Quaternion, Sprite, SpriteMaterial, Vector3, type Light } from '@iwsdk/core';
-import { COUNTS, PROBE } from '../lib/probe.js';
+import { COUNTS, ownContext, PROBE } from '../lib/probe.js';
 import { AnchorSystem } from './anchor-system.js';
 import { CafeSystem } from './cafe-system.js';
 import { GuestSystem } from './guest-system.js';
@@ -59,7 +59,7 @@ export class RenderBudgetSystem extends createSystem({}) {
   /** How many times the shadow map has been redrawn (for the checks). */
   shadowDraws = 0;
   /** What the readout shows (the last half second's rates; for the checks). */
-  readonly probe = { fps: 0, calls: 0, triangles: 0, shadowsPerS: 0, uploadsPerS: 0, linksPerS: 0, links: 0, uploads: 0, corrections: 0, guests: 0 };
+  readonly probe = { fps: 0, calls: 0, triangles: 0, shadowsPerS: 0, uploadsPerS: 0, dotsPerS: 0, linksPerS: 0, links: 0, uploads: 0, corrections: 0, guests: 0 };
   private readonly last = new Matrix4();
   private readonly lastScale = new Vector3(Number.NaN, 0, 0);
   private readonly p = new Vector3();
@@ -73,11 +73,13 @@ export class RenderBudgetSystem extends createSystem({}) {
   private readout: Readout | null = null;
   private readonly spot = new Vector3();
   /** The counts at the last readout, for the rates. */
-  private readonly was = { shadows: 0, uploads: 0, links: 0, hud: 0 };
+  private readonly was = { shadows: 0, uploads: 0, links: 0, hud: 0, dots: 0 };
   /** The readout's own texture uploads (one per refresh), left out of the rate it shows. */
   private hudUploads = 0;
 
   init(): void {
+    // Count the game's own context only (not the desktop emulator's).
+    ownContext(this.world.renderer.getContext() as WebGL2RenderingContext);
     this.world.renderer.shadowMap.autoUpdate = false;
     this.world.renderer.shadowMap.needsUpdate = true;
     if (PROBE.readout || PROBE.fpsOnly) this.readout = makeReadout(PROBE.readout);
@@ -163,7 +165,10 @@ export class RenderBudgetSystem extends createSystem({}) {
     probe.calls = info.calls;
     probe.triangles = info.triangles;
     probe.shadowsPerS = (this.shadowDraws - this.was.shadows) / seconds;
-    probe.uploadsPerS = Math.max(0, COUNTS.uploads - this.was.uploads - (this.hudUploads - this.was.hud)) / seconds;
+    // The dots' small cell copies are counted on their own (`dots`): `upload` is the other textures, the whole ones.
+    const dots = COUNTS.dotCopies - this.was.dots;
+    probe.dotsPerS = dots / seconds;
+    probe.uploadsPerS = Math.max(0, COUNTS.uploads - this.was.uploads - (this.hudUploads - this.was.hud) - dots) / seconds;
     probe.linksPerS = (COUNTS.links - this.was.links) / seconds;
     probe.links = COUNTS.links;
     probe.uploads = COUNTS.uploads;
@@ -173,6 +178,7 @@ export class RenderBudgetSystem extends createSystem({}) {
     this.was.uploads = COUNTS.uploads;
     this.was.links = COUNTS.links;
     this.was.hud = this.hudUploads;
+    this.was.dots = COUNTS.dotCopies;
     const readout = this.readout;
     if (!readout) return;
     this.draw(readout);
@@ -216,7 +222,7 @@ export class RenderBudgetSystem extends createSystem({}) {
     const multiview = COUNTS.multiview === null ? 'mv ?' : COUNTS.multiview ? 'mv on' : 'mv off';
     const shadows = this.world.renderer.shadowMap.enabled ? 'shadow on' : 'shadow off';
     line(h * 0.2, [[`${this.fps.toFixed(0)} fps`, fpsColour], [`${probe.calls} calls`, warn(probe.calls > 300)], [`${(probe.triangles / 1000).toFixed(0)}k tri`, '#efe6d6']]);
-    line(h * 0.5, [[`shadow ${probe.shadowsPerS.toFixed(0)}/s`, warn(probe.shadowsPerS > 0)], [`upload ${probe.uploadsPerS.toFixed(0)}/s`, warn(probe.uploadsPerS > 2)], [`link ${probe.linksPerS.toFixed(0)}/s`, warn(probe.linksPerS > 0)]]);
+    line(h * 0.5, [[`shadow ${probe.shadowsPerS.toFixed(0)}/s`, warn(probe.shadowsPerS > 0)], [`upload ${probe.uploadsPerS.toFixed(0)}/s`, warn(probe.uploadsPerS > 2)], [`dots ${probe.dotsPerS.toFixed(0)}/s`, warn(probe.dotsPerS > 12)], [`link ${probe.linksPerS.toFixed(0)}/s`, warn(probe.linksPerS > 0)]]);
     line(h * 0.8, [[`anchor ${probe.corrections}`, '#efe6d6'], [`guests ${probe.guests}`, '#efe6d6'], [multiview, '#cfe3ff'], [shadows, '#cfe3ff']]);
     texture.needsUpdate = true;
   }
