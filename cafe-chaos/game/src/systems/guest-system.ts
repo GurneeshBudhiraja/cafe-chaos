@@ -46,7 +46,7 @@ import { Blobs } from '../guests/blobs.js';
 import { CANADA_SPECIES, fullOutfit, randomLook, SPECIES, type Look } from '../guests/cast.js';
 import { HeldAct, watchingFace, type Held } from '../guests/expressions.js';
 import { ANNEX_EXIT_LANES, ANNEX_OUTSIDE_X, ARRIVAL_FROM, ARRIVAL_POINT, arrivalPoint, CANADA_EXIT_LANES, CANADA_OUTSIDE_Z, EXIT_LANES, OUTSIDE_X, pathBack, QUEUE_SPOTS, QUEUE_YAW } from '../guests/paths.js';
-import { CANADA_FLOOR_TOP_M, CANADA_PLACES } from '../cafe/canada-layout.js';
+import { CANADA_PLACES } from '../cafe/canada-layout.js';
 import { isCanada } from '../cafe/style.js';
 import {
   CARRY_FOLLOW, CLAIM_RADII, FADE_IN_M, FADE_OUT_M, FIRST_SPAWN_SECONDS, PAIR_FOLLOW_SECONDS, FOLLOW_GAP_M, GRIP_HEIGHT_M, HAPPY_SECONDS, HOP, IDLE_LAST_SECONDS, IMPATIENT_AFTER, LEAN_FOLLOW, MAX_GUESTS, MAX_QUEUE,
@@ -54,7 +54,9 @@ import {
   EYE_HEIGHT_M,
 } from '../guests/rules.js';
 import { PickRings } from '../guests/pick-ring.js';
-import { canadaWishAllowed, grants, isPlaceWish, pairPlaces, pickName, pickWishes, SPECIES_LEAN, TAKEAWAY_CHANCE, tablesOf, wishInfo, type Sitter, type WishId, openWishes, type Friendship } from '../guests/wishes.js';
+import { grants, pairPlaces, pickName, SHAPE_NAMES, SPECIES_LEAN, tablesOf, wishInfo, type GrantContext, type Sitter, type WishId, type Friendship } from '../guests/wishes.js';
+import { planWishes } from '../guests/wish-plan.js';
+import { disposeTag, GUEST_TAG, makeLeavingMark, makeNameTag } from '../guests/guest-tags.js';
 import { payFor, wishCount } from '../game/rules.js';
 import { BUBBLE, feelingFor, Reactions, type Reacting } from '../guests/reactions.js';
 import { WishCards } from '../ui/wish-card.js';
@@ -144,6 +146,14 @@ export interface Guest {
   sings: boolean;
   /** Each wish met (true) or not (false), judged once as it sat down (its seat is final); null before it sits. */
   wishMet: boolean[] | null;
+  /** The guest its named wish names (meet, avoid; 0: none), and the wish type it brings for the first time (its tip and its seats' glow). */
+  link: number;
+  firstWish: WishId | null;
+  /** Wears a hat (for the `hat` wish). */
+  hat: boolean;
+  /** Its name tag and its "leaving soon" mark, made when first needed (guests/guest-tags.ts). */
+  nameTag?: Sprite | null;
+  leavingMark?: Sprite | null;
   /** Vanishing: how long it has been fading (seconds). */
   vanishing: number;
   hop: Hop | null;
@@ -166,6 +176,17 @@ const HOP_HEIGHT_M = 0.014;
 /** Seats that may be added after the start (the annex has ten), for the seat dots' room. */
 const SEAT_HEADROOM = 24;
 const fromLine = (guest: Guest): boolean => !!guest.home && 'line' in guest.home;
+/** Hats, for the `hat` wish: the chef's hat, the beret and the toque (a headband or earmuffs are not hats). */
+const HATS = /^(ChefHat|Beret|Toque)/;
+/** How often a new guest takes a seated guest's shape while "with my kind" is still to come. */
+const KIND_CUE = 0.5;
+/** A fingertip within this of a seated guest's head shows its name (metres, café space), for this long (seconds). */
+const POINT_REACH_M = 0.03;
+const NAME_SHOWN_S = 2;
+/** A wish is offered only if a seat meets it this many seconds before the guest's patience would run out (rule 4). */
+const WISH_MARGIN = 4;
+/** A seated guest shows the "leaving soon" mark this many seconds before it gets down (rule 5). */
+export const LEAVING_SOON_S = 8;
 /** A guest with a coffee to take away waits this long at the pick-up spot, then pays and goes (seconds). */
 const TAKEAWAY_SECONDS = 4;
 /** The stairs at the clips' own pace: two steps a second, 12.5 mm of stair a step (m/s along the stair). */
@@ -236,6 +257,8 @@ export class GuestSystem extends createSystem({}) {
   seatedPatience: number | null = null;
   /** The share of new guests who sing (the game sets it). */
   singerChance = 0;
+  /** The game's cue: the next arrival sings (the first singer comes on cue, as the first hurried guest does). */
+  forceSinger = false;
   /** The cards beside the hands: who the lit or carried guest is and what it wants. */
   cards!: WishCards;
   /** Which table each seat is at (guests/wishes.ts), the quiet corner's, and who is seated now. */
@@ -245,7 +268,6 @@ export class GuestSystem extends createSystem({}) {
   private readonly granting = new Set<Seat>();
   /** The free seats meeting none of a carried guest's wishes (they glow red under it, and refuse it). */
   private readonly refusing = new Set<Seat>();
-  private lastWishes: WishId[] = [];
   private readonly cardAt = new Vector3();
   private readonly headLocal = new Vector3();
   /** Pinch what you see (guests/rules.ts SIGHT). Off: only a pinch right at a guest, or a guest held right over a seat, counts. */
@@ -335,11 +357,6 @@ export class GuestSystem extends createSystem({}) {
     const cafe = this.cafeSystem;
     this.seats = collectSeats(cafe.cafe, cafe.seats, (y) => cafe.navAt(y), cafe.pieces);
     this.seatAnchors = cafe.seats.length;
-    // The Canadian café's pick-up spot (the shell's TakeawaySpot), at the counter's right end, facing the counter.
-    if (isCanada()) {
-      const t = CANADA_PLACES.takeaway;
-      this.seats.push({ index: this.seats.length, position: new Vector3(t.x, CANADA_FLOOR_TOP_M, t.z), yaw: Math.PI, occupant: 0, locked: false, dirty: false, table: -1, meal: null, takeaway: true });
-    }
     this.firstSeatCount = this.seats.length;
     this.tables = new Map();
   }
@@ -376,6 +393,7 @@ export class GuestSystem extends createSystem({}) {
     this.hands(delta);
     this.keepLine();
     this.seatedNow();
+    this.tendNames(frameDelta);
     this.blobs.begin();
     for (const guest of [...this.guests]) {
       if (guest.state === 'queued') this.wait(guest, delta);
@@ -438,7 +456,7 @@ export class GuestSystem extends createSystem({}) {
   private refusalFor(guest: Guest, own: Seat | null): { seat: Seat; why: SeatRefusal; detail?: string } | null {
     const target = guest.target;
     // A seat that meets none of its wishes: it will not sit there.
-    if (target && !target.dirty && target !== own && this.meetsNone(guest, target)) return { seat: target, why: 'unwanted', detail: `Wants ${wishInfo(guest.wishes[0])?.wants ?? 'another seat'}` };
+    if (target && !target.dirty && target !== own && this.meetsNone(guest, target)) return { seat: target, why: 'unwanted', detail: `Wants ${wishInfo(guest.wishes[0], this.wordsFor(guest))?.wants ?? 'another seat'}` };
     if (target && !target.dirty) return null;
     const near = seatNear(this.seats, guest.actor.root.position, SEAT_REACH_M);
     if (near && near !== own) {
@@ -457,20 +475,36 @@ export class GuestSystem extends createSystem({}) {
       const pieces = this.cafeSystem.pieces;
       this.tables = tablesOf(this.seats, pieces);
       this.quietCorner = pieces.findIndex((piece) => /quiet/i.test(piece.name));
+      // The big tables (the `big` wish): the Japanese café's four-seaters.
+      this.bigTables = pieces.map((piece, i) => (piece.name === 'table-4' || piece.name === 'table-big' ? i : -1)).filter((i) => i >= 0);
     }
     this.collectSitters();
   }
 
   /** Would this seat meet each of this guest's wishes, as things stand? */
   grantsEach(guest: Guest, seat: Seat): boolean[] {
+    const c = this.contextFor(guest);
+    return guest.wishes.map((wish) => grants(wish, seat, c));
+  }
+
+  /** What a seat is judged against for this guest (wishes.ts GrantContext). */
+  private contextFor(guest: Guest, sitters: readonly Sitter[] = this.sitters): GrantContext {
     let friendship: Friendship | null = null;
     if (guest.friend) {
       const friend = this.guests.find((g) => g.id === guest.friend);
       const waiting = !!friend && (friend.state === 'arriving' || friend.state === 'queued' || friend.state === 'held' || (friend.state === 'hop' && !friend.seat));
       friendship = { friend: guest.friend, free: this.freeSeats(), waiting };
     }
-    return guest.wishes.map((wish) => grants(wish, seat, guest.id, this.sitters, this.tables, this.quietCorner, friendship, this.band, guest.cold));
+    return { self: guest.id, species: guest.actor.look.species, link: guest.link, cold: guest.cold, sitters, tables: this.tables, quietCorner: this.quietCorner, bigTables: this.bigTables, band: this.band, friendship };
   }
+  /** What a guest's wishes name: the guest its named wish names, and its own shape. */
+  wordsFor(guest: Guest): { other?: string; shape: string } {
+    const other = guest.link ? this.guests.find((g) => g.id === guest.link)?.name : undefined;
+    return { other, shape: SHAPE_NAMES[guest.actor.look.species] ?? guest.actor.look.species };
+  }
+
+  /** The big tables (indices into the café's pieces). */
+  private bigTables: number[] = [];
 
   /** Would this seat meet every one of this guest's wishes? */
   wouldGrant(guest: Guest, seat: Seat): boolean {
@@ -543,14 +577,16 @@ export class GuestSystem extends createSystem({}) {
       const preview = carried && carried.target && !carried.target.dirty ? this.grantsEach(carried, carried.target) : null;
       this.cards.update(
         i,
-        guest ? { id: guest.id, name: guest.name, wishes: guest.wishes, sings: guest.sings, hurried: guest.hurried, friend: this.guests.find((g) => g.id === guest.friend)?.name ?? null, left: guest.patience / guest.patienceFull, seconds: guest.patience, preview } : null,
+        guest ? { id: guest.id, name: guest.name, wishes: guest.wishes, sings: guest.sings, hurried: guest.hurried, friend: this.guests.find((g) => g.id === guest.friend)?.name ?? null, other: this.wordsFor(guest).other ?? null, shape: this.wordsFor(guest).shape, line: guest.wishes.length ? wishInfo(guest.wishes[0], this.wordsFor(guest)).says : undefined, left: guest.patience / guest.patienceFull, seconds: guest.patience, preview } : null,
         at,
         this.eye,
         this.headLocal,
         scale,
         Math.min(0.1, delta),
       );
-      if (carried) {
+      // The seats that meet its wishes glow only with Seat hints on (Settings), or for a guest bringing a wish type for
+      // the first time (its tip is up): in normal play the player reads the card (the owner's rule 9).
+      if (carried && (this.seatHints || carried.firstWish)) {
         for (const seat of this.seats) {
           if (seat.occupant !== 0 || seat.locked || seat.dirty) continue;
           if (this.wouldGrant(carried, seat)) this.granting.add(seat);
@@ -572,7 +608,6 @@ export class GuestSystem extends createSystem({}) {
       seat.hidden = this.hiddenTables.has(seat.table);
       this.seats.push(seat);
     }
-    if (this.wishPool) this.wishPool = openWishes(this.seats.filter((x) => !x.locked), this.quietCorner, this.band);
   }
 
   /**
@@ -589,19 +624,16 @@ export class GuestSystem extends createSystem({}) {
       seat.locked = locked.has(seat.table);
       seat.hidden = hidden.has(seat.table);
     }
-    this.wishPool = openWishes(this.seats.filter((s) => !s.locked), this.quietCorner, this.band);
   }
 
   /** A musician has started to play (or stopped): `music` comes into the wishes on offer. */
   setBand(band: Vector3[]): void {
     if (band.length === this.band.length) return;
     this.band = band;
-    this.wishPool = openWishes(this.seats.filter((s) => !s.locked), this.quietCorner, this.band);
   }
   private lockedTables: ReadonlySet<number> = new Set();
   private hiddenTables: ReadonlySet<number> = new Set();
-  /** The wishes an open seat can meet (all of them until the game says which tables are locked). */
-  private wishPool: WishId[] | null = null;
+
 
   /** Guests let go over a dirty table and sent back to the line (for the checks). */
   refusedDirty = 0;
@@ -742,8 +774,22 @@ export class GuestSystem extends createSystem({}) {
   private prewarmed = '';
   private prewarming = false;
 
-  /** Bring a new guest on at the arrival point and send it to the back of the line. */
-  spawn(look: Look = randomLook(Math.random, this.lastLook)): Guest {
+
+  /**
+   * Bring a new guest on at the arrival point and send it to the back of the
+   * line. `plain`: a guest with no wishes that the wish plan does not count
+   * (the first run's guest: it teaches the pinch and the seat).
+   */
+  spawn(look: Look = randomLook(Math.random, this.lastLook), plain = false): Guest {
+    // "With my kind" next to come and no guest of this one's shape seated: now and then it comes as the shape of a
+    // guest already seated, so the wish can come in (there are five shapes: a match is rare by chance).
+    if (!plain && this.gameGuests >= 3 && !this.seenWishes.has('kind') && Math.random() < KIND_CUE) {
+      const shapes = this.guests.filter((g) => g.state === 'seated').map((g) => g.actor.look.species);
+      if (shapes.length && !shapes.includes(look.species)) {
+        const want = shapes[Math.floor(Math.random() * shapes.length)];
+        for (let i = 0; i < 40 && look.species !== want; i++) look = randomLook(Math.random);
+      }
+    }
     this.lastLook = look;
     const actor = new GuestActor(look);
     actor.root.name = `Guest-${++this.arrived}`;
@@ -763,19 +809,30 @@ export class GuestSystem extends createSystem({}) {
     actor.root.add(dial.sprite);
     // Its name, its wishes, and perhaps a song.
     const taken = new Set(this.guests.map((g) => g.name));
-    const singerAbout = this.guests.some((g) => g.sings);
-    const sings = !singerAbout && Math.random() < this.singerChance;
-    // 1 to 3 wishes, more as the evening goes on; a singer wants company (an audience).
-    // In the Canadian café now and then a guest wants only a coffee to take away (the pick-up spot at the counter).
+    const sings = !this.guests.some((g) => g.sings) && (this.forceSinger || Math.random() < this.singerChance);
+    if (sings) this.forceSinger = false;
+    // Its wishes (guests/wish-plan.ts): by how far into the game and the run it comes, only what a seat can meet before
+    // its patience runs out; a singer wants company (an audience).
     const canada = isCanada();
-    const cold = canada && Math.random() < this.coldChance;
-    const takeaway = canada && !cold && this.level > 1 && Math.random() < TAKEAWAY_CHANCE;
-    const wishes: WishId[] = takeaway ? ['takeaway'] : sings ? ['company'] : canada ? this.canadaWishes(look, cold) : pickWishes(wishCount(this.level), singerAbout, this.lastWishes, Math.random, this.wishPool ?? undefined);
-    if (cold) {
-      patience *= this.cold.line;
-      actor.setCold(true);
+    let cold = canada && Math.random() < this.coldChance;
+    if (cold) patience *= this.cold.line;
+    if (!plain) {
+      this.gameGuests++;
+      this.runGuests++;
     }
-    this.lastWishes = wishes;
+    const hat = look.outfit.some((item) => HATS.test(item));
+    // A singer wants an audience (company), if a seat with someone at its table frees up in time; else no wish.
+    const singerWishes: WishId[] = this.meetableSoon(['company'], { id: -1, species: look.species, cold, link: 0 }, patience) ? ['company'] : [];
+    const plan = plain ? { wishes: [] as WishId[], link: 0, first: null } : sings ? { wishes: singerWishes, link: 0, first: null } : this.planFor(look.species, cold, hurried, patience);
+    const wishes = plan.wishes;
+    // A guest bringing a new wish type has that one wish: one that would have been cold (wanting the fireplace) is not.
+    if (cold && plan.first && !wishes.includes('warm')) {
+      cold = false;
+      patience /= this.cold.line;
+    }
+    if (plan.first) this.seenWishes.add(plan.first);
+    for (const w of wishes) this.seenWishes.add(w);
+    if (cold) actor.setCold(true);
     const guest: Guest = {
       id: this.arrived,
       actor,
@@ -810,6 +867,9 @@ export class GuestSystem extends createSystem({}) {
       wishes,
       sings,
       wishMet: null,
+      link: plan.link,
+      firstWish: plan.first,
+      hat,
       vanishing: 0,
       hop: null,
       act: null,
@@ -833,9 +893,10 @@ export class GuestSystem extends createSystem({}) {
     b.friend = a.id;
     // One draw for the pair: the friend wish, and the same other wishes for both (a place, so one table can meet
     // both; never alone, company or quiet, which clash with sharing a table).
-    const count = wishCount(this.level);
-    const places = pairPlaces();
-    const pool = (this.wishPool ?? places).filter((w) => places.includes(w));
+    // The first pair brings the friend wish alone (a new type comes on a one-wish guest); later ones may add a place
+    // they have both seen that a table meets in time.
+    const count = this.seenWishes.has('friend') ? wishCount(this.level) : 1;
+    const pool = pairPlaces().filter((w) => this.seenWishes.has(w) && this.meetableSoon([w], { id: -1, species: a.actor.look.species, cold: false, link: 0 }, this.patienceSeconds));
     const others = count > 1 && pool.length > 0 ? [pool[Math.floor(Math.random() * pool.length)]] : [];
     for (const g of [a, b]) {
       g.hurried = false;
@@ -844,29 +905,150 @@ export class GuestSystem extends createSystem({}) {
       g.sings = false;
       g.wishes = ['friend', ...others];
     }
-    this.lastWishes = a.wishes;
+    for (const g of [a, b]) {
+      g.link = 0;
+      g.firstWish = this.seenWishes.has('friend') ? null : 'friend';
+    }
+    this.seenWishes.add('friend');
     // Their own usual wait (not a hurried one), the same for both.
     b.patience = b.patienceFull = a.patienceFull = a.patience = this.patienceSeconds;
   }
   /**
-   * A Canadian guest's wishes (docs/CANADA-CHALLENGES.md): from the wishes
-   * an open seat can meet, those of its level's difficulty
-   * (CANADA_DIFFICULTY), none outdoors in a snowstorm; its species' and the
-   * day's leanings twice as often; `warm` always when it is cold; and only
-   * places one open seat can meet together (which musician plays, which
-   * tables are open).
+   * A new guest's wishes (guests/wish-plan.ts), from the café as it is: the
+   * types seen this game, who is here (a singer or musician, a hat-wearer, a
+   * hurried guest, the guests a named wish may name), and which seats free
+   * up before its `patience` runs out. In the Canadian café its species'
+   * and the day's leanings come twice as often, a cold guest always wants
+   * the fireplace, and a snowstorm keeps everyone in (PR #21).
    */
-  private canadaWishes(look: Look, cold: boolean): WishId[] {
-    const STORM_OUT: WishId[] = ['outside', 'lake', 'upstairs'];
-    const pool = (this.wishPool ?? openWishes(this.seats, this.quietCorner, this.band)).filter((w) => canadaWishAllowed(w, this.level) && !(this.storm && STORM_OUT.includes(w)));
-    if (pool.length === 0) return [];
-    const lean = [...(SPECIES_LEAN[look.species] ?? []), ...this.forecastLean];
-    const open = this.seats.filter((s) => !s.locked && !s.takeaway);
-    const meetable = (wishes: WishId[]): boolean => {
-      const places = wishes.filter(isPlaceWish);
-      return places.length === 0 || open.some((seat) => places.every((w) => grants(w, seat, -1, [], this.tables, this.quietCorner, null, this.band, cold)));
-    };
-    return pickWishes(wishCount(this.level), false, this.lastWishes, Math.random, pool, { lean, must: cold ? 'warm' : undefined, meetable });
+  private planFor(species: string, cold: boolean, hurried: boolean, patience: number) {
+    const STORM_OUT: WishId[] = ['outside', 'patio', 'lake', 'upstairs'];
+    const present = this.guests.filter((g) => g.state !== 'leaving' && g.state !== 'vanishing');
+    const seated = present.filter((g) => g.state === 'seated' && g.seat && g.fuming < 0);
+    const self = { id: -1, species, cold, link: 0 };
+    return planWishes({
+      gameGuest: this.gameGuests,
+      runGuest: this.runGuests,
+      level: this.level,
+      count: () => wishCount(this.level),
+      seen: this.seenWishes,
+      allowed: (wish) => {
+        if (this.storm && STORM_OUT.includes(wish)) return false;
+        if (wish === 'music') return isCanada() ? this.band.length > 0 : seated.some((g) => g.sings);
+        if (wish === 'hat') return seated.some((g) => g.hat);
+        if (wish === 'calm') return hurried ? false : present.some((g) => g.hurried);
+        if (wish === 'meet' || wish === 'avoid') return seated.length > 0;
+        if (wish === 'kind') return seated.some((g) => g.actor.look.species === species);
+        return true;
+      },
+      candidates: () => seated.map((g) => g.id),
+      meetable: (wishes, link) => this.meetableSoon(wishes, { ...self, link }, patience),
+      lean: isCanada() ? [...(SPECIES_LEAN[species] ?? []), ...this.forecastLean] : [],
+      must: cold ? 'warm' : undefined,
+      random: Math.random,
+    });
+  }
+
+  /**
+   * Can a seat meet all of `wishes` for a guest like `who` before `patience`
+   * runs out (the owner's rule 4)? A seat counts if it is open and free now,
+   * or will be in time: its guest finishing its meal, or its table being
+   * cleaned, with WISH_MARGIN seconds to spare. Judged with the guests
+   * seated as they are (less the one leaving that seat).
+   */
+  meetableSoon(wishes: WishId[], who: { id: number; species: string; cold: boolean; link: number }, patience: number): boolean {
+    if (wishes.length === 0) return true;
+    const within = patience - WISH_MARGIN;
+    const base: GrantContext = { self: who.id, species: who.species, link: who.link, cold: who.cold, sitters: this.sitters, tables: this.tables, quietCorner: this.quietCorner, bigTables: this.bigTables, band: this.band, friendship: null };
+    for (const seat of this.seats) {
+      if (seat.locked || seat.hidden) continue;
+      let sitters: readonly Sitter[] = this.sitters;
+      if (seat.occupant !== 0) {
+        const g = this.guests.find((x) => x.id === seat.occupant);
+        if (!g || g.state !== 'seated' || this.leavesIn(g) > within) continue;
+        sitters = this.sitters.filter((x) => x.id !== g.id);
+      } else if (seat.dirty && !(this.cleaningSoon?.(seat.table) ?? false)) continue;
+      const c = sitters === this.sitters ? base : { ...base, sitters };
+      if (wishes.every((w) => grants(w, seat, c))) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Names (the owner's rule 8): no labels in normal play. While a hand holds
+   * a guest whose wish names another (meet, avoid), that guest glows and
+   * shows its name; and a fingertip at a seated guest's head shows its name
+   * for NAME_SHOWN_S.
+   */
+  private tendNames(delta: number): void {
+    this.named.clear();
+    for (const g of this.guests) if (g.state === 'held' && g.link && g.wishes.some((w) => w === 'meet' || w === 'avoid')) this.named.add(g.link);
+    for (const [id, t] of this.pointedFor) {
+      if (t - delta <= 0) this.pointedFor.delete(id);
+      else this.pointedFor.set(id, t - delta);
+    }
+    const hold = this.holdSystem;
+    if (!hold) return;
+    const cafe = this.cafeSystem.cafe;
+    for (const hand of HANDS) {
+      const tip = hold.tip[hand];
+      if (!tip.tracked || this.carriedBy(hand)) continue;
+      cafe.worldToLocal(this.pointAt.copy(tip.point));
+      for (const g of this.guests) {
+        if (g.state !== 'seated') continue;
+        const head = g.actor.root.position;
+        const top = head.y + g.actor.bubbleAnchor.position.y;
+        if (Math.hypot(this.pointAt.x - head.x, this.pointAt.z - head.z) < POINT_REACH_M && this.pointAt.y > head.y && this.pointAt.y < top + POINT_REACH_M) this.pointedFor.set(g.id, NAME_SHOWN_S);
+      }
+    }
+  }
+  /** The guests named by a held guest's wish this frame, and how long each pointed-at guest's name still shows (seconds). */
+  private readonly named = new Set<number>();
+  private readonly pointedFor = new Map<number, number>();
+  private readonly pointAt = new Vector3();
+
+  /** A guest's name tag (shown or not) and its "leaving soon" mark (seated, its meal nearly done). */
+  private tags(guest: Guest, nameShown: boolean): void {
+    const above = guest.actor.bubbleAnchor.position.y + DIAL.above;
+    if (nameShown && !guest.nameTag) {
+      guest.nameTag = makeNameTag(guest.name);
+      guest.actor.root.add(guest.nameTag);
+    }
+    if (guest.nameTag) {
+      guest.nameTag.visible = nameShown;
+      guest.nameTag.position.set(0, above + GUEST_TAG.nameHeight * 1.6, 0);
+    }
+    const leaving = guest.state === 'seated' && guest.fuming < 0 && this.leavesIn(guest) <= LEAVING_SOON_S;
+    if (leaving && !guest.leavingMark) {
+      guest.leavingMark = makeLeavingMark();
+      guest.actor.root.add(guest.leavingMark);
+    }
+    if (guest.leavingMark) {
+      guest.leavingMark.visible = leaving;
+      guest.leavingMark.position.set(0, above, 0);
+    }
+  }
+
+  /** Seconds until a seated guest gets down (Infinity if its food has not come yet: no telling). */
+  leavesIn(guest: Guest): number {
+    if (guest.state !== 'seated') return Infinity;
+    if (!guest.served) return Infinity;
+    const stay = Math.max(this.seatedSeconds - guest.seatedFor, Math.min(EAT_SECONDS, this.seatedSeconds * 0.25) - guest.eaten);
+    return Math.max(0, Math.min(stay, this.mealSeconds - guest.eaten));
+  }
+  /** Seat hints (Settings, off by default): the seats meeting a carried guest's wishes glow. */
+  seatHints = false;
+  /** Is a dirty table about to be clean (a member of staff on the way to it or wiping it)? MessSystem tells. */
+  cleaningSoon: ((table: number) => boolean) | null = null;
+  /** Guests so far in this game (the wish plan's count; the game saves it) and in this run (one wish for the first 3). */
+  gameGuests = 0;
+  runGuests = 0;
+  /** The wish types this game has met (the game saves them with the café). */
+  seenWishes = new Set<WishId>();
+
+  /** A run starts: the first 3 guests have one wish each again. */
+  startRun(): void {
+    this.runGuests = 0;
   }
 
   /** A pair's first guest, whose friend arrives next (0: none waiting); and the gap that friend's arrival put off. */
@@ -1181,7 +1363,7 @@ export class GuestSystem extends createSystem({}) {
   /** Who is seated now (for the wishes that depend on the other guests). */
   private collectSitters(): void {
     this.sitters.length = 0;
-    for (const guest of this.guests) if (guest.state === 'seated' && guest.seat && guest.fuming < 0) this.sitters.push({ id: guest.id, seat: guest.seat, sings: guest.sings });
+    for (const guest of this.guests) if (guest.state === 'seated' && guest.seat && guest.fuming < 0) this.sitters.push({ id: guest.id, seat: guest.seat, sings: guest.sings, species: guest.actor.look.species, hat: guest.hat, hurried: guest.hurried });
   }
 
   /** Tell the listeners how a guest's visit ended. */
@@ -1667,8 +1849,10 @@ export class GuestSystem extends createSystem({}) {
     if (guest.state === 'leaving' && walk) opacity = Math.min(1, walk.remaining / FADE_OUT_M);
     if (guest.state === 'vanishing') opacity = Math.max(0, 1 - guest.vanishing / VANISH_SECONDS);
     guest.actor.setOpacity(opacity);
-    // Lit up while a hand is over it, ready to pick it up.
-    const want = this.hovered.includes(guest) ? 1 : 0;
+    // Lit up while a hand is over it, ready to pick it up; or while the player holds a guest whose wish names it.
+    const named = this.named.has(guest.id);
+    const want = this.hovered.includes(guest) || named ? 1 : 0;
+    this.tags(guest, named || (this.pointedFor.get(guest.id) ?? 0) > 0);
     guest.highlight += (want - guest.highlight) * (1 - Math.exp(-(want ? 18 : 8) * delta));
     guest.actor.setHighlight(guest.highlight < 0.01 ? 0 : guest.highlight);
     guest.actor.update(delta);
@@ -1685,6 +1869,9 @@ export class GuestSystem extends createSystem({}) {
 
   private remove(guest: Guest): void {
     if (guest.anger) this.popups.release(guest.anger);
+    disposeTag(guest.nameTag ?? null);
+    disposeTag(guest.leavingMark ?? null);
+    this.pointedFor.delete(guest.id);
     for (const seat of this.seats) if (seat.occupant === guest.id) seat.occupant = 0;
     guest.dial.dispose();
     guest.actor.dispose();

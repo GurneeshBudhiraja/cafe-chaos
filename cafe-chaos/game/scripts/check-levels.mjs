@@ -43,13 +43,13 @@ const check = (name, pass, detail) => { results.push(pass); console.log(`${pass 
 const until = (fn, timeout = 60000) => page.waitForFunction(fn, null, { timeout, polling: 100 }).then(() => true, () => false);
 const state = () => page.evaluate(() => {
   const { game, guests, score, system, strip } = window.__cafe;
-  const saved = JSON.parse(localStorage.getItem('cafe-chaos/save/v3') ?? 'null');
+  const saved = JSON.parse(localStorage.getItem('cafe-chaos/save/v4') ?? 'null')?.cafes?.japan ?? null;
   return {
     phase: game.phase, level: game.level, served: game.levelServed, bar: [score.level, score.levelServed, score.levelGoal],
     gap: guests.spawnSeconds.map((v) => +v.toFixed(2)), queue: guests.queueCap, line: guests.patienceSeconds, seated: guests.seatedPatience,
     bank: score.bank, happiness: score.happiness, speed: +system.timeScale.toFixed(2), cafe: system.cafe.visible,
     card: game.menu.card.open ? game.menu.cardKind : null, buttons: game.menu.card.buttons.map((b) => b.id), handsOff: guests.handsOff,
-    confetti: strip.celebrations, banner: strip.banner ? [strip.banner.level, strip.banner.bonus] : null,
+    confetti: strip.celebrations, banner: strip.banner ? [strip.banner.title, strip.banner.amount] : null,
     note: game.note.panel.open ? game.note.drawn.split('|')[0] : null, nextGuest: +guests.nextSpawnIn.toFixed(2), saved,
   };
 });
@@ -100,7 +100,7 @@ for (let i = 0; i < 3; i++) paid += await pay(0.2, 1, 1);
 await until(() => window.__cafe.game.level === 2, 5000);
 await page.waitForTimeout(450);
 s = await state();
-check('the goal met (a guest in the hand too): no card, the café keeps going; the bar shows LEVEL 2! +10 with confetti', s.phase === 'run' && s.card === null && s.speed === 1 && s.cafe && !s.handsOff && s.banner?.join() === '2,10' && s.confetti === before.confetti + 1, JSON.stringify({ phase: s.phase, card: s.card, speed: s.speed, cafe: s.cafe, handsOff: s.handsOff, banner: s.banner, confetti: [before.confetti, s.confetti] }));
+check('the goal met (a guest in the hand too): no card, the café keeps going; the bar shows LEVEL 2! +10 with confetti', s.phase === 'run' && s.card === null && s.speed === 1 && s.cafe && !s.handsOff && s.banner?.join() === 'LEVEL 2!,10' && s.confetti === before.confetti + 1, JSON.stringify({ phase: s.phase, card: s.card, speed: s.speed, cafe: s.cafe, handsOff: s.handsOff, banner: s.banner, confetti: [before.confetti, s.confetti] }));
 check('level 2 is reached and saved at once: its bonus in the bank, the happiness full', s.level === 2 && s.served === 0 && s.bank === before.bank + paid + 10 && s.happiness === 100 && s.saved?.level === 2 && s.saved?.levelServed === 0 && s.saved?.bank === s.bank, JSON.stringify({ level: s.level, served: s.served, bank: [before.bank, paid, s.bank], happiness: s.happiness, saved: s.saved }));
 check('the next goal, one line under the bar ("Next: serve 7 guests"), and a breather: no guest for about 5 s', s.note === 'Next: serve 7 guests' && s.nextGuest > 3.5, JSON.stringify({ note: s.note, nextGuest: s.nextGuest }));
 await h.screenshot('artifacts/levels-2-level-up.png');
@@ -144,7 +144,8 @@ await h.screenshot('artifacts/levels-4-paused.png');
 await page.evaluate(() => window.__cafe.game.click('end'));
 await until(() => window.__cafe.game.phase === 'title');
 s = await state();
-check('MAIN MENU saves the level as it stands; the start card offers CONTINUE', s.card === 'start' && s.buttons.includes('continue') && s.saved?.level === 2 && s.saved?.levelServed === 3 && s.speed === 1, JSON.stringify({ card: s.card, buttons: s.buttons, saved: s.saved, speed: s.speed }));
+const tileLabel = await page.evaluate(() => window.__cafe.game.menu.card.buttons.find((b) => b.id === 'play-japan')?.label);
+check('MAIN MENU saves the level as it stands; the start card offers CONTINUE', s.card === 'start' && s.buttons.includes('play-japan') && tileLabel === 'CONTINUE' && s.saved?.level === 2 && s.saved?.levelServed === 3 && s.speed === 1, JSON.stringify({ card: s.card, buttons: s.buttons, saved: s.saved, speed: s.speed }));
 await page.waitForTimeout(600);
 await h.screenshot('artifacts/levels-5-continue.png');
 // The café put away behind the start card (it used to stand there, the card inside its roof and tree), for some frames.
@@ -219,10 +220,11 @@ check('gaps 11, 11, 11, 10, 7.65 (rush), 8.8 (breather), 7, 6, 5.5, then 5 (the 
 
 // 11. An old save keeps only its settings.
 const migrated = await page.evaluate(async () => {
+  localStorage.removeItem('cafe-chaos/save/v4');
   localStorage.removeItem('cafe-chaos/save/v3');
   localStorage.setItem('cafe-chaos/save/v2', JSON.stringify({ bank: 900, hires: 2, tutorialDone: true, bestSeconds: 400, bestCoins: 300, runs: 9, music: 4, sounds: 1, size: 120 }));
-  const { loadSave } = await import('/src/game/save.ts');
-  return loadSave();
+  const { SaveBook } = await import('/src/game/save.ts');
+  return new SaveBook().load('japan');
 });
 check('an old save starts fresh at level 1 with no coins or hires; its settings and the first run are kept', migrated.bank === 0 && migrated.hires === 0 && migrated.level === 1 && migrated.music === 4 && migrated.sounds === 1 && migrated.size === 120 && migrated.tutorialDone === true, JSON.stringify(migrated));
 

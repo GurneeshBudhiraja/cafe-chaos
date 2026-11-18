@@ -97,13 +97,16 @@ export const LEVEL = {
   queue: [3, 3, 3, 3, 3, 3, 3, 4],
   linePatience: { start: 30, perLevel: 1, min: 20 },
   seatedPatience: 40,
+  // The owner's rule 2 (18 Nov 2026): about 1 in 3 guests have two wishes; from level 3 about half, and three-wish
+  // guests begin; from level 5 up to three; mostly 2 or 3 from level 8. (The first 3 guests of a run have one:
+  // guests/wish-plan.ts.)
   wishes: [
-    { from: 1, weights: [1, 0, 0] },
-    { from: 3, weights: [0.6, 0.4, 0] },
+    { from: 1, weights: [2 / 3, 1 / 3, 0] },
+    { from: 3, weights: [0.4, 0.5, 0.1] },
     { from: 5, weights: [0.4, 0.45, 0.15] },
     { from: 8, weights: [0.25, 0.45, 0.3] },
   ],
-  singerFrom: 2,
+  singerFrom: 3,
   singer: 0.14,
   bonus: 5,
   breather: 5,

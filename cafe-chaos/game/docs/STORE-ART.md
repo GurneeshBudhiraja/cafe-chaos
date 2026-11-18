@@ -55,24 +55,38 @@ in grayscale. Sources at the end.
 Generate art without the title, then add the title from one logo file in
 every size (consistent, crisp, and Meta needs the logo as its own file).
 
-## Built so far (scripts/build-store-art.py)
+## The brand now (Nov 17 2026)
 
-Sources in assets/source, output in assets/meta-store, assets/devpost and
-assets/social (see assets/README.md); the app icons in public/icons
-are the same icon. Run `python3 scripts/build-store-art.py` after replacing
-a source.
+**One logo for everything, on moss (Nov 17 2026, final).** Every brand image
+is now the 3D logo centred on the flat moss field (no glow), at each
+place's exact size; `logo-on-white.png` is the logo on white; the game renders are no longer used in them.
 
-- logo.png: the wordmark, magenta keyed out (transparent).
-- icon-512x512.png: the one icon (also public/icons; a maskable copy keeps the
-  name inside the centre 80%). favicon-32: the C.
-- cover-square-1440x1440.png, cover-landscape-2560x1440.png,
-  devpost/thumbnail-1500x1000.png: from the cast-on-a-chair picture.
-- hero-3000x900.png, cover-portrait-1008x1440.png,
-  mini-landscape-1080x360.png: interim, from the same picture (the title
-  centred on the hero and the mini). Replace with The Pinch (hero), the
-  tower (portrait) and the table (mini) when they come in.
-- social/link-preview-1200x630.png, social/video-thumbnail-1280x720.png.
-- Still needed for the store: 5 screenshots, 2560×1440, real captures.
+**One logo for everything.** The rebrand replaced the hand-drawn wordmark and
+sketch cast: the logo is a 3D build ("The Rush"), CAFÉ arched close over
+CHAOS, every letter of CHAOS on its own tilt, all glossy lantern-gold glaze
+with timber sides and an ink outline. Pictures are renders of the real game
+(the café on a real-looking table, the game's cream hand pinching a guest
+above its glowing seat). Colours are the game's own (`src/ui/sketch.ts`):
+moss, lantern, timber, koi, cream, ink.
+
+Built by three Blender scripts (run from `game/`):
+
+- `scripts/build-logo-3d.py`: the logo (Fredoka, SIL OFL, in
+  `assets/source/fonts`) to `assets/source/logo/logo-3d.png`.
+- `scripts/render-key-art.py`: the four key-art renders to
+  `assets/source/renders` (shots `jp-landscape`, `jp-hero`, `ca-square`,
+  `ca-portrait`).
+- `scripts/build-brand-assets.py`: every asset from those two sources: the
+  store logo, the icon (the logo on moss with a lantern glow; the favicon is
+  the C alone), the five covers, the Devpost thumbnail, the link preview and
+  the video thumbnail, and the app icons in `public/icons`.
+
+Placement: the title upper left on the landscape, Devpost and social images;
+centred on the hero and mini (Meta's rule); across the top on the square and
+portrait. Still needed for the store: 5 screenshots, 2560×1440, real captures.
+
+The sections below are the research and the first (sketch) directions, kept
+for the record; the prompts are no longer used.
 
 ## Prompts (Nano Banana)
 

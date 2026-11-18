@@ -18,13 +18,21 @@
  *   while the tip is up, so reading costs nothing).
  * - pair: the first two friends: one table for both.
 
+ * The wishes' tips (the owner's list of 18 Nov 2026), each the first time
+ * its kind of wish or guest turns up, next to that guest:
+ * - card: the first guest: read its card, seat it to match;
+ * - company, music (with quiet), kind, meet, avoid (with calm): what each
+ *   asks; a new place (or any other new wish): "A new wish. Read the card."
+ *
  * - cold: the first cold guest (the Canadian café): sit it by a fire (its
  *   clock waits while the tip is up). `storm` is the snowstorm's note's icon.
  */
 
 import { snowflake } from '../guests/patience-dial.js';
+import { drawWish } from '../guests/wish-art.js';
+import type { WishId } from '../guests/wishes.js';
 
-export type TipId = 'goal' | 'table' | 'shop' | 'dirty' | 'hurry' | 'pair' | 'cold' | 'storm';
+export type TipId = 'goal' | 'table' | 'shop' | 'dirty' | 'hurry' | 'pair' | 'cold' | 'storm' | 'card' | 'company' | 'music' | 'kind' | 'meet' | 'avoid' | 'newwish';
 
 export interface TipText {
   title: string;
@@ -39,15 +47,33 @@ export const TIPS: Record<TipId, TipText> = {
   table: { title: 'Open a table', text: 'Point at a padlock and pinch.', seconds: 25 },
   shop: { title: 'More hands', text: 'Shop: hire a barista.', seconds: 9 },
   dirty: { title: 'Dirty table', text: 'Your staff will clean it.', seconds: 8 },
-  hurry: { title: 'In a hurry!', text: 'Seat it soon. It pays more.', seconds: 8 },
-  pair: { title: 'Two friends', text: 'Seat them at one table.', seconds: 10 },
+  hurry: { title: 'In a hurry!', text: 'Hurried guests wait less. Seat them first.', seconds: 9 },
+  pair: { title: 'Two friends came together.', text: 'Seat them at the same table.', seconds: 10 },
+  card: { title: "Read the guest's card.", text: 'Put the guest in a seat that matches.', seconds: 10 },
+  company: { title: 'With other guests', text: 'Some guests want to sit with other guests.', seconds: 9 },
+  music: { title: 'Some guests want to sit near the music.', text: 'Quiet guests want to sit away from it.', seconds: 10 },
+  kind: { title: 'With their own kind', text: 'Some guests want to sit with their own kind.', seconds: 9 },
+  meet: { title: 'Some guests name another guest.', text: 'That guest glows. Look for it.', seconds: 10 },
+  avoid: { title: 'Some guests want to keep away from a guest.', text: 'Seat them at another table.', seconds: 10 },
+  newwish: { title: 'A new wish.', text: 'Read the card.', seconds: 7 },
   cold: { title: 'A cold guest!', text: 'Sit it by a fire.', seconds: 9 },
   // Not a tip: the snowstorm's note under the bar (game-system), with this icon.
   storm: { title: 'Snowstorm!', text: 'Cold guests: sit them by a fire.', seconds: 8 },
 };
 
 /** The order tips are offered in when more than one is due (the one players act on first). */
-export const TIP_ORDER: TipId[] = ['goal', 'hurry', 'cold', 'pair', 'dirty', 'shop'];
+export const TIP_ORDER: TipId[] = ['goal', 'card', 'hurry', 'cold', 'pair', 'company', 'music', 'kind', 'meet', 'avoid', 'newwish', 'dirty', 'shop'];
+
+/** The wish tips: the wishes that bring each (a guest with one of these in the line is the tip's moment). */
+export const WISH_TIPS: Partial<Record<TipId, WishId[]>> = {
+  company: ['company'],
+  music: ['music', 'quiet'],
+  kind: ['kind'],
+  meet: ['meet'],
+  avoid: ['avoid', 'calm'],
+};
+/** Each wish tip's picture (guests/wish-art.ts). */
+const WISH_TIP_PICTURE: Partial<Record<TipId, WishId>> = { card: 'window', company: 'company', music: 'music', kind: 'kind', meet: 'meet', avoid: 'avoid', newwish: 'door' };
 
 /** Seconds between one tip going and the next appearing. */
 export const TIP_GAP = 2;
@@ -55,6 +81,21 @@ export const TIP_GAP = 2;
 /** Each tip's little picture, drawn at (x, y), radius r. */
 export function tipIcon(id: TipId): (ctx: CanvasRenderingContext2D, x: number, y: number, r: number) => void {
   return (ctx, x, y, r) => {
+    // A wish tip: its wish's picture on a paper disc.
+    const picture = WISH_TIP_PICTURE[id];
+    if (picture) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#f4ecdc';
+      ctx.fill();
+      ctx.lineWidth = r * 0.12;
+      ctx.strokeStyle = '#2a1d14';
+      ctx.stroke();
+      drawWish(ctx, picture, x, y, r * 1.25);
+      ctx.restore();
+      return;
+    }
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';

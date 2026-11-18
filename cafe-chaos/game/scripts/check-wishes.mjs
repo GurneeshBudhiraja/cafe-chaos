@@ -3,7 +3,8 @@
  * 1. every guest in the line has a name of its own and 1 to 3 wishes that
  *    can all be met together, and a dot over its head (its seconds, its
  *    timer ring, a pip for each wish);
- * 2. at level 1 guests have 1 wish; at a high level, a mix of 1, 2 and 3;
+ * 2. the first 3 guests of a run have 1 wish; at level 1 about 1 in 3 have
+ *    two; at a high level, a mix of 1, 2 and 3;
  * 3. a hand over a guest brings up its request card beside the hand;
  * 4. carried over a seat, the card marks each wish that seat meets, and
  *    the seats that meet every wish are lit;
@@ -65,8 +66,13 @@ await hold();
 // 2. How many wishes, at level 1 and at a high level (new guests made directly, then cleared away).
 const counts = await page.evaluate(() => {
   const g = window.__cafe.guests;
+  // Every wish type seen (the order they come in is check-wish-rules): how many a guest has, by level and by how far
+  // into the run it comes.
+  g.seenWishes = new Set(['window', 'door', 'counter', 'alone', 'company', 'big', 'quiet', 'kind', 'meet', 'hat', 'avoid', 'calm']);
   const sample = (level) => {
     g.level = level;
+    g.gameGuests = 100;
+    g.runGuests = 0;
     const out = [];
     for (let i = 0; i < 30; i++) {
       const guest = g.spawn();
@@ -78,7 +84,7 @@ const counts = await page.evaluate(() => {
   return { early: sample(1), late: sample(10) };
 });
 const lateSet = new Set(counts.late);
-check('early guests have 1 wish; late ones a mix of 1, 2 and 3', counts.early.every((n) => n === 1) && counts.late.every((n) => n >= 1 && n <= 3) && lateSet.has(2) && lateSet.has(3), `early ${counts.early.join('')}, late ${counts.late.join('')}`);
+check('the first 3 guests of a run have 1 wish; at level 1 one or two (about 1 in 3 two); late ones a mix of 1, 2 and 3', counts.early.slice(0, 3).every((n) => n === 1) && counts.early.every((n) => n === 1 || n === 2) && counts.early.includes(2) && counts.late.slice(3).every((n) => n >= 1 && n <= 3) && lateSet.has(2) && lateSet.has(3), `early ${counts.early.join('')}, late ${counts.late.join('')}`);
 
 // 1. The line, at a high level (a mix of wishes).
 // Every table open (the wishes need window and door seats), a high level, room in the line.
@@ -123,6 +129,13 @@ const middle = await page.evaluate(() => {
 await pinchAt(add(middle.at, [0, 0.085, 0]), false);
 await h.head(P(add(middle.at, [0.33, 0.26, 0.08])), P(add(middle.at, [-0.04, 0.05, 0])), 300);
 await frames(8);
+// Seat hints off (the default) and the guest bringing no new wish type: no seat glows (the card is read instead).
+await page.evaluate(() => { const { guests } = window.__cafe; guests.seatHints = false; const g = guests.carriedBy('right'); if (g) g.firstWish = null; });
+await frames(3);
+const litOff = await page.evaluate(() => [...window.__cafe.guests.granting].length);
+// Seat hints on (Settings): the seats meeting every wish glow.
+await page.evaluate(() => { window.__cafe.guests.seatHints = true; });
+await frames(3);
 const carried = await page.evaluate(() => {
   const { guests } = window.__cafe;
   const g = guests.carriedBy('right');
@@ -131,8 +144,8 @@ const carried = await page.evaluate(() => {
   const all = guests.seats.filter((s) => s.occupant === 0 && !s.locked && guests.wouldGrant(g, s)).map((s) => s.index).sort((a, b) => a - b);
   return { id: g.id, target: g.target.index, each, lit: [...guests.granting].map((s) => s.index).sort((a, b) => a - b), all, cardKey: guests.cards.shown[0] };
 });
-check('carried over a seat, the card marks each wish it meets, and the seats that meet them all are lit',
-  !!carried && carried.id === first.id && carried.cardKey.endsWith(carried.each.join()) && JSON.stringify(carried.lit) === JSON.stringify(carried.all),
+check('carried over a seat, the card marks each wish it meets; with Seat hints off no seat glows, on the seats that meet them all do',
+  litOff === 0 && !!carried && carried.id === first.id && carried.cardKey.endsWith(carried.each.join()) && JSON.stringify(carried.lit) === JSON.stringify(carried.all),
   JSON.stringify(carried));
 await h.screenshot('artifacts/wishes-3-carried.png');
 

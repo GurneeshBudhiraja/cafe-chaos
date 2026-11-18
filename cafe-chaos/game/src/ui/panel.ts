@@ -117,6 +117,12 @@ export class Panel {
   size = 1;
   /** Draw the paper card behind the content (false: the content draws its own). */
   frame = true;
+  /**
+   * Buttons that overlap (a small button laid on a big one, as the start
+   * card's arrows on its café cards): true, the one drawn last, on top,
+   * takes the press; false, the first in the list.
+   */
+  topmostHit = false;
   /** Draw over everything in the scene (nothing in front of it hides it). */
   set onTop(on: boolean) {
     this.material.depthTest = !on;
@@ -241,8 +247,22 @@ export class Panel {
     if (Math.abs(local.z) * this.scale.z > REACH_M) return null;
     const px = (local.x / params.width + 0.5) * this.width;
     const py = (0.5 - local.y / params.height) * this.height;
-    const pad = this.height * 0.02;
-    return this.buttons.find((b) => px >= b.x - pad && px <= b.x + b.w + pad && py >= b.y - pad && py <= b.y + b.h + pad) ?? null;
+    return this.buttonAt(px, py, this.height * 0.02);
+  }
+
+  /** The button at a canvas point (pixels), with `pad` round each. */
+  private buttonAt(px: number, py: number, pad: number): Button | null {
+    const on = (b: Button): boolean => b.w > 0 && px >= b.x - pad && px <= b.x + b.w + pad && py >= b.y - pad && py <= b.y + b.h + pad;
+    if (!this.topmostHit) return this.buttons.find(on) ?? null;
+    for (let i = this.buttons.length - 1; i >= 0; i--) if (on(this.buttons[i]!)) return this.buttons[i]!;
+    return null;
+  }
+
+  /** Where a world point falls on the card (canvas pixels), whatever its distance from the face. */
+  toCanvas(point: Vector3): { x: number; y: number } {
+    const local = this.mesh.worldToLocal(this.local.copy(point));
+    const params = (this.mesh.geometry as PlaneGeometry).parameters;
+    return { x: (local.x / params.width + 0.5) * this.width, y: (0.5 - local.y / params.height) * this.height };
   }
 
   /**
@@ -265,7 +285,7 @@ export class Panel {
     const px = (local.x / params.width + 0.5) * this.width;
     const py = (0.5 - local.y / params.height) * this.height;
     const pad = this.height * 0.015;
-    const under = z <= TOUCH.hover && z >= -TOUCH.behind ? (this.buttons.find((b) => px >= b.x - pad && px <= b.x + b.w + pad && py >= b.y - pad && py <= b.y + b.h + pad) ?? null) : null;
+    const under = z <= TOUCH.hover && z >= -TOUCH.behind ? this.buttonAt(px, py, pad) : null;
     // Drawn back far enough (or seen in front for the first time): it may press.
     if (z > TOUCH.rearm) state.armed = true;
     let pressed: Button | null = null;
