@@ -5,25 +5,28 @@
  * round shoji paper, and its lines boil (redrawn with a new seed ten times
  * a second) while it is up.
  *
- * The start card is wide, the cover art on the left and the buttons on
- * the right, so it stays short: its top edge sits a little under eye
- * level and the whole card in the comfortable band below it (sideways
- * looking is easier than up and down), inside Meta VR Glasses' design
- * area. The pause card and the shop are the same shape.
+ * The start card is one rounded box with a margin, and nothing is drawn
+ * past its edge: three small square buttons in its top corners (Quit on
+ * the left; How to play and Settings on the right), the logo between them,
+ * and a row of café cards across the middle that scrolls sideways (pinch
+ * and drag it, or press the arrows at its ends). A card is the café's
+ * picture with its name over a dark shadow at the bottom; pinching it plays
+ * there. The last card is a café still to come, and cannot be picked.
  *
- *   ┌──────────────┬──────────────────────┐
- *   │ [BEST 5:40]  │               [Quit] │
- *   │  cover art   │ [      CONTINUE    ] │   40 coins · 2 baristas
- *   │              │ [      NEW GAME    ] │
- *   │  CAFÉ CHAOS  │ [? How to play][⚙ Settings]
- *   └──────────────┴──────────────────────┘
+ *   ╭──────────────────────────────────────────────╮
+ *   │ [⏻]           CAFÉ CHAOS            [?] [⚙] │
+ *   │ ╭──────────╮  ╭──────────╮  ╭────╌╌╌         │
+ *   │ │ picture  │  │ picture  │  │ Brazil  (→)    │
+ *   │ │▒Japanese▒│  │▒Canadian▒│  │▒Coming         │
+ *   │ ╰──────────╯  ╰──────────╯  ╰────╌╌╌         │
+ *   │       Pinch a café to play · drag for more    │
+ *   ╰──────────────────────────────────────────────╯
  *
- * The first time (no save) there is only NEW GAME, and it is bigger. With
- * no best time there is no badge. Quit sits at the top right, out of the
- * way of the buttons pressed often, and asks first. Settings, the New
- * Game warning and the Quit question open on a second card in front of it
- * (`sheet`): the card behind is dimmed and does not take presses until the
- * sheet closes.
+ * The pause card and the failed card are the same width, the older shape:
+ * their words on the left and the buttons on the right. Settings, the New
+ * Game warning and the Quit question open on a second card in front
+ * (`sheet`): the card behind is dimmed and takes no presses until the sheet
+ * closes.
  *
  * Everything is drawn in design units (720 across) and scaled to the panel.
  */
@@ -33,15 +36,46 @@ import type { RoughCanvas } from 'roughjs/bin/canvas';
 import type { HowToStep } from '../game/how-to-play.js';
 import type { Options } from 'roughjs/bin/core';
 import type { CafeId } from '../cafe/style.js';
-import { Panel, type Button } from './panel.js';
+import { Panel, roundRect, type Button } from './panel.js';
 import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
 
 /** The sheet's size (metres): 24 cm across (Settings, the New Game warning, Quit). */
 export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.21 };
 /** The menu card (start, pause, shop): wide and short (metres), 960 by 600 design units. */
 export const START_SIZE = { width: 0.32, height: 0.2 };
-/** The start card with the two cafés: as wide as the others (960 design units), its height fitted to its rows. */
-export const PICKER_SIZE = { width: 0.32 };
+/**
+ * The start card (design units, 960 across like the others): the outer
+ * box's margin, corner radius and rim; the corner buttons (square, 84
+ * units: 3.2 degrees at the card's metre, over Meta's 2.5 to 3 for a ray)
+ * and their labels; the carousel's window, its cards and the arrows.
+ */
+const START = {
+  W: 960,
+  H: 556,
+  margin: 14,
+  radius: 40,
+  rim: 10,
+  corner: 84,
+  cornerX: 44,
+  cornerY: 32,
+  label: 22,
+  view: { x: 44, y: 172, w: 872, h: 318 },
+  cardW: 356,
+  cardGap: 32,
+  cardRadius: 26,
+  arrow: 84,
+  hintY: 520,
+} as const;
+/** The start card's size (metres). */
+export const PICKER_SIZE = { width: 0.32, height: (START.H * 0.32) / START.W };
+/** The corner buttons' colours: Quit red, How to play plum, Settings slate blue (the sketch's three markers, toned to the café). */
+const CORNER = {
+  quit: { fill: SKETCH.red, deep: SKETCH.redInk, lit: '#de5444' },
+  help: { fill: '#6d4a7e', deep: '#4a3157', lit: '#85609a' },
+  gear: { fill: '#3d5f8a', deep: '#29425f', lit: '#5378a8' },
+} as const;
+/** Ink on a dark ground (the corner buttons, the words over a café's picture). */
+const CREAM = '#f2ebdd';
 /**
  * How to play: one step at a time, as on the web page (index.html #how):
  * the step's video (looping, silent) on the left, its title and line on
@@ -134,12 +168,13 @@ export interface WarnState {
 
 /**
  * The cafés' pictures on the start card: the Japanese café's cover, and the
- * Canadian café from a seat (its top strip, a viewer's caption, is cropped
- * away: `top`, a share of its height).
+ * Canadian café from a seat (`top`: a share of the picture's height cropped
+ * away at the top, for a picture with a caption strip).
  */
 const ART: Record<CafeId, { file: string; top: number }> = {
   japan: { file: 'ui/cover.jpg', top: 0 },
-  canada: { file: 'ui/canada-cover.jpg', top: 0.07 },
+  // From the seat (models/27-cafe-canada/previews/seat.png), the café as the player first sees it.
+  canada: { file: 'ui/canada-card.jpg', top: 0 },
 };
 const covers: Partial<Record<CafeId, HTMLImageElement>> = {};
 const coverListeners: (() => void)[] = [];
@@ -201,6 +236,16 @@ export class StartMenu {
   private settings: SettingsState = { music: 2, sounds: 3 };
   private warn: WarnState = { cafe: '', coins: 0, staff: 1, level: 1 };
   private readonly k: number;
+  /**
+   * The café row: how far it is scrolled (design units), where it is
+   * heading, and where it was when a drag began (null: no drag).
+   */
+  private scroll = 0;
+  private scrollTo = 0;
+  private dragFrom: number | null = null;
+  /** The row's buttons and where each sits in the row (design units), to move them as it scrolls. */
+  private rowButtons: { b: Button; x: number; y: number; w: number; h: number; whole: boolean }[] = [];
+  private arrows: { prev: Button | null; next: Button | null } = { prev: null, next: null };
   /** How to play's scale (metres per design unit). */
   private readonly kh: number;
 
@@ -307,7 +352,8 @@ export class StartMenu {
   showStart(state: StartState): void {
     this.cardKind = 'start';
     this.start = state;
-    // Its height is fitted to its rows (layoutStart).
+    this.card.topmostHit = true;
+    this.card.resize(PICKER_SIZE.width, PICKER_SIZE.height);
     this.layoutStart();
     this.card.show(true);
   }
@@ -315,6 +361,7 @@ export class StartMenu {
   /** The pause card (in a run). */
   showPause(state: PauseState): void {
     this.cardKind = 'pause';
+    this.card.topmostHit = false;
     this.card.resize(START_SIZE.width, START_SIZE.height);
     this.layoutPause(state);
     this.card.show(true);
@@ -324,6 +371,7 @@ export class StartMenu {
   /** The café's happiness ran out: the level starts again (TRY AGAIN), or back to the menu. */
   showFailed(state: FailState): void {
     this.cardKind = 'failed';
+    this.card.topmostHit = false;
     this.card.resize(START_SIZE.width, START_SIZE.height);
     this.layoutFailed(state);
     this.card.show(true);
@@ -421,6 +469,13 @@ export class StartMenu {
   /** Each frame: the boil (a new seed, ten times a second) while a card is up. */
   tick(delta: number): void {
     this.tickVideo();
+    // The café row easing to where it was sent (an arrow, or let go after a drag).
+    if (this.cardKind === 'start' && this.card.open && this.dragFrom === null && this.scroll !== this.scrollTo) {
+      this.scroll += (this.scrollTo - this.scroll) * (1 - Math.exp(-14 * delta));
+      if (Math.abs(this.scrollTo - this.scroll) < 0.5) this.scroll = this.scrollTo;
+      this.placeRow();
+      this.card.paint();
+    }
     this.clock += delta;
     const seed = 1 + Math.floor(this.clock * BOIL_HZ);
     if (seed === this.seed) return;
@@ -491,108 +546,430 @@ export class StartMenu {
   }
 
   /**
-   * The start card: the cafés side by side, the same rows at the same
-   * heights in each (picture, name, line, status, the big button, the small
-   * one: an empty slot where a café has none), so the two big buttons line
-   * up. One primary (moss) button on the card: the café to play now (the
-   * one played last; on the first launch the Japanese café). The title alone
-   * at the top; How to play, Settings and Quit in one row under both tiles.
-   * The card's height is fitted to its rows, with PAD on all four sides.
+   * The start card (see the drawing at the top of this file): the outer box,
+   * the three corner buttons, the logo, and the café row, which scrolls
+   * sideways inside its window and is never drawn past it.
    *
-   *   ┌───────────────────────────────────────────────┐
-   *   │                 [ the logo ]                   │
-   *   │ ┌──────────────────┐   ┌──────────────────┐   │
-   *   │ │     picture      │   │     picture      │   │
-   *   │ └──────────────────┘   └──────────────────┘   │
-   *   │ Japanese café          Canadian café          │
-   *   │ A cherry-blossom...    A snowy log cabin...   │
-   *   │ New · starts with...   Free trial · progress..│
-   *   │ [      START      ]    [     TRY FREE     ]   │
-   *   │                        [ Buy · 750 coins  ]   │
-   *   │ [? How to play]   [⚙ Settings]   [  Quit  ]   │
-   *   └───────────────────────────────────────────────┘
-   *
-   * Sizes (the card stands a metre away, shown twice its size: a unit is
-   * 0.67 mm there): the big buttons 94 units (3.6 degrees), the small ones
-   * and the bottom row 80 (3.1), at or over the top of Meta's 2.5 to 3
-   * degree minimum for a ray (3 degrees for gaze); 40 units (27 mm) between
-   * things pressed, over Meta's 12 mm and Apple's 16 pt.
+   * The row is the cafés (`start.tiles`, in their order) and a café still to
+   * come. Pinching a café's card plays there as its one button did (Start,
+   * Continue, or the Canadian café's free trial); a small tag on its picture
+   * does the rest (New game for a café with a save, Buy for the Canadian café
+   * not owned yet). The café to come has no button.
    */
   private layoutStart(): void {
     const st = this.start;
-    const SW = Math.round(this.card.width / this.k);
+    const { W: SW, H, view } = START;
+    const step = START.cardW + START.cardGap;
+    const entries: (CafeTile | null)[] = [...st.tiles, null];
+    this.scrollMax = Math.max(0, entries.length * step - START.cardGap - view.w);
+    this.scrollTo = this.clampScroll(this.scrollTo);
+    this.scroll = this.clampScroll(this.scroll);
     const buttons: Button[] = [];
-    const ROW = { title: 96, art: 160, name: 34, line: 32, status: 38, main: 94, small: 80, bottom: 80 };
-    // Down the card: the title, then the tiles' rows, then the bottom row; GAP between blocks, TOUCH_GAP between
-    // things pressed.
-    const titleY = PAD;
-    const artY = titleY + ROW.title + 16;
-    const nameY = artY + ROW.art + 14;
-    const lineY = nameY + ROW.name + 6;
-    const statusY = lineY + ROW.line * 2 + 6;
-    const mainY = statusY + ROW.status + 12;
-    const smallY = mainY + ROW.main + TOUCH_GAP;
-    const bottomY = smallY + ROW.small + TOUCH_GAP;
-    const H = bottomY + ROW.bottom + PAD;
-    this.card.resize(PICKER_SIZE.width, (H * this.k) / PPM);
-    const tw = (SW - PAD * 2 - TOUCH_GAP) / 2;
-    const tiles = st.tiles.map((t, i) => {
-      const x = PAD + i * (tw + TOUCH_GAP);
-      const label = t.loading ? 'LOADING…' : !t.owned ? 'TRY FREE' : t.started ? 'CONTINUE' : 'START';
-      buttons.push(this.button(this.card, `play-${t.id}`, x, mainY, tw, ROW.main, t.loading ? 'busy' : i === 0 ? 'primary' : 'secondary', label, undefined, false, 40));
-      if (!t.owned) buttons.push(this.button(this.card, `buy-${t.id}`, x, smallY, tw, ROW.small, 'secondary', `Buy · ${st.price} coins`, undefined, false, 28));
-      else if (t.started) buttons.push(this.button(this.card, `new-${t.id}`, x, smallY, tw, ROW.small, 'secondary', 'New game', undefined, false, 28));
-      const status = t.loading ? 'Loading · it opens when ready' : !t.owned ? 'Free trial · progress not saved' : t.started ? `Level ${t.level} · ${t.coins.toLocaleString('en')} coins` : st.lesson ? 'New · starts with a short lesson' : 'New';
-      return { t, x, status };
+    this.rowButtons = [];
+    // The café cards: each draws itself (its picture, the shadow and its name) where the row is scrolled to.
+    entries.forEach((t, i) => {
+      const x = i * step;
+      if (!t) return;
+      const b: Button = {
+        id: `play-${t.id}`, label: t.name, x: 0, y: 0, w: 0, h: 0, bare: true,
+        draw: (ctx, _b, hover, pressed) => {
+          ctx.save();
+          ctx.scale(this.k, this.k);
+          this.drawRowCard(ctx, x, t, !!hover, !!pressed);
+          ctx.restore();
+        },
+      };
+      buttons.push(b);
+      this.rowButtons.push({ b, x, y: view.y, w: START.cardW, h: view.h, whole: false });
     });
-    // The bottom row: three buttons across both tiles, the same width, evenly spaced.
-    const bw = (SW - PAD * 2 - TOUCH_GAP * 2) / 3;
-    buttons.push(this.button(this.card, 'help', PAD, bottomY, bw, ROW.bottom, 'secondary', '? How to play', undefined, false, 28));
-    buttons.push(this.button(this.card, 'gear', PAD + bw + TOUCH_GAP, bottomY, bw, ROW.bottom, 'secondary', '⚙ Settings', undefined, false, 28));
-    buttons.push(this.button(this.card, 'quit', PAD + (bw + TOUCH_GAP) * 2, bottomY, bw, ROW.bottom, 'secondary', 'Quit', undefined, false, 28));
+    // The tags on the pictures (pressed only while the whole tag is in the window).
+    entries.forEach((t, i) => {
+      if (!t || t.loading || (t.owned && !t.started)) return;
+      // Narrow, in the picture's top right corner, clear of the café's sign.
+      const tw = 170;
+      const th = 80;
+      const x = i * step + START.cardW - 16 - tw;
+      const y = view.y + 16;
+      const id = t.owned ? `new-${t.id}` : `buy-${t.id}`;
+      const label = t.owned ? 'New game' : `Buy · ${st.price}`;
+      const b: Button = { id, label, x: 0, y: 0, w: 0, h: 0, bare: true, draw: (ctx, _b, hover, pressed) => this.drawTag(ctx, x, y, tw, th, label, !!hover, !!pressed) };
+      buttons.push(b);
+      this.rowButtons.push({ b, x, y, w: tw, h: th, whole: true });
+    });
+    // The arrows at the window's ends, over the cards: shown while the row can go that way.
+    const ay = view.y + (view.h - START.arrow) / 2;
+    const prev = this.arrowButton('carousel-prev', view.x + 14, ay, -1);
+    const next = this.arrowButton('carousel-next', view.x + view.w - 14 - START.arrow, ay, 1);
+    buttons.push(prev, next);
+    this.arrows = { prev, next };
+    // The corner buttons.
+    const c = START.corner;
+    const right = SW - START.cornerX - c;
+    buttons.push(this.cornerButton('quit', START.cornerX, 'quit'));
+    buttons.push(this.cornerButton('help', right - TOUCH_GAP - c, 'help'));
+    buttons.push(this.cornerButton('gear', right, 'gear'));
+    this.placeRow();
     this.card.set((ctx) => {
       ctx.clearRect(0, 0, this.card.width, this.card.height);
       ctx.save();
       ctx.scale(this.k, this.k);
-      const rc = pen(this.card.canvas);
-      this.paper(ctx, rc, 0, H, SW);
-      // The title: the brand's logo, centred over the two cafés (the name in the lettering until it loads).
+      // The outer box: timber rim round the paper, a margin of clear space outside it.
+      const m = START.margin;
+      roundRect(ctx, m, m, SW - m * 2, H - m * 2, START.radius);
+      ctx.fillStyle = SKETCH.timber;
+      ctx.fill();
+      roundRect(ctx, m + START.rim, m + START.rim, SW - (m + START.rim) * 2, H - (m + START.rim) * 2, START.radius - START.rim);
+      ctx.fillStyle = SKETCH.paper;
+      ctx.fill();
+      // The logo between the corner buttons (the name in the lettering until it loads).
+      const lh = 104;
       if (logo) {
-        const lh = ROW.title;
         const lw = (lh * logo.width) / logo.height;
-        ctx.drawImage(logo, (SW - lw) / 2, titleY, lw, lh);
-      } else {
-        text(ctx, 'Café Chaos', SW / 2, titleY + ROW.title / 2 + 2, 44, SKETCH.ink);
-      }
-      tiles.forEach(({ t, x, status }, i) => {
-        // The picture: the same frame for both, each cropped to fill it from its middle (never stretched).
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(x, artY, tw, ROW.art);
-        ctx.clip();
-        ctx.fillStyle = '#2a2420';
-        ctx.fillRect(x, artY, tw, ROW.art);
-        const img = covers[t.id];
-        if (img) {
-          const top = img.height * ART[t.id].top;
-          const ih0 = img.height - top;
-          const k = Math.max(tw / img.width, ROW.art / ih0);
-          const iw = tw / k;
-          const ih = ROW.art / k;
-          ctx.drawImage(img, (img.width - iw) / 2, top + (ih0 - ih) / 2, iw, ih, x, artY, tw, ROW.art);
-        }
-        ctx.restore();
-        rc.rectangle(x, artY, tw, ROW.art, this.o({ strokeWidth: 3, seed: this.seed + 3 + i }));
-        text(ctx, t.name, x + 4, nameY + ROW.name / 2, 40, SKETCH.ink, 'left');
-        // 27 units is 18 mm at the card's metre: a cap height of about 0.65 degrees, inside the comfortable 0.6 to
-        // 0.75 for reading (Microsoft's mixed reality typography).
-        this.wrap(ctx, t.line, 27, false, tw - 8)
-          .slice(0, 2)
-          .forEach((l, j) => text(ctx, l, x + 4, lineY + ROW.line / 2 + j * ROW.line, 27, SKETCH.soft, 'left', false));
-        text(ctx, status, x + 4, statusY + ROW.status / 2, 27, t.owned ? SKETCH.ink : SKETCH.mossDeep, 'left');
-      });
+        ctx.drawImage(logo, (SW - lw) / 2, START.cornerY - 8, lw, lh);
+      } else text(ctx, 'Café Chaos', SW / 2, START.cornerY + c / 2, 44, SKETCH.ink);
+      // The corner buttons' names, under each.
+      const ly = START.cornerY + c + 22;
+      text(ctx, 'Quit', START.cornerX + c / 2, ly, START.label, SKETCH.soft);
+      text(ctx, 'How to play', right - TOUCH_GAP - c / 2, ly, START.label, SKETCH.soft);
+      text(ctx, 'Settings', right + c / 2, ly, START.label, SKETCH.soft);
+      // The café to come (no button: it cannot be picked).
+      const soon = entries.length - 1;
+      this.drawRowCard(ctx, soon * step, null, false, false);
+      text(ctx, this.scrollMax > 0 ? 'Pinch a café to play  ·  drag the row for more' : 'Pinch a café to play', SW / 2, START.hintY, 24, SKETCH.soft, 'center', false);
       ctx.restore();
     }, buttons);
+  }
+
+  /** How far the row can scroll (design units): its cards' width past the window. */
+  private scrollMax = 0;
+
+  private clampScroll(v: number): number {
+    return Math.max(0, Math.min(this.scrollMax, v));
+  }
+
+  /** Where the row comes to rest: each card's left edge at the window's, as far as the row goes. */
+  private get stops(): number[] {
+    const step = START.cardW + START.cardGap;
+    const out: number[] = [];
+    for (let i = 0; i * step < this.scrollMax; i++) out.push(i * step);
+    out.push(this.scrollMax);
+    return out;
+  }
+
+  /**
+   * Move the row's buttons to where it is scrolled: each card's press area is
+   * the part of it inside the window (none once it has left), a tag's only
+   * while it is all inside; the arrows show while the row can go their way.
+   */
+  private placeRow(): void {
+    const { view } = START;
+    const k = this.k;
+    for (const r of this.rowButtons) {
+      const x = view.x + r.x - this.scroll;
+      const l = Math.max(x, view.x);
+      const rr = Math.min(x + r.w, view.x + view.w);
+      const show = r.whole ? l === x && rr === x + r.w : rr - l > 8;
+      r.b.x = show ? l * k : -1e4;
+      r.b.w = show ? (rr - l) * k : 0;
+      r.b.y = r.y * k;
+      r.b.h = r.h * k;
+    }
+    const { prev, next } = this.arrows;
+    if (prev) prev.w = this.scroll > 1 ? START.arrow * k : 0;
+    if (next) next.w = this.scroll < this.scrollMax - 1 ? START.arrow * k : 0;
+  }
+
+  /** The row one stop along (`by` +1 or -1), easing there. */
+  carouselStep(by: number): void {
+    const stops = this.stops;
+    const at = this.scrollTo;
+    const to = by > 0 ? stops.find((s) => s > at + 1) : [...stops].reverse().find((s) => s < at - 1);
+    if (to === undefined) return;
+    this.scrollTo = to;
+  }
+
+  /** Is a point of the card (canvas pixels) in the café row's window? */
+  inCarousel(px: number, py: number): boolean {
+    if (this.cardKind !== 'start') return false;
+    const { view } = START;
+    const x = px / this.k;
+    const y = py / this.k;
+    return x >= view.x && x <= view.x + view.w && y >= view.y && y <= view.y + view.h;
+  }
+
+  /** A café's card in the row (pressed on letting go, so the row can be dragged from it). */
+  isCafeCard(id: string): boolean {
+    return id.startsWith('play-');
+  }
+
+  /** How far a pinch must move along the card (canvas pixels) before it drags the row and presses nothing. */
+  get dragSlop(): number {
+    return 22 * this.k;
+  }
+
+  /** A pinch on the row: it starts to drag. */
+  dragBegin(): void {
+    this.dragFrom = this.scroll;
+  }
+
+  /** The pinch has moved `dx` canvas pixels along the card since it began: the row follows it (a little give past its ends). */
+  dragBy(dx: number): void {
+    if (this.dragFrom === null) return;
+    const v = this.dragFrom - dx / this.k;
+    const give = 40;
+    this.scroll = v < 0 ? -give * (1 - Math.exp(v / give)) : v > this.scrollMax ? this.scrollMax + give * (1 - Math.exp(-(v - this.scrollMax) / give)) : v;
+    this.scrollTo = this.scroll;
+    this.placeRow();
+    this.card.paint();
+  }
+
+  /** The pinch let go: the row eases to the stop it was dragged towards (or the nearest). */
+  dragEnd(): void {
+    if (this.dragFrom === null) return;
+    const from = this.dragFrom;
+    this.dragFrom = null;
+    const stops = this.stops;
+    const moved = this.scroll - from;
+    let to = stops.reduce((best, s) => (Math.abs(s - this.scroll) < Math.abs(best - this.scroll) ? s : best), stops[0] ?? 0);
+    // A short flick still goes one stop the way it was dragged.
+    if (Math.abs(moved) > 40 && to === stops.reduce((best, s) => (Math.abs(s - from) < Math.abs(best - from) ? s : best), stops[0] ?? 0)) {
+      to = (moved > 0 ? stops.find((s) => s > from + 1) : [...stops].reverse().find((s) => s < from - 1)) ?? to;
+    }
+    this.scrollTo = this.clampScroll(to);
+  }
+
+  /**
+   * A card in the row, `x` along it (design units): the café's picture
+   * filling a rounded card, a dark shadow up from its bottom, and its name
+   * and state over the shadow in cream. No café (`t` null): the café to
+   * come, a placeholder picture and Coming Soon. Clipped to the window.
+   */
+  private drawRowCard(ctx: CanvasRenderingContext2D, x0: number, t: CafeTile | null, hover: boolean, pressed: boolean): void {
+    const { view } = START;
+    const w = START.cardW;
+    const h = view.h;
+    const x = view.x + x0 - this.scroll;
+    if (x + w < view.x || x > view.x + view.w) return;
+    const dip = pressed ? 6 : 0;
+    const y = view.y + dip;
+    // (Drawn in design units: the caller has scaled the canvas.)
+    ctx.save();
+    // The window: nothing of the row is drawn outside it.
+    ctx.beginPath();
+    ctx.rect(view.x, view.y - 4, view.w, view.h + 12);
+    ctx.clip();
+    ctx.save();
+    roundRect(ctx, x, y, w, h, START.cardRadius);
+    ctx.clip();
+    ctx.fillStyle = '#2a2420';
+    ctx.fillRect(x, y, w, h);
+    const img = t ? covers[t.id] : null;
+    if (t && img) {
+      // Cover the card: cropped from the middle, never stretched.
+      const top = img.height * ART[t.id].top;
+      const ih0 = img.height - top;
+      const s = Math.max(w / img.width, h / ih0);
+      const iw = w / s;
+      const ih = h / s;
+      ctx.drawImage(img, (img.width - iw) / 2, top + (ih0 - ih) / 2, iw, ih, x, y, w, h);
+    } else if (!t) this.drawSoon(ctx, x, y, w, h);
+    // The shadow the words sit on.
+    const g = ctx.createLinearGradient(0, y + h * 0.42, 0, y + h);
+    g.addColorStop(0, 'rgba(18, 12, 8, 0)');
+    g.addColorStop(0.55, 'rgba(18, 12, 8, 0.62)');
+    g.addColorStop(1, 'rgba(18, 12, 8, 0.9)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    if (t?.loading) {
+      ctx.fillStyle = 'rgba(18, 12, 8, 0.45)';
+      ctx.fillRect(x, y, w, h);
+    }
+    if (hover) {
+      const glow = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, w * 0.75);
+      glow.addColorStop(0, 'rgba(255,214,140,.22)');
+      glow.addColorStop(1, 'rgba(255,214,140,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(x, y, w, h);
+    }
+    ctx.restore();
+    // Its edge: ink, or lantern light while a hand is on it.
+    roundRect(ctx, x, y, w, h, START.cardRadius);
+    ctx.lineWidth = hover ? 7 : 3.5;
+    ctx.strokeStyle = hover ? SKETCH.lantern : t ? SKETCH.ink : 'rgba(22,23,29,.55)';
+    ctx.stroke();
+    // The name and its state.
+    const name = t ? t.name.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Coming Soon';
+    const state = !t ? 'A new café is on its way' : t.loading ? 'Loading…' : !t.owned ? 'Free trial' : t.started ? `Level ${t.level} · ${t.coins.toLocaleString('en')} coins` : this.start.lesson ? 'New · starts with a lesson' : 'New';
+    this.fitText(ctx, name, x + 22, y + h - 66, 42, w - 44, CREAM, true);
+    this.fitText(ctx, state, x + 22, y + h - 26, 26, w - 44, t ? '#e8dcc6' : '#cfc3ae', false);
+    ctx.restore();
+  }
+
+  /** Text that fits `width` (design units): smaller if it must be. */
+  private fitText(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, width: number, color: string, heavy: boolean): void {
+    ctx.font = font(size, heavy);
+    const over = ctx.measureText(s).width / width;
+    text(ctx, s, x, y, over > 1 ? Math.floor(size / over) : size, color, 'left', heavy);
+  }
+
+  /** The café to come (a Brazilian café): a placeholder, warm hills under a sunset over the sea, toned down. */
+  private drawSoon(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+    const sky = ctx.createLinearGradient(0, y, 0, y + h);
+    sky.addColorStop(0, '#2f6f6a');
+    sky.addColorStop(0.5, '#d99a4a');
+    sky.addColorStop(0.62, '#e8b765');
+    sky.addColorStop(0.63, '#2f7d78');
+    sky.addColorStop(1, '#1d4e4b');
+    ctx.fillStyle = sky;
+    ctx.fillRect(x, y, w, h);
+    // The sun, low over the sea.
+    ctx.fillStyle = 'rgba(250, 222, 150, 0.9)';
+    ctx.beginPath();
+    ctx.arc(x + w * 0.66, y + h * 0.58, w * 0.12, Math.PI, 0);
+    ctx.fill();
+    // Two rounded peaks by the shore, and a palm.
+    ctx.fillStyle = '#1f3b2c';
+    ctx.beginPath();
+    ctx.moveTo(x - 10, y + h * 0.63);
+    ctx.bezierCurveTo(x + w * 0.05, y + h * 0.3, x + w * 0.24, y + h * 0.2, x + w * 0.3, y + h * 0.4);
+    ctx.bezierCurveTo(x + w * 0.34, y + h * 0.52, x + w * 0.38, y + h * 0.6, x + w * 0.42, y + h * 0.63);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.3, y + h * 0.63);
+    ctx.bezierCurveTo(x + w * 0.36, y + h * 0.46, x + w * 0.46, y + h * 0.44, x + w * 0.52, y + h * 0.63);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#1f3b2c';
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    const px = x + w * 0.86;
+    const py = y + h * 0.63;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.quadraticCurveTo(px - 6, py - h * 0.18, px - 2, py - h * 0.34);
+    ctx.stroke();
+    ctx.lineWidth = 5;
+    for (const [dx, dy] of [[-40, 6], [-30, 26], [36, 4], [30, 26], [4, -18]] as const) {
+      ctx.beginPath();
+      ctx.moveTo(px - 2, py - h * 0.34);
+      ctx.quadraticCurveTo(px - 2 + dx * 0.6, py - h * 0.34 - 14, px - 2 + dx, py - h * 0.34 + dy);
+      ctx.stroke();
+    }
+    // Toned down: not open yet.
+    ctx.fillStyle = 'rgba(40, 36, 32, 0.35)';
+    ctx.fillRect(x, y, w, h);
+  }
+
+  /** A tag on a café's picture (New game, Buy): paper, ink, a lantern glow when lit. Clipped to the window. */
+  private drawTag(ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number, label: string, hover: boolean, pressed: boolean): void {
+    const { view } = START;
+    const x = view.x + x0 - this.scroll;
+    if (x + w < view.x || x > view.x + view.w) return;
+    const y = y0 + (pressed ? 6 : 0);
+    ctx.save();
+    ctx.scale(this.k, this.k);
+    ctx.beginPath();
+    ctx.rect(view.x, view.y - 4, view.w, view.h + 12);
+    ctx.clip();
+    roundRect(ctx, x, y, w, h, 18);
+    ctx.fillStyle = hover ? HOVER.plain : 'rgba(217, 207, 190, 0.94)';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = SKETCH.ink;
+    ctx.stroke();
+    if (hover) this.lantern(ctx, x, y, w, h);
+    ctx.font = font(28);
+    const size = Math.min(28, Math.floor((28 * (w - 32)) / ctx.measureText(label).width));
+    text(ctx, label, x + w / 2, y + h / 2 + 2, size, SKETCH.ink);
+    ctx.restore();
+  }
+
+  /** An arrow at an end of the café row (a round paper button with a chevron), hidden while the row cannot go that way. */
+  private arrowButton(id: string, x: number, y: number, dir: number): Button {
+    const k = this.k;
+    const d = START.arrow;
+    return {
+      id, label: dir > 0 ? 'More cafés' : 'Back', x: x * k, y: y * k, w: d * k, h: d * k, bare: true,
+      draw: (ctx, b, hover, pressed) => {
+        if (b.w === 0) return;
+        ctx.save();
+        ctx.scale(k, k);
+        const cx = x + d / 2;
+        const cy = y + d / 2 + (pressed ? 4 : 0);
+        ctx.beginPath();
+        ctx.arc(cx, cy, d / 2, 0, Math.PI * 2);
+        ctx.fillStyle = hover ? HOVER.plain : 'rgba(217, 207, 190, 0.94)';
+        ctx.fill();
+        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = SKETCH.ink;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - dir * 8, cy - 16);
+        ctx.lineTo(cx + dir * 10, cy);
+        ctx.lineTo(cx - dir * 8, cy + 16);
+        ctx.lineWidth = 7;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        ctx.restore();
+      },
+    };
+  }
+
+  /** A small square corner button (Quit, How to play, Settings): its colour, a cream picture, lighter when lit. */
+  private cornerButton(id: 'quit' | 'help' | 'gear', x: number, kind: keyof typeof CORNER): Button {
+    const k = this.k;
+    const s = START.corner;
+    const y = START.cornerY;
+    const c = CORNER[kind];
+    const label = kind === 'quit' ? 'Quit' : kind === 'help' ? 'How to play' : 'Settings';
+    return {
+      id, label, x: x * k, y: y * k, w: s * k, h: s * k, bare: true,
+      draw: (ctx, _b, hover, pressed) => {
+        ctx.save();
+        ctx.scale(k, k);
+        const dy = y + (pressed ? 5 : 0);
+        roundRect(ctx, x, dy, s, s, 20);
+        ctx.fillStyle = hover ? c.lit : c.fill;
+        ctx.fill();
+        ctx.lineWidth = hover ? 6 : 3.5;
+        ctx.strokeStyle = hover ? SKETCH.lantern : c.deep;
+        ctx.stroke();
+        const cx = x + s / 2;
+        const cy = dy + s / 2;
+        ctx.strokeStyle = CREAM;
+        ctx.fillStyle = CREAM;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 6;
+        if (kind === 'quit') {
+          // A power sign: a ring open at the top, and a stroke through the gap.
+          ctx.beginPath();
+          ctx.arc(cx, cy + 3, 21, -Math.PI / 2 + 0.75, -Math.PI / 2 - 0.75 + Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - 23);
+          ctx.lineTo(cx, cy - 2);
+          ctx.stroke();
+        } else if (kind === 'help') {
+          text(ctx, '?', cx, cy + 3, 54, CREAM);
+        } else {
+          // A gear: eight teeth round a ring.
+          ctx.save();
+          ctx.translate(cx, cy);
+          for (let i = 0; i < 8; i++) {
+            ctx.rotate(Math.PI / 4);
+            ctx.fillRect(-5.5, -27, 11, 12);
+          }
+          ctx.restore();
+          ctx.beginPath();
+          ctx.arc(cx, cy, 17, 0, Math.PI * 2);
+          ctx.lineWidth = 9;
+          ctx.stroke();
+        }
+        ctx.restore();
+      },
+    };
   }
 
   /** Lines of `s` that fit `width` (design units) at this size. */
