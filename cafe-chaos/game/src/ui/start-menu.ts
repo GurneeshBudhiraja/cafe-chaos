@@ -38,6 +38,7 @@ import type { Options } from 'roughjs/bin/core';
 import type { CafeId } from '../cafe/style.js';
 import { Panel, roundRect, type Button } from './panel.js';
 import { hand, pen, SKETCH, sketchCoin } from './sketch.js';
+import { snowflake } from '../guests/patience-dial.js';
 
 /** The sheet's size (metres): 24 cm across (Settings, the New Game warning, Quit). */
 export const MENU_SIZE = { width: 0.24, height: 0.28, sheetHeight: 0.21 };
@@ -122,6 +123,8 @@ export interface CafeTile {
   coins: number;
   /** Chosen, and its models still loading. */
   loading: boolean;
+  /** Today's forecast (the Canadian café): its icon and one line, over the foot of its picture. */
+  forecast?: { id: 'sunny' | 'snap' | 'snow'; line: string };
 }
 /** The start card: the cafés, the one played last first; and the Canadian café's price. */
 export interface StartState {
@@ -780,6 +783,8 @@ export class StartMenu {
     g.addColorStop(1, 'rgba(18, 12, 8, 0.9)');
     ctx.fillStyle = g;
     ctx.fillRect(x, y, w, h);
+    // Today's forecast (the Canadian café), a paper band above the name.
+    if (t?.forecast) this.forecastBand(ctx, t.forecast, x, y + h - 104, w);
     if (t?.loading) {
       ctx.fillStyle = 'rgba(18, 12, 8, 0.45)';
       ctx.fillRect(x, y, w, h);
@@ -970,6 +975,32 @@ export class StartMenu {
         ctx.restore();
       },
     };
+  }
+
+  /**
+   * Today's forecast over the foot of a café's picture (docs/CANADA-CHALLENGES.md):
+   * a paper band, the weather's icon and its one line, `bottom` the picture's foot.
+   */
+  private forecastBand(ctx: CanvasRenderingContext2D, f: { id: 'sunny' | 'snap' | 'snow'; line: string }, x: number, bottom: number, w: number): void {
+    const H = 44;
+    const y = bottom - H;
+    ctx.save();
+    ctx.fillStyle = 'rgba(244, 236, 220, 0.92)';
+    ctx.fillRect(x, y, w, H);
+    const r = 15;
+    const cx = x + 10 + r;
+    const cy = y + H / 2;
+    weatherIcon(ctx, f.id, cx, cy, r);
+    // 27 units at most (the card's smallest reading size), smaller only if the line would not fit.
+    let size = 27;
+    const room = w - (cx + r + 10 - x) - 8;
+    ctx.font = font(size, false);
+    while (size > 22 && ctx.measureText(f.line).width > room) ctx.font = font(--size, false);
+    // Still too long (the start card's narrower café cards): cut at a word, with an ellipsis.
+    let line = f.line;
+    while (ctx.measureText(line).width > room && line.includes(' ')) line = `${line.slice(0, line.lastIndexOf(' ')).replace(/[.,;:]$/, '')}…`.replace(/……$/, '…');
+    text(ctx, line, cx + r + 10, cy + 1, size, SKETCH.ink, 'left', false);
+    ctx.restore();
   }
 
   /** Lines of `s` that fit `width` (design units) at this size. */
@@ -1244,4 +1275,43 @@ export class StartMenu {
       ctx.restore();
     }, buttons);
   }
+}
+
+/** The forecast's icon, centred at (x, y), radius r: a sun, a snowflake on blue (cold snap), a snow cloud. */
+function weatherIcon(ctx: CanvasRenderingContext2D, id: 'sunny' | 'snap' | 'snow', x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.lineCap = 'round';
+  if (id === 'sunny') {
+    ctx.strokeStyle = '#d9822b';
+    ctx.lineWidth = r * 0.16;
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * r * 0.62, y + Math.sin(a) * r * 0.62);
+      ctx.lineTo(x + Math.cos(a) * r * 0.95, y + Math.sin(a) * r * 0.95);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.45, 0, Math.PI * 2);
+    ctx.fillStyle = '#f2b62e';
+    ctx.fill();
+  } else if (id === 'snap') {
+    snowflake(ctx, x, y - 1, r);
+  } else {
+    // A grey cloud and three flakes under it.
+    ctx.fillStyle = '#8c98a6';
+    ctx.beginPath();
+    ctx.arc(x - r * 0.4, y - r * 0.15, r * 0.38, 0, Math.PI * 2);
+    ctx.arc(x + r * 0.05, y - r * 0.35, r * 0.48, 0, Math.PI * 2);
+    ctx.arc(x + r * 0.5, y - r * 0.12, r * 0.36, 0, Math.PI * 2);
+    ctx.rect(x - r * 0.75, y - r * 0.15, r * 1.6, r * 0.38);
+    ctx.fill();
+    ctx.fillStyle = '#3f86c9';
+    for (const dx of [-0.45, 0, 0.45]) {
+      ctx.beginPath();
+      ctx.arc(x + dx * r, y + r * 0.62 + (dx === 0 ? r * 0.15 : 0), r * 0.13, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
 }

@@ -17,9 +17,14 @@
  * - hurry: the first guest in a hurry: seat it soon (its own clock waits
  *   while the tip is up, so reading costs nothing).
  * - pair: the first two friends: one table for both.
+
+ * - cold: the first cold guest (the Canadian café): sit it by a fire (its
+ *   clock waits while the tip is up). `storm` is the snowstorm's note's icon.
  */
 
-export type TipId = 'goal' | 'table' | 'shop' | 'dirty' | 'hurry' | 'pair';
+import { snowflake } from '../guests/patience-dial.js';
+
+export type TipId = 'goal' | 'table' | 'shop' | 'dirty' | 'hurry' | 'pair' | 'cold' | 'storm';
 
 export interface TipText {
   title: string;
@@ -36,10 +41,13 @@ export const TIPS: Record<TipId, TipText> = {
   dirty: { title: 'Dirty table', text: 'Your staff will clean it.', seconds: 8 },
   hurry: { title: 'In a hurry!', text: 'Seat it soon. It pays more.', seconds: 8 },
   pair: { title: 'Two friends', text: 'Seat them at one table.', seconds: 10 },
+  cold: { title: 'A cold guest!', text: 'Sit it by a fire.', seconds: 9 },
+  // Not a tip: the snowstorm's note under the bar (game-system), with this icon.
+  storm: { title: 'Snowstorm!', text: 'Cold guests: sit them by a fire.', seconds: 8 },
 };
 
 /** The order tips are offered in when more than one is due (the one players act on first). */
-export const TIP_ORDER: TipId[] = ['goal', 'hurry', 'pair', 'dirty', 'shop'];
+export const TIP_ORDER: TipId[] = ['goal', 'hurry', 'cold', 'pair', 'dirty', 'shop'];
 
 /** Seconds between one tip going and the next appearing. */
 export const TIP_GAP = 2;
@@ -54,7 +62,7 @@ export function tipIcon(id: TipId): (ctx: CanvasRenderingContext2D, x: number, y
     ctx.strokeStyle = '#2a1d14';
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = id === 'hurry' ? '#2a1d14' : id === 'dirty' ? '#c98a1e' : '#3d6136';
+    ctx.fillStyle = id === 'hurry' ? '#2a1d14' : id === 'dirty' ? '#c98a1e' : id === 'cold' || id === 'storm' ? '#3f86c9' : '#3d6136';
     ctx.fill();
     ctx.fillStyle = '#f4ecdc';
     ctx.strokeStyle = '#f4ecdc';
@@ -116,6 +124,11 @@ export function tipIcon(id: TipId): (ctx: CanvasRenderingContext2D, x: number, y
         ctx.fill();
         break;
       }
+      case 'cold':
+      case 'storm':
+        // A snowflake (the cold guest's mark on its dot).
+        snowflake(ctx, x, y - r * 0.07, r);
+        break;
       case 'pair': {
         // Two heads and a small heart.
         for (const dx of [-0.32, 0.32]) {

@@ -72,13 +72,17 @@ export const CANADA_TABLE_RINGS: number[][] = [[3, 4, 5], [6, 7], [8, 9, 10], [1
 export const CANADA_PLACES = {
   /** Seats whose table stands under a wall socket. */
   socketTables: [1, 2],
-  /** By the fireplace inside (the `warm` wish): the second window table, nearest the hearth. */
+  /** By the fireplace inside (the `warm` wish): both window tables, either side of the hearth. */
   warmTables: [1, 2],
   /** Everything not inside the cabin (the upper deck is outside too: it is open to the sky). */
   outsideTables: [6, 7, 8, 9, 10, 11, 12, 13, 14],
-  patioTables: [6, 7],
-  /** No seat by the lake now (the dock was removed): nobody is given the `lake` wish. */
-  lakeTables: [] as number[],
+  /** Lake view (docs/CANADA-CHALLENGES.md): the deck's two tables stand on its front half over the frozen lake (the `patio` wish was folded into this). */
+  lakeTables: [6, 7],
+  /** Inside the cabin (the `inside` wish): the window pair, the long table and the door-side pair. */
+  insideTables: [1, 2, 3, 4, 5],
+  /** By the chalk menu board (the `board` wish): the long table facing the counter. */
+  boardTables: [3],
+  /** The bonfire's chairs: one table for company, alone and quiet (they share the fire; wishes.ts tablesOf). */
   bonfireTables: [8, 9, 10],
   /** Upstairs (the `upstairs` wish: a view over the café). */
   upperTables: [11, 12, 13, 14],
@@ -86,11 +90,13 @@ export const CANADA_PLACES = {
   takeaway: { x: 0.0, z: -0.085 },
   /** The two musicians, each bought in the shop; seats within `earshot` of one meet `music` once it plays. `yawDeg` is three.js's (rotation.y). */
   musicians: [
-    /** The violinist at the back of the deck (the shell's `MusicianSpot`, barista-fiddler.glb, clip `Play`), facing the patio and the player; in earshot of both patio tables. */
-    { model: 'barista-fiddler', x: 0.205, y: CANADA_FLOOR_TOP_M, z: -0.19, yawDeg: 0, clip: 'Play', earshot: 0.32 },
+    /** The violinist at the back of the deck (the shell's `MusicianSpot`, barista-fiddler.glb, clip `Play`), facing the patio and the player. Earshot 0.34: both seats at each deck table (6, 7), 0.30 to 0.33 m off, and the two roof tables nearest the stairs (docs/CANADA-CHALLENGES.md). */
+    { model: 'barista-fiddler', x: 0.205, y: CANADA_FLOOR_TOP_M, z: -0.19, yawDeg: 0, clip: 'Play', earshot: 0.34 },
     /** The pianist at the rooftop piano (the shell's `PianoSpot`, barista-pianist.glb, clip `PlayPiano`). */
     { model: 'barista-pianist', x: -0.17, y: CANADA_UPPER_TOP_M, z: -0.212, yawDeg: 180, clip: 'PlayPiano', earshot: 0.2 },
   ],
+  /** Where leaving guests walk to: the foot of the stone exit walkway at the plate's front edge (the shell's `Exit`). */
+  exit: { x: 0.06, z: 0.295 },
   /** The stairs: guests and staff walk from `bottom` to `top` playing StairsUp / ClimbUp (and back down), 15 steps. */
   stairs: { bottom: { x: 0.081, y: 0.024, z: -0.002 }, top: { x: 0.081, y: CANADA_UPPER_TOP_M, z: -0.153 }, landing: { x: 0.076, z: -0.19 }, steps: 15 },
 };

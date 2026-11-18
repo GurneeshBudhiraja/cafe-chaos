@@ -24,6 +24,8 @@ export interface HowToStep {
   video?: string;
   /** The still picture (required). */
   poster: string;
+  /** Only for this café (the card in the headset shows it there; the web page leaves it out). */
+  cafe?: 'japan' | 'canada';
 }
 
 export const HOW_TO_PLAY: readonly HowToStep[] = [
@@ -80,4 +82,16 @@ export const HOW_TO_PLAY: readonly HowToStep[] = [
     text: 'An hourglass: the guest is in a hurry. Seat it soon: it pays more. Hearts: two friends. Seat them at one table.',
     poster: 'ui/howto-guests.jpg',
   },
+  {
+    id: 'cold',
+    title: 'Cold guests',
+    text: 'A snowflake: the guest is cold. Sit it by a fire: the fireplace or the bonfire.',
+    poster: 'ui/canada-cover.jpg',
+    cafe: 'canada',
+  },
 ];
+
+/** The steps for a café (the steps for every café, and its own). */
+export function howToPlay(cafe: 'japan' | 'canada' | null): readonly HowToStep[] {
+  return HOW_TO_PLAY.filter((s) => !s.cafe || s.cafe === cafe);
+}

@@ -62,7 +62,7 @@ await until((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.state 
 await page.waitForTimeout(300);
 const clips = await page.evaluate(([a, b]) => { const f = (id) => window.__cafe.guests.guests.find((g) => g.id === id); return { hurried: f(a).actor.clip, calm: f(b).actor.clip, left: +(f(a).patience / f(a).patienceFull).toFixed(2) }; }, [hurried.id, calm]);
 check('a hurried guest fidgets from the start (Impatient, its patience still full); a calm one stands idle', clips.hurried === 'Impatient' && clips.calm === 'Idle' && clips.left > 0.9, JSON.stringify(clips));
-check('a hurried guest waits 0.6 of the usual in the line (15 s at least), and its dot has the hourglass', hurried.hurried && hurried.patience >= 15 && hurried.patience <= hurried.usual * 0.6 * 1.16 && /\|true\|false$/.test(dot), JSON.stringify({ ...hurried, dot }));
+check('a hurried guest waits 0.6 of the usual in the line (15 s at least), and its dot has the hourglass', hurried.hurried && hurried.patience >= 15 && hurried.patience <= hurried.usual * 0.6 * 1.16 && /\|true\|false\|false$/.test(dot), JSON.stringify({ ...hurried, dot }));
 await h.screenshot('artifacts/types-1-hurried.png');
 const seatedFor = await page.evaluate((id) => {
   const { guests, baristas } = window.__cafe;
@@ -119,7 +119,7 @@ check('a pair: two friends, linked, each with the friend wish first and none tha
 await until((id) => window.__cafe.guests.guests.find((g) => g.id === id)?.state === 'queued', 30000, pair.a.id);
 await page.waitForTimeout(300);
 const pairDot = await page.evaluate((id) => window.__cafe.guests.guests.find((g) => g.id === id).dial.drawn, pair.a.id);
-check('the pair\'s dots carry the heart', /\|false\|true$/.test(pairDot), pairDot);
+check('the pair\'s dots carry the heart', /\|false\|true\|false$/.test(pairDot), pairDot);
 await h.screenshot('artifacts/types-2-pair.png');
 
 // 6. Seated together, then apart.
