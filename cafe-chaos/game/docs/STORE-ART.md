@@ -55,30 +55,34 @@ in grayscale. Sources at the end.
 Generate art without the title, then add the title from one logo file in
 every size (consistent, crisp, and Meta needs the logo as its own file).
 
-## Built so far
+## The brand now (Nov 17 2026)
 
-**The covers are the game's own 3D models (Nov 17 2026).** Research on the
-Meta store shelf showed that Quest covers are almost all in-game renders with a
-chunky logo, and the judges ask for art that "honestly represents the
-experience". So the hand-drawn cast was replaced on the store covers and the
-Devpost thumbnail by renders of the real game: the café on a real-looking oak
-table (a mug and a plant at the edge, a warm cream wall behind, a tilt-shift
-depth of field), the game's cream hand pinching a guest by the head above the
-seat that glows violet for it, the other guests seated and tinted as the game
-tints them. The Japanese café leads (hero, landscape, mini, Devpost); the
-Canadian café takes the square and portrait (guests in toques, scarves and
-parkas, the fiddler and pianist playing). The hand-lettered logo, the palette
-and the icon stay.
+**One logo for everything.** The rebrand replaced the hand-drawn wordmark and
+sketch cast: the logo is a 3D build ("The Rush"), CAFÉ arched close over
+CHAOS, every letter of CHAOS on its own tilt, all glossy lantern-gold glaze
+with timber sides and an ink outline. Pictures are renders of the real game
+(the café on a real-looking table, the game's cream hand pinching a guest
+above its glowing seat). Colours are the game's own (`src/ui/sketch.ts`):
+moss, lantern, timber, koi, cream, ink.
 
-- `scripts/render-key-art.py` (Blender): places the shipped models as the game
-  does (layout.ts, canada-layout.ts), poses the hand's finger joints into a
-  pinch, lights and renders one shot. Shots and cameras in `SHOTS`.
-- `scripts/compose-covers.py` (Blender): crops each render to its size and lays
-  `meta-store/logo.png` over it (title upper left on the landscape and Devpost,
-  centred on the hero and mini, across the top on the square and portrait).
-- `scripts/build-store-art.py`: the logo, the one icon (also `public/icons`)
-  and the social images (link preview, video thumbnail) from the sketch picture.
-- Still needed for the store: 5 screenshots, 2560×1440, real captures.
+Built by three Blender scripts (run from `game/`):
+
+- `scripts/build-logo-3d.py`: the logo (Fredoka, SIL OFL, in
+  `assets/source/fonts`) to `assets/source/logo/logo-3d.png`.
+- `scripts/render-key-art.py`: the four key-art renders to
+  `assets/source/renders` (shots `jp-landscape`, `jp-hero`, `ca-square`,
+  `ca-portrait`).
+- `scripts/build-brand-assets.py`: every asset from those two sources: the
+  store logo, the icon (the logo on moss with a lantern glow; the favicon is
+  the C alone), the five covers, the Devpost thumbnail, the link preview and
+  the video thumbnail, and the app icons in `public/icons`.
+
+Placement: the title upper left on the landscape, Devpost and social images;
+centred on the hero and mini (Meta's rule); across the top on the square and
+portrait. Still needed for the store: 5 screenshots, 2560×1440, real captures.
+
+The sections below are the research and the first (sketch) directions, kept
+for the record; the prompts are no longer used.
 
 ## Prompts (Nano Banana)
 
