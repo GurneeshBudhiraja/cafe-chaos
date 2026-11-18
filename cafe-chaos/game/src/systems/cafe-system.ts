@@ -334,6 +334,24 @@ export class CafeSystem extends createSystem({
   }
 
   /**
+   * How far (metres) a character walks from one point to another (café
+   * space), on either floor, without making the way's points (see
+   * NavGrid.distance). Infinity if there is no way. `keep`: remember it
+   * until the grid is rebuilt (from a place that does not move).
+   */
+  walkDistance(from: Vector3, to: Vector3, reach = 0.12, keep = false): number {
+    const up = from.y > UPPER_FLOOR_Y;
+    const upTo = to.y > UPPER_FLOOR_Y;
+    if (!this.upperNav || up === upTo) return this.navAt(from.y).distance(from, to, reach, keep);
+    const s = CANADA_PLACES.stairs;
+    const bottom = new Vector3(s.bottom.x, s.bottom.y, s.bottom.z);
+    const top = new Vector3(s.top.x, s.top.y, s.top.z);
+    const landing = new Vector3(s.landing.x, CANADA_UPPER_TOP_M, s.landing.z);
+    const stairs = landing.distanceTo(top) + top.distanceTo(bottom);
+    return up ? this.upperNav.distance(from, landing, reach, keep) + stairs + this.nav.distance(bottom, to, reach, keep) : this.nav.distance(from, bottom, reach, keep) + stairs + this.upperNav.distance(landing, to, reach, keep);
+  }
+
+  /**
    * A way from one point to another (café space), on either floor: on one
    * floor, its grid's path; between the floors, to the foot (or the top) of
    * the stairs, straight up (or down) them, and on from the landing.

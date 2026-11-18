@@ -92,6 +92,13 @@ export class NavGrid {
   /** The highest that ground can be (the seed's floor plus the allowed rise). */
   private ceiling = Infinity;
   private readonly cache = new Map<string, Vector3[]>();
+  /**
+   * Walking lengths by square pair (`distance`): `kept` for the ones asked
+   * to be kept (from a station, which does not move), until the next
+   * rebuild; `lengths` for the rest, emptied when it grows large.
+   */
+  private readonly kept = new Map<number, number>();
+  private readonly lengths = new Map<number, number>();
   // Search scratch, reused.
   private readonly g: Float32Array;
   private readonly from: Int32Array;
@@ -125,6 +132,8 @@ export class NavGrid {
   rebuild(): void {
     const started = performance.now();
     this.cache.clear();
+    this.lengths.clear();
+    this.kept.clear();
     this.rasterise();
     this.drawBarriers();
     this.spread();
@@ -378,6 +387,8 @@ export class NavGrid {
     const { min, cell } = this.options;
     const cx = Math.floor((x - min.x) / cell);
     const cz = Math.floor((z - min.z) / cell);
+    // On an open square already (a character on its way, a standing place): that square is the nearest.
+    if (cx >= 0 && cz >= 0 && cx < nx && cz < nz && this.open(cz * nx + cx)) return cz * nx + cx;
     const rings = Math.ceil(reach / cell);
     let best = -1;
     let bestDistance = reach * reach;
@@ -422,6 +433,45 @@ export class NavGrid {
     return path;
   }
 
+  /**
+   * How far (metres) a character walks from one point to another on this
+   * grid, along the squares of its way; Infinity if there is no way. No
+   * points are made: the baristas weigh every server against every order
+   * this way many times a second when the café is busy
+   * (systems/barista-system.ts), and the full `findPath` (finding the
+   * nearest squares, straightening, copying the points) made those plans
+   * frames of 10 ms and more on the headset. Remembered by square pair
+   * until the next rebuild.
+   */
+  distance(from: Vector3, to: Vector3, reach = 0.12, keep = false): number {
+    const start = this.nearestCell(from.x, from.z, reach);
+    const goal = this.nearestCell(to.x, to.z, reach);
+    if (start < 0 || goal < 0) return Infinity;
+    const key = start * this.nx * this.nz + goal;
+    let metres = this.kept.get(key) ?? this.lengths.get(key);
+    if (metres === undefined) {
+      const cells = this.search(start, goal);
+      metres = Infinity;
+      if (cells) {
+        metres = 0;
+        const { nx } = this;
+        const { cell } = this.options;
+        for (let k = 1; k < cells.length; k++) {
+          const a = cells[k - 1];
+          const b = cells[k];
+          metres += (a % nx !== b % nx && Math.floor(a / nx) !== Math.floor(b / nx) ? 1.414 : 1) * cell;
+        }
+      }
+      if (keep) this.kept.set(key, metres);
+      else {
+        // Servers on their way start from new squares each plan: start again rather than grow without end.
+        if (this.lengths.size >= 5000) this.lengths.clear();
+        this.lengths.set(key, metres);
+      }
+    }
+    return metres;
+  }
+
   /** A* over the open squares, eight ways, keeping to the middle. Returns the squares from start to goal. */
   private search(start: number, goal: number): number[] | null {
     this.searches++;
@@ -431,10 +481,13 @@ export class NavGrid {
     state.fill(0);
     const gx = goal % nx;
     const gz = (goal - gx) / nx;
+    // Every step costs at least its length times the least centre pull (a square at least OPEN from everything): still
+    // never more than the true cost, so the way found is the same, with fewer squares looked at.
+    const least = 1 + CENTRE_PULL / OPEN;
     const estimate = (i: number): number => {
       const dx = Math.abs((i % nx) - gx);
       const dz = Math.abs(Math.floor(i / nx) - gz);
-      return (Math.max(dx, dz) + 0.414 * Math.min(dx, dz)) * cell;
+      return (Math.max(dx, dz) + 0.414 * Math.min(dx, dz)) * cell * least;
     };
     let size = 0;
     const push = (i: number): void => {
