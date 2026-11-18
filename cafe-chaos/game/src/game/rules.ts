@@ -219,9 +219,9 @@ export interface Forecast {
   lean: ('outside' | 'lake' | 'upstairs' | 'warm' | 'bonfire' | 'inside')[];
 }
 export const FORECASTS: Record<ForecastId, Forecast> = {
-  sunny: { id: 'sunny', name: 'Sunny', line: 'Sunny today: guests want the fresh air.', days: 3, cold: 0.08, stormEvery: 0, stormSeconds: 0, lean: ['outside', 'lake', 'upstairs'] },
-  snap: { id: 'snap', name: 'Cold snap', line: 'Cold snap today: many cold guests.', days: 2, cold: 0.25, stormEvery: 4, stormSeconds: 60, lean: ['warm', 'bonfire', 'inside'] },
-  snow: { id: 'snow', name: 'Snow day', line: 'Snow day today: storms blow in often.', days: 2, cold: 0.15, stormEvery: 2, stormSeconds: 75, lean: ['inside'] },
+  sunny: { id: 'sunny', name: 'Sunny', line: 'Today: sunny. Guests want outside.', days: 3, cold: 0.08, stormEvery: 0, stormSeconds: 0, lean: ['outside', 'lake', 'upstairs'] },
+  snap: { id: 'snap', name: 'Cold snap', line: 'Today: cold snap. Many cold guests.', days: 2, cold: 0.25, stormEvery: 4, stormSeconds: 60, lean: ['warm', 'bonfire', 'inside'] },
+  snow: { id: 'snow', name: 'Snow day', line: 'Today: snow day. Storms blow in.', days: 2, cold: 0.15, stormEvery: 2, stormSeconds: 75, lean: ['inside'] },
 };
 
 /** The share of new guests who are cold in `level` on this forecast (none before COLD.from). */

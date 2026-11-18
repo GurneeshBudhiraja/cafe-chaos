@@ -516,6 +516,8 @@ export class GameSystem extends createSystem({}) {
         level: p.level,
         coins: p.bank,
         loading: this.pending?.id === id,
+        // Today's weather at the Canadian café (read afresh each time the card shows: the date may have turned).
+        forecast: id === 'canada' ? { id: forecastFor().id, line: forecastFor().line } : undefined,
       };
     });
     this.menu.showStart({ tiles, price: CANADA_PRICE, lesson: !this.save.tutorialDone });
