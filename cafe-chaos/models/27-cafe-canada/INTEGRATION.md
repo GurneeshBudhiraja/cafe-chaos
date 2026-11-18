@@ -56,9 +56,10 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
 - **Base:** the same 92 × 62 cm plate as `cafe-shell`, origin at the centre of its underside; snow
   on top at y 0.024 (the same height as the cabin floor and the deck: all walked).
 - **Cabin:** logs (stacked cylinders) x −0.42 … 0.04, z −0.27 … 0.16; the back and left walls nine
-  logs high (0.125, top y 0.149: just over the baristas' heads, so the upper deck sits on them), the
-  front wall knee high (4 logs) so every table shows from the seat; no right wall at all (the cabin
-  opens straight onto the patio and the stairs; guests come and go anywhere along x 0.04). A 2 × 2 window in the left wall with green shutters; two wall
+  logs high (0.125, top y 0.149: just over the baristas' heads, so the upper deck sits on them), no
+  front wall and no right wall (the room is open to the player, every table shows from the seat; it
+  opens straight onto the patio and the stairs; guests come and go anywhere along x 0.04; a
+  strip of pine boards, x 0.03 … 0.06, joins the cabin floor to the deck edge to edge, all at y 0.024). A 2 × 2 window in the left wall with green shutters; two wall
   sockets inside (`Socket-1` under the window at z −0.05, `Socket-2` at z 0.09). No roof over the
   tables: the room is open to the hand from above. The tables stand in a grid: three columns 14 cm
   apart (x −0.31 window, −0.17 middle, −0.03 door side) and two rows at z −0.05 and 0.09, either side of the room's middle (0.02, between the
@@ -107,8 +108,9 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
   a guest stride each), x 0.050 … 0.112 (6.2 cm wide: a guest with room either side), climbing away
   from the player from z −0.012 to −0.147; stringers both sides, a handrail on the patio side. The
   landing (x 0.04 … 0.112, z −0.24 … −0.147) joins the deck; its posts stand on the snow behind.
-- **Deck:** x 0.06 … 0.40, z −0.12 … 0.17, planks with snow at the edges; a back rail; three light
-  poles with two sagging strings of bulbs; a patio heater at (0.235, 0.0).
+- **Deck:** x 0.06 … 0.40, z −0.12 … 0.17, planks with snow at the edges; a back rail; two light
+  poles on its gate side with two sagging strings of bulbs (one along the gate side; one from the front
+  pole up to the upper deck's front-right light pole, festoon-style over the patio); a patio heater at (0.235, 0.0).
 - **The bear:** behind the deck where the musician's stage stood, at (0.31, −0.205): a big low-poly black
   bear (about 16 cm tall, x 0.25 … 0.37, z −0.25 … −0.13) sitting in the snow, legs out in front, holding a red takeaway cup with a white
   lid in both paws under its chin, a little snow on its head, turned 15° toward the player (`Bear`,
@@ -116,7 +118,7 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
   triangles; new flat materials `BearFur`, `BearMuzzle`, `CupLid`). The violinist, once bought, stands on
   the snow at its left (`MusicianSpot`).
 - **Lake:** ice x 0.12 … 0.46, z 0.20 … 0.31 at y 0.022 with a deeper skating patch and cracks; no dock
-  (the dock bench stands on the ice at `DockSpot`); the red canoe
+  and no lake bench (the lake is left to the canoe, the net and the skating patch); the red canoe
   by it (0.385, 0.245) with snow and two paddles; a tiny hockey net, stick and puck.
 - **Bonfire:** a ring of eleven river stones at (−0.27, 0.245), logs, a bed of glowing embers and
   five shaped flame tongues (as the fireplace's, larger); a woodpile against the cabin's front; dark
@@ -165,7 +167,6 @@ its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −9
 | `BaristaSpot-1/2/3` | (−0.235 / −0.115 / 0.005, 0.036, −0.159) | the three stations behind the counter |
 | `TakeawaySpot` | (0.0, 0.024, −0.085), facing −Z | where a takeaway guest stands at the counter's right end (3 cm off its front, clear of `TableSpot-4`) |
 | `TableSpot-1/2/3/4/5` | (−0.31, −0.05), (−0.31, 0.09), (−0.17, 0.02), (−0.03, −0.05), (−0.03, 0.09) | the cabin's tables: two by the window-wall sockets (either side of the fireplace), the long one in the middle, two on the door side mirroring the window pair |
-| `TableSpot-6` | (−0.31, 0.024, 0.02) | new: a log table (`patio-table.glb`) right in front of the hearth, between the window tables: `warm` |
 | `Socket-1/2` | the left wall at z −0.05 and 0.09, y 0.052 | the `socket` wish: met at TableSpot-1 and 2 |
 | `FireplaceSpot` | (−0.383, 0.024, 0.02), facing +X | the hearth: the `warm` wish (TableSpot-1 and 2 are beside it) |
 | `UpperFloorTop` | (−0.19, 0.1548, −0.17) | the upper floor's sample (for its own walk grid) |
@@ -175,8 +176,7 @@ its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −9
 | `StairTop` | (0.081, 0.1548, −0.153), facing −Z | the top: the first spot on the landing |
 | `UpperLanding` | (0.076, 0.1548, −0.19), facing −X | on the landing, turned toward the deck |
 | `PatioSpot-1/2` | (0.15, 0.11), (0.31, 0.11) (the deck's front half, either side of the heater, clear of the way from the gate) | the deck's tables: `patio` and `outside` |
-| `DockSpot` | (0.26, 0.022, 0.25) | the dock bench, on the ice (the dock is gone): `lake`, `outside` |
-| `FireSpot-1/2/3` | round the ring at radius 8.5 cm, each facing the fire | the Muskoka chairs: `bonfire`, `outside` |
+| `FireSpot-1/2/3` | round the ring at radius 8.5 cm, 120° apart (front-left, front-right, behind toward the cabin; none straight in front, which put a chair past the plate's front edge), each facing the fire | the Muskoka chairs: `bonfire`, `outside` |
 | `MusicianSpot` | (0.205, 0.024, −0.19), facing −Z | the violinist once bought; seats within earshot meet `music` |
 | `Exit` | (0.06, 0.024, 0.295), facing +Z | the foot of the exit walkway at the plate's front edge: where guests leave the café (new; the game still sends them out by the gate until `canada-layout.ts` uses it) |
 | `BenchSpot` | (0.235, 0.024, 0.165) | kept for compatibility (unused: the queue stands outside) |
@@ -184,7 +184,7 @@ its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −9
 ## Walkways
 
 From the gate (x 0.39) across the deck into the cabin (its right side is open along x 0.04); from the door round the
-cabin's front corner to the bonfire (the stepping slabs); onto the ice to the lake bench; out: from the door
+cabin's front corner to the bonfire (the stepping slabs); out: from the door
 along the doorstep to the deck's front edge and down the exit walkway to `Exit`. The lake's ice
 is at walking height: a guest who crosses it is no harm (cute, even), but a path over it is 2 mm
 below the snow, so the grid's nearest-walkable logic treats it as floor.
@@ -206,6 +206,8 @@ own pace (two steps a second); play the staff's at 2× to keep service brisk.
 
 ## The furniture (phase 2): `pieces_build.py`
 
+All in one log-cabin palette: pine tops and seats, bark-brown log legs and pedestals, red buffalo-plaid cushions, the brand red for the Muskoka chairs.
+
 Five pieces, each its own glb (the game places them by the layout, `game/src/cafe/canada-layout.ts`),
 with the Japanese pieces' conventions: origin at the bottom centre, the front toward +Z, `Seat-N` at
 the seat top (1.6 cm) with its +Z toward the table, `Meal-N` on the table top (2.8 cm), `TableTop`.
@@ -213,11 +215,11 @@ Materials from `kit.py`, textured by `textures.py` with a 512 px occlusion atlas
 
 | File | What | Size (w × h × d, cm) | Seats | Where it stands |
 |---|---|---|---|---|
-| `table-ca-2.glb` | square maple table on a pedestal, two slat-back chairs with red cushions, a napkin holder | 9.3 × 3.9 × 4.2 | 1–2 (chairs at x ±3.3) | the cabin's window wall, `TableSpot-1/2` (under the sockets), and the door side, `TableSpot-4/5` |
-| `table-ca-4.glb` | long maple table, a plaid-cushioned bench either side, a candle | 7.0 × 3.8 × 10.3 | 1–2 front bench, 3–4 back | the cabin's middle, `TableSpot-3`, turned 90° |
-| `patio-table.glb` | log-cabin table: a round pine slab with its bark rim on a log pedestal and three log feet, two log chairs with red buffalo-plaid cushions and a rail back (no snow: it also stands inside) | about 9 × 3.7 × 4.5 | 1–2 | the deck, `PatioSpot-1/2`; the upper deck, `UpperSpot-1/2/3/4` (y 0.1548); in front of the fireplace, `TableSpot-6` |
-| `dock-bench.glb` | pine bench for two facing +Z (the lake and the player), plaid cushion, snow on its back, a mug shelf on each arm (the meal spots) | 8.7 × 4.0 × 2.6 | 1–2 | on the ice, `DockSpot` (y 0.022) |
-| `fire-chair.glb` | red Muskoka chair with a log stump beside it (the meal spot), snow on both | 5.7 × 4.7 × 3.5 | 1 | round the fire, `FireSpot-1/2/3`, each turned to face it |
+| `table-ca-2.glb` | square pine table on a log pedestal, two pine slat-back chairs on round log legs with red buffalo-plaid cushions, a napkin holder | 9.3 × 3.9 × 4.2 | 1–2 (chairs at x ±3.3) | the cabin's window wall, `TableSpot-1/2` (under the sockets), and the door side, `TableSpot-4/5` |
+| `table-ca-4.glb` | long pine table on log legs, a plaid-cushioned pine bench either side, a candle | 7.0 × 3.8 × 10.3 | 1–2 front bench, 3–4 back | the cabin's middle, `TableSpot-3`, turned 90° |
+| `patio-table.glb` | log-cabin table: a round pine slab with its bark rim on a log pedestal and three log feet, two log chairs with red buffalo-plaid cushions and a rail back (no snow: it also stands inside) | about 9 × 3.7 × 4.5 | 1–2 | the deck, `PatioSpot-1/2`; the upper deck, `UpperSpot-1/2/3/4` (y 0.1548) |
+| `dock-bench.glb` | (unused: the lake bench was removed; the file is kept) | | | |
+| `fire-chair.glb` | brand-red Muskoka chair (the signs' and counter's `Red`) with a log stump beside it (the meal spot), snow on both | 5.7 × 4.7 × 3.5 | 1 | round the fire, `FireSpot-1/2/3`, each turned to face it |
 
 ## The characters (phase 3): `staff_canada_build.py`, `guests_canada_build.py`
 
@@ -307,7 +309,7 @@ bodies too if ever wanted; the per-species ones (Hachimaki, Apron, Vest) do not 
 
 **Moved in the layout pass of 17 Nov (the game's `canada-layout.ts` and `routes.ts` must follow):**
 `BaristaSpot-1/2/3` and `TakeawaySpot` 4.5 cm forward, `TableSpot-1..5`, `Socket-1/2` and `FireplaceSpot` (see the table),
-`UpperSpot-1/2` moved and `3/4` new, `PianoSpot` (centred against the rooftop sign, facing −Z), `PatioSpot-1/2`, `DockSpot` (y), `TableSpot-6` new, `MusicianSpot` off the removed stage, `Exit` new.
+`UpperSpot-1/2` moved and `3/4` new, `PianoSpot` (centred against the rooftop sign, facing −Z), `PatioSpot-1/2`, `DockSpot` removed (no `lake` seat), `MusicianSpot` off the removed stage, `Exit` new.
 
 Phase 4 (game): the café picker, the five guest species (snowbit, beavertail, nanaimo, doubledouble, buttertart), registering these files in `assets.ts`, the Canadian layout
 (`canada-layout.ts`: 25 seats on two floors, with `TableSpot-4/5`), the upper floor's walk grid and the stair walk (above),
