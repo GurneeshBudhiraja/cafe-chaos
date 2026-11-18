@@ -95,9 +95,13 @@ the fire, and only a little (it is daytime). No walls glow, no dimming is meant 
   (kept clear of the three stations), string lights on two poles well above the seated guests' heads.
   The rooftop sign (the cream board, the red oval, Hoser's / COFFEE & DONUTS) stands at its back on
   two legs, 7 cm up so neither the seated guests nor the pianist hide it. Four bistro tables stand on it in
-  two rows of two (`UpperSpot-1/2` at the back, `3/4` in front, from the layout).
-- **Rooftop piano:** an upright at the upper deck's left end, side on to the player, keys toward the
-  deck, a red runner and a mug on top, its bench in front (`PianoSpot`, where the pianist sits).
+  two columns either side of the piano (`UpperSpot-1/2` at the back, `3/4` in front, from the layout),
+  the middle left open so the player sees the pianist and the logo; the aisle between the rows is in
+  line with the landing.
+- **Rooftop piano:** a low console piano (4.4 cm) centred under the rooftop logo (x −0.17), its back to
+  the player at z −0.205 and its keys toward the sign; a red runner and a mug on top; the bench behind
+  it on the sign side (`PianoSpot`), so the pianist plays facing the player, face over the piano and
+  the logo over the pianist's head (the seated pianist's bun reaches y 0.235, under the words).
 - **Stairs:** outside the cabin's right wall, from the patio by the door up to a landing level with
   the upper deck: 15 open treads of 9 mm, 8.7 mm up each (under the walk grid's 1.35 cm step, about
   a guest stride each), x 0.050 … 0.112 (6.2 cm wide: a guest with room either side), climbing away
@@ -164,8 +168,8 @@ its +Z; "facing −X" means its +Z points to −X (three.js `rotation.y` of −9
 | `Socket-1/2` | the left wall at z −0.05 and 0.09, y 0.052 | the `socket` wish: met at TableSpot-1 and 2 |
 | `FireplaceSpot` | (−0.383, 0.024, 0.02), facing +X | the hearth: the `warm` wish (TableSpot-1 and 2 are beside it) |
 | `UpperFloorTop` | (−0.19, 0.1548, −0.17) | the upper floor's sample (for its own walk grid) |
-| `UpperSpot-1/2/3/4` | (−0.27, 0.1548, −0.2225), (−0.11, 0.1548, −0.2225), (−0.27, 0.1548, −0.1375), (−0.11, 0.1548, −0.1375) | the upper deck's four bistro tables, back row then front: `upstairs`, `outside` |
-| `PianoSpot` | (−0.365, 0.1548, −0.2125), facing −X | where the pianist sits (barista-pianist.glb, clip `PlayPiano`); seats in earshot meet `music` |
+| `UpperSpot-1/2/3/4` | (−0.32, 0.1548, −0.2225), (−0.03, 0.1548, −0.2225), (−0.32, 0.1548, −0.1375), (−0.03, 0.1548, −0.1375) | the upper deck's four bistro tables, either side of the piano, back row then front: `upstairs`, `outside` |
+| `PianoSpot` | (−0.17, 0.1548, −0.261), facing +Z (the keys and the player) | where the pianist sits (barista-pianist.glb, clip `PlayPiano`); seats in earshot meet `music` |
 | `StairBottom` | (0.081, 0.024, −0.002), facing −Z | the foot of the stairs, on the patio by the door |
 | `StairTop` | (0.081, 0.1548, −0.153), facing −Z | the top: the first spot on the landing |
 | `UpperLanding` | (0.076, 0.1548, −0.19), facing −X | on the landing, turned toward the deck |
@@ -302,7 +306,7 @@ bodies too if ever wanted; the per-species ones (Hachimaki, Apron, Vest) do not 
 
 **Moved in the layout pass of 17 Nov (the game's `canada-layout.ts` and `routes.ts` must follow):**
 `BaristaSpot-1/2/3` and `TakeawaySpot` 4.5 cm forward, `TableSpot-1..5`, `Socket-1/2` and `FireplaceSpot` (see the table),
-`UpperSpot-3/4` new, `MusicianSpot` off the removed stage, `Exit` new.
+`UpperSpot-1/2` moved and `3/4` new, `PianoSpot` (centred in front of the rooftop sign, now facing +Z), `MusicianSpot` off the removed stage, `Exit` new.
 
 Phase 4 (game): the café picker, the five guest species (snowbit, beavertail, nanaimo, doubledouble, buttertart), registering these files in `assets.ts`, the Canadian layout
 (`canada-layout.ts`: 25 seats on two floors, with `TableSpot-4/5`), the upper floor's walk grid and the stair walk (above),
